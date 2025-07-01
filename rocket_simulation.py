@@ -1,5 +1,6 @@
 # Import Libraries
 import astropy.units as u  # type: ignore
+from astropy.units.quantity import Quantity
 from typing import List, Tuple
 
 
@@ -11,7 +12,7 @@ def process_input(
     pos_vec_o_unit_input: str,
     mass_o_value_input: float,
     mass_o_unit_input: str,
-) -> Tuple[float, List[float], float]:
+) -> Tuple[Quantity, Quantity, Quantity]:
 
     if delta_time_unit_input in ("second", "seconds", "sec", "secs", "s"):
         delta_time_unit = u.s  # type: ignore
@@ -38,7 +39,11 @@ def process_input(
     )
 
 
-def simulate_rocket_trajectory():
+def simulate_rocket_trajectory(
+    delta_time: Quantity,
+    pos_vec_o: Quantity,
+    mass_o: Quantity,
+) -> None:
     pass
 
 
@@ -67,6 +72,11 @@ if __name__ == "__main__":
     )
 
     # Simulate
+    simulate_rocket_trajectory(
+        delta_time=delta_time,
+        pos_vec_o=pos_vec_o,
+        mass_o=mass_o,
+    )
 
     # Output
     pass
