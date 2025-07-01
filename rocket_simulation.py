@@ -2,7 +2,7 @@
 import astropy.units as u  # type: ignore
 from astropy.units.quantity import Quantity
 from typing import List, Tuple
-
+import math
 
 # Functions
 def process_input(
@@ -37,6 +37,33 @@ def process_input(
         pos_vec_o,
         mass_o,
     )
+
+
+def rocket_dynamics(
+    time: float,
+    state: List[float],
+) -> float:
+    
+    # Unpack state: state = [vel, mass]
+    vel = state[0]
+    mass = state[1]
+
+    spec_imp = 0.0
+    grav_acc_const = 9.81
+    exhaust_velocity = spec_imp * grav_acc_const
+    dmass__dtime = 0.0
+    
+    drag_acc = 0.0
+
+    flight_path_angle = 90.0 * math.pi / 180.0
+    grav_acc = -grav_acc_const * math.sin(flight_path_angle)
+
+    dvel__dtime = exhaust_velocity * dmass__dtime + drag_acc + grav_acc
+
+    dstate__dtime[0] = dvel__dtime
+    dstate__dtime[1] = dmass__dtime
+
+    return dstate__dtime
 
 
 def simulate_rocket_trajectory(
