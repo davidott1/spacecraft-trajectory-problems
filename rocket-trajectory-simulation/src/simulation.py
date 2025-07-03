@@ -1,10 +1,11 @@
 from astropy.units.quantity import Quantity
+import astropy.units as u
 import numpy as np
 from typing import List, Tuple
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 
-from rocket_simulation import rocket_dynamics
+from rocket_dynamics import rocket_dynamics
 
 def process_input(
     delta_time_value_input: float,
@@ -15,7 +16,15 @@ def process_input(
     vel_o_unit_input: str,
     mass_o_value_input: float,
     mass_o_unit_input: str,
-) -> Tuple[Quantity, Quantity, Quantity, Quantity]:
+    grav_acc_const_value_input: float,
+    grav_acc_const_unit_input: str,
+    grav_acc_sea_level_value_input: float,
+    grav_acc_sea_level_unit_input: str,
+    spec_imp_value_input: float,
+    spec_imp_unit_input: str,
+    thrust_value_input: float,
+    thrust_unit_input: str,
+) -> Tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity, Quantity, Quantity]:
 
     if delta_time_unit_input in ("second", "seconds", "sec", "secs", "s"):
         delta_time_unit = u.s  # type: ignore
@@ -41,55 +50,92 @@ def process_input(
         mass_o_unit = u.kg  # type: ignore
     mass_o = mass_o_value_input * mass_o_unit
 
+    if grav_acc_const_unit_input in ("m/s^2", "m/s2", "m/s^2", "m/s2"):
+        grav_acc_const_unit = u.m/u.s**2  # type: ignore
+    else:
+        grav_acc_const_unit = u.m/u.s**2  # type: ignore
+    grav_acc_const = grav_acc_const_value_input * grav_acc_const_unit
+    
+    if grav_acc_sea_level_unit_input in ("m/s^2", "m/s2", "m/s^2", "m/s2"):
+        grav_acc_sea_level_unit = u.m/u.s**2  # type: ignore
+    else:
+        grav_acc_sea_level_unit = u.m/u.s**2  # type: ignore
+    grav_acc_sea_level = grav_acc_sea_level_value_input * grav_acc_sea_level_unit
+
+    if spec_imp_unit_input in ("s", "sec", "seconds"):
+        spec_imp_unit = u.s  # type: ignore
+    else:
+        spec_imp_unit = u.s  # type: ignore    
+    spec_imp = spec_imp_value_input * spec_imp_unit
+
+    if thrust_unit_input in ("N", "newton", "newtons"):
+        thrust_unit = u.N  # type: ignore
+    else:
+        thrust_unit = u.N  # type: ignore
+    thrust = thrust_value_input * thrust_unit
+
     return (
         delta_time,
         pos_o,
         vel_o,
         mass_o,
+        grav_acc_const,
+        grav_acc_sea_level,
+        spec_imp,
+        thrust,
     )
 
 
 def simulate_rocket_trajectory(
-    delta_time     : Quantity,
-    pos_o          : Quantity,
-    vel_o          : Quantity,
-    mass_o         : Quantity,
-    thrust         : float,
-    spec_imp       : float,
-    grav_acc_const : float,
-    total_time     : float,
+    delta_time         : Quantity,
+    time_steps         : int,
+    pos_o              : Quantity,
+    vel_o              : Quantity,
+    mass_o             : Quantity,
+    thrust             : Quantity,
+    spec_imp           : Quantity,
+    grav_acc_const     : Quantity,
+    grav_acc_sea_level : Quantity,
 ) -> None:
     
-    t_span = (0, 20)  # Time span for the integration (start, end)
-
-    time_steps = int(total_time / delta_time.value)
-    state_o = np.array([pos_o.value, vel_o.value, mass_o.value], dtype=float)
-
-
-    rocket_dynamics(time, state, thrust=thrust, spec_imp=spec_imp, grav_acc_const=grav_acc_const)
+    time_span = (0, delta_time.value)
+    time_eval = np.linspace(0, delta_time.value, time_steps)
+    state_o   = np.array([pos_o.value, vel_o.value, mass_o.value], dtype=float)
+    params    = (thrust.value, spec_imp.value, grav_acc_const.value, grav_acc_sea_level.value)
 
     sol = solve_ivp(
         rocket_dynamics,
-        t_span, 
+        time_span, 
         state_o,
         args=params, 
-        t_eval=t_eval, 
-        method='RK45
+        time_eval=time_eval, 
+        method='RK45',
     )
+
+    breakpoint()
 
 
 
 # Main
 if __name__ == "__main__":
     # Input
-    delta_time_value = 1.0
-    delta_time_unit  = "sec"
-    pos_o_value      = 1.0
-    pos_o_unit       = "m"
-    vel_o_value      = 0.0
-    vel_o_unit       = "m"
-    mass_o_value     = 0.0
-    mass_o_unit      = "kg"
+    delta_time_value         = 1.0
+    delta_time_unit          = "sec"
+    time_steps               = 100
+    pos_o_value              = 1.0
+    pos_o_unit               = "m"
+    vel_o_value              = 0.0
+    vel_o_unit               = "m"
+    mass_o_value             = 1000.0
+    mass_o_unit              = "kg"
+    grav_acc_const_value     = 9.81
+    grav_acc_const_unit      = "m/s^2"
+    grav_acc_sea_level_value = 9.81
+    grav_acc_sea_level_unit  = "m/s^2"
+    spec_imp_value           = 300.0
+    spec_imp_unit            = "s"
+    thrust_value             = 20000.0
+    thrust_unit              = "N"
 
     # Process Input
     (
@@ -97,6 +143,10 @@ if __name__ == "__main__":
         pos_o,
         vel_o,
         mass_o,
+        grav_acc_const,
+        grav_acc_sea_level,
+        spec_imp,
+        thrust,
     ) = process_input(
         delta_time_value,
         delta_time_unit,
@@ -106,47 +156,30 @@ if __name__ == "__main__":
         vel_o_unit,
         mass_o_value,
         mass_o_unit,
+        grav_acc_const_value,
+        grav_acc_const_unit,
+        grav_acc_sea_level_value,
+        grav_acc_sea_level_unit,
+        spec_imp_value,
+        spec_imp_unit,
+        thrust_value,
+        thrust_unit,
     )
 
     # Simulate
     simulate_rocket_trajectory(
-        delta_time=delta_time,
-        pos_o=pos_o,
-        vel_o=vel_o,
-        mass_o=mass_o,
+        delta_time         = delta_time,
+        time_steps         = time_steps,
+        pos_o              = pos_o,
+        vel_o              = vel_o,
+        mass_o             = mass_o,
+        thrust             = thrust,
+        spec_imp           = spec_imp,
+        grav_acc_const     = grav_acc_const,
+        grav_acc_sea_level = grav_acc_sea_level,
     )
 
     # Output
     pass
 
 
-# # Main execution
-# if __name__ == "__main__":
-#     # Example parameters for simulation
-#     delta_time_value = 1.0
-#     delta_time_unit = "sec"
-#     pos_vec_o_value = [0.0, 0.0, 0.0]
-#     pos_vec_o_unit = "m"
-#     mass_o_value = 1000.0  # Initial mass in kg
-#     mass_o_unit = "kg"
-#     thrust = 15000.0  # Thrust in Newtons
-#     spec_imp = 300.0  # Specific impulse in seconds
-
-#     # Process Input
-#     delta_time, pos_vec_o, mass_o = process_input(
-#         delta_time_value,
-#         delta_time_unit,
-#         pos_vec_o_value,
-#         pos_vec_o_unit,
-#         mass_o_value,
-#         mass_o_unit,
-#     )
-
-#     # Simulate
-#     simulate_rocket_trajectory(
-#         delta_time=delta_time,
-#         pos_vec_o=pos_vec_o,
-#         mass_o=mass_o,
-#         thrust=thrust,
-#         spec_imp=spec_imp,
-#     )

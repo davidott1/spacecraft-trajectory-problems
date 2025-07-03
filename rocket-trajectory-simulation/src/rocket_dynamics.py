@@ -3,17 +3,15 @@ import numpy as np
 def rocket_dynamics(
     time: float,
     state: np.ndarray,
-    **kwargs,
+    thrust: float = 0.0,
+    spec_imp: float = 0.0,
+    grav_acc_const: float  = 9.81,
+    grav_acc_sea_level: float = 9.81,
 ) -> np.ndarray:
 
     pos  = state[0]
     vel  = state[1]
     mass = state[2]
-
-    spec_imp           = kwargs.get('spec_imp', 0.0)
-    grav_acc_const     = kwargs.get('grav_acc_const', 9.81)
-    grav_acc_sea_level = kwargs.get('grav_acc_sea_level', 9.81)
-    thrust             = kwargs.get('thrust', 0.0)
 
     exhaust_velocity = spec_imp * grav_acc_sea_level
 
