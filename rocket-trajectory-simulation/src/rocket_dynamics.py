@@ -53,3 +53,62 @@ def rocket_dynamics_2d(
     dstate__dtime[4  ] = dmass__dtime
 
     return dstate__dtime
+
+
+def rocket_dynamics_2d_indirect(
+    time             : float,
+    state            : np.ndarray,
+    thrust_mag_max   : float = 0.0,
+    exhaust_velocity : float = 300.0,
+    grav_acc_const   : float = 9.81,
+):
+
+    pos_x   = state[0]
+    pos_y   = state[1]
+    vel_x   = state[2]
+    vel_y   = state[3]
+    mass    = state[4]
+    copos_x = state[5]
+    copos_y = state[6]
+    covel_x = state[7]
+    covel_y = state[8]
+    comass  = state[9]
+
+    grav_acc_x   = 0.0
+    grav_acc_y   = -grav_acc_const
+
+    thrust_ang  = np.arctan2(-covel_x, -covel_y)
+    switch_func = 1.0/mass * (covel_x*np.cos(thrust_ang) + covel_y*np.sin(thrust_ang)) - comass/exhaust_velocity
+    if switch_func > 0.0:
+        thrust_mag = thrust_mag_max
+    elif switch_func < 0.0:
+        thrust_mag = 0.0
+    else:
+        thrust_mag = 0.0 # indeterminate
+    thrust_acc_x  = thrust_mag / mass * np.cos(thrust_ang)
+    thrust_acc_y  = thrust_mag / mass * np.sin(thrust_ang)
+
+    dpos_x__dtime   = vel_x
+    dpos_y__dtime   = vel_y
+    dvel_x__dtime   = grav_acc_x + thrust_acc_x
+    dvel_y__dtime   = grav_acc_y + thrust_acc_y
+    dmass__dtime    = -thrust_mag / exhaust_velocity
+    dcopos_x__dtime = 0.0
+    dcopos_y__dtime = 0.0
+    dcovel_x__dtime = -copos_x
+    dcovel_y__dtime = -copos_y
+    dcomass__dtime  = thrust_mag/mass**2 * (covel_x*np.cos(thrust_ang) + covel_y*np.sin(thrust_ang)) - covel_y*grav_acc_const/mass
+
+    dstate__dtime    = np.zeros(10, dtype=float)
+    dstate__dtime[0] = dpos_x__dtime
+    dstate__dtime[1] = dpos_y__dtime
+    dstate__dtime[2] = dvel_x__dtime
+    dstate__dtime[3] = dvel_y__dtime
+    dstate__dtime[4] = dmass__dtime
+    dstate__dtime[5] = dcopos_x__dtime
+    dstate__dtime[6] = dcopos_y__dtime
+    dstate__dtime[7] = dcovel_x__dtime
+    dstate__dtime[8] = dcovel_y__dtime
+    dstate__dtime[9] = dcomass__dtime
+
+    return dstate__dtime
