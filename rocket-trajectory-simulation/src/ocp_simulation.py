@@ -3,6 +3,7 @@ import astropy.units as u
 import numpy as np
 from typing import List, Tuple
 from scipy.integrate import solve_ivp
+from scipy.integrate._ivp.ivp import OdeResult
 import matplotlib.pyplot as plt
 
 from rocket_dynamics import rocket_dynamics_2d_indirect
@@ -86,7 +87,7 @@ def process_input(
     )
 
 
-def simulate_rocket_trajectory_2d(
+def propagate_rocket_trajectory_2d(
     delta_time         : Quantity,
     time_steps         : int,
     pos_vec_o          : Quantity,
@@ -99,7 +100,7 @@ def simulate_rocket_trajectory_2d(
     spec_imp           : Quantity,
     grav_acc_const     : Quantity,
     grav_acc_sea_level : Quantity,
-) -> None:
+) -> Tuple[Quantity, Quantity, Quantity, Quantity, Quantity, Quantity, OdeResult]:
     """
     Simulate and plot 2D rocket trajectory to a specified altitude with no vertical velocity.
     """
@@ -119,68 +120,41 @@ def simulate_rocket_trajectory_2d(
         method = 'RK45',
     )
 
-    pos_vec_f = soln.y[0:2,-1] * pos_vec_o.unit
-    vel_vec_f = soln.y[2:4,-1] * vel_vec_o.unit
-    mass_f    = soln.y[4,-1] * mass_o.unit
+    pos_vec_f   = soln.y[0:2,-1] *   pos_vec_o.unit
+    vel_vec_f   = soln.y[2:4,-1] *   vel_vec_o.unit
+    mass_f      = soln.y[  4,-1] *      mass_o.unit
+    copos_vec_f = soln.y[5:7,-1] * copos_vec_o.unit
+    covel_vec_f = soln.y[7:9,-1] * covel_vec_o.unit
+    comass_f    = soln.y[  9,-1] *    comass_o.unit
 
-    print("\nSimulation Results: 2D Rocket Trajectory")
-    print(f"  Success              : {soln.success}")
-    print(f"  Message              : {soln.message}")
-    print(f"  Time                 :")
-    print(f"    Steps              : {time_steps:>12d}")
-    print(f"    Initial            : {0.0:>12.6f} s")
-    print(f"    Final              : {delta_time.to_value('s'):>12.6f} s")
-    print(f"  State                :")
-    print(f"    Initial            :")
-    print(f"      Position         : {pos_vec_o[0].to_value('m'):>12.6f} m")
-    print(f"      Velocity         : {vel_vec_o[0].to_value('m/s'):>12.6f} m/s")
-    print(f"      Mass             : {mass_o.to_value('kg'):>12.6f} kg")
-    print(f"    Final State        :")
-    print(f"      Position         : {pos_vec_f[0].to_value('m'):>12.6f} m")
-    print(f"      Velocity         : {vel_vec_f[0].to_value('m/s'):>12.6f} m/s")
-    print(f"      Mass             : {mass_f.to_value('kg'):>12.6f} kg")
-    print(f"  System Parameters    :")
-    print(f"    Thrust             : {thrust_mag:>12.6f} N")
-    print(f"    Grav Acc Const     : {grav_acc_const.to_value('m/s^2'):>12.6f} m/s^2")
-    print(f"    Specific Impulse   : {spec_imp.to_value('s'):>12.6f} s")
-    print(f"    Grav Acc Sea Level : {grav_acc_sea_level.to_value('m/s^2'):>12.6f} m/s^2")
-    print(f"    Exhaust Velocity   : {exhaust_velocity.to_value('m/s'):>12.6f} m/s")
+    return (
+        pos_vec_f,
+        vel_vec_f,
+        mass_f,
+        copos_vec_f,
+        covel_vec_f,
+        comass_f,
+        soln_init,
+    )
 
-    print("Plotting the results ...")
-    fig, ax = plt.subplots(3, 1, figsize=(10, 6))
-    fig.suptitle('Rocket Trajectory Simulation (2D)')
-    fig.align_ylabels(ax)
-    ax[0].set_ylabel('Position [m]')
-    ax[0].grid()
-    ax[0].tick_params(labelbottom=False)
-    ax[1].set_ylabel('Velocity [m/s]')
-    ax[1].grid()
-    ax[1].tick_params(labelbottom=False)
-    ax[2].set_xlabel('Time [s]')
-    ax[2].set_ylabel('Mass [kg]')
-    ax[2].grid()
-    ax[0].plot(soln.t, soln.y[0], label='Pos X', color='blue')
-    ax[0].plot(soln.t, soln.y[1], label='Pos Y', color='orange')
-    ax[1].plot(soln.t, soln.y[2], label='Vel X', color='blue')
-    ax[1].plot(soln.t, soln.y[3], label='Vel Y', color='orange')
-    ax[2].plot(soln.t, soln.y[4], label='Mass', color='black')
-    ax[0].legend()
-    ax[1].legend()
-
-    fig, ax = plt.subplots(1, 2, figsize=(10, 6))
-    ax[0].set_xlabel('Position X [m]')
-    ax[0].set_ylabel('Position Y [m]')
-    ax[0].grid()
-    ax[1].set_xlabel('Velocity X [m/s]')
-    ax[1].set_ylabel('Velocity Y [m/s]')
-    ax[1].grid()
-    ax[0].plot(soln.y[0,0], soln.y[1,0], color='black', marker='>', markersize=5)
-    ax[0].plot(soln.y[0], soln.y[1], color='black')
-    ax[0].plot(soln.y[0,-1], soln.y[1,-1], color='black', marker='s', markersize=5)
-    ax[1].plot(soln.y[2,0], soln.y[3,0], color='red', marker='>', markersize=5)
-    ax[1].plot(soln.y[2], soln.y[3], color='red')
-    ax[1].plot(soln.y[2,-1], soln.y[3,-1], color='red', marker='s', markersize=5)
-    plt.show()
+def plot_rocket_trajectory(
+    soln_init: OdeResult,
+):
+    """
+    Plot the rocket trajectory based on the solution from the ODE solver.
+    """
+    # Extract position data
+    pos_x_t_init = soln_init.y[0, :] * u.m  # type: ignore
+    pos_y_t_init = soln_init.y[1, :] * u.m  # type: ignore
+    
+    # Create a plot 
+    plt.figure(figsize=(10, 6))
+    plt.plot(pos_x_t_init.value, pos_y_t_init.value, color='black')
+    plt.title('Rocket Trajectory Simulation')
+    plt.xlabel('Pos-X [m]')
+    plt.ylabel('Pos-Y [m]')
+    plt.grid()
+    plt.axis('equal')
 
 # Main
 if __name__ == "__main__":
@@ -238,7 +212,15 @@ if __name__ == "__main__":
     comass_o    =    mass_o * 0.0 * u.kg    # type: ignore
 
     # Simulate rocket trajectory
-    simulate_rocket_trajectory_2d(
+    (
+        pos_vec_f,
+        vel_vec_f,
+        mass_f,
+        copos_vec_f,
+        covel_vec_f,
+        comass_f,
+        soln_init,
+    ) = propagate_rocket_trajectory_2d(
         delta_time         = delta_time,
         time_steps         = time_steps,
         pos_vec_o          = pos_vec_o,
@@ -252,7 +234,12 @@ if __name__ == "__main__":
         grav_acc_const     = grav_acc_const,
         grav_acc_sea_level = grav_acc_sea_level,
     )
+    
+    # Plot the trajectory
+    plot_rocket_trajectory(soln_init)
 
+    # Show the plot
+    plt.show()
 
 
 
