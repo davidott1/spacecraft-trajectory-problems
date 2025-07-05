@@ -104,7 +104,7 @@ def simulate_rocket_trajectory(
     state_o          = np.array([pos_vec_o[0].value, vel_vec_o[0].value, mass_o.value], dtype=float)
     exhaust_velocity = spec_imp * grav_acc_sea_level
     thrust_mag       = np.linalg.norm(thrust_vec)
-    params           = (thrust_mag.value, exhaust_velocity.value, grav_acc_const.value)
+    params           = (thrust_mag.value, exhaust_velocity.value, grav_acc_const.value) # type: ignore
 
     soln = solve_ivp(
         rocket_dynamics_1d,
