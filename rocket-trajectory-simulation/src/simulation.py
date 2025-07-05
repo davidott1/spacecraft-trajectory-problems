@@ -136,7 +136,8 @@ def simulate_rocket_trajectory(
     print(f"      Velocity         : {vel_vec_f[0].to_value('m/s'):>12.6f} m/s")
     print(f"      Mass             : {mass_f.to_value('kg'):>12.6f} kg")
     print(f"  System Parameters    :")
-    print(f"    Thrust             : {thrust_mag.to_value('N'):>12.6f} N")
+    breakpoint()
+    print(f"    Thrust             : {thrust_mag.to_value('N'):>12.6f} N") # type: ignore
     print(f"    Grav Acc Const     : {grav_acc_const.to_value('m/s^2'):>12.6f} m/s^2")
     print(f"    Specific Impulse   : {spec_imp.to_value('s'):>12.6f} s")
     print(f"    Grav Acc Sea Level : {grav_acc_sea_level.to_value('m/s^2'):>12.6f} m/s^2")
