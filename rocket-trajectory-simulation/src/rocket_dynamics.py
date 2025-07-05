@@ -31,8 +31,8 @@ def rocket_dynamics_2d(
     time             : float,
     state            : np.ndarray,
     thrust_vec       : np.ndarray = np.array([0.0,1.0]),
-    exhaust_velocity : float = 300.0,
-    grav_acc_const   : float = 9.81,
+    exhaust_velocity : float      = 300.0,
+    grav_acc_const   : float      = 9.81,
 ):
 
     pos_vec = state[0:2]
