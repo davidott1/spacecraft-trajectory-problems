@@ -193,7 +193,7 @@ def solve_trajectory(T_max):
                 objective_and_jacobian,
                 initial_costates_guess, 
                 args=([t0, tf], initial_states, final_states, T_max, alpha, k_for_alpha_loop),
-                method='lm', 
+                method='hybr', # hybr | lm
                 tol=1e-8,
                 jac=True,
             )
