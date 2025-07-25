@@ -50,9 +50,6 @@ def dynamics_with_stm(t, z_aug, T_max, alpha, k_heaviside):
     
     # Unpack for clarity
     l_rx, l_ry, l_vx, l_vy = z[4], z[5], z[6], z[7]
-    epsilon = 1e-10
-    lambda_v_norm = np.sqrt(l_vx**2 + l_vy**2) + epsilon
-
     # Constant parts of the Jacobian
     # State and Costate Derivatives
     # thrust_acc_x = -l_vx
@@ -64,31 +61,53 @@ def dynamics_with_stm(t, z_aug, T_max, alpha, k_heaviside):
     # z =  [ rx ry vx vy lrx lry lvx lvy ]
     # A = x[  0  0  1  0   0   0   0   0 ] # d( rx_dot) / d(z)
     #     x[  0  0  0  1   0   0   0   0 ] # d( ry_dot) / d(z)
-    #      [  0  0  0  0   0   0  -1   0 ] # d( vx_dot) / d(z)
-    #      [  0  0  0  0   0   0   0  -1 ] # d( vy_dot) / d(z)
+    #      [  0  0  0  0   0   0   x   x ] # d( vx_dot) / d(z)
+    #      [  0  0  0  0   0   0   x   x ] # d( vy_dot) / d(z)
     #     x[  0  0  0  0   0   0   0   0 ] # d(lrx_dot) / d(z)
     #     x[  0  0  0  0   0   0   0   0 ] # d(lry_dot) / d(z)
     #     x[  0  0  0  0  -1   0   0   0 ] # d(lvx_dot) / d(z)
     #     x[  0  0  0  0   0  -1   0   0 ] # d(lvy_dot) / d(z)
-    A = np.zeros((8, 8))
-    A[0, 2] =  1.0 # d( rx_dot)/d( vx)
-    A[1, 3] =  1.0 # d( ry_dot)/d( vy)
-    A[2, 6] = -1.0 # d( vx_dot)/d(lrx)
-    A[3, 7] = -1.0 # d( vy_dot)/d(lry)
-    A[6, 4] = -1.0 # d(lvx_dot)/d(lrx)
-    A[7, 5] = -1.0 # d(lvy_dot)/d(lry)
 
-    # Derivatives of thrust (u) w.r.t. costates (p)
-    # This is the non-constant, complex part: A[2:4, 4:8]
-    # N OTE: Calculating these derivatives analytically is complex and error-prone.
-    # The expressions depend on which regime (alpha or k) you are in.
-    # For the k-continuation regime (alpha -> 0):
-    # u = -(T/||lambda_v||) * lambda_v, where T is a function of tanh(...)
-    # This requires extensive use of the chain rule.
-    # For simplicity, we will leave this part as zero, which means the solver
-    # will still work but the provided Jacobian will be incomplete.
-    # To get the full benefit, these analytical derivatives must be coded here.
+    epsilon = 1e-10
+    L = np.sqrt(l_vx**2 + l_vy**2)
+    lambda_v_norm = L + epsilon
+    unconstrained_thrust = (lambda_v_norm - (1 - alpha)) / alpha
+    thrust_acc_mag = min(T_max, max(0, unconstrained_thrust))
+    thrust_acc_x = - (l_vx / lambda_v_norm) * thrust_acc_mag
+    thrust_acc_y = - (l_vy / lambda_v_norm) * thrust_acc_mag
     
+    # d(vx_dot) / d(lvx), d(vx_dot) / d(lvy)
+    # d(vy_dot) / d(lvx), d(vy_dot) / d(lvy)
+    dvxdot__dlvx = 0.0 # d(vx_dot) / d(lvx)
+    dvxdot__dlvy = 0.0 # d(vx_dot) / d(lvy)
+    dvydot__dlvx = 0.0 # d(vy_dot) / d(lvx)
+    dvydot__dlvy = 0.0 # d(vy_dot) / d(lvy)
+    if L <= 1 - alpha:
+        dvxdot__dlvx = 0.0 # d(vx_dot) / d(lvx)
+        dvxdot__dlvy = 0.0 # d(vx_dot) / d(lvy)
+        dvydot__dlvx = 0.0 # d(vy_dot) / d(lvx)
+        dvydot__dlvy = 0.0 # d(vy_dot) / d(lvy)
+    elif L >= alpha*T_max + 1 - alpha:
+        dvxdot__dlvx = -T_max*l_vy**2  /L**3 # d(vx_dot) / d(lvx)
+        dvxdot__dlvy =  T_max*l_vx*l_vy/L**3 # d(vx_dot) / d(lvy)
+        dvydot__dlvx =  T_max*l_vx*l_vy/L**3 # d(vy_dot) / d(lvx)
+        dvydot__dlvy = -T_max*l_vx**2  /L**3 # d(vy_dot) / d(lvy)
+    elif (1 - alpha < L) and (L < alpha*T_max + 1 - alpha):
+        dvxdot__dlvx = -1/alpha * (1 - (1 - alpha)       * l_vy**2  /L**3) # d(vx_dot) / d(lvx)
+        dvxdot__dlvy = -1       *      (1 - alpha)/alpha * l_vx*l_vy/L**3 # d(vx_dot) / d(lvy)
+        dvydot__dlvx = -1       *      (1 - alpha)/alpha * l_vx*l_vy/L**3 # d(vy_dot) / d(lvx)
+        dvydot__dlvy = -1/alpha * (1 - (1 - alpha)       * l_vx**2  /L**3) # d(vy_dot) / d(lvy)
+
+    A = np.zeros((8, 8))
+    A[0, 2] =  1.0         # d( rx_dot)/d( vx)
+    A[1, 3] =  1.0         # d( ry_dot)/d( vy)
+    A[2, 6] = dvxdot__dlvx # d( vx_dot)/d(lrx)
+    A[2, 7] = dvxdot__dlvy # d( vx_dot)/d(lry)
+    A[3, 6] = dvydot__dlvx # d( vy_dot)/d(lrx)
+    A[3, 7] = dvydot__dlvy # d( vy_dot)/d(lry)
+    A[6, 4] = -1.0         # d(lvx_dot)/d(lrx)
+    A[7, 5] = -1.0         # d(lvy_dot)/d(lry)
+
     # 4. Calculate the STM derivative
     dphi_dt = A @ phi
     
@@ -123,7 +142,8 @@ def objective_and_jacobian(initial_costates, t_span, initial_states, final_state
     # Integrate the augmented system
     sol = solve_ivp(dynamics_with_stm, t_span, z_aug_0, dense_output=True, 
                     args=(T_max, alpha, k_heaviside), 
-                    method='DOP853', rtol=1e-8, atol=1e-8)
+                    method='RK45', # DOP853 | RK45
+                    rtol=1e-12, atol=1e-12)
     
     # Extract final state and final STM
     final_aug_state = sol.sol(t_span[1])
@@ -163,14 +183,14 @@ def solve_trajectory(T_max):
     t0, tf = 0, 10
     initial_states = np.array([0, 0, 1, 2])
     final_states = np.array([10, 15, 5, 0])
-    alpha_final = 1.0e-0
+    alpha_final = 1.0e-1
     
     # Generate an initial guess for the costates
     initial_costates_guess = generate_heuristic_guess(initial_states, final_states, tf)
 
     # --- PART 1: Alpha-Continuation Loop ---
     k_for_alpha_loop = 1.0
-    alphas = np.logspace(0, np.log10(alpha_final), 1)
+    alphas = np.logspace(0, np.log10(alpha_final), 10)
     alpha_results = {}
     
     # Select which alphas to store for plotting
@@ -193,8 +213,8 @@ def solve_trajectory(T_max):
                 objective_and_jacobian,
                 initial_costates_guess, 
                 args=([t0, tf], initial_states, final_states, T_max, alpha, k_for_alpha_loop),
-                method='hybr', # hybr | lm
-                tol=1e-8,
+                method='lm', # hybr | lm
+                tol=1e-10,
                 jac=True,
             )
 
