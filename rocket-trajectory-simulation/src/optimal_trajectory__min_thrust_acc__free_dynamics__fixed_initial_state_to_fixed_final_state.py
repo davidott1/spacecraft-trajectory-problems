@@ -2,10 +2,12 @@
 import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.optimize import root
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
+import matplotlib.pyplot as mplt
+import matplotlib.colors as mcolors
 import random
 np.random.seed(42)
+import astropy.units as u
+
 
 
 # Dynamical functions
@@ -242,7 +244,7 @@ def objective_function(
     """
     Objective function for the root-finder that calls the unified dynamics.
     """
-    statecostate_o = np.concatenate((boundary_condition_state_o, decision_state))
+    statecostate_o = np.hstack((boundary_condition_state_o, decision_state))
     sol = \
         solve_ivp(
             freebodydynamics__minfuel__indirect_thrustacc_heaviside,
@@ -290,40 +292,43 @@ def objective_and_jacobian(initial_costates, time_span, initial_states, final_st
     return error, jacobian
 
 
-def generate_heuristic_guess(time_o, time_f, posvel_o, posvel_f, thrust_min, thrust_max, k_heaviside):
+def generate_guess(time_span, boundary_condition_state_o, boundary_condition_state_f, thrust_min, thrust_max, k_heaviside):
     """
-    Generates a robust, physics-based initial guess for the costates.
+    Generates a robust initial guess for the co-states: copos_vec, covel_vec
     """
-    time_span    = [time_o, time_f]
-    pos_o, vel_o = posvel_o[:2], posvel_o[2:]
-    pos_f, vel_f = posvel_f[:2], posvel_f[2:]
-    # l_r0_guess = (pos_o - pos_f) / (t_f - t_o)
-    # l_v0_guess =  vel_o - vel_f
-    # costates_o_guess = np.concatenate([l_r0_guess, l_v0_guess])
-    # l_r0_guess = np.array([1.0e-9, 1.0e-9])
-    # l_v0_guess = np.array([1.0e-9, 1.0e-9])
-    # costates_o_guess = np.concatenate([l_r0_guess, l_v0_guess])
-
+    print("\nHeuristic Initial Guess Process")
     error_mag_min = np.Inf
     for idx in range(1000):
-        l_r0_guess     = np.random.uniform(low=-1, high=1, size=2)
-        l_v0_guess     = np.random.uniform(low=-1, high=1, size=2)
-        costates_o_idx = np.concatenate([l_r0_guess, l_v0_guess])
-
-        error_idx = objective_function(costates_o_idx, time_span, posvel_o, posvel_f, thrust_min, thrust_max, k_heaviside)
+        copos_vec_o        = np.random.uniform(low=-1, high=1, size=2)
+        covel_vec_o        = np.random.uniform(low=-1, high=1, size=2)
+        decision_state_idx = np.hstack([copos_vec_o, covel_vec_o])
+        
+        error_idx = objective_function(
+            decision_state_idx,
+            time_span,
+            boundary_condition_state_o,
+            boundary_condition_state_f,
+            thrust_min,
+            thrust_max,
+            k_heaviside,
+        )
 
         error_mag_idx = np.linalg.norm(error_idx)
         if error_mag_idx < error_mag_min:
-            error_mag_min  = error_mag_idx
-            costates_o_min = costates_o_idx
-            print(f"idx error_mag costate_o : {idx}, {error_mag_min}, {costates_o_min}")
-    costates_o_guess = costates_o_min
+            idx_min            = idx
+            error_mag_min      = error_mag_idx
+            decision_state_min = decision_state_idx
+            if idx==0:
+                print(f"                              {'decision_state':>{4*14+3}s}")
+                print(f"         {'idx':>5s} {'error_mag':>14s} {'copos_x':>14s} {'copos_y':>14s} {'covel_x':>14s} {'covel_y':>14s}")
+            decision_state_min_str = ' '.join(f"{x:>14.6e}" for x in decision_state_idx)
+            print(f"         {idx_min:>5d} {error_mag_min:>14.6e} {decision_state_min_str}")
 
+    # Pack up and print solution
+    costate_o_guess = decision_state_min
     
-    print("--- Generated Heuristic Initial Guess ---")
-    print(f"  l_r(0) guess: [{costates_o_guess[0]:.2f}, {costates_o_guess[1]:.2f}]")
-    print(f"  l_v(0) guess: [{costates_o_guess[2]:.2f}, {costates_o_guess[3]:.2f}]")
-    return costates_o_min
+    print(f"MIN: *** {idx_min:>5d} {error_mag_min:>14.6e} {decision_state_min_str} ***")
+    return costate_o_guess
 
 
 def solve_trajectory():
@@ -332,111 +337,129 @@ def solve_trajectory():
     using the unified smoothed dynamics.
     """
     # Problem input
-    time_o, time_f         = 0, 50
-    posvel_o               = [ 0,  0, 0, 0]
-    posvel_f               = [10, 15, 5, 0]
-    thrust_min, thrust_max = 0.0e-0, 0.5e+0
-    k_idx0, k_idxn, k_divs = 1.0e-1, 1.0e+2, 50
+    units_time, units_distance, units_mass, units_force = "s", "m", "kg", "N" # "s", "m", "kg", "N" | ???
+    time_o, time_f                          = 0, 200
+    pos_vec_o                               = [  0.0,  0.0 ]
+    vel_vec_o                               = [ -0.3, -0.5 ]
+    pos_vec_f                               = [ 10.0,  5.0 ]
+    vel_vec_f                               = [  0.3, -0.5 ] 
+    thrust_acc_min, thrust_acc_max          = 0.0e+0, 0.1e+0
+    k_idxinitguess, k_idxfinsoln, k_idxdivs = 1.0e-1, 1.0e+2, 50
 
     # Process input
-    time_span = [time_o, time_f]
-    posvel_o = np.array(posvel_o)
-    posvel_f = np.array(posvel_f)
-    
-    # Generate an initial guess for the costates
-    decisionstate = generate_heuristic_guess(time_o, time_f, posvel_o, posvel_f, thrust_min, thrust_max, k_idx0)
+    time_span                  = np.hstack([time_o, time_f])
+    state_o                    = np.hstack([pos_vec_o, vel_vec_o])
+    state_f                    = np.hstack([pos_vec_f, vel_vec_f])
+    boundary_condition_state_o = state_o
+    boundary_condition_state_f = state_f
 
-    # --- K-Continuation Process ---
-    print(f"\n--- K-Continuation Process ---")
-    k_idx0ton = np.logspace(np.log(k_idx0), np.log(k_idxn), k_divs)
-    k_results = {}
-    for idx, k_idx in enumerate(k_idx0ton):
-        print(f"Step {idx+1}/{len(k_idx0ton)}: Solving for k = {k_idx:.2f}...", end="")
+    # Generate initial guess for the costates
+    decisionstate_initguess = generate_guess(time_span, boundary_condition_state_o, boundary_condition_state_f, thrust_acc_min, thrust_acc_max, k_idxinitguess)
+
+    # K-Continuation Process
+    print(f"\nK-Continuation Process")
+    k_idxinitguess_to_idxfinsoln = np.logspace(np.log(k_idxinitguess), np.log(k_idxfinsoln), k_idxdivs)
+    results_k_idx = {}
+    for idx, k_idx in enumerate(k_idxinitguess_to_idxfinsoln):
+        if idx==0:
+            print(f"       {'Step':>5s} {'k':>14s}")
+        print(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e}")
         sol_root = \
             root(
                 objective_and_jacobian,
-                decisionstate,
-                args=(time_span, posvel_o, posvel_f, thrust_min, thrust_max, k_idx),
+                decisionstate_initguess,
+                args=(time_span, state_o, state_f, thrust_acc_min, thrust_acc_max, k_idx),
                 method='lm',
                 tol=1e-7,
                 jac=True,
             )
         if sol_root.success:
-            print("Success!")
-            decisionstate     = sol_root.x
-            statecostate_o    = np.concatenate((posvel_o, decisionstate))
-            stm_oo            = np.identity(8).flatten()
-            statecostatestm_o = np.concatenate([statecostate_o, stm_oo])
-            time_eval_points  = np.linspace(time_span[0], time_span[1], 201)
+            decisionstate_initguess = sol_root.x
+            statecostate_o          = np.hstack((pos_vec_o, vel_vec_o, decisionstate_initguess))
+            stm_oo                  = np.identity(8).flatten()
+            statecostatestm_o       = np.concatenate([statecostate_o, stm_oo])
+            time_eval_points        = np.linspace(time_span[0], time_span[1], 401)
             sol_optimal = \
                 solve_ivp(
                     freebodydynamics__minfuel__indirect_thrustacc_heaviside_stm,
                     time_span,
                     statecostatestm_o,
-                    t_eval=time_eval_points,
-                    dense_output=True, 
-                    args=(thrust_min, thrust_max, k_idx), 
-                    method='RK45', # DOP853 | RK45
-                    rtol=1e-12,
-                    atol=1e-12,
+                    t_eval       = time_eval_points,
+                    dense_output = True, 
+                    args         = (thrust_acc_min, thrust_acc_max, k_idx), 
+                    method       = 'RK45', # DOP853 | RK45
+                    rtol         = 1e-12,
+                    atol         = 1e-12,
                 )
-            k_results[k_idx] = sol_optimal
+            results_k_idx[k_idx] = sol_optimal
         else:
-            print(f"Convergence Failed for k={k_idx:.2f}. Stopping.")
+            print(f"Convergence Failed for k={k_idx:>14.6e}. Stopping.")
             break
     
-    # The final solution is the one with the highest k
-    final_solution = k_results[k_idx0ton[-1]]
-    final_k        = k_idx0ton[-1]
+    # Final solution
+    results_finsoln = results_k_idx[k_idxinitguess_to_idxfinsoln[-1]]
+    state_f_finsoln = results_finsoln.y[0:4, -1]
+    k_finsoln       = k_idxinitguess_to_idxfinsoln[-1]
 
     # Check final state error
-    final_state_vector = final_solution.y[0:4, -1]
-    error_vector = final_state_vector - posvel_f
-    print("\n--- Final State Error Check ---")
-    print(f"               {'rx':>12s} {'ry':>12s} {'vx':>12s} {'vy':>12s}")
-    print(f"Target:      {posvel_f[0]:12.6f} {posvel_f[1]:12.6f} {posvel_f[2]:12.6f} {posvel_f[3]:12.6f}")
-    print(f"Actual:      {final_state_vector[0]:12.6f} {final_state_vector[1]:12.6f} {final_state_vector[2]:12.6f} {final_state_vector[3]:12.6f}")
-    print(f"Error:       {error_vector[0]:12.3e} {error_vector[1]:12.3e} {error_vector[2]:12.3e} {error_vector[3]:12.3e}")
-
+    error_finsoln_vec = state_f_finsoln - boundary_condition_state_f
+    print("\nFinal State Error Check")
+    print(f"           {'pos_x':>14s} {'pos_y':>14s} {'vel_x':>14s} {'vel_y':>14s}")
+    print(f"           {    'm':>14s} {    'm':>14s} {  'm/s':>14s} {  'm/s':>14s}")
+    print(f"  Target : {boundary_condition_state_f[0]:>14.6e} {boundary_condition_state_f[1]:>14.6e} {boundary_condition_state_f[2]:>14.6e} {boundary_condition_state_f[3]:>14.6e}")
+    print(f"  Actual : {           state_f_finsoln[0]:>14.6e} {           state_f_finsoln[1]:>14.6e} {           state_f_finsoln[2]:>14.6e} {           state_f_finsoln[3]:>14.6e}")
+    print(f"  Error  : {         error_finsoln_vec[0]:>14.6e} {         error_finsoln_vec[1]:14.3e} {         error_finsoln_vec[2]:>14.6e} {         error_finsoln_vec[3]:>14.6e}")
+   
     # Plot the results
-    plot_final_results(final_solution, posvel_o, posvel_f, thrust_min, thrust_max, final_k)
+    plot_final_results(
+        results_finsoln, 
+        boundary_condition_state_o,
+        boundary_condition_state_f,
+        thrust_acc_min,
+        thrust_acc_max,
+        k_finsoln,
+    )
 
 
-def plot_final_results(solution, initial_states, final_states, thrust_acc_min, thrust_acc_max, k):
+def plot_final_results(
+        results_finsoln,
+        boundary_condition_state_o, 
+        boundary_condition_state_f, 
+        thrust_acc_min, 
+        thrust_acc_max, 
+        k,
+    ):
     """
     Calculates and plots all relevant results for the final trajectory solution.
     """
     # Unpack state and costate histories
-    time_t, states_t = solution.t, solution.y
-    pos_x_t, pos_y_t, vel_x_t, vel_y_t = states_t[0], states_t[1], states_t[2], states_t[3]
-    covel_x_t, covel_y_t = states_t[6], states_t[7]
+    time_t, states_t                           = results_finsoln.t, results_finsoln.y
+    pos_x_t, pos_y_t, vel_x_t, vel_y_t         = states_t[0:4]
+    copos_x_t, copos_y_t, covel_x_t, covel_y_t = states_t[4:8]
     
     # Recalculate the thrust profile to match the dynamics function
-    epsilon          = 1e-6
-    covel_t_mag      = np.sqrt(covel_x_t**2 + covel_y_t**2 + epsilon**2)
-    switching_func   = covel_t_mag - 1
-    heaviside_approx = 0.5 + 0.5 * np.tanh(k * switching_func)
+    epsilon          = 1.0e-6
+    covel_mag_t      = np.sqrt(covel_x_t**2 + covel_y_t**2 + epsilon**2)
+    switching_func_t = covel_mag_t - 1
+    heaviside_approx = 0.5 + 0.5 * np.tanh(k * switching_func_t)
     thrust_acc_mag_t = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx
-    thrust_acc_dir_t = np.array([ -covel_x_t/covel_t_mag, -covel_y_t/covel_t_mag ])
+    thrust_acc_dir_t = np.array([ -covel_x_t/covel_mag_t, -covel_y_t/covel_mag_t ])
     thrust_acc_vec_t = thrust_acc_mag_t * thrust_acc_dir_t
 
     # --- Create the plots ---
-    plt.style.use('seaborn-v0_8-whitegrid')
-    fig = plt.figure(figsize=(15, 8))
+    mplt.style.use('seaborn-v0_8-whitegrid')
+    fig = mplt.figure(figsize=(15, 8))
     gs = fig.add_gridspec(3, 2)
 
     # Panel 1: 2D Trajectory Path
-    ax1 = fig.add_subplot(gs[0, 0])
-    ax1.plot(pos_x_t, pos_y_t, label='Trajectory')
-    ax1.scatter(initial_states[0], initial_states[1], color='g', s=100, zorder=5, label='Start')
-    ax1.scatter(  final_states[0],   final_states[1], color='r', s=100, zorder=5, label='End'  )
-    ax1.set_title('2D Trajectory Path'); ax1.set_xlabel('$r_x$'); ax1.set_ylabel('$r_y$')
-    ax1.legend(); ax1.grid(True); ax1.axis('equal')
-
-    # Define a scale for the tangent lines (like quiver's scale)
+    ax1 = fig.add_subplot(gs[0:3, 0])
+    
+    ax1.plot   (                   pos_x_t    ,                    pos_y_t    , color=mcolors.CSS4_COLORS['black'],                                                                                                                                           label='Trajectory' )
+    ax1.scatter(boundary_condition_state_o[ 0], boundary_condition_state_o[ 1], color=mcolors.CSS4_COLORS['black'], marker='>',          s=400,       facecolor=mcolors.CSS4_COLORS['white'],       edgecolor=mcolors.CSS4_COLORS['black']                                       )
+    ax1.scatter(boundary_condition_state_f[ 0], boundary_condition_state_f[ 1], color=mcolors.CSS4_COLORS['black'], marker='s',          s=400,       facecolor=mcolors.CSS4_COLORS['white'],       edgecolor=mcolors.CSS4_COLORS['black']                                       )
+    ax1.plot   (                   pos_x_t[ 0],                    pos_y_t[ 0], color=mcolors.CSS4_COLORS['black'], marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='Start'      )
+    ax1.plot   (                   pos_x_t[-1],                    pos_y_t[-1], color=mcolors.CSS4_COLORS['black'], marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='End'        )
     line_scale = 1.0e0
-
-    # 5. Plot each tangent line using a loop
     for idx in range(len(time_t)):
         # Define the start and end points of the line segment
         start_x = pos_x_t[idx]
@@ -444,39 +467,78 @@ def plot_final_results(solution, initial_states, final_states, thrust_acc_min, t
         end_x   = pos_x_t[idx] + thrust_acc_vec_t[0][idx] * line_scale
         end_y   = pos_y_t[idx] + thrust_acc_vec_t[1][idx] * line_scale
 
-        # Add a label only to the first line to avoid a messy legend
+        # Only one label for thrust acc vectors
         if idx == 0:
-            ax1.plot([start_x, end_x], [start_y, end_y], color='red', linewidth=3.5, label='Velocity $\\vec{v}(t)$' )
+            ax1.plot([start_x, end_x], [start_y, end_y], color=mcolors.CSS4_COLORS['red'], linewidth=3.5, label='Thrust Acc Vec' )
         else:
-            ax1.plot([start_x, end_x], [start_y, end_y], color='red', linewidth=3.5 )
+            ax1.plot([start_x, end_x], [start_y, end_y], color=mcolors.CSS4_COLORS['red'], linewidth=3.5 )
+    ax1.set_xlabel('Position x [m]')
+    ax1.set_ylabel('Position y [m]')
+    ax1.grid(True)
+    ax1.axis('equal')
+    ax1.legend()
 
-    # Panel 2: Thrust Profile
-    ax2 = fig.add_subplot(gs[0, 1])
-    ax2.plot(time_t, thrust_acc_mag_t, 'r-', label='Thrust Acc Mag $||\Gamma||$')
-    ax2.axhline(y=thrust_acc_max, color='k', linestyle='--', label=f'thrust_acc_max = {thrust_acc_max}')
-    ax2.axhline(y=thrust_acc_min, color='k', linestyle=':' , label=f'thrust_acc_min = {thrust_acc_min}')
-    ax2.set_title('Thrust Acc Profile')
-    ax2.set_xlabel('Time (s)')
-    ax2.set_ylabel('Thrust Acc Mag')
-    ax2.legend(); ax2.grid(True)
-    ax2.set_ylim(0, thrust_acc_max * 1.1)
+    # Thrust Profile
+    ax2 = fig.add_subplot(gs[0,1])
+    ax2.axhline(y=thrust_acc_max, color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Min')
+    ax2.axhline(y=thrust_acc_min, color=mcolors.CSS4_COLORS['black'], linestyle=':' , linewidth=2.0, label=f'Thrust Acc Max')
+    ax2.plot(time_t, thrust_acc_mag_t, color=mcolors.CSS4_COLORS['red'], linewidth=2.0, label='Thrust Acc Mag')
+    ax2.set_xlabel('Time [s]')
+    ax2.set_ylabel('Thrust Acc Mag [m/s2]')
+    ax2.grid(True)
+    ax2.set_ylim(
+        thrust_acc_min - (thrust_acc_max - thrust_acc_min) * 0.1,
+        thrust_acc_max + (thrust_acc_max - thrust_acc_min) * 0.1,
+    )
 
-    # Panel 3: Position vs. Time
-    ax3 = fig.add_subplot(gs[1, :])
-    ax3.plot(time_t, pos_x_t, label='$r_x(t)$')
-    ax3.plot(time_t, pos_y_t, label='$r_y(t)$', linestyle='--')
-    ax3.set_title('Position vs. Time'); ax3.set_ylabel('Position'); ax3.legend(); ax3.grid(True)
+    # Position vs. Time
+    ax3 = fig.add_subplot(gs[1,1])
+    ax3.plot(time_t[ 0], boundary_condition_state_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax3.plot(time_t[-1], boundary_condition_state_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax3.plot(time_t    ,                    pos_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='x' )
+    ax3.plot(time_t[ 0],                    pos_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax3.plot(time_t[-1],                    pos_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax3.plot(time_t[ 0], boundary_condition_state_o[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax3.plot(time_t[-1], boundary_condition_state_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax3.plot(time_t    ,                    pos_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='y' )
+    ax3.plot(time_t[ 0],                    pos_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax3.plot(time_t[-1],                    pos_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax3.set_ylabel('Position [m]')
+    ax3.legend()
+    ax3.grid(True)
+    min_ylim = min(min(pos_x_t), min(pos_y_t))
+    max_ylim = max(max(pos_x_t), max(pos_y_t))
+    ax3.set_ylim(
+        min_ylim - (max_ylim - min_ylim) * 0.2,
+        max_ylim + (max_ylim - min_ylim) * 0.2,
+    )
 
-    # Panel 4: Velocity vs. Time
-    ax4 = fig.add_subplot(gs[2, :])
-    ax4.plot(time_t, vel_x_t, label='$v_x(t)$')
-    ax4.plot(time_t, vel_y_t, label='$v_y(t)$', linestyle='--')
-    ax4.set_title('Velocity vs. Time'); ax4.set_xlabel('Time (s)'); ax4.set_ylabel('Velocity')
-    ax4.legend(); ax4.grid(True)
+    # Velocity vs. Time
+    ax4 = fig.add_subplot(gs[2,1])
+    ax4.plot(time_t[ 0], boundary_condition_state_o[ 2], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax4.plot(time_t[-1], boundary_condition_state_f[ 2], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax4.plot(time_t    ,                    vel_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='x' )
+    ax4.plot(time_t[ 0],                    vel_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax4.plot(time_t[-1],                    vel_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax4.plot(time_t[ 0], boundary_condition_state_o[ 3], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax4.plot(time_t[-1], boundary_condition_state_f[ 3], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax4.plot(time_t    ,                    vel_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='y' )
+    ax4.plot(time_t[ 0],                    vel_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax4.plot(time_t[-1],                    vel_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax4.set_xlabel('Time [s]')
+    ax4.set_ylabel('Velocity [m/s]')
+    ax4.legend()
+    ax4.grid(True)
+    min_ylim = min(min(vel_x_t), min(vel_y_t))
+    max_ylim = max(max(vel_x_t), max(vel_y_t))
+    ax4.set_ylim(
+        min_ylim - (max_ylim - min_ylim) * 0.2,
+        max_ylim + (max_ylim - min_ylim) * 0.2,
+    )
 
-    plt.tight_layout(rect=[0.0, 0.0, 1.0, 0.96]) # type: ignore
+    mplt.tight_layout(rect=[0.0, 0.0, 1.0, 0.96]) # type: ignore
 
 
 if __name__ == '__main__':
     solve_trajectory()
-    plt.show()
+    mplt.show()
