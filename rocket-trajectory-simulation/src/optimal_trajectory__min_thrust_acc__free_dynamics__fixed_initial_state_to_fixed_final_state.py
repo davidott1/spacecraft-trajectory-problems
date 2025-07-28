@@ -338,13 +338,13 @@ def solve_trajectory():
     """
     # Problem input
     units_time, units_distance, units_mass, units_force = "s", "m", "kg", "N" # "s", "m", "kg", "N" | ???
-    time_o, time_f                          = 0, 200
+    time_o, time_f                          = 0, 400
     pos_vec_o                               = [  0.0,  0.0 ]
     vel_vec_o                               = [ -0.3, -0.5 ]
     pos_vec_f                               = [ 10.0,  5.0 ]
     vel_vec_f                               = [  0.3, -0.5 ] 
-    thrust_acc_min, thrust_acc_max          = 0.0e+0, 2.0e-2
-    k_idxinitguess, k_idxfinsoln, k_idxdivs = 1.0e-1, 1.0e+2, 50
+    thrust_acc_min, thrust_acc_max          = 0.0e+0, 8.0e-3
+    k_idxinitguess, k_idxfinsoln, k_idxdivs = 1.0e-1, 1.0e+2, 100
 
     # Process input
     time_span                  = np.hstack([time_o, time_f])
@@ -410,7 +410,7 @@ def solve_trajectory():
     print(f"           {    'm':>14s} {    'm':>14s} {  'm/s':>14s} {  'm/s':>14s}")
     print(f"  Target : {boundary_condition_state_f[0]:>14.6e} {boundary_condition_state_f[1]:>14.6e} {boundary_condition_state_f[2]:>14.6e} {boundary_condition_state_f[3]:>14.6e}")
     print(f"  Actual : {           state_f_finsoln[0]:>14.6e} {           state_f_finsoln[1]:>14.6e} {           state_f_finsoln[2]:>14.6e} {           state_f_finsoln[3]:>14.6e}")
-    print(f"  Error  : {         error_finsoln_vec[0]:>14.6e} {         error_finsoln_vec[1]:14.3e} {         error_finsoln_vec[2]:>14.6e} {         error_finsoln_vec[3]:>14.6e}")
+    print(f"  Error  : {         error_finsoln_vec[0]:>14.6e} {         error_finsoln_vec[1]:>14.3e} {         error_finsoln_vec[2]:>14.6e} {         error_finsoln_vec[3]:>14.6e}")
    
     # Plot the results
     plot_final_results(
@@ -448,16 +448,16 @@ def plot_final_results(
     thrust_acc_dir_t = np.array([ -covel_x_t/covel_mag_t, -covel_y_t/covel_mag_t ])
     thrust_acc_vec_t = thrust_acc_mag_t * thrust_acc_dir_t
 
-    # --- Create the plots ---
+    # Create trajectory figure
     mplt.style.use('seaborn-v0_8-whitegrid')
     fig = mplt.figure(figsize=(15, 8))
     gs = fig.add_gridspec(3, 2)
 
     # Configure figure
     fig.suptitle(
-        "OPTIMAL TRAJECTORY"
-        + "\nFree Dynamics | Min Fuel | Thrust Acceleration Control"
-        + "\nFixed Time-of-Flight | Fixed-Initial-Position, Fixed-Initial-Velocity to Fixed-Final-Position, Fixed-Final-Velocity",
+        "OPTIMAL TRAJECTORY: Minimize Fuel"
+        + "\nFree Dynamics"
+        + "\nThrust Acceleration Max | Fixed Time-of-Flight | Fixed-Initial-Position, Fixed-Initial-Velocity to Fixed-Final-Position, Fixed-Final-Velocity",
         fontsize=16,
         fontweight='normal',
     )
@@ -473,7 +473,7 @@ def plot_final_results(
 
     min_pos = min(min(pos_x_t), min(pos_y_t))
     max_pos = max(max(pos_x_t), max(pos_y_t))
-    thrust_acc_vec_scale = 0.2*(max_pos - min_pos) / thrust_acc_max
+    thrust_acc_vec_scale = 0.1 * (max_pos - min_pos) / thrust_acc_max
     for idx in range(len(time_t)):
         # Define the start and end points of the line segment
         start_x = pos_x_t[idx]
