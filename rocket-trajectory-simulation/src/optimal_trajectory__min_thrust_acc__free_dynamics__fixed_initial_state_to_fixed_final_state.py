@@ -343,7 +343,7 @@ def solve_trajectory():
     vel_vec_o                               = [ -0.3, -0.5 ]
     pos_vec_f                               = [ 10.0,  5.0 ]
     vel_vec_f                               = [  0.3, -0.5 ] 
-    thrust_acc_min, thrust_acc_max          = 0.0e+0, 0.1e+0
+    thrust_acc_min, thrust_acc_max          = 0.0e+0, 2.0e-2
     k_idxinitguess, k_idxfinsoln, k_idxdivs = 1.0e-1, 1.0e+2, 50
 
     # Process input
@@ -361,10 +361,7 @@ def solve_trajectory():
     k_idxinitguess_to_idxfinsoln = np.logspace(np.log(k_idxinitguess), np.log(k_idxfinsoln), k_idxdivs)
     results_k_idx = {}
     for idx, k_idx in enumerate(k_idxinitguess_to_idxfinsoln):
-        if idx==0:
-            print(f"       {'Step':>5s} {'k':>14s}")
-        print(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e}")
-        sol_root = \
+        soln_root = \
             root(
                 objective_and_jacobian,
                 decisionstate_initguess,
@@ -373,13 +370,13 @@ def solve_trajectory():
                 tol=1e-7,
                 jac=True,
             )
-        if sol_root.success:
-            decisionstate_initguess = sol_root.x
+        if soln_root.success:
+            decisionstate_initguess = soln_root.x
             statecostate_o          = np.hstack((pos_vec_o, vel_vec_o, decisionstate_initguess))
             stm_oo                  = np.identity(8).flatten()
             statecostatestm_o       = np.concatenate([statecostate_o, stm_oo])
             time_eval_points        = np.linspace(time_span[0], time_span[1], 401)
-            sol_optimal = \
+            soln_ivp = \
                 solve_ivp(
                     freebodydynamics__minfuel__indirect_thrustacc_heaviside_stm,
                     time_span,
@@ -391,7 +388,12 @@ def solve_trajectory():
                     rtol         = 1e-12,
                     atol         = 1e-12,
                 )
-            results_k_idx[k_idx] = sol_optimal
+            results_k_idx[k_idx] = soln_ivp
+            error_mag = np.linalg.norm(soln_root.fun)
+            if idx==0:
+                print(f"       {'Step':>5s} {'k':>14s} {'Error Mag':>14s}")
+            print(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
+
         else:
             print(f"Convergence Failed for k={k_idx:>14.6e}. Stopping.")
             break
@@ -451,6 +453,15 @@ def plot_final_results(
     fig = mplt.figure(figsize=(15, 8))
     gs = fig.add_gridspec(3, 2)
 
+    # Configure figure
+    fig.suptitle(
+        "OPTIMAL TRAJECTORY"
+        + "\nFree Dynamics | Min Fuel | Thrust Acceleration Control"
+        + "\nFixed Time-of-Flight | Fixed-Initial-Position, Fixed-Initial-Velocity to Fixed-Final-Position, Fixed-Final-Velocity",
+        fontsize=16,
+        fontweight='normal',
+    )
+
     # Panel 1: 2D Trajectory Path
     ax1 = fig.add_subplot(gs[0:3, 0])
     
@@ -459,13 +470,16 @@ def plot_final_results(
     ax1.scatter(boundary_condition_state_f[ 0], boundary_condition_state_f[ 1], color=mcolors.CSS4_COLORS['black'], marker='s',          s=400,       facecolor=mcolors.CSS4_COLORS['white'],       edgecolor=mcolors.CSS4_COLORS['black']                                       )
     ax1.plot   (                   pos_x_t[ 0],                    pos_y_t[ 0], color=mcolors.CSS4_COLORS['black'], marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='Start'      )
     ax1.plot   (                   pos_x_t[-1],                    pos_y_t[-1], color=mcolors.CSS4_COLORS['black'], marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='End'        )
-    line_scale = 1.0e0
+
+    min_pos = min(min(pos_x_t), min(pos_y_t))
+    max_pos = max(max(pos_x_t), max(pos_y_t))
+    thrust_acc_vec_scale = 0.2*(max_pos - min_pos) / thrust_acc_max
     for idx in range(len(time_t)):
         # Define the start and end points of the line segment
         start_x = pos_x_t[idx]
         start_y = pos_y_t[idx]
-        end_x   = pos_x_t[idx] + thrust_acc_vec_t[0][idx] * line_scale
-        end_y   = pos_y_t[idx] + thrust_acc_vec_t[1][idx] * line_scale
+        end_x   = pos_x_t[idx] + thrust_acc_vec_t[0][idx] * thrust_acc_vec_scale
+        end_y   = pos_y_t[idx] + thrust_acc_vec_t[1][idx] * thrust_acc_vec_scale
 
         # Only one label for thrust acc vectors
         if idx == 0:
@@ -536,7 +550,8 @@ def plot_final_results(
         max_ylim + (max_ylim - min_ylim) * 0.2,
     )
 
-    mplt.tight_layout(rect=[0.0, 0.0, 1.0, 0.96]) # type: ignore
+    # Configure figure
+    mplt.tight_layout(rect=[0.0, 0.0, 1.0, 1.0]) # type: ignore
 
 
 if __name__ == '__main__':
