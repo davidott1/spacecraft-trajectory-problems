@@ -475,13 +475,10 @@ def plot_final_results(
     max_pos = max(max(pos_x_t), max(pos_y_t))
     thrust_acc_vec_scale = 0.1 * (max_pos - min_pos) / thrust_acc_max
     for idx in range(len(time_t)):
-        # Define the start and end points of the line segment
         start_x = pos_x_t[idx]
         start_y = pos_y_t[idx]
         end_x   = pos_x_t[idx] + thrust_acc_vec_t[0][idx] * thrust_acc_vec_scale
         end_y   = pos_y_t[idx] + thrust_acc_vec_t[1][idx] * thrust_acc_vec_scale
-
-        # Only one label for thrust acc vectors
         if idx == 0:
             ax1.plot([start_x, end_x], [start_y, end_y], color=mcolors.CSS4_COLORS['red'], linewidth=3.5, label='Thrust Acc Vec' )
         else:
@@ -552,8 +549,9 @@ def plot_final_results(
 
     # Configure figure
     mplt.tight_layout(rect=[0.0, 0.0, 1.0, 1.0]) # type: ignore
+    mplt.show()
 
 
 if __name__ == '__main__':
     solve_trajectory()
-    mplt.show()
+
