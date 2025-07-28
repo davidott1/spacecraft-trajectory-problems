@@ -457,7 +457,8 @@ def plot_final_results(
     fig.suptitle(
         "OPTIMAL TRAJECTORY: Minimize Fuel"
         + "\nFree Dynamics"
-        + "\nThrust Acceleration Max | Fixed Time-of-Flight | Fixed-Initial-Position, Fixed-Initial-Velocity to Fixed-Final-Position, Fixed-Final-Velocity",
+        + "\nFixed Time-of-Flight | Fixed-Initial-Position, Fixed-Initial-Velocity to Fixed-Final-Position, Fixed-Final-Velocity"
+        + "\nThrust Acceleration Max",
         fontsize=16,
         fontweight='normal',
     )
@@ -483,8 +484,8 @@ def plot_final_results(
             ax1.plot([start_x, end_x], [start_y, end_y], color=mcolors.CSS4_COLORS['red'], linewidth=3.5, label='Thrust Acc Vec' )
         else:
             ax1.plot([start_x, end_x], [start_y, end_y], color=mcolors.CSS4_COLORS['red'], linewidth=3.5 )
-    ax1.set_xlabel('Position x [m]')
-    ax1.set_ylabel('Position y [m]')
+    ax1.set_xlabel('Position X [m]')
+    ax1.set_ylabel('Position Y [m]')
     ax1.grid(True)
     ax1.axis('equal')
     ax1.legend()
@@ -506,12 +507,12 @@ def plot_final_results(
     ax3 = fig.add_subplot(gs[1,1])
     ax3.plot(time_t[ 0], boundary_condition_state_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
     ax3.plot(time_t[-1], boundary_condition_state_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax3.plot(time_t    ,                    pos_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='x' )
+    ax3.plot(time_t    ,                    pos_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
     ax3.plot(time_t[ 0],                    pos_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
     ax3.plot(time_t[-1],                    pos_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
     ax3.plot(time_t[ 0], boundary_condition_state_o[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
     ax3.plot(time_t[-1], boundary_condition_state_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax3.plot(time_t    ,                    pos_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='y' )
+    ax3.plot(time_t    ,                    pos_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
     ax3.plot(time_t[ 0],                    pos_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
     ax3.plot(time_t[-1],                    pos_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
     ax3.set_ylabel('Position [m]')
@@ -528,12 +529,12 @@ def plot_final_results(
     ax4 = fig.add_subplot(gs[2,1])
     ax4.plot(time_t[ 0], boundary_condition_state_o[ 2], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
     ax4.plot(time_t[-1], boundary_condition_state_f[ 2], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax4.plot(time_t    ,                    vel_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='x' )
+    ax4.plot(time_t    ,                    vel_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
     ax4.plot(time_t[ 0],                    vel_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
     ax4.plot(time_t[-1],                    vel_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
     ax4.plot(time_t[ 0], boundary_condition_state_o[ 3], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
     ax4.plot(time_t[-1], boundary_condition_state_f[ 3], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax4.plot(time_t    ,                    vel_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='y' )
+    ax4.plot(time_t    ,                    vel_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
     ax4.plot(time_t[ 0],                    vel_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
     ax4.plot(time_t[-1],                    vel_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
     ax4.set_xlabel('Time [s]')
