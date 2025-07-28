@@ -9,13 +9,244 @@ np.random.seed(42)
 import astropy.units as u
 
 
-
-# Dynamical functions
-def freebodydynamics__minfuel__indirect_thrustacc_heaviside(
+# Dynamics functions
+def freebodydynamics__minfuel__indirect_thrustaccmax(
         time           : float              ,
         state          : np.ndarray         ,
         thrust_acc_min : float      = 1.0e-1, 
-        thrust_acc_max : float      = 1.0e1 ,
+        thrust_acc_max : float      = 1.0e+1,
+    ) -> np.ndarray:
+    """
+    Calculates the time derivatives of state variables for a free-body system
+    with a minimum-fuel thrust control approximated by a smooth Heaviside function.
+
+    This function represents the right-hand side of the ordinary differential
+    equations (ODEs) for integration.
+
+    Input
+    -----
+    time : float
+        Current time (t).
+    state : np.ndarray
+        Current integration state:
+        [ pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y ]
+        -   pos_x,   pos_y : position in x and y
+        -   vel_x,   vel_y : velocity in x and y
+        - copos_x, copos_y : co-position in x and y
+        - covel_x, covel_y : co-velocity in x and y
+    thrust_acc_min : float, optional
+        Minimum thrust acceleration magnitude.
+        Defaults to 1.0e-1.
+    thrust_acc_max : float, optional
+        Maximum thrust acceleration magnitude.
+        Defaults to 1.0e1.
+    k_heaviside : float, optional
+        Coefficient for the tanh approximation of the Heaviside function.
+        Higher values lead to a sharper transition.
+        Defaults to 1.0.
+
+    Output
+    ------
+    np.ndarray
+        Array of time derivatives of the state variables:
+        [   dpos_x__dtime,   dpos_y__dtime,   dvel_x__dtime,   dvel_y__dtime,
+          dcopos_x__dtime, dcopos_y__dtime, dcovel_x__dtime, dcovel_y__dtime  ]
+    """
+
+    # Unpack: state into scalar components
+    pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y = state
+
+    # Control: thrust acceleration
+    #   thrust_acc_vec = -covel_vec / cvel_mag
+    epsilon         = 1.0e-6
+    covel_mag       = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
+    switching_func  = covel_mag - 1.0
+    if switching_func > 0.0:
+        thrust_acc_mag = thrust_acc_max
+    elif switching_func < 0.0:
+        thrust_acc_mag = thrust_acc_min
+    else:
+        thrust_acc_mag = thrust_acc_min # undetermined. choose thrust_acc_min.
+    thrust_acc_x_dir = -covel_x / covel_mag
+    thrust_acc_y_dir = -covel_y / covel_mag
+    thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
+    thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
+
+    # Dynamics: free-body
+    #   dstate/dtime = dynamics(time,state)
+    dpos_x__dtime   = vel_x
+    dpos_y__dtime   = vel_y
+    dvel_x__dtime   = thrust_acc_x
+    dvel_y__dtime   = thrust_acc_y
+    dcopos_x__dtime = 0.0
+    dcopos_y__dtime = 0.0
+    dcovel_x__dtime = -copos_x
+    dcovel_y__dtime = -copos_y
+    
+    # Pack up: scalar components into state
+    return np.array([
+        dpos_x__dtime,
+        dpos_y__dtime,
+        dvel_x__dtime,
+        dvel_y__dtime,
+        dcopos_x__dtime,
+        dcopos_y__dtime,
+        dcovel_x__dtime,
+        dcovel_y__dtime,
+    ])
+
+
+def freebodydynamics__minfuel__indirect_thrustaccmax_stm(
+        time           : float              ,
+        state__stm     : np.ndarray         ,
+        thrust_acc_min : float      = 1.0e-1, 
+        thrust_acc_max : float      = 1.0e+1,
+    ) -> np.ndarray:
+    """
+    xxx
+    """
+
+    # Unpack: full state into state and variational-state-transition matrix
+    n_states = 8
+    state    = state__stm[:n_states]
+    stm      = state__stm[n_states:].reshape((n_states, n_states))
+
+    # Unpack: state into scalar components
+    pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y = state
+
+    # Control: thrust acceleration
+    #   thrust_acc_vec = -covel_vec / cvel_mag
+    epsilon         = 1.0e-6
+    covel_mag       = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
+    switching_func  = covel_mag - 1.0
+    if switching_func > 0.0:
+        thrust_acc_mag = thrust_acc_max
+    elif switching_func < 0.0:
+        thrust_acc_mag = thrust_acc_min
+    else:
+        thrust_acc_mag = thrust_acc_min # undetermined. choose thrust_acc_min.
+    thrust_acc_x_dir = -covel_x / covel_mag
+    thrust_acc_y_dir = -covel_y / covel_mag
+    thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
+    thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
+
+    # Dynamics: free-body
+    #   dstate/dtime = dynamics(time,state)
+    dpos_x__dtime   = vel_x
+    dpos_y__dtime   = vel_y
+    dvel_x__dtime   = thrust_acc_x
+    dvel_y__dtime   = thrust_acc_y
+    dcopos_x__dtime = 0.0
+    dcopos_y__dtime = 0.0
+    dcovel_x__dtime = -copos_x
+    dcovel_y__dtime = -copos_y
+    
+    # Pack up: scalar components into state
+    dstate__dtime = \
+        np.array([
+            dpos_x__dtime,
+            dpos_y__dtime,
+            dvel_x__dtime,
+            dvel_y__dtime,
+            dcopos_x__dtime,
+            dcopos_y__dtime,
+            dcovel_x__dtime,
+            dcovel_y__dtime,
+        ])
+
+    # Variational Dynamics: free-body
+    #   stm_dot = jacobian * stm
+
+    # Jacobian: free-body
+    #   d(dstate/dtime)/dstate
+    #     = [ d(  dpos_x/dtime)/dpos_x, d(  dpos_x/dtime)/dpos_y, d(  dpos_x/dtime)/dvel_x, d(  dpos_x/dtime)/dvel_y, d(  dpos_x/dtime)/dcopos_x, d(  dpos_x/dtime)/dcopos_y, d(  dpos_x/dtime)/dcovel_x, d(  dpos_x/dtime)/dcovel_y ]
+    #       [ d(  dpos_y/dtime)/dpos_x, d(  dpos_y/dtime)/dpos_y, d(  dpos_y/dtime)/dvel_x, d(  dpos_y/dtime)/dvel_y, d(  dpos_y/dtime)/dcopos_x, d(  dpos_y/dtime)/dcopos_y, d(  dpos_y/dtime)/dcovel_x, d(  dpos_y/dtime)/dcovel_y ]
+    #       [ d(  dvel_x/dtime)/dpos_x, d(  dvel_x/dtime)/dpos_y, d(  dvel_x/dtime)/dvel_x, d(  dvel_x/dtime)/dvel_y, d(  dvel_x/dtime)/dcopos_x, d(  dvel_x/dtime)/dcopos_y, d(  dvel_x/dtime)/dcovel_x, d(  dvel_x/dtime)/dcovel_y ]
+    #       [ d(  dvel_y/dtime)/dpos_x, d(  dvel_y/dtime)/dpos_y, d(  dvel_y/dtime)/dvel_x, d(  dvel_y/dtime)/dvel_y, d(  dvel_y/dtime)/dcopos_x, d(  dvel_y/dtime)/dcopos_y, d(  dvel_y/dtime)/dcovel_x, d(  dvel_y/dtime)/dcovel_y ]
+    #       [ d(dcopos_x/dtime)/dpos_x, d(dcopos_x/dtime)/dpos_y, d(dcopos_x/dtime)/dvel_x, d(dcopos_x/dtime)/dvel_y, d(dcopos_x/dtime)/dcopos_x, d(dcopos_x/dtime)/dcopos_y, d(dcopos_x/dtime)/dcovel_x, d(dcopos_x/dtime)/dcovel_y ]
+    #       [ d(dcopos_y/dtime)/dpos_x, d(dcopos_y/dtime)/dpos_y, d(dcopos_y/dtime)/dvel_x, d(dcopos_y/dtime)/dvel_y, d(dcopos_y/dtime)/dcopos_x, d(dcopos_y/dtime)/dcopos_y, d(dcopos_y/dtime)/dcovel_x, d(dcopos_y/dtime)/dcovel_y ]
+    #       [ d(dcovel_x/dtime)/dpos_x, d(dcovel_x/dtime)/dpos_y, d(dcovel_x/dtime)/dvel_x, d(dcovel_x/dtime)/dvel_y, d(dcovel_x/dtime)/dcopos_x, d(dcovel_x/dtime)/dcopos_y, d(dcovel_x/dtime)/dcovel_x, d(dcovel_x/dtime)/dcovel_y ]
+    #       [ d(dcovel_y/dtime)/dpos_x, d(dcovel_y/dtime)/dpos_y, d(dcovel_y/dtime)/dvel_x, d(dcovel_y/dtime)/dvel_y, d(dcovel_y/dtime)/dcopos_x, d(dcovel_y/dtime)/dcopos_y, d(dcovel_y/dtime)/dcovel_x, d(dcovel_y/dtime)/dcovel_y ]
+    #     = [                      0.0,                      0.0, d(  dpos_x/dtime)/dvel_x,                      0.0,                        0.0,                        0.0,                        0.0,                        0.0 ]
+    #       [                      0.0,                      0.0,                      0.0, d(  dpos_y/dtime)/dvel_y,                        0.0,                        0.0,                        0.0,                        0.0 ]
+    #       [                      0.0,                      0.0,                      0.0,                      0.0,                        0.0,                        0.0, d(  dvel_x/dtime)/dcovel_x, d(  dvel_x/dtime)/dcovel_y ]
+    #       [                      0.0,                      0.0,                      0.0,                      0.0,                        0.0,                        0.0, d(  dvel_y/dtime)/dcovel_x, d(  dvel_y/dtime)/dcovel_y ]
+    #       [                      0.0,                      0.0,                      0.0,                      0.0,                        0.0,                        0.0,                        0.0,                        0.0 ]
+    #       [                      0.0,                      0.0,                      0.0,                      0.0,                        0.0,                        0.0,                        0.0,                        0.0 ]
+    #       [                      0.0,                      0.0,                      0.0,                      0.0, d(dcovel_x/dtime)/dcopos_x,                        0.0,                        0.0,                        0.0 ]
+    #       [                      0.0,                      0.0,                      0.0,                      0.0,                        0.0, d(dcovel_y/dtime)/dcopos_y,                        0.0,                        0.0 ]
+    ddstatedtime__dstate = np.zeros((n_states, n_states))
+
+    # Row 1
+    #   d(dpos_x/dtime)/dvel_x
+    ddstatedtime__dstate[0,2] = 1.0
+
+    # Row 2
+    #   d(dpos_y/dtime)/dvel_y
+    ddstatedtime__dstate[1,3] = 1.0
+
+    # Row 3
+    #   d(dvel_x/dtime)/dcovel_x, d(dvel_x/dtime)/dcovel_y
+    # Row 4
+    #   d(dvel_y/dtime)/dcovel_x, d(dvel_y/dtime)/dcovel_y
+
+    # Common terms for derivatives
+    dcovel_mag__dcovel_x = covel_x / covel_mag
+    dcovel_mag__dcovel_y = covel_y / covel_mag
+
+    k_heaviside = 0.0
+    one_mns_tanhsq              = 1.0 - np.tanh(k_heaviside * switching_func)**2
+    dheaviside_approx__dcovel_x = 0.5 * k_heaviside * one_mns_tanhsq * dcovel_mag__dcovel_x
+    dheaviside_approx__dcovel_y = 0.5 * k_heaviside * one_mns_tanhsq * dcovel_mag__dcovel_y
+
+    dthrust_acc_mag__dcovel_x = (thrust_acc_max - thrust_acc_min) * dheaviside_approx__dcovel_x
+    dthrust_acc_mag__dcovel_y = (thrust_acc_max - thrust_acc_min) * dheaviside_approx__dcovel_y
+
+    dthrust_acc_x_dir__dcovel_x = -1.0 / covel_mag - covel_x * (-1.0 / covel_mag**2) * dcovel_mag__dcovel_x
+    dthrust_acc_x_dir__dcovel_y =                  - covel_x * (-1.0 / covel_mag**2) * dcovel_mag__dcovel_y
+    dthrust_acc_y_dir__dcovel_y = -1.0 / covel_mag - covel_y * (-1.0 / covel_mag**2) * dcovel_mag__dcovel_y
+    dthrust_acc_y_dir__dcovel_x =                  - covel_y * (-1.0 / covel_mag**2) * dcovel_mag__dcovel_x
+
+    # d(dvel_x__dtime)/dcovel_x
+    ddstatedtime__dstate[2,6] = 0.0 * dthrust_acc_mag__dcovel_x * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
+
+    # d(dvel_x__dtime)/dcovel_y
+    ddstatedtime__dstate[2,7] = 0.0 * dthrust_acc_mag__dcovel_y * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_y
+
+    # d(dvel_y__dtime)/dcovel_x
+    ddstatedtime__dstate[3,6] = 0.0 * dthrust_acc_mag__dcovel_x * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_x
+
+    # d(dvel_y__dtime)/dcovel_y
+    ddstatedtime__dstate[3,7] = 0.0 * dthrust_acc_mag__dcovel_y * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
+
+    # Row 5
+    #   dcopos_x__dtime = 0
+    # Do nothing. All zeros.
+
+    # Row 6
+    #   dcopos_y__dtime = 0
+    # Do nothing. All zeros.
+
+    # Row 7
+    #   d(dcovel_x_dtime)/dcopos_x
+    ddstatedtime__dstate[6,4] = -1.0 
+
+    # Row 8
+    #   d(dcovel_y__dttime)/dcopos_y
+    ddstatedtime__dstate[7,5] = -1.0
+
+    # Combine: time-derivative of state-transition matrix
+    dstm__dtime = np.dot(ddstatedtime__dstate, stm)
+
+    # Pack up: time-derivative of state and stm
+    return np.concatenate((dstate__dtime, dstm__dtime.flatten()))
+
+
+def freebodydynamics__minfuel__indirect_thrustaccmax_heaviside(
+        time           : float              ,
+        state          : np.ndarray         ,
+        thrust_acc_min : float      = 1.0e-1, 
+        thrust_acc_max : float      = 1.0e+1,
         k_heaviside    : float      = 1.0   ,
     ) -> np.ndarray:
     """
@@ -62,7 +293,7 @@ def freebodydynamics__minfuel__indirect_thrustacc_heaviside(
     #   thrust_acc_vec = -covel_vec / cvel_mag
     epsilon          = 1.0e-6
     covel_mag        = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
-    switching_func   = covel_mag - 1
+    switching_func   = covel_mag - 1.0
     heaviside_approx = 0.5 + 0.5 * np.tanh(k_heaviside * switching_func)
     thrust_acc_mag   = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx
     thrust_acc_x_dir = -covel_x / covel_mag
@@ -94,7 +325,7 @@ def freebodydynamics__minfuel__indirect_thrustacc_heaviside(
     ])
 
 
-def freebodydynamics__minfuel__indirect_thrustacc_heaviside_stm(
+def freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
         time           : float              ,
         state__stm     : np.ndarray         ,
         thrust_acc_min : float      = 1.0e-1, 
@@ -114,7 +345,7 @@ def freebodydynamics__minfuel__indirect_thrustacc_heaviside_stm(
     #   thrust_acc_vec = -covel_vec / cvel_mag
     epsilon          = 1.0e-6
     covel_mag        = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
-    switching_func   = covel_mag - 1
+    switching_func   = covel_mag - 1.0
     heaviside_approx = 0.5 + 0.5 * np.tanh(k_heaviside * switching_func)
     thrust_acc_mag   = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx
     thrust_acc_x_dir = -covel_x / covel_mag
@@ -232,6 +463,180 @@ def freebodydynamics__minfuel__indirect_thrustacc_heaviside_stm(
     return np.concatenate((dstate__dtime, dstm__dtime.flatten()))
 
 
+def constantgravitydynamics__minfuel__indirect_thrustaccmax_heaviside(
+        time             : float              ,
+        state            : np.ndarray         ,
+        thrust_acc_min   : float      = 1.0e-1,
+        thrust_acc_max   : float      = 1.0e+1,
+        k_heaviside      : float      = 1.0   ,
+        constant_gravity : float      = -9.81 , 
+    ) -> np.ndarray:
+    """
+    Calculates the time derivatives of state variables for a free-body system
+    with a minimum-fuel thrust control approximated by a smooth Heaviside function.
+
+    This function represents the right-hand side of the ordinary differential
+    equations (ODEs) for integration.
+
+    Input
+    -----
+    time : float
+        Current time (t).
+    state : np.ndarray
+        Current integration state:
+        [ pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y ]
+        -   pos_x,   pos_y : position in x and y
+        -   vel_x,   vel_y : velocity in x and y
+        - copos_x, copos_y : co-position in x and y
+        - covel_x, covel_y : co-velocity in x and y
+    thrust_acc_min : float, optional
+        Minimum thrust acceleration magnitude.
+        Defaults to 1.0e-1.
+    thrust_acc_max : float, optional
+        Maximum thrust acceleration magnitude.
+        Defaults to 1.0e1.
+    k_heaviside : float, optional
+        Coefficient for the tanh approximation of the Heaviside function.
+        Higher values lead to a sharper transition.
+        Defaults to 1.0.
+    constant_gravity : float, optional
+        Gravity constant in the y-direction.
+        Defaults to -9.81 m/s^2.
+
+    Output
+    ------
+    np.ndarray
+        Array of time derivatives of the state variables:
+        [   dpos_x__dtime,   dpos_y__dtime,   dvel_x__dtime,   dvel_y__dtime,
+          dcopos_x__dtime, dcopos_y__dtime, dcovel_x__dtime, dcovel_y__dtime  ]
+    """
+
+    # Unpack: state into scalar components
+    pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y = state
+
+    # Control: thrust acceleration
+    #   thrust_acc_vec = -covel_vec / cvel_mag
+    epsilon          = 1.0e-6
+    covel_mag        = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
+    switching_func   = covel_mag - 1.0
+    heaviside_approx = 0.5 + 0.5 * np.tanh(k_heaviside * switching_func)
+    thrust_acc_mag   = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx
+    thrust_acc_x_dir = -covel_x / covel_mag
+    thrust_acc_y_dir = -covel_y / covel_mag
+    thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
+    thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
+
+    # Dynamics: free-body
+    #   dstate/dtime = dynamics(time,state)
+    dpos_x__dtime   = vel_x
+    dpos_y__dtime   = vel_y
+    dvel_x__dtime   =                    thrust_acc_x
+    dvel_y__dtime   = constant_gravity + thrust_acc_y
+    dcopos_x__dtime = 0.0
+    dcopos_y__dtime = 0.0
+    dcovel_x__dtime = -copos_x
+    dcovel_y__dtime = -copos_y
+    
+    # Pack up: scalar components into state
+    return np.array([
+        dpos_x__dtime,
+        dpos_y__dtime,
+        dvel_x__dtime,
+        dvel_y__dtime,
+        dcopos_x__dtime,
+        dcopos_y__dtime,
+        dcovel_x__dtime,
+        dcovel_y__dtime,
+    ])
+
+
+def constantgravitydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
+        time             : float              ,
+        state            : np.ndarray         ,
+        thrust_acc_min   : float      = 1.0e-1,
+        thrust_acc_max   : float      = 1.0e+1,
+        k_heaviside      : float      = 1.0   ,
+        constant_gravity : float      = -9.81 , 
+    ) -> np.ndarray:
+    """
+    Calculates the time derivatives of state variables for a free-body system
+    with a minimum-fuel thrust control approximated by a smooth Heaviside function.
+
+    This function represents the right-hand side of the ordinary differential
+    equations (ODEs) for integration.
+
+    Input
+    -----
+    time : float
+        Current time (t).
+    state : np.ndarray
+        Current integration state:
+        [ pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y ]
+        -   pos_x,   pos_y : position in x and y
+        -   vel_x,   vel_y : velocity in x and y
+        - copos_x, copos_y : co-position in x and y
+        - covel_x, covel_y : co-velocity in x and y
+    thrust_acc_min : float, optional
+        Minimum thrust acceleration magnitude.
+        Defaults to 1.0e-1.
+    thrust_acc_max : float, optional
+        Maximum thrust acceleration magnitude.
+        Defaults to 1.0e1.
+    k_heaviside : float, optional
+        Coefficient for the tanh approximation of the Heaviside function.
+        Higher values lead to a sharper transition.
+        Defaults to 1.0.
+    constant_gravity : float, optional
+        Gravity constant in the y-direction.
+        Defaults to -9.81 m/s^2.
+
+    Output
+    ------
+    np.ndarray
+        Array of time derivatives of the state variables:
+        [   dpos_x__dtime,   dpos_y__dtime,   dvel_x__dtime,   dvel_y__dtime,
+          dcopos_x__dtime, dcopos_y__dtime, dcovel_x__dtime, dcovel_y__dtime  ]
+    """
+
+    # Unpack: state into scalar components
+    pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y = state
+
+    # Control: thrust acceleration
+    #   thrust_acc_vec = -covel_vec / cvel_mag
+    epsilon          = 1.0e-6
+    covel_mag        = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
+    switching_func   = covel_mag - 1.0
+    heaviside_approx = 0.5 + 0.5 * np.tanh(k_heaviside * switching_func)
+    thrust_acc_mag   = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx
+    thrust_acc_x_dir = -covel_x / covel_mag
+    thrust_acc_y_dir = -covel_y / covel_mag
+    thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
+    thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
+
+    # Dynamics: free-body
+    #   dstate/dtime = dynamics(time,state)
+    dpos_x__dtime   = vel_x
+    dpos_y__dtime   = vel_y
+    dvel_x__dtime   =                    thrust_acc_x
+    dvel_y__dtime   = constant_gravity + thrust_acc_y
+    dcopos_x__dtime = 0.0
+    dcopos_y__dtime = 0.0
+    dcovel_x__dtime = -copos_x
+    dcovel_y__dtime = -copos_y
+    
+    # Pack up: scalar components into state
+    return np.array([
+        dpos_x__dtime,
+        dpos_y__dtime,
+        dvel_x__dtime,
+        dvel_y__dtime,
+        dcopos_x__dtime,
+        dcopos_y__dtime,
+        dcovel_x__dtime,
+        dcovel_y__dtime,
+    ])
+
+
 def objective_function(
         decision_state,
         time_span,
@@ -247,7 +652,7 @@ def objective_function(
     statecostate_o = np.hstack((boundary_condition_state_o, decision_state))
     sol = \
         solve_ivp(
-            freebodydynamics__minfuel__indirect_thrustacc_heaviside,
+            freebodydynamics__minfuel__indirect_thrustaccmax_heaviside,
             time_span,
             statecostate_o,
             dense_output=True, 
@@ -260,36 +665,95 @@ def objective_function(
     return state_f - boundary_condition_state_f
 
 
-def objective_and_jacobian(initial_costates, time_span, initial_states, final_states, T_min, T_max, k_heaviside):
+def objective_and_jacobian(
+        decision_state,
+        time_span,
+        boundary_condition_state_o,
+        boundary_condition_state_f,
+        thrust_acc_min,
+        thrust_acc_max,
+        k_heaviside,
+    ):
     """
     Objective function that also returns the analytical Jacobian.
     """
 
     # Initial augmented state
-    z0      = np.concatenate((initial_states, initial_costates))
-    phi0    = np.identity(8).flatten()
-    z_aug_0 = np.concatenate([z0, phi0])
+    statecostate_o    = np.hstack((boundary_condition_state_o, decision_state))
+    stm_oo            = np.identity(8).flatten()
+    statecostatestm_o = np.hstack([statecostate_o, stm_oo])
     
     # Integrate the augmented system
-    sol = solve_ivp(freebodydynamics__minfuel__indirect_thrustacc_heaviside_stm, time_span, z_aug_0, dense_output=True, 
-                    args=(T_min, T_max, k_heaviside), 
-                    method='RK45', # DOP853 | RK45
-                    rtol=1e-12,
-                    atol=1e-12)
+    soln = \
+        solve_ivp(
+            freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm,
+            time_span,
+            statecostatestm_o,
+            dense_output = True, 
+            args         = (thrust_acc_min, thrust_acc_max, k_heaviside), 
+            method       = 'RK45',
+            rtol         = 1.0e-12,
+            atol         = 1.0e-12,
+        )
     
     # Extract final state and final STM
-    final_aug_state = sol.sol(time_span[1])
-    final_z         = final_aug_state[:8]
-    final_phi       = final_aug_state[8:].reshape((8, 8))
+    statecostatestm_f = soln.sol(time_span[1])
+    statecostate_f    = statecostatestm_f[:8]
+    stm_of            = statecostatestm_f[8:].reshape((8,8))
     
     # Calculate the error vector
-    error = final_z[:4] - final_states
+    error = statecostate_f[:4] - boundary_condition_state_f
     
-    # Extract the required 4x4 Jacobian from the final STM
-    #   jacobian = d(x_final) / d(l_initial)
-    jacobian = final_phi[0:4, 4:8]
+    # Extract 4x4 Jacobian from the final STM
+    #   jacobian = d(state_final) / d(costate_initial)
+    error_jacobian = stm_of[0:4, 4:8]
     
-    return error, jacobian
+    return error, error_jacobian
+
+
+def objective_and_jacobian_2(
+        decision_state,
+        time_span,
+        boundary_condition_state_o,
+        boundary_condition_state_f,
+        thrust_acc_min,
+        thrust_acc_max,
+    ):
+    """
+    Objective function that also returns the analytical Jacobian.
+    """
+
+    # Initial augmented state
+    statecostate_o    = np.hstack((boundary_condition_state_o, decision_state))
+    stm_oo            = np.identity(8).flatten()
+    statecostatestm_o = np.hstack([statecostate_o, stm_oo])
+    
+    # Integrate the augmented system
+    soln = \
+        solve_ivp(
+            freebodydynamics__minfuel__indirect_thrustaccmax_stm,
+            time_span,
+            statecostatestm_o,
+            dense_output = True, 
+            args         = (thrust_acc_min, thrust_acc_max), 
+            method       = 'RK45',
+            rtol         = 1.0e-12,
+            atol         = 1.0e-12,
+        )
+    
+    # Extract final state and final STM
+    statecostatestm_f = soln.sol(time_span[1])
+    statecostate_f    = statecostatestm_f[:8]
+    stm_of            = statecostatestm_f[8:].reshape((8,8))
+    
+    # Calculate the error vector
+    error = statecostate_f[:4] - boundary_condition_state_f
+    
+    # Extract 4x4 Jacobian from the final STM
+    #   jacobian = d(state_final) / d(costate_initial)
+    error_jacobian = stm_of[0:4, 4:8]
+    
+    return error, error_jacobian
 
 
 def generate_guess(time_span, boundary_condition_state_o, boundary_condition_state_f, thrust_min, thrust_max, k_heaviside):
@@ -331,30 +795,30 @@ def generate_guess(time_span, boundary_condition_state_o, boundary_condition_sta
     return costate_o_guess
 
 
-def solve_trajectory():
+def solve_trajectory(
+        time_span,
+        boundary_condition_state_o,
+        boundary_condition_state_f,
+        thrust_acc_min,
+        thrust_acc_max,
+        k_idxinitguess,
+        k_idxfinsoln, 
+        k_idxdivs,
+    ):
     """
     Main solver that implements the two-stage continuation process
     using the unified smoothed dynamics.
     """
-    # Problem input
-    units_time, units_distance, units_mass, units_force = "s", "m", "kg", "N" # "s", "m", "kg", "N" | ???
-    time_o, time_f                          = 0, 400
-    pos_vec_o                               = [  0.0,  0.0 ]
-    vel_vec_o                               = [ -0.3, -0.5 ]
-    pos_vec_f                               = [ 10.0,  5.0 ]
-    vel_vec_f                               = [  0.3, -0.5 ] 
-    thrust_acc_min, thrust_acc_max          = 0.0e+0, 8.0e-3
-    k_idxinitguess, k_idxfinsoln, k_idxdivs = 1.0e-1, 1.0e+2, 10
-
-    # Process input
-    time_span                  = np.hstack([time_o, time_f])
-    state_o                    = np.hstack([pos_vec_o, vel_vec_o])
-    state_f                    = np.hstack([pos_vec_f, vel_vec_f])
-    boundary_condition_state_o = state_o
-    boundary_condition_state_f = state_f
 
     # Generate initial guess for the costates
-    decisionstate_initguess = generate_guess(time_span, boundary_condition_state_o, boundary_condition_state_f, thrust_acc_min, thrust_acc_max, k_idxinitguess)
+    decisionstate_initguess = generate_guess(
+        time_span,
+        boundary_condition_state_o,
+        boundary_condition_state_f,
+        thrust_acc_min,
+        thrust_acc_max,
+        k_idxinitguess,
+    )
 
     # K-Continuation Process
     print(f"\nK-Continuation Process")
@@ -378,7 +842,7 @@ def solve_trajectory():
             time_eval_points        = np.linspace(time_span[0], time_span[1], 201)
             soln_ivp = \
                 solve_ivp(
-                    freebodydynamics__minfuel__indirect_thrustacc_heaviside_stm,
+                    freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm,
                     time_span,
                     statecostatestm_o,
                     t_eval       = time_eval_points,
@@ -397,24 +861,58 @@ def solve_trajectory():
         else:
             print(f"Convergence Failed for k={k_idx:>14.6e}. Stopping.")
             break
-    
-    # Final solution
-    results_finsoln = results_k_idx[k_idxinitguess_to_idxfinsoln[-1]]
-    state_f_finsoln = results_finsoln.y[0:4, -1]
-    k_finsoln       = k_idxinitguess_to_idxfinsoln[-1]
+
+    # Final solution: no heaviside approximation
+    soln_root = \
+        root(
+            objective_and_jacobian_2,
+            decisionstate_initguess,
+            args   = (time_span, state_o, state_f, thrust_acc_min, thrust_acc_max),
+            method = 'lm',
+            tol    = 1e-12,
+            jac    = True,
+        )
+    decisionstate_initguess = soln_root.x
+    statecostate_o          = np.hstack((pos_vec_o, vel_vec_o, decisionstate_initguess))
+    stm_oo                  = np.identity(8).flatten()
+    statecostatestm_o       = np.concatenate([statecostate_o, stm_oo])
+    time_eval_points        = np.linspace(time_span[0], time_span[1], 401)
+    soln_ivp = \
+        solve_ivp(
+            freebodydynamics__minfuel__indirect_thrustaccmax_stm,
+            time_span,
+            statecostatestm_o,
+            t_eval       = time_eval_points,
+            dense_output = True, 
+            args         = (thrust_acc_min, thrust_acc_max), 
+            method       = 'RK45', # DOP853 | RK45
+            rtol         = 1e-12,
+            atol         = 1e-12,
+        )
+    results_finalsoln = soln_ivp
+    state_f_finalsoln = results_finalsoln.y[0:4, -1]
+
+    # Final solution: approx and true
+    results_approx_finalsoln = results_k_idx[k_idxinitguess_to_idxfinsoln[-1]]
+    state_f_approx_finalsoln = results_approx_finalsoln.y[0:4, -1]
+    k_finsoln                = k_idxinitguess_to_idxfinsoln[-1]
 
     # Check final state error
-    error_finsoln_vec = state_f_finsoln - boundary_condition_state_f
+    error_approx_finalsoln_vec = state_f_approx_finalsoln - boundary_condition_state_f
+    error_finalsoln_vec        = state_f_finalsoln        - boundary_condition_state_f
     print("\nFinal State Error Check")
     print(f"           {'pos_x':>14s} {'pos_y':>14s} {'vel_x':>14s} {'vel_y':>14s}")
     print(f"           {    'm':>14s} {    'm':>14s} {  'm/s':>14s} {  'm/s':>14s}")
     print(f"  Target : {boundary_condition_state_f[0]:>14.6e} {boundary_condition_state_f[1]:>14.6e} {boundary_condition_state_f[2]:>14.6e} {boundary_condition_state_f[3]:>14.6e}")
-    print(f"  Actual : {           state_f_finsoln[0]:>14.6e} {           state_f_finsoln[1]:>14.6e} {           state_f_finsoln[2]:>14.6e} {           state_f_finsoln[3]:>14.6e}")
-    print(f"  Error  : {         error_finsoln_vec[0]:>14.6e} {         error_finsoln_vec[1]:>14.3e} {         error_finsoln_vec[2]:>14.6e} {         error_finsoln_vec[3]:>14.6e}")
+    print(f"  Approx : {  state_f_approx_finalsoln[0]:>14.6e} {  state_f_approx_finalsoln[1]:>14.6e} {  state_f_approx_finalsoln[2]:>14.6e} {  state_f_approx_finalsoln[3]:>14.6e}")
+    print(f"  Error  : {error_approx_finalsoln_vec[0]:>14.6e} {error_approx_finalsoln_vec[1]:>14.3e} {error_approx_finalsoln_vec[2]:>14.6e} {error_approx_finalsoln_vec[3]:>14.6e}")
+    print(f"  Actual : {         state_f_finalsoln[0]:>14.6e} {         state_f_finalsoln[1]:>14.6e} {         state_f_finalsoln[2]:>14.6e} {         state_f_finalsoln[3]:>14.6e}")
+    print(f"  Error  : {       error_finalsoln_vec[0]:>14.6e} {       error_finalsoln_vec[1]:>14.3e} {       error_finalsoln_vec[2]:>14.6e} {       error_finalsoln_vec[3]:>14.6e}")
    
     # Plot the results
     plot_final_results(
-        results_finsoln, 
+        results_approx_finalsoln, 
+        results_finalsoln,
         boundary_condition_state_o,
         boundary_condition_state_f,
         thrust_acc_min,
@@ -422,8 +920,12 @@ def solve_trajectory():
         k_finsoln,
     )
 
+    # End
+    print()
+
 
 def plot_final_results(
+        results_approx_finalsoln,
         results_finsoln,
         boundary_condition_state_o, 
         boundary_condition_state_f, 
@@ -435,7 +937,8 @@ def plot_final_results(
     Calculates and plots all relevant results for the final trajectory solution.
     """
     # Unpack state and costate histories
-    time_t, states_t                           = results_finsoln.t, results_finsoln.y
+    time_t                                     = results_finsoln.t
+    states_t                                   = results_finsoln.y
     pos_x_t, pos_y_t, vel_x_t, vel_y_t         = states_t[0:4]
     copos_x_t, copos_y_t, covel_x_t, covel_y_t = states_t[4:8]
     
@@ -451,7 +954,7 @@ def plot_final_results(
     # Create trajectory figure
     mplt.style.use('seaborn-v0_8-whitegrid')
     fig = mplt.figure(figsize=(15, 8))
-    gs = fig.add_gridspec(3, 2)
+    gs  = fig.add_gridspec(3, 2)
 
     # Configure figure
     fig.suptitle(
@@ -463,7 +966,7 @@ def plot_final_results(
         fontweight='normal',
     )
 
-    # Panel 1: 2D Trajectory Path
+    # 2D Trajectory Path
     ax1 = fig.add_subplot(gs[0:3, 0])
     
     ax1.plot(                   pos_x_t    ,                    pos_y_t    , color=mcolors.CSS4_COLORS['black'],                                                                                                                                           label='Trajectory' )
@@ -554,5 +1057,33 @@ def plot_final_results(
 
 
 if __name__ == '__main__':
-    solve_trajectory()
+
+    # Problem input
+    units_time, units_distance, units_mass, units_force = "s", "m", "kg", "N" # "s", "m", "kg", "N" | ???
+    time_o, time_f                          = 0, 400
+    pos_vec_o                               = [  0.0,  0.0 ]
+    vel_vec_o                               = [ -0.3, -0.5 ]
+    pos_vec_f                               = [ 10.0,  5.0 ]
+    vel_vec_f                               = [  0.3, -0.5 ] 
+    thrust_acc_min, thrust_acc_max          = 0.0e+0, 8.0e-3
+    k_idxinitguess, k_idxfinsoln, k_idxdivs = 1.0e-1, 1.0e+2, 10
+
+    # Process input
+    time_span                  = np.hstack([time_o, time_f])
+    state_o                    = np.hstack([pos_vec_o, vel_vec_o])
+    state_f                    = np.hstack([pos_vec_f, vel_vec_f])
+    boundary_condition_state_o = state_o
+    boundary_condition_state_f = state_f
+
+    # Solve for optimal trajectory
+    solve_trajectory(
+        time_span,
+        boundary_condition_state_o,
+        boundary_condition_state_f,
+        thrust_acc_min,
+        thrust_acc_max,
+        k_idxinitguess,
+        k_idxfinsoln, 
+        k_idxdivs,
+    )
 
