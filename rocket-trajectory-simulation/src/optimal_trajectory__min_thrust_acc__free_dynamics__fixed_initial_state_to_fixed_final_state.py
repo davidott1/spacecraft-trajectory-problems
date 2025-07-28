@@ -344,7 +344,7 @@ def solve_trajectory():
     pos_vec_f                               = [ 10.0,  5.0 ]
     vel_vec_f                               = [  0.3, -0.5 ] 
     thrust_acc_min, thrust_acc_max          = 0.0e+0, 8.0e-3
-    k_idxinitguess, k_idxfinsoln, k_idxdivs = 1.0e-1, 1.0e+2, 100
+    k_idxinitguess, k_idxfinsoln, k_idxdivs = 1.0e-1, 1.0e+2, 10
 
     # Process input
     time_span                  = np.hstack([time_o, time_f])
@@ -375,7 +375,7 @@ def solve_trajectory():
             statecostate_o          = np.hstack((pos_vec_o, vel_vec_o, decisionstate_initguess))
             stm_oo                  = np.identity(8).flatten()
             statecostatestm_o       = np.concatenate([statecostate_o, stm_oo])
-            time_eval_points        = np.linspace(time_span[0], time_span[1], 401)
+            time_eval_points        = np.linspace(time_span[0], time_span[1], 201)
             soln_ivp = \
                 solve_ivp(
                     freebodydynamics__minfuel__indirect_thrustacc_heaviside_stm,
@@ -466,11 +466,11 @@ def plot_final_results(
     # Panel 1: 2D Trajectory Path
     ax1 = fig.add_subplot(gs[0:3, 0])
     
-    ax1.plot   (                   pos_x_t    ,                    pos_y_t    , color=mcolors.CSS4_COLORS['black'],                                                                                                                                           label='Trajectory' )
-    ax1.scatter(boundary_condition_state_o[ 0], boundary_condition_state_o[ 1], color=mcolors.CSS4_COLORS['black'], marker='>',          s=400,       facecolor=mcolors.CSS4_COLORS['white'],       edgecolor=mcolors.CSS4_COLORS['black']                                       )
-    ax1.scatter(boundary_condition_state_f[ 0], boundary_condition_state_f[ 1], color=mcolors.CSS4_COLORS['black'], marker='s',          s=400,       facecolor=mcolors.CSS4_COLORS['white'],       edgecolor=mcolors.CSS4_COLORS['black']                                       )
-    ax1.plot   (                   pos_x_t[ 0],                    pos_y_t[ 0], color=mcolors.CSS4_COLORS['black'], marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='Start'      )
-    ax1.plot   (                   pos_x_t[-1],                    pos_y_t[-1], color=mcolors.CSS4_COLORS['black'], marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='End'        )
+    ax1.plot(                   pos_x_t    ,                    pos_y_t    , color=mcolors.CSS4_COLORS['black'],                                                                                                                                           label='Trajectory' )
+    ax1.plot(boundary_condition_state_o[ 0], boundary_condition_state_o[ 1], color=mcolors.CSS4_COLORS['black'], marker='>', markersize=20, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
+    ax1.plot(boundary_condition_state_f[ 0], boundary_condition_state_f[ 1], color=mcolors.CSS4_COLORS['black'], marker='s', markersize=20, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
+    ax1.plot(                   pos_x_t[ 0],                    pos_y_t[ 0], color=mcolors.CSS4_COLORS['black'], marker='>', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='Start'      )
+    ax1.plot(                   pos_x_t[-1],                    pos_y_t[-1], color=mcolors.CSS4_COLORS['black'], marker='s', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='End'        )
 
     min_pos = min(min(pos_x_t), min(pos_y_t))
     max_pos = max(max(pos_x_t), max(pos_y_t))
@@ -481,9 +481,9 @@ def plot_final_results(
         end_x   = pos_x_t[idx] + thrust_acc_vec_t[0][idx] * thrust_acc_vec_scale
         end_y   = pos_y_t[idx] + thrust_acc_vec_t[1][idx] * thrust_acc_vec_scale
         if idx == 0:
-            ax1.plot([start_x, end_x], [start_y, end_y], color=mcolors.CSS4_COLORS['red'], linewidth=3.5, label='Thrust Acc Vec' )
+            ax1.plot([start_x, end_x], [start_y, end_y], color=mcolors.CSS4_COLORS['red'], linewidth=5.0, alpha=0.5, label='Thrust Acc Vec' )
         else:
-            ax1.plot([start_x, end_x], [start_y, end_y], color=mcolors.CSS4_COLORS['red'], linewidth=3.5 )
+            ax1.plot([start_x, end_x], [start_y, end_y], color=mcolors.CSS4_COLORS['red'], linewidth=5.0, alpha=0.5 )
     ax1.set_xlabel('Position X [m]')
     ax1.set_ylabel('Position Y [m]')
     ax1.grid(True)
