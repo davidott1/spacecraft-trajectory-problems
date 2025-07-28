@@ -814,6 +814,7 @@ def generate_guess(
 
 
 def optimal_trajectory_solve(
+        min_type,
         time_span,
         boundary_condition_pos_vec_o,
         boundary_condition_vel_vec_o,
@@ -842,105 +843,108 @@ def optimal_trajectory_solve(
         k_idxinitguess,
     )
 
-    # K-Continuation Process
-    print(f"\nK-Continuation Process")
-    k_idxinitguess_to_idxfinsoln = np.logspace( np.log(k_idxinitguess), np.log(k_idxfinsoln), k_idxdivs )
-    results_k_idx = {}
-    for idx, k_idx in enumerate(k_idxinitguess_to_idxfinsoln):
+    # Select minimization type
+    if min_type == "fuel":
+
+        # K-Continuation Process
+        print(f"\nK-Continuation Process")
+        k_idxinitguess_to_idxfinsoln = np.logspace( np.log(k_idxinitguess), np.log(k_idxfinsoln), k_idxdivs )
+        results_k_idx = {}
+        for idx, k_idx in enumerate(k_idxinitguess_to_idxfinsoln):
+            soln_root = \
+                root(
+                    objective_and_jacobian,
+                    decisionstate_initguess,
+                    args   = (time_span, boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, boundary_condition_pos_vec_f, boundary_condition_vel_vec_f, thrust_acc_min, thrust_acc_max, k_idx),
+                    method = 'lm',
+                    tol    = 1e-7,
+                    jac    = True,
+                )
+            if soln_root.success:
+                decisionstate_initguess = soln_root.x
+                statecostate_o          = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decisionstate_initguess])
+                stm_oo                  = np.identity(8).flatten()
+                statecostatestm_o       = np.concatenate([statecostate_o, stm_oo])
+                time_eval_points        = np.linspace(time_span[0], time_span[1], 201)
+                soln_ivp = \
+                    solve_ivp(
+                        freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm,
+                        time_span,
+                        statecostatestm_o,
+                        t_eval       = time_eval_points,
+                        dense_output = True, 
+                        args         = (thrust_acc_min, thrust_acc_max, k_idx), 
+                        method       = 'RK45', # DOP853 | RK45
+                        rtol         = 1e-12,
+                        atol         = 1e-12,
+                    )
+                results_k_idx[k_idx] = soln_ivp
+                error_mag = np.linalg.norm(soln_root.fun)
+                if idx==0:
+                    print(f"       {'Step':>5s} {'k':>14s} {'Error Mag':>14s}")
+                print(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
+
+            else:
+                print(f"Convergence Failed for k={k_idx:>14.6e}. Stopping.")
+                break
+
+        # Final solution: no heaviside approximation
         soln_root = \
             root(
-                objective_and_jacobian,
+                objective_and_jacobian_2,
                 decisionstate_initguess,
-                args   = (time_span, boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, boundary_condition_pos_vec_f, boundary_condition_vel_vec_f, thrust_acc_min, thrust_acc_max, k_idx),
+                args   = (time_span, boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, boundary_condition_pos_vec_f, boundary_condition_vel_vec_f, thrust_acc_min, thrust_acc_max),
                 method = 'lm',
-                tol    = 1e-7,
+                tol    = 1e-12,
                 jac    = True,
             )
-        if soln_root.success:
-            decisionstate_initguess = soln_root.x
-            statecostate_o          = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decisionstate_initguess])
-            stm_oo                  = np.identity(8).flatten()
-            statecostatestm_o       = np.concatenate([statecostate_o, stm_oo])
-            time_eval_points        = np.linspace(time_span[0], time_span[1], 201)
-            soln_ivp = \
-                solve_ivp(
-                    freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm,
-                    time_span,
-                    statecostatestm_o,
-                    t_eval       = time_eval_points,
-                    dense_output = True, 
-                    args         = (thrust_acc_min, thrust_acc_max, k_idx), 
-                    method       = 'RK45', # DOP853 | RK45
-                    rtol         = 1e-12,
-                    atol         = 1e-12,
-                )
-            results_k_idx[k_idx] = soln_ivp
-            error_mag = np.linalg.norm(soln_root.fun)
-            if idx==0:
-                print(f"       {'Step':>5s} {'k':>14s} {'Error Mag':>14s}")
-            print(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
+        decisionstate_initguess = soln_root.x
+        statecostate_o          = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decisionstate_initguess])
+        stm_oo                  = np.identity(8).flatten()
+        statecostatestm_o       = np.concatenate([statecostate_o, stm_oo])
+        time_eval_points        = np.linspace(time_span[0], time_span[1], 401)
+        soln_ivp = \
+            solve_ivp(
+                freebodydynamics__minfuel__indirect_thrustaccmax_stm,
+                time_span,
+                statecostatestm_o,
+                t_eval       = time_eval_points,
+                dense_output = True, 
+                args         = (thrust_acc_min, thrust_acc_max), 
+                method       = 'RK45', # DOP853 | RK45
+                rtol         = 1e-12,
+                atol         = 1e-12,
+            )
+        results_finalsoln = soln_ivp
+        state_f_finalsoln = results_finalsoln.y[0:4, -1]
 
-        else:
-            print(f"Convergence Failed for k={k_idx:>14.6e}. Stopping.")
-            break
+        # Final solution: approx and true
+        results_approx_finalsoln = results_k_idx[k_idxinitguess_to_idxfinsoln[-1]]
+        state_f_approx_finalsoln = results_approx_finalsoln.y[0:4, -1]
+        k_finsoln                = k_idxinitguess_to_idxfinsoln[-1]
 
-    # Final solution: no heaviside approximation
-    soln_root = \
-        root(
-            objective_and_jacobian_2,
-            decisionstate_initguess,
-            args   = (time_span, boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, boundary_condition_pos_vec_f, boundary_condition_vel_vec_f, thrust_acc_min, thrust_acc_max),
-            method = 'lm',
-            tol    = 1e-12,
-            jac    = True,
+        # Check final state error
+        error_approx_finalsoln_vec = state_f_approx_finalsoln - np.hstack([boundary_condition_pos_vec_f, boundary_condition_vel_vec_f])
+        error_finalsoln_vec        = state_f_finalsoln        - np.hstack([boundary_condition_pos_vec_f, boundary_condition_vel_vec_f])
+        print("\nFinal State Error Check")
+        print(f"           {'pos_x':>14s} {'pos_y':>14s} {'vel_x':>14s} {'vel_y':>14s}")
+        print(f"           {    'm':>14s} {    'm':>14s} {  'm/s':>14s} {  'm/s':>14s}")
+        print(f"  Target : {boundary_condition_pos_vec_f[0]:>14.6e} {boundary_condition_pos_vec_f[1]:>14.6e} {boundary_condition_vel_vec_f[0]:>14.6e} {boundary_condition_vel_vec_f[1]:>14.6e}")
+        print(f"  Approx : {  state_f_approx_finalsoln[0]:>14.6e} {  state_f_approx_finalsoln[1]:>14.6e} {  state_f_approx_finalsoln[2]:>14.6e} {  state_f_approx_finalsoln[3]:>14.6e}")
+        print(f"  Error  : {error_approx_finalsoln_vec[0]:>14.6e} {error_approx_finalsoln_vec[1]:>14.3e} {error_approx_finalsoln_vec[2]:>14.6e} {error_approx_finalsoln_vec[3]:>14.6e}")
+        print(f"  Actual : {         state_f_finalsoln[0]:>14.6e} {         state_f_finalsoln[1]:>14.6e} {         state_f_finalsoln[2]:>14.6e} {         state_f_finalsoln[3]:>14.6e}")
+        print(f"  Error  : {       error_finalsoln_vec[0]:>14.6e} {       error_finalsoln_vec[1]:>14.3e} {       error_finalsoln_vec[2]:>14.6e} {       error_finalsoln_vec[3]:>14.6e}")
+    
+        # Plot the results
+        plot_final_results(
+            results_finalsoln,
+            boundary_condition_pos_vec_o,
+            boundary_condition_vel_vec_o,
+            boundary_condition_pos_vec_f,
+            boundary_condition_vel_vec_f,
+            thrust_acc_min,
+            thrust_acc_max,
         )
-    decisionstate_initguess = soln_root.x
-    statecostate_o          = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decisionstate_initguess])
-    stm_oo                  = np.identity(8).flatten()
-    statecostatestm_o       = np.concatenate([statecostate_o, stm_oo])
-    time_eval_points        = np.linspace(time_span[0], time_span[1], 401)
-    soln_ivp = \
-        solve_ivp(
-            freebodydynamics__minfuel__indirect_thrustaccmax_stm,
-            time_span,
-            statecostatestm_o,
-            t_eval       = time_eval_points,
-            dense_output = True, 
-            args         = (thrust_acc_min, thrust_acc_max), 
-            method       = 'RK45', # DOP853 | RK45
-            rtol         = 1e-12,
-            atol         = 1e-12,
-        )
-    results_finalsoln = soln_ivp
-    state_f_finalsoln = results_finalsoln.y[0:4, -1]
-
-    # Final solution: approx and true
-    results_approx_finalsoln = results_k_idx[k_idxinitguess_to_idxfinsoln[-1]]
-    state_f_approx_finalsoln = results_approx_finalsoln.y[0:4, -1]
-    k_finsoln                = k_idxinitguess_to_idxfinsoln[-1]
-
-    # Check final state error
-    error_approx_finalsoln_vec = state_f_approx_finalsoln - np.hstack([boundary_condition_pos_vec_f, boundary_condition_vel_vec_f])
-    error_finalsoln_vec        = state_f_finalsoln        - np.hstack([boundary_condition_pos_vec_f, boundary_condition_vel_vec_f])
-    print("\nFinal State Error Check")
-    print(f"           {'pos_x':>14s} {'pos_y':>14s} {'vel_x':>14s} {'vel_y':>14s}")
-    print(f"           {    'm':>14s} {    'm':>14s} {  'm/s':>14s} {  'm/s':>14s}")
-    print(f"  Target : {boundary_condition_pos_vec_f[0]:>14.6e} {boundary_condition_pos_vec_f[1]:>14.6e} {boundary_condition_vel_vec_f[0]:>14.6e} {boundary_condition_vel_vec_f[1]:>14.6e}")
-    print(f"  Approx : {  state_f_approx_finalsoln[0]:>14.6e} {  state_f_approx_finalsoln[1]:>14.6e} {  state_f_approx_finalsoln[2]:>14.6e} {  state_f_approx_finalsoln[3]:>14.6e}")
-    print(f"  Error  : {error_approx_finalsoln_vec[0]:>14.6e} {error_approx_finalsoln_vec[1]:>14.3e} {error_approx_finalsoln_vec[2]:>14.6e} {error_approx_finalsoln_vec[3]:>14.6e}")
-    print(f"  Actual : {         state_f_finalsoln[0]:>14.6e} {         state_f_finalsoln[1]:>14.6e} {         state_f_finalsoln[2]:>14.6e} {         state_f_finalsoln[3]:>14.6e}")
-    print(f"  Error  : {       error_finalsoln_vec[0]:>14.6e} {       error_finalsoln_vec[1]:>14.3e} {       error_finalsoln_vec[2]:>14.6e} {       error_finalsoln_vec[3]:>14.6e}")
-   
-    # Plot the results
-    plot_final_results(
-        results_finalsoln,
-        boundary_condition_pos_vec_o,
-        boundary_condition_vel_vec_o,
-        boundary_condition_pos_vec_f,
-        boundary_condition_vel_vec_f,
-        thrust_acc_min,
-        thrust_acc_max,
-    )
 
     # End
     print()
@@ -1094,31 +1098,41 @@ def proceess_input(
         parameters_input,
     ):
 
-    # Create parameters dictionary
-    parameters_with_units = {}
-    for key, value_unit in parameters_input.items():
-        value    = value_unit['value']
-        unit_str = value_unit['unit']
-
-        # Handle parameters with unit
-        if unit_str not in ("None", None):
-            parameters_with_units[key] = value * u.Unit(unit_str)
-        
-        # Handle parameters without unit
-        else:
-            parameters_with_units[key] = value * u.one
-
-    # Print
+    # Create parameters dictionary and print to screen
     print("\nInput Parameters")
     print(f"  {'Variable':<14s} : {'Value':>{2*14+2}s} {'Unit':<14s}")
-    for parameter, value_unit in parameters_with_units.items():
-        if np.asarray(value_unit.value).ndim == 0:
-            value_unit_value_str = str(f"{value_unit.value:>14.6e}")
-        else:
-            value_unit_value_str = ', '.join([str(f"{val.value:>14.6e}") for val in value_unit])
-        print(f"  {parameter:<14s} : {value_unit_value_str:>{2*14+2}s} {value_unit.unit:<14s}")
+    parameters_with_units = {}
+    for variable, value_unit in parameters_input.items():
+        if isinstance(value_unit, dict):
+
+            # Unpack
+            value    = value_unit['value']
+            unit_str = value_unit['unit']
+
+            # Handle parameters with unit
+            if unit_str not in ("None", None):
+                parameters_with_units[variable] = value * u.Unit(unit_str)
+                if np.asarray(value_unit['value']).ndim == 0: # type: ignore
+                    value_str = str(f"{value_unit['value']:>14.6e}") # type: ignore
+                else:
+                    value_str = ', '.join([str(f"{val:>14.6e}") for val in value_unit['value']])
+
+            # Handle parameters without unit
+            else:
+                parameters_with_units[variable] = value * u.one
+                unit_str = ""
+            
+            # Print row: variable, value, and unit
+            print(f"  {variable:<14s} : {value_str:>{2*14+2}s} {unit_str:<14s}") # type: ignore
+
+        elif isinstance(value_unit, str):
+            parameters_with_units[variable] = value_unit
+
+            # Print row: variable, value
+            print(f"  {variable:<14s} : {value_unit:>{2*14+2}s}")
 
     # Convert to standard units: seconds, meters, kilograms, one
+    min_type       = parameters_with_units[      'min_type']
     time_span      = parameters_with_units[     'time_span'].to_value(u.s       ) # type: ignore
     pos_vec_o      = parameters_with_units[     'pos_vec_o'].to_value(u.m       ) # type: ignore
     vel_vec_o      = parameters_with_units[     'vel_vec_o'].to_value(u.m/u.s   ) # type: ignore
@@ -1141,6 +1155,7 @@ def proceess_input(
 
     # Pack up variable input
     return (
+        min_type,
         time_span,
         boundary_condition_pos_vec_o,
         boundary_condition_vel_vec_o,
@@ -1166,6 +1181,7 @@ if __name__ == '__main__':
 
     # Optimal trajectory input
     (
+        min_type,
         time_span,
         boundary_condition_pos_vec_o,
         boundary_condition_vel_vec_o,
@@ -1181,6 +1197,7 @@ if __name__ == '__main__':
 
     # Optimal trajectory solve
     optimal_trajectory_solve(
+        min_type,
         time_span,
         boundary_condition_pos_vec_o,
         boundary_condition_vel_vec_o,
@@ -1193,3 +1210,18 @@ if __name__ == '__main__':
         k_idxdivs,
     )
 
+
+# {
+#     "_commenet_0"    : "fuel eneergy || { 'value': [  0.0, 400.0 ], 'unit': 's'     } free || { 'value': [  0.0,   0.0 ], 'unit': 'm'     } free || { 'value': [ -0.3,  -0.5 ], 'unit': 'm/s'   } free || { 'value':          8.0e-3, 'unit': 'm/s^2' }",
+#     "min_type"       : "fuel", 
+#     "time_span"      : { "value": [  0.0, 400.0 ], "unit": "s"     },
+#     "pos_vec_o"      : { "value": [  0.0,   0.0 ], "unit": "m"     },
+#     "vel_vec_o"      : { "value": [ -0.3,  -0.5 ], "unit": "m/s"   },
+#     "pos_vec_f"      : { "value": [ 10.0,   5.0 ], "unit": "m"     },
+#     "vel_vec_f"      : { "value": [  0.3,  -0.5 ], "unit": "m/s"   },
+#     "thrust_acc_min" : { "value":          0.0e+0, "unit": "m/s^2" },
+#     "thrust_acc_max" : { "value":          8.0e-3, "unit": "m/s^2" },
+#     "k_idxinitguess" : { "value":          1.0e-1, "unit": "None"  },
+#     "k_idxfinsoln"   : { "value":          1.0e+2, "unit": "None"  },
+#     "k_idxdivs"      : { "value":             100, "unit": "None"  }
+# }
