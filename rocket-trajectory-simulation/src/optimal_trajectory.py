@@ -1,4 +1,5 @@
 # Imports
+import sys
 import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.optimize import root
@@ -842,7 +843,7 @@ def generate_guess(
     """
     Generates a robust initial guess for the co-states: copos_vec, covel_vec
     """
-    print("\Initial Guess Process")
+    print("\nInitial Guess Process")
 
     # Loop through random guesses for the costates
     error_mag_min = np.Inf
@@ -1203,8 +1204,21 @@ def plot_final_results(
 
 
 def read_input():
-    with open("optimal_trajectory_input.json", "r") as file:
+    print("\nReading Input")
+
+    # Grab command line input
+    example_name = sys.argv[1]
+
+     # Check if the filename already has the .json extension
+    if example_name.endswith('.json'):
+        filename = example_name
+    else:
+        filename = f"{example_name}.json"
+
+    # Read input
+    with open(filename, "r") as file:
        parameters_input = json.load(file)
+    print(f"  Successfully read input: {filename}")
     return parameters_input
 
 
