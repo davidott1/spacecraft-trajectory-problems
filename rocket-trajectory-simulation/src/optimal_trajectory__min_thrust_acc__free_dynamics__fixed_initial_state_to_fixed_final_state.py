@@ -842,9 +842,11 @@ def generate_guess(
     """
     Generates a robust initial guess for the co-states: copos_vec, covel_vec
     """
-    print("\nHeuristic Initial Guess Process")
+    print("\Initial Guess Process")
+
+    # Loop through random guesses for the costates
     error_mag_min = np.Inf
-    for idx in range(1000):
+    for idx in range(2000):
         copos_vec_o        = np.random.uniform(low=-1, high=1, size=2)
         covel_vec_o        = np.random.uniform(low=-1, high=1, size=2)
         decision_state_idx = np.hstack([copos_vec_o, covel_vec_o])
@@ -1092,7 +1094,6 @@ def plot_final_results(
     end_y = pos_y_t + thrust_acc_vec_t[1] * thrust_acc_vec_scale
 
     # Find contiguous segments where thrust is active
-    # Calculate thrust magnitude and create a boolean mask
     thrust_magnitude = np.linalg.norm(thrust_acc_vec_t, axis=0)
     is_thrust_on     = thrust_magnitude > 1e-9  # Use a small threshold for float precision
 
@@ -1337,4 +1338,19 @@ if __name__ == '__main__':
 #     "k_idxinitguess" : { "value":          1.0e-1, "unit": "None"  },
 #     "k_idxfinsoln"   : { "value":          1.0e+2, "unit": "None"  },
 #     "k_idxdivs"      : { "value":             100, "unit": "None"  }
+# }
+
+
+# {
+#     "min_type"       : "fuel", 
+#     "time_span"      : { "value": [  0.0e+0,  4.0e+0 ], "unit": "s"     },
+#     "pos_vec_o"      : { "value": [  0.0e+0,  0.0e+0 ], "unit": "m"     },
+#     "vel_vec_o"      : { "value": [  0.0e+0,  0.0e+0 ], "unit": "m/s"   },
+#     "pos_vec_f"      : { "value": [  1.0e+0,  1.0e+0 ], "unit": "m"     },
+#     "vel_vec_f"      : { "value": [  1.0e+0,  0.0e+0 ], "unit": "m/s"   },
+#     "thrust_acc_min" : { "value":             0.0e+0  , "unit": "m/s^2" },
+#     "thrust_acc_max" : { "value":             1.0e-1  , "unit": "m/s^2" },
+#     "k_idxinitguess" : { "value":             1.0e-1  , "unit": "None"  },
+#     "k_idxfinsoln"   : { "value":             1.0e+2  , "unit": "None"  },
+#     "k_idxdivs"      : { "value":                 10  , "unit": "None"  }
 # }
