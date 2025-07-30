@@ -1219,6 +1219,7 @@ def read_input():
     with open(filename, "r") as file:
        parameters_input = json.load(file)
     print(f"  Successfully read input: {filename}")
+    
     return parameters_input
 
 
