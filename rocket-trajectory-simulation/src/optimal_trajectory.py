@@ -630,11 +630,11 @@ def optimal_trajectory_solve(
                     )
             soln_root = \
                 root(
-                    root_func,
-                    decisionstate_initguess,
-                    method = 'lm',
-                    tol    = 1e-11,
-                    jac    = True,
+                    root_func                      ,
+                    decisionstate_initguess        ,
+                    method                  = 'lm' ,
+                    tol                     = 1e-11,
+                    jac                     = True ,
                 )
             if soln_root.success:
                 decisionstate_initguess = soln_root.x
@@ -651,14 +651,14 @@ def optimal_trajectory_solve(
                         )
                 soln_ivp = \
                     solve_ivp(
-                        solve_ivp_func,
-                        time_span,
-                        state_costate_scstm_o,
+                        solve_ivp_func                 ,
+                        time_span                      ,
+                        state_costate_scstm_o          ,
                         t_eval       = time_eval_points,
-                        dense_output = True, 
-                        method       = 'RK45', # DOP853 | RK45
-                        rtol         = 1e-12,
-                        atol         = 1e-12,
+                        dense_output = True            , 
+                        method       = 'RK45'          , # DOP853 | RK45
+                        rtol         = 1e-12           ,
+                        atol         = 1e-12           ,
                     )
                 results_k_idx[k_idx] = soln_ivp
                 error_mag = np.linalg.norm(soln_root.fun)
@@ -700,14 +700,14 @@ def optimal_trajectory_solve(
                 )
         soln_ivp = \
             solve_ivp(
-                solve_ivp_func,
-                time_span,
-                state_costate_scstm_o,
+                solve_ivp_func                 ,
+                time_span                      ,
+                state_costate_scstm_o          ,
                 t_eval       = time_eval_points,
-                dense_output = True, 
-                method       = 'RK45', # DOP853 | RK45
-                rtol         = 1e-12,
-                atol         = 1e-12,
+                dense_output = True            , 
+                method       = 'RK45'          , # DOP853 | RK45
+                rtol         = 1e-12           ,
+                atol         = 1e-12           ,
             )
         results_finalsoln = soln_ivp
         state_f_finalsoln = results_finalsoln.y[0:4, -1]
@@ -730,14 +730,14 @@ def optimal_trajectory_solve(
 
         # Plot the results
         plot_final_results(
-            results_finalsoln,
-            boundary_condition_pos_vec_o,
-            boundary_condition_vel_vec_o,
-            boundary_condition_pos_vec_f,
-            boundary_condition_vel_vec_f,
-            thrust_acc_min = thrust_acc_min,
-            thrust_acc_max = thrust_acc_max,
-            min_type       = min_type      ,
+            results_finalsoln                            ,
+            boundary_condition_pos_vec_o                 ,
+            boundary_condition_vel_vec_o                 ,
+            boundary_condition_pos_vec_f                 ,
+            boundary_condition_vel_vec_f                 ,
+            thrust_acc_min               = thrust_acc_min,
+            thrust_acc_max               = thrust_acc_max,
+            min_type                     = min_type      ,
         )
 
     elif min_type == "energy":
@@ -776,14 +776,14 @@ def optimal_trajectory_solve(
                     )
             soln_ivp = \
                 solve_ivp(
-                    solve_ivp_func,
-                    time_span,
-                    state_costate_scstm_o,
+                    solve_ivp_func                 ,
+                    time_span                      ,
+                    state_costate_scstm_o          ,
                     t_eval       = time_eval_points,
-                    dense_output = True, 
-                    method       = 'RK45', # DOP853 | RK45
-                    rtol         = 1e-12,
-                    atol         = 1e-12,
+                    dense_output = True            , 
+                    method       = 'RK45'          , # DOP853 | RK45
+                    rtol         = 1e-12           ,
+                    atol         = 1e-12           ,
                 )
             
             results_finalsoln = soln_ivp
