@@ -1002,8 +1002,14 @@ def plot_final_results(
     gs  = fig.add_gridspec(3, 2)
 
     # Configure figure
+    if min_type == 'fuel':
+        title_min_type = "Minimize Fuel"
+    elif min_type == 'energy':
+        title_min_type = "Minimize Energy"
+    else: # assume energy
+        title_min_type = "Minimize Energy"
     fig.suptitle(
-        "OPTIMAL TRAJECTORY: Minimize Fuel"
+        f"OPTIMAL TRAJECTORY: {title_min_type}"
         + "\nFree-Body Dynamics"
         + "\nFixed Time-of-Flight | Fixed-Initial-Position, Fixed-Initial-Velocity to Fixed-Final-Position, Fixed-Final-Velocity"
         + "\nThrust Acceleration Max",
@@ -1084,7 +1090,7 @@ def plot_final_results(
         edgecolor = 'none',
         alpha     = 0.5
     )
-    ax2.set_xlabel('Time [s]')
+    ax2.set_xticklabels([])
     ax2.set_ylabel('Thrust Acc Mag [m/s2]')
     ax2.grid(True)
     if min_type=='fuel':
@@ -1110,6 +1116,7 @@ def plot_final_results(
     ax3.plot(time_t    ,                      pos_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
     ax3.plot(time_t[ 0],                      pos_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
     ax3.plot(time_t[-1],                      pos_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax3.set_xticklabels([])
     ax3.set_ylabel('Position [m]')
     ax3.legend()
     ax3.grid(True)
