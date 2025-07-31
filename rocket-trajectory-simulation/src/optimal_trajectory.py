@@ -556,43 +556,6 @@ def freebodydynamics__minenergy__indirect_stm(
     else:
         # state-costate
         return dstatecostate__dtime
-        
-
-
-def objective_function(
-        decision_state,
-        time_span,
-        boundary_condition_pos_vec_o,
-        boundary_condition_vel_vec_o,
-        boundary_condition_pos_vec_f,
-        boundary_condition_vel_vec_f,
-        thrust_acc_min,
-        thrust_acc_max,
-        k_heaviside,
-    ):
-    """
-    Objective function for the root-finder that calls the unified dynamics.
-    """
-    state_o = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decision_state])
-    solve_ivp_func = \
-        lambda time, state: \
-            freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
-                time, state,
-                thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, k_heaviside=k_heaviside, include_stm=False,
-            )
-    soln = \
-        solve_ivp(
-            solve_ivp_func,
-            time_span,
-            state_o,
-            dense_output=True, 
-            method='DOP853',
-            rtol=1e-12,
-            atol=1e-12,
-        )
-    pos_vec_f = soln.sol(time_span[1])[0:2]
-    vel_vec_f = soln.sol(time_span[1])[2:4]
-    return np.hstack([ pos_vec_f, vel_vec_f ]) - np.hstack([ boundary_condition_pos_vec_f, boundary_condition_vel_vec_f ])
 
 
 def objective_and_jacobian(
@@ -628,7 +591,7 @@ def objective_and_jacobian(
             lambda time, totalstate: \
                 freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
                     time, totalstate,
-                    thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, k_heaviside=k_heaviside, include_stm=True,
+                    thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, k_heaviside=k_heaviside, include_stm=include_stm,
                 )
         soln = \
             solve_ivp(
@@ -719,7 +682,7 @@ def generate_guess(
         decision_state_idx = np.hstack([copos_vec_o, covel_vec_o])
         
         error_idx = \
-            objective_function(
+            objective_and_jacobian(
                 decision_state_idx,
                 time_span,
                 boundary_condition_pos_vec_o,
@@ -729,6 +692,8 @@ def generate_guess(
                 thrust_acc_min,
                 thrust_acc_max,
                 k_heaviside,
+                min_type='fuel',
+                include_jacobian=False,
             )
 
         error_mag_idx = np.linalg.norm(error_idx)
@@ -1187,6 +1152,7 @@ def optimal_trajectory_input():
     return proceess_input( parameters_input )
 
 
+# Main
 if __name__ == '__main__':
 
     # Optimal trajectory input
@@ -1221,32 +1187,4 @@ if __name__ == '__main__':
     )
 
 
-# {
-#     "_commenet_0"    : "fuel eneergy || { 'value': [  0.0, 400.0 ], 'unit': 's'     } free || { 'value': [  0.0,   0.0 ], 'unit': 'm'     } free || { 'value': [ -0.3,  -0.5 ], 'unit': 'm/s'   } free || { 'value':          8.0e-3, 'unit': 'm/s^2' }",
-#     "min_type"       : "fuel", 
-#     "time_span"      : { "value": [  0.0, 400.0 ], "unit": "s"     },
-#     "pos_vec_o"      : { "value": [  0.0,   0.0 ], "unit": "m"     },
-#     "vel_vec_o"      : { "value": [ -0.3,  -0.5 ], "unit": "m/s"   },
-#     "pos_vec_f"      : { "value": [ 10.0,   5.0 ], "unit": "m"     },
-#     "vel_vec_f"      : { "value": [  0.3,  -0.5 ], "unit": "m/s"   },
-#     "thrust_acc_min" : { "value":          0.0e+0, "unit": "m/s^2" },
-#     "thrust_acc_max" : { "value":          8.0e-3, "unit": "m/s^2" },
-#     "k_idxinitguess" : { "value":          1.0e-1, "unit": "None"  },
-#     "k_idxfinsoln"   : { "value":          1.0e+2, "unit": "None"  },
-#     "k_idxdivs"      : { "value":             100, "unit": "None"  }
-# }
 
-
-# {
-#     "min_type"       : "fuel", 
-#     "time_span"      : { "value": [  0.0e+0,  4.0e+0 ], "unit": "s"     },
-#     "pos_vec_o"      : { "value": [  0.0e+0,  0.0e+0 ], "unit": "m"     },
-#     "vel_vec_o"      : { "value": [  0.0e+0,  0.0e+0 ], "unit": "m/s"   },
-#     "pos_vec_f"      : { "value": [  1.0e+0,  1.0e+0 ], "unit": "m"     },
-#     "vel_vec_f"      : { "value": [  1.0e+0,  0.0e+0 ], "unit": "m/s"   },
-#     "thrust_acc_min" : { "value":             0.0e+0  , "unit": "m/s^2" },
-#     "thrust_acc_max" : { "value":             1.0e-1  , "unit": "m/s^2" },
-#     "k_idxinitguess" : { "value":             1.0e-1  , "unit": "None"  },
-#     "k_idxfinsoln"   : { "value":             1.0e+2  , "unit": "None"  },
-#     "k_idxdivs"      : { "value":                 10  , "unit": "None"  }
-# }
