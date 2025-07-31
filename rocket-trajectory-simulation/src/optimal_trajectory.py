@@ -156,7 +156,7 @@ def freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
         thrust_acc_min : float      = 1.0e-1, 
         thrust_acc_max : float      = 1.0e+1,
         k_heaviside    : float      = 0.0e+0,
-        include_stm    : bool       = False ,
+        include_scstm  : bool       = False ,
     ) -> np.ndarray:
     """
     Calculates the time derivatives of state variables for a free-body system
@@ -198,8 +198,8 @@ def freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
     # Unpack: full state into state and variational-state-transition matrix
     n_states = 8
     state    = state__stm[:n_states]
-    if include_stm:
-        stm      = state__stm[n_states:].reshape((n_states, n_states))
+    if include_scstm:
+        scstm = state__stm[n_states:].reshape((n_states, n_states))
 
     # Unpack: state into scalar components
     pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y = state
@@ -249,7 +249,7 @@ def freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
 
     # Variational Dynamics: free-body
     #   stm_dot = jacobian * stm
-    if include_stm:
+    if include_scstm:
 
         # Jacobian: free-body
         #   d(dstate/dtime)/dstate
@@ -338,12 +338,12 @@ def freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
         ddstatedtime__dstate[7,5] = -1.0
 
         # Combine: time-derivative of state-transition matrix
-        dstm__dtime = np.dot(ddstatedtime__dstate, stm)
+        dscstm__dtime = np.dot(ddstatedtime__dstate, scstm)
 
     # Pack up: time-derivative of state or state+stm
-    if include_stm:
+    if include_scstm:
         # State + STM
-        return np.hstack((dstate__dtime, dstm__dtime.flatten()))
+        return np.hstack((dstate__dtime, dscstm__dtime.flatten()))
     else:
         # State
         return dstate__dtime
@@ -438,7 +438,7 @@ def constantgravitydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
 
 def freebodydynamics__minenergy__indirect_stm(
         time                : float             ,
-        statecostate__scstm : np.ndarray        ,
+        state_costate_scstm : np.ndarray        ,
         include_scstm       : bool       = False,
     ) -> np.ndarray:
     """
@@ -470,9 +470,9 @@ def freebodydynamics__minenergy__indirect_stm(
 
     # Unpack: state and stm
     n_states = 8
-    state    = statecostate__scstm[:n_states]
+    state    = state_costate_scstm[:n_states]
     if include_scstm:
-        scstm = statecostate__scstm[n_states:].reshape((n_states,n_states))
+        scstm = state_costate_scstm[n_states:].reshape((n_states,n_states))
 
     # Unpack: state into scalar components
     pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y = state
@@ -565,25 +565,25 @@ def objective_and_jacobian(
         boundary_condition_vel_vec_o,
         boundary_condition_pos_vec_f,
         boundary_condition_vel_vec_f,
-        thrust_acc_min,
-        thrust_acc_max,
-        k_heaviside=0.0,
-        min_type='energy',
-        include_jacobian=False,
+        thrust_acc_min   : float = 0.0e+0  ,
+        thrust_acc_max   : float = 1.0e+1  ,
+        k_heaviside      : float = 0.0     ,
+        min_type         : str   = 'energy',
+        include_jacobian : bool  = False   ,
     ):
     """
     Objective function that also returns the analytical Jacobian.
     """
 
     # Initial state and stm
-    statecostate_o = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decision_state])
+    state_costate_o = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decision_state])
     if include_jacobian:
-        include_stm  = True
-        stm_oo       = np.identity(8).flatten()
-        totalstate_o = np.hstack([statecostate_o, stm_oo])
+        include_scstm  = True
+        stm_oo         = np.identity(8).flatten()
+        totalstate_o   = np.hstack([state_costate_o, stm_oo])
     else:
-        include_stm  = False
-        totalstate_o = statecostate_o
+        include_scstm = False
+        totalstate_o  = state_costate_o
     
     # Integrate
     if min_type=='fuel':
@@ -591,7 +591,7 @@ def objective_and_jacobian(
             lambda time, totalstate: \
                 freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
                     time, totalstate,
-                    thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, k_heaviside=k_heaviside, include_stm=include_stm,
+                    thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, k_heaviside=k_heaviside, include_scstm=include_scstm,
                 )
         soln = \
             solve_ivp(
@@ -605,10 +605,11 @@ def objective_and_jacobian(
             )
     elif min_type=='energy':
         solve_ivp_func = \
-            lambda time, totalstate: \
+            lambda time, state_costate_scstm: \
                 freebodydynamics__minenergy__indirect_stm(
-                    time, totalstate,
-                    include_scstm=True,
+                    time                               ,
+                    state_costate_scstm                ,
+                    include_scstm       = include_scstm,
                 )
         soln = \
             solve_ivp(
@@ -624,16 +625,17 @@ def objective_and_jacobian(
         solve_ivp_func = \
             lambda time, totalstate: \
                 freebodydynamics__minenergy__indirect_stm(
-                    time, totalstate,
-                    include_scstm=True,
+                    time                ,
+                    totalstate          ,
+                    include_scstm = True,
                 )
         soln = \
             solve_ivp(
-                solve_ivp_func,
-                time_span,
-                totalstate_o,
-                dense_output = True, 
-                method       = 'RK45',
+                solve_ivp_func        ,
+                time_span             ,
+                totalstate_o          ,
+                dense_output = True   , 
+                method       = 'RK45' ,
                 rtol         = 1.0e-12,
                 atol         = 1.0e-12,
             )
@@ -667,7 +669,8 @@ def generate_guess(
         boundary_condition_vel_vec_f,
         thrust_acc_min,
         thrust_acc_max,
-        k_heaviside,
+        k_heaviside : float = 0.0     ,
+        min_type    : str   = 'energy',
     ):
     """
     Generates a robust initial guess for the co-states: copos_vec, covel_vec
@@ -692,8 +695,8 @@ def generate_guess(
                 thrust_acc_min,
                 thrust_acc_max,
                 k_heaviside,
-                min_type='fuel',
-                include_jacobian=False,
+                min_type         = min_type,
+                include_jacobian = False,
             )
 
         error_mag_idx = np.linalg.norm(error_idx)
@@ -732,22 +735,23 @@ def optimal_trajectory_solve(
     """
 
     # Generate initial guess for the costates
-    decisionstate_initguess = generate_guess(
-        time_span,
-        boundary_condition_pos_vec_o,
-        boundary_condition_vel_vec_o,
-        boundary_condition_pos_vec_f,
-        boundary_condition_vel_vec_f,
-        thrust_acc_min,
-        thrust_acc_max,
-        k_idxinitguess,
-    )
+    decisionstate_initguess = \
+        generate_guess(
+            time_span                   ,
+            boundary_condition_pos_vec_o,
+            boundary_condition_vel_vec_o,
+            boundary_condition_pos_vec_f,
+            boundary_condition_vel_vec_f,
+            thrust_acc_min              ,
+            thrust_acc_max              ,
+            k_idxinitguess              ,
+            min_type       = min_type   ,
+        )
 
     # Select minimization type
     if min_type == "fuel":
 
         # Set arguments
-        min_type         = 'fuel'
         include_jacobian = True
 
         # K-Continuation Process
@@ -759,8 +763,8 @@ def optimal_trajectory_solve(
                 lambda decisionstate_initguess: \
                     objective_and_jacobian(
                         decisionstate_initguess, 
-                        time_span, boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, boundary_condition_pos_vec_f, boundary_condition_vel_vec_f, thrust_acc_min, thrust_acc_max,
-                        k_heaviside=k_idx, min_type=min_type, include_jacobian=include_jacobian,
+                        time_span, boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, boundary_condition_pos_vec_f, boundary_condition_vel_vec_f,
+                        thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, k_heaviside=k_idx, min_type=min_type, include_jacobian=include_jacobian,
                     )
             soln_root = \
                 root(
@@ -773,15 +777,15 @@ def optimal_trajectory_solve(
             if soln_root.success:
                 decisionstate_initguess = soln_root.x
                 statecostate_o          = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decisionstate_initguess])
-                include_stm             = True
+                include_scstm           = True
                 stm_oo                  = np.identity(8).flatten()
-                state_costate_scstm_o     = np.concatenate([statecostate_o, stm_oo])
+                state_costate_scstm_o   = np.concatenate([statecostate_o, stm_oo])
                 time_eval_points        = np.linspace(time_span[0], time_span[1], 201)
                 solve_ivp_func = \
                     lambda time, state_costate_scstm: \
                         freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
                             time, state_costate_scstm,
-                            thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, k_heaviside=k_idx, include_stm=include_stm,
+                            thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, k_heaviside=k_idx, include_scstm=include_scstm,
                         )
                 soln_ivp = \
                     solve_ivp(
@@ -806,19 +810,19 @@ def optimal_trajectory_solve(
 
         # Final solution: no heaviside approximation
         root_func = \
-            lambda decisionstate_initguess: \
+            lambda decisionstate: \
                 objective_and_jacobian(
-                    decisionstate_initguess, 
-                    time_span, boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, boundary_condition_pos_vec_f, boundary_condition_vel_vec_f, thrust_acc_min, thrust_acc_max,
-                    min_type=min_type, include_jacobian=include_jacobian,
+                    decisionstate, 
+                    time_span, boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, boundary_condition_pos_vec_f, boundary_condition_vel_vec_f,
+                    thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, min_type=min_type, include_jacobian=include_jacobian,
                 )
         soln_root = \
             root(
-                root_func,
+                root_func              ,
                 decisionstate_initguess,
-                method = 'lm',
-                tol    = 1e-11,
-                jac    = True,
+                method = 'lm'          ,
+                tol    = 1e-11         ,
+                jac    = True          ,
             )
         decisionstate_initguess = soln_root.x
         state_costate_o         = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decisionstate_initguess])
@@ -830,7 +834,7 @@ def optimal_trajectory_solve(
             lambda time, state_costate_scstm: \
                 freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
                     time, state_costate_scstm,
-                    thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, k_heaviside=0.0, include_stm=include_stm,
+                    thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, k_heaviside=0.0, include_scstm=include_scstm,
                 )
         soln_ivp = \
             solve_ivp(
@@ -857,10 +861,10 @@ def optimal_trajectory_solve(
         print(f"           {'pos_x':>14s} {'pos_y':>14s} {'vel_x':>14s} {'vel_y':>14s}")
         print(f"           {    'm':>14s} {    'm':>14s} {  'm/s':>14s} {  'm/s':>14s}")
         print(f"  Target : {boundary_condition_pos_vec_f[0]:>14.6e} {boundary_condition_pos_vec_f[1]:>14.6e} {boundary_condition_vel_vec_f[0]:>14.6e} {boundary_condition_vel_vec_f[1]:>14.6e}")
-        print(f"  Approx : {  state_f_approx_finalsoln[0]:>14.6e} {  state_f_approx_finalsoln[1]:>14.6e} {  state_f_approx_finalsoln[2]:>14.6e} {  state_f_approx_finalsoln[3]:>14.6e}")
-        print(f"  Error  : {error_approx_finalsoln_vec[0]:>14.6e} {error_approx_finalsoln_vec[1]:>14.3e} {error_approx_finalsoln_vec[2]:>14.6e} {error_approx_finalsoln_vec[3]:>14.6e}")
-        print(f"  Actual : {         state_f_finalsoln[0]:>14.6e} {         state_f_finalsoln[1]:>14.6e} {         state_f_finalsoln[2]:>14.6e} {         state_f_finalsoln[3]:>14.6e}")
-        print(f"  Error  : {       error_finalsoln_vec[0]:>14.6e} {       error_finalsoln_vec[1]:>14.3e} {       error_finalsoln_vec[2]:>14.6e} {       error_finalsoln_vec[3]:>14.6e}")
+        print(f"  Approx : {    state_f_approx_finalsoln[0]:>14.6e} {    state_f_approx_finalsoln[1]:>14.6e} {    state_f_approx_finalsoln[2]:>14.6e} {    state_f_approx_finalsoln[3]:>14.6e}")
+        print(f"  Error  : {  error_approx_finalsoln_vec[0]:>14.6e} {  error_approx_finalsoln_vec[1]:>14.3e} {  error_approx_finalsoln_vec[2]:>14.6e} {  error_approx_finalsoln_vec[3]:>14.6e}")
+        print(f"  Actual : {           state_f_finalsoln[0]:>14.6e} {           state_f_finalsoln[1]:>14.6e} {           state_f_finalsoln[2]:>14.6e} {           state_f_finalsoln[3]:>14.6e}")
+        print(f"  Error  : {         error_finalsoln_vec[0]:>14.6e} {         error_finalsoln_vec[1]:>14.3e} {         error_finalsoln_vec[2]:>14.6e} {         error_finalsoln_vec[3]:>14.6e}")
 
         # Plot the results
         plot_final_results(
@@ -869,26 +873,101 @@ def optimal_trajectory_solve(
             boundary_condition_vel_vec_o,
             boundary_condition_pos_vec_f,
             boundary_condition_vel_vec_f,
-            thrust_acc_min,
-            thrust_acc_max,
+            thrust_acc_min = thrust_acc_min,
+            thrust_acc_max = thrust_acc_max,
+            min_type       = min_type      ,
         )
+
+    elif min_type == "energy":
+
+        # Set arguments
+        include_jacobian = True
+
+        # Root solve two-point boundary-value problem
+        root_func = \
+            lambda decisionstate: \
+                objective_and_jacobian(
+                    decisionstate, 
+                    time_span, boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, boundary_condition_pos_vec_f, boundary_condition_vel_vec_f,
+                    min_type=min_type, include_jacobian=include_jacobian,
+                )
+        soln_root = \
+            root(
+                root_func              ,
+                decisionstate_initguess,
+                method = 'lm'          ,
+                tol    = 1e-11         ,
+                jac    = True          ,
+            )
+        if soln_root.success:
+            decisionstate_initguess = soln_root.x
+            state_costate_o         = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decisionstate_initguess])
+            include_scstm           = True
+            scstm_oo                = np.identity(8).flatten()
+            state_costate_scstm_o   = np.hstack([state_costate_o, scstm_oo])
+            time_eval_points        = np.linspace(time_span[0], time_span[1], 201)
+            solve_ivp_func = \
+                lambda time, state_costate_scstm: \
+                    freebodydynamics__minenergy__indirect_stm(
+                        time, state_costate_scstm,
+                        include_scstm=include_scstm,
+                    )
+            soln_ivp = \
+                solve_ivp(
+                    solve_ivp_func,
+                    time_span,
+                    state_costate_scstm_o,
+                    t_eval       = time_eval_points,
+                    dense_output = True, 
+                    method       = 'RK45', # DOP853 | RK45
+                    rtol         = 1e-12,
+                    atol         = 1e-12,
+                )
+            
+            results_finalsoln = soln_ivp
+            state_f_finalsoln = results_finalsoln.y[0:4, -1]
+
+            # Check final state error
+            error_finalsoln_vec = state_f_finalsoln - np.hstack([boundary_condition_pos_vec_f, boundary_condition_vel_vec_f])
+            print("\nFinal State Error Check")
+            print(f"           {'pos_x':>14s} {'pos_y':>14s} {'vel_x':>14s} {'vel_y':>14s}")
+            print(f"           {    'm':>14s} {    'm':>14s} {  'm/s':>14s} {  'm/s':>14s}")
+            print(f"  Target : {boundary_condition_pos_vec_f[0]:>14.6e} {boundary_condition_pos_vec_f[1]:>14.6e} {boundary_condition_vel_vec_f[0]:>14.6e} {boundary_condition_vel_vec_f[1]:>14.6e}")
+            print(f"  Actual : {           state_f_finalsoln[0]:>14.6e} {           state_f_finalsoln[1]:>14.6e} {           state_f_finalsoln[2]:>14.6e} {           state_f_finalsoln[3]:>14.6e}")
+            print(f"  Error  : {         error_finalsoln_vec[0]:>14.6e} {         error_finalsoln_vec[1]:>14.3e} {         error_finalsoln_vec[2]:>14.6e} {         error_finalsoln_vec[3]:>14.6e}")
+            
+            # Plot the results
+            plot_final_results(
+                results_finalsoln                      ,
+                boundary_condition_pos_vec_o           ,
+                boundary_condition_vel_vec_o           ,
+                boundary_condition_pos_vec_f           ,
+                boundary_condition_vel_vec_f           ,
+                min_type                     = min_type,
+            )
+
+        else:
+            print(f"Convergence failed. Stopping.")
+
 
     # End
     print()
 
 
 def plot_final_results(
-        results_finsoln,
-        boundary_condition_pos_vec_o,
-        boundary_condition_vel_vec_o,
-        boundary_condition_pos_vec_f,
-        boundary_condition_vel_vec_f,
-        thrust_acc_min, 
-        thrust_acc_max, 
+        results_finsoln                                ,
+        boundary_condition_pos_vec_o                   ,
+        boundary_condition_vel_vec_o                   ,
+        boundary_condition_pos_vec_f                   ,
+        boundary_condition_vel_vec_f                   ,
+        thrust_acc_min               : float = 0.0e+0  , 
+        thrust_acc_max               : float = 1.0e+1  ,
+        min_type                     : str   = 'energy',
     ):
     """
     Calculates and plots all relevant results for the final trajectory solution.
     """
+    
     # Unpack state and costate histories
     time_t                                     = results_finsoln.t
     states_t                                   = results_finsoln.y
@@ -896,20 +975,27 @@ def plot_final_results(
     copos_x_t, copos_y_t, covel_x_t, covel_y_t = states_t[4:8]
     
     # Recalculate the thrust profile to match the dynamics function
-    epsilon          = 1.0e-6
-    covel_mag_t      = np.sqrt(covel_x_t**2 + covel_y_t**2 + epsilon**2)
-    switching_func_t = covel_mag_t - 1.0
-    thrust_acc_mag_t = np.zeros_like(switching_func_t)
-    for idx, switching_func_t_value in enumerate(switching_func_t):
-        if switching_func_t_value > 0:
-            thrust_acc_mag_t[idx] = thrust_acc_max
-        elif switching_func_t_value < 0:
-            thrust_acc_mag_t[idx] = thrust_acc_min
-        else:
-            thrust_acc_mag_t[idx] = thrust_acc_min
-    thrust_acc_dir_t = np.array([ -covel_x_t/covel_mag_t, -covel_y_t/covel_mag_t ])
-    thrust_acc_vec_t = thrust_acc_mag_t * thrust_acc_dir_t
-
+    if min_type == 'fuel':
+        epsilon          = 1.0e-6
+        covel_mag_t      = np.sqrt(covel_x_t**2 + covel_y_t**2 + epsilon**2)
+        switching_func_t = covel_mag_t - 1.0
+        thrust_acc_mag_t = np.zeros_like(switching_func_t)
+        for idx, switching_func_t_value in enumerate(switching_func_t):
+            if switching_func_t_value > 0:
+                thrust_acc_mag_t[idx] = thrust_acc_max
+            elif switching_func_t_value < 0:
+                thrust_acc_mag_t[idx] = thrust_acc_min
+            else:
+                thrust_acc_mag_t[idx] = thrust_acc_min
+        thrust_acc_dir_t = np.array([ -covel_x_t/covel_mag_t, -covel_y_t/covel_mag_t ])
+        thrust_acc_vec_t = thrust_acc_mag_t * thrust_acc_dir_t
+    elif min_type == 'energy':
+        thrust_acc_vec_t = np.array([ -covel_x_t, -covel_y_t ])
+        thrust_acc_mag_t = np.sqrt( thrust_acc_vec_t[0]**2 + thrust_acc_vec_t[1]**2 )
+    else: # assumes energy
+        thrust_acc_vec_t = np.array([ -covel_x_t, -covel_y_t ])
+        thrust_acc_mag_t = np.sqrt( thrust_acc_vec_t[0]**2 + thrust_acc_vec_t[1]**2 )
+    
     # Create trajectory figure
     mplt.style.use('seaborn-v0_8-whitegrid')
     fig = mplt.figure(figsize=(15, 8))
@@ -921,8 +1007,8 @@ def plot_final_results(
         + "\nFree-Body Dynamics"
         + "\nFixed Time-of-Flight | Fixed-Initial-Position, Fixed-Initial-Velocity to Fixed-Final-Position, Fixed-Final-Velocity"
         + "\nThrust Acceleration Max",
-        fontsize=16,
-        fontweight='normal',
+        fontsize   = 16              ,
+        fontweight = 'normal'        ,
     )
 
     # 2D Trajectory Path
@@ -936,7 +1022,13 @@ def plot_final_results(
     # Calculate the boundary points for the entire trajectory
     min_pos = min(min(pos_x_t), min(pos_y_t))
     max_pos = max(max(pos_x_t), max(pos_y_t))
-    thrust_acc_vec_scale = 0.2 * (max_pos - min_pos) / thrust_acc_max
+
+    if min_type=='fuel':
+        plot_thrust_acc_max = thrust_acc_max
+    elif min_type=='energy':
+        plot_thrust_acc_max = max(thrust_acc_mag_t)
+
+    thrust_acc_vec_scale = 0.2 * (max_pos - min_pos) / plot_thrust_acc_max
     end_x = pos_x_t + thrust_acc_vec_t[0] * thrust_acc_vec_scale
     end_y = pos_y_t + thrust_acc_vec_t[1] * thrust_acc_vec_scale
 
@@ -947,17 +1039,17 @@ def plot_final_results(
     # Find the start and end indices of each 'True' block
     padded = np.concatenate(([False], is_thrust_on, [False]))
     diffs  = np.diff(padded.astype(int))
-    starts = np.where(diffs == 1)[0]
+    starts = np.where(diffs == +1)[0]
     stops  = np.where(diffs == -1)[0]
 
-    # 3. Loop through each segment and draw a separate polygon
-    for i, (start_idx, stop_idx) in enumerate(zip(starts, stops)):
+    # Loop through each segment and draw a separate polygon
+    for idx, (start_idx, stop_idx) in enumerate(zip(starts, stops)):
 
         # Slice the data arrays to get just the points for this segment
         segment_pos_x = pos_x_t[start_idx:stop_idx]
         segment_pos_y = pos_y_t[start_idx:stop_idx]
-        segment_end_x = end_x[start_idx:stop_idx]
-        segment_end_y = end_y[start_idx:stop_idx]
+        segment_end_x = end_x  [start_idx:stop_idx]
+        segment_end_y = end_y  [start_idx:stop_idx]
 
         # Construct the polygon for this segment
         poly_x = np.concatenate([segment_pos_x, segment_end_x[::-1]])
@@ -980,8 +1072,9 @@ def plot_final_results(
 
     # Thrust Profile
     ax2 = fig.add_subplot(gs[0,1])
-    ax2.axhline(y=thrust_acc_min, color=mcolors.CSS4_COLORS['black'], linestyle=':' , linewidth=2.0, label=f'Thrust Acc Min')
-    ax2.axhline(y=thrust_acc_max, color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Max')
+    if min_type=='fuel':
+        ax2.axhline(y=thrust_acc_min, color=mcolors.CSS4_COLORS['black'], linestyle=':' , linewidth=2.0, label=f'Thrust Acc Min')
+        ax2.axhline(y=thrust_acc_max, color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Max')
     ax2.plot(time_t, thrust_acc_mag_t, color=mcolors.CSS4_COLORS['red'], linewidth=2.0, label='Thrust Acc Mag')
     ax2.fill_between(
         time_t,
@@ -994,9 +1087,15 @@ def plot_final_results(
     ax2.set_xlabel('Time [s]')
     ax2.set_ylabel('Thrust Acc Mag [m/s2]')
     ax2.grid(True)
+    if min_type=='fuel':
+        plot_thrust_acc_min = 0.0
+        plot_thrust_acc_max = thrust_acc_max
+    elif min_type=='energy':
+        plot_thrust_acc_min = 0.0
+        plot_thrust_acc_max = max(thrust_acc_mag_t)
     ax2.set_ylim(
-        thrust_acc_min - (thrust_acc_max - thrust_acc_min) * 0.1,
-        thrust_acc_max + (thrust_acc_max - thrust_acc_min) * 0.1,
+        plot_thrust_acc_min - (plot_thrust_acc_max - plot_thrust_acc_min) * 0.1, # type: ignore
+        plot_thrust_acc_max + (plot_thrust_acc_max - plot_thrust_acc_min) * 0.1, # type: ignore
     )
 
     # Position vs. Time
