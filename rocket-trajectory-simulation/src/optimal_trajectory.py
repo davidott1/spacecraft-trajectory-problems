@@ -128,8 +128,8 @@ def freebodydynamics__indirect_thrustaccmax_heaviside_stm(
             thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
             thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
         else: # assume energy
-            thrust_acc_x   = -covel_x
-            thrust_acc_y   = -covel_y
+            thrust_acc_x   = covel_x
+            thrust_acc_y   = covel_y
             thrust_acc_mag = covel_mag
 
     # Dynamics: free-body
@@ -253,11 +253,11 @@ def freebodydynamics__indirect_thrustaccmax_heaviside_stm(
 
             # Row 3
             #   d(dvel_x/dtime)/dcovel_x
-            ddstatedtime__dstate[2,6] = np.float64(-1.0)
+            ddstatedtime__dstate[2,6] = np.float64(+1.0)
 
             # Row 4
             #   d(dvel_y/dtime)/dcovel_y
-            ddstatedtime__dstate[3,7] = np.float64(-1.0)
+            ddstatedtime__dstate[3,7] = np.float64(+1.0)
 
     
         # Row 7
@@ -371,136 +371,6 @@ def constantgravitydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
         dcovel_x__dtime,
         dcovel_y__dtime,
     ])
-
-
-# def freebodydynamics__minenergy__indirect_stm(
-#         time                  : float                                    ,
-#         state_costate_scstm   : np.ndarray                               ,
-#         include_scstm         : Optional[bool]       = False             ,
-#         use_thrust_acc_limits : Optional[bool]       = False             ,
-#         thrust_acc_min        : Optional[np.float64] = None              ,
-#         thrust_acc_max        : Optional[np.float64] = None              ,
-#         use_thrust_limits     : Optional[bool]       = False             ,
-#         thrust_min            : Optional[np.float64] = None              ,
-#         thrust_max            : Optional[np.float64] = None              ,
-#         exhaust_velocity      : Optional[np.float64] = np.float64(3.0e+3),
-#         post_process          : Optional[bool]       = False             ,
-#     ) -> np.ndarray:
-#     """
-#     Calculates the time derivatives of state variables for a free-body system
-#     with a minimum-fuel thrust control approximated by a smooth Heaviside function.
-
-#     This function represents the right-hand side of the ordinary differential
-#     equations (ODEs) for integration.
-
-#     Input
-#     -----
-#     time : float
-#         Current time (t).
-#     state : np.ndarray
-#         Current integration state:
-#         [ pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y ]
-#         -   pos_x,   pos_y : position in x and y
-#         -   vel_x,   vel_y : velocity in x and y
-#         - copos_x, copos_y : co-position in x and y
-#         - covel_x, covel_y : co-velocity in x and y
-
-#     Output
-#     ------
-#     np.ndarray
-#         Array of time derivatives of the state variables:
-#         [   dpos_x__dtime,   dpos_y__dtime,   dvel_x__dtime,   dvel_y__dtime,
-#           dcopos_x__dtime, dcopos_y__dtime, dcovel_x__dtime, dcovel_y__dtime  ]
-#     """
-
-#     # Unpack: state and stm
-#     n_states = 8
-#     state    = state_costate_scstm[:n_states]
-#     if include_scstm:
-#         scstm = state_costate_scstm[n_states:].reshape((n_states,n_states))
-
-#     # Unpack: state into scalar components
-#     pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y = state
-
-#     # Control: thrust acceleration
-#     #   thrust_acc_vec = covel_vec
-#     thrust_acc_x = covel_x
-#     thrust_acc_y = covel_y
-
-#     # Dynamics: free-body
-#     #   dstate/dtime = dynamics(time,state)
-#     dpos_x__dtime   = vel_x
-#     dpos_y__dtime   = vel_y
-#     dvel_x__dtime   = thrust_acc_x
-#     dvel_y__dtime   = thrust_acc_y
-#     dcopos_x__dtime = np.float64(0.0)
-#     dcopos_y__dtime = np.float64(0.0)
-#     dcovel_x__dtime = -copos_x
-#     dcovel_y__dtime = -copos_y
-    
-#     # Pack up: scalar components into state
-#     dstatecostate__dtime = \
-#         np.array([
-#             dpos_x__dtime,
-#             dpos_y__dtime,
-#             dvel_x__dtime,
-#             dvel_y__dtime,
-#             dcopos_x__dtime,
-#             dcopos_y__dtime,
-#             dcovel_x__dtime,
-#             dcovel_y__dtime,
-#         ])
-
-#     # Variational Dynamics: free-body
-#     #   dstm/dtime = jacobian * stm
-#     if include_scstm:
-
-#         # Jacobian: free-body
-#         #   d(dstate/dtime)/dstate
-#         #     = [ 0.0, 0.0, d(  dpos_x/dtime)/dvel_x,                      0.0,                        0.0,                        0.0,                        0.0,                        0.0 ]
-#         #       [ 0.0, 0.0,                      0.0, d(  dpos_y/dtime)/dvel_y,                        0.0,                        0.0,                        0.0,                        0.0 ]
-#         #       [ 0.0, 0.0,                      0.0,                      0.0,                        0.0,                        0.0, d(  dvel_x/dtime)/dcovel_x, d(  dvel_x/dtime)/dcovel_y ]
-#         #       [ 0.0, 0.0,                      0.0,                      0.0,                        0.0,                        0.0, d(  dvel_y/dtime)/dcovel_x, d(  dvel_y/dtime)/dcovel_y ]
-#         #       [ 0.0, 0.0,                      0.0,                      0.0,                        0.0,                        0.0,                        0.0,                        0.0 ]
-#         #       [ 0.0, 0.0,                      0.0,                      0.0,                        0.0,                        0.0,                        0.0,                        0.0 ]
-#         #       [ 0.0, 0.0,                      0.0,                      0.0, d(dcovel_x/dtime)/dcopos_x,                        0.0,                        0.0,                        0.0 ]
-#         #       [ 0.0, 0.0,                      0.0,                      0.0,                        0.0, d(dcovel_y/dtime)/dcopos_y,                        0.0,                        0.0 ]
-#         ddstatedtime__dstate = np.zeros((n_states, n_states))
-
-#         # Row 1
-#         #   d(dpos_x/dtime)/dvel_x
-#         ddstatedtime__dstate[0,2] = np.float64(1.0)
-
-#         # Row 2
-#         #   d(dpos_y/dtime)/dvel_y
-#         ddstatedtime__dstate[1,3] = np.float64(1.0)
-
-#         # Row 3
-#         #   d(dvel_x/dtime)/dcovel_x
-#         ddstatedtime__dstate[2,6] = np.float64(1.0)
-
-#         # Row 4
-#         #   d(dvel_y/dtime)/dcovel_y
-#         ddstatedtime__dstate[3,7] = np.float64(1.0)
-
-#         # Row 7
-#         #   d(dcovel_x_dtime)/dcopos_x
-#         ddstatedtime__dstate[6,4] = np.float64(-1.0)
-
-#         # Row 8
-#         #   d(dcovel_y__dttime)/dcopos_y
-#         ddstatedtime__dstate[7,5] = np.float64(-1.0)
-
-#         # Combine: time-derivative of state-transition matrix
-#         dscstm__dtime = np.dot(ddstatedtime__dstate, scstm)
-
-#     # Pack up: time-derivative of state-costate or state-costate and scstm
-#     if include_scstm:
-#         # state-costate and scstm
-#         return np.concatenate((dstatecostate__dtime, dscstm__dtime.flatten()))
-#     else:
-#         # state-costate
-#         return dstatecostate__dtime
 
 
 def tpbvp_objective_and_jacobian(
