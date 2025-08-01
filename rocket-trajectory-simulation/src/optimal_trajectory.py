@@ -10,15 +10,22 @@ import random
 np.random.seed(42)
 import astropy.units as u
 from functools import partial
+from typing import Optional
 
 # Dynamics functions
 def freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
-        time           : float              ,
-        state__stm     : np.ndarray         ,
-        thrust_acc_min : float      = 1.0e-1, 
-        thrust_acc_max : float      = 1.0e+1,
-        k_heaviside    : float      = 0.0e+0,
-        include_scstm  : bool       = False ,
+        time                  : np.float64                               ,
+        state_costate_scstm   : np.ndarray                               ,
+        include_scstm         : Optional[bool]       = False             ,
+        use_thrust_acc_limits : Optional[bool]       = False             ,
+        thrust_acc_min        : Optional[np.float64] = None              , 
+        thrust_acc_max        : Optional[np.float64] = None              ,
+        use_thrust_limits     : Optional[bool]       = False             ,
+        thrust_min            : Optional[np.float64] = None              , 
+        thrust_max            : Optional[np.float64] = None              ,
+        exhaust_velocity      : Optional[np.float64] = np.float64(3.0e+3),
+        k_heaviside           : Optional[np.float64] = np.float64(0.0e+0),
+        post_process          : Optional[bool]       = False             ,
     ) -> np.ndarray:
     """
     Calculates the time derivatives of state variables for a free-body system
@@ -31,7 +38,7 @@ def freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
     -----
     time : float
         Current time (t).
-    state : np.ndarray
+    state_costate_scstm : np.ndarray
         Current integration state:
         [ pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y ]
         -   pos_x,   pos_y : position in x and y
@@ -57,34 +64,65 @@ def freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
           dcopos_x__dtime, dcopos_y__dtime, dcovel_x__dtime, dcovel_y__dtime  ]
     """
 
-    # Unpack: full state into state and variational-state-transition matrix
-    n_states = 8
-    state    = state__stm[:n_states]
-    if include_scstm:
-        scstm = state__stm[n_states:].reshape((n_states, n_states))
+    # Set default values
+    if use_thrust_acc_limits and use_thrust_limits:
+        use_thrust_limits = False
+    if use_thrust_acc_limits is False and use_thrust_limits is False:
+        use_thrust_acc_limits = True
+        use_thrust_limits     = False
+    if use_thrust_acc_limits:
+        if thrust_acc_min is None:
+            thrust_acc_min = np.float64(0.0e+0)
+        if thrust_acc_max is None:
+            thrust_acc_max = np.float64(1.0e+1)
+    if use_thrust_limits:
+        if thrust_min is None:
+            thrust_min = np.float64(0.0e+0)
+        if thrust_max is None:
+            thrust_max = np.float64(1.0e+1)
 
-    # Unpack: state into scalar components
-    pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y = state
+    # Unpack: full state into state and variational-state-transition matrix
+    n_state_costate = 8
+    state_costate   = state_costate_scstm[:n_state_costate]
+    if include_scstm:
+        scstm = state_costate_scstm[n_state_costate:].reshape((n_state_costate, n_state_costate))
+
+    # Unpack: state
+    pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y = state_costate
+
+    # Unpack: post-process states mass and objective
+    if post_process:
+        mass                      = state_costate_scstm[-2]
+        optimal_control_objective = state_costate_scstm[-1]
 
     # Control: thrust acceleration
     #   thrust_acc_vec = -covel_vec / cvel_mag
-    epsilon        = 1.0e-6
+    epsilon        = np.float64(1.0e-6)
     covel_mag      = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
-    switching_func = covel_mag - 1.0
-    if k_heaviside==0.0:
-        if switching_func > 0.0:
-            thrust_acc_mag = thrust_acc_max
-        elif switching_func < 0.0:
-            thrust_acc_mag = thrust_acc_min
+    switching_func = covel_mag - np.float64(1.0)
+
+    if use_thrust_limits:
+        thrust_mag       = np.float64(0.0e+0)
+        thrust_acc_mag   = np.float64(0.0e+0) # thrust_mag / mass
+        thrust_acc_x_dir = -covel_x / covel_mag
+        thrust_acc_y_dir = -covel_y / covel_mag
+        thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
+        thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
+    else: # use_thrust_acc_limits
+        if k_heaviside == np.float64(0.0):
+            if switching_func > np.float64(0.0):
+                thrust_acc_mag = thrust_acc_max
+            elif switching_func < np.float64(0.0):
+                thrust_acc_mag = thrust_acc_min
+            else:
+                thrust_acc_mag = thrust_acc_min # undetermined. choose thrust_acc_min.
         else:
-            thrust_acc_mag = thrust_acc_min # undetermined. choose thrust_acc_min.
-    else:
-        heaviside_approx = 0.5 + 0.5 * np.tanh(k_heaviside * switching_func)
-        thrust_acc_mag   = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx
-    thrust_acc_x_dir = -covel_x / covel_mag
-    thrust_acc_y_dir = -covel_y / covel_mag
-    thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
-    thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
+            heaviside_approx = np.float64(0.5) + np.float64(0.5) * np.tanh(k_heaviside * switching_func)
+            thrust_acc_mag   = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx # type: ignore
+        thrust_acc_x_dir = -covel_x / covel_mag
+        thrust_acc_y_dir = -covel_y / covel_mag
+        thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
+        thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
 
     # Dynamics: free-body
     #   dstate/dtime = dynamics(time,state)
@@ -92,10 +130,13 @@ def freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
     dpos_y__dtime   = vel_y
     dvel_x__dtime   = thrust_acc_x
     dvel_y__dtime   = thrust_acc_y
-    dcopos_x__dtime = 0.0
-    dcopos_y__dtime = 0.0
+    dcopos_x__dtime = np.float64(0.0)
+    dcopos_y__dtime = np.float64(0.0)
     dcovel_x__dtime = -copos_x
     dcovel_y__dtime = -copos_y
+    if post_process:
+        dmass__dtime                      = -thrust_acc_mag * mass / exhaust_velocity # type: ignore
+        doptimal_control_objective__dtime =  thrust_acc_mag
     
     dstate__dtime = \
         np.array([
@@ -131,15 +172,15 @@ def freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
         #       [                      0.0,                      0.0,                      0.0,                      0.0,                        0.0,                        0.0,                        0.0,                        0.0 ]
         #       [                      0.0,                      0.0,                      0.0,                      0.0, d(dcovel_x/dtime)/dcopos_x,                        0.0,                        0.0,                        0.0 ]
         #       [                      0.0,                      0.0,                      0.0,                      0.0,                        0.0, d(dcovel_y/dtime)/dcopos_y,                        0.0,                        0.0 ]
-        ddstatedtime__dstate = np.zeros((n_states, n_states))
+        ddstatedtime__dstate = np.zeros((n_state_costate, n_state_costate))
 
         # Row 1
         #   d(dpos_x/dtime)/dvel_x
-        ddstatedtime__dstate[0,2] = 1.0
+        ddstatedtime__dstate[0,2] = np.float64(1.0)
 
         # Row 2
         #   d(dpos_y/dtime)/dvel_y
-        ddstatedtime__dstate[1,3] = 1.0
+        ddstatedtime__dstate[1,3] = np.float64(1.0)
 
         # Row 3
         #   d(dvel_x/dtime)/dcovel_x, d(dvel_x/dtime)/dcovel_y
@@ -150,10 +191,10 @@ def freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
         dcovel_mag__dcovel_x = covel_x / covel_mag
         dcovel_mag__dcovel_y = covel_y / covel_mag
 
-        dthrust_acc_x_dir__dcovel_x = -1.0 / covel_mag - covel_x * (-1.0 / covel_mag**2) * dcovel_mag__dcovel_x
-        dthrust_acc_x_dir__dcovel_y =                  - covel_x * (-1.0 / covel_mag**2) * dcovel_mag__dcovel_y
-        dthrust_acc_y_dir__dcovel_y = -1.0 / covel_mag - covel_y * (-1.0 / covel_mag**2) * dcovel_mag__dcovel_y
-        dthrust_acc_y_dir__dcovel_x =                  - covel_y * (-1.0 / covel_mag**2) * dcovel_mag__dcovel_x
+        dthrust_acc_x_dir__dcovel_x = np.float64(-1.0) / covel_mag - covel_x * (np.float64(-1.0) / covel_mag**2) * dcovel_mag__dcovel_x
+        dthrust_acc_x_dir__dcovel_y =                              - covel_x * (np.float64(-1.0) / covel_mag**2) * dcovel_mag__dcovel_y
+        dthrust_acc_y_dir__dcovel_y = np.float64(-1.0) / covel_mag - covel_y * (np.float64(-1.0) / covel_mag**2) * dcovel_mag__dcovel_y
+        dthrust_acc_y_dir__dcovel_x =                              - covel_y * (np.float64(-1.0) / covel_mag**2) * dcovel_mag__dcovel_x
 
         # If-else for heaviside inclusion
         if k_heaviside==0.0:
@@ -173,11 +214,11 @@ def freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
         else:
             
             # Common terms
-            one_mns_tanhsq              = 1.0 - np.tanh(k_heaviside * switching_func)**2
-            dheaviside_approx__dcovel_x = 0.5 * k_heaviside * one_mns_tanhsq * dcovel_mag__dcovel_x
-            dheaviside_approx__dcovel_y = 0.5 * k_heaviside * one_mns_tanhsq * dcovel_mag__dcovel_y
-            dthrust_acc_mag__dcovel_x   = (thrust_acc_max - thrust_acc_min) * dheaviside_approx__dcovel_x
-            dthrust_acc_mag__dcovel_y   = (thrust_acc_max - thrust_acc_min) * dheaviside_approx__dcovel_y
+            one_mns_tanhsq              = np.float64(1.0) - np.tanh(k_heaviside * switching_func)**2
+            dheaviside_approx__dcovel_x = np.float64(0.5) * k_heaviside * one_mns_tanhsq * dcovel_mag__dcovel_x # type: ignore
+            dheaviside_approx__dcovel_y = np.float64(0.5) * k_heaviside * one_mns_tanhsq * dcovel_mag__dcovel_y # type: ignore
+            dthrust_acc_mag__dcovel_x   = (thrust_acc_max - thrust_acc_min) * dheaviside_approx__dcovel_x       # type: ignore
+            dthrust_acc_mag__dcovel_y   = (thrust_acc_max - thrust_acc_min) * dheaviside_approx__dcovel_y       # type: ignore
 
             # d(dvel_x__dtime)/dcovel_x
             ddstatedtime__dstate[2,6] = dthrust_acc_mag__dcovel_x * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
@@ -205,10 +246,16 @@ def freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
     # Pack up: time-derivative of state or state+stm
     if include_scstm:
         # State + STM
-        return np.hstack((dstate__dtime, dscstm__dtime.flatten()))
+        if post_process:
+            return np.hstack((dstate__dtime, dscstm__dtime.flatten(), dmass__dtime, doptimal_control_objective__dtime)) # type: ignore
+        else:
+            return np.hstack((dstate__dtime, dscstm__dtime.flatten()))
     else:
         # State
-        return dstate__dtime
+        if post_process:
+            return np.hstack((dstate__dtime, dmass__dtime, doptimal_control_objective__dtime)) # type: ignore
+        else:
+            return dstate__dtime
 
 
 def constantgravitydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
@@ -420,18 +467,18 @@ def freebodydynamics__minenergy__indirect_stm(
         return dstatecostate__dtime
 
 
-def objective_and_jacobian(
-        decision_state,
-        time_span,
-        boundary_condition_pos_vec_o,
-        boundary_condition_vel_vec_o,
-        boundary_condition_pos_vec_f,
-        boundary_condition_vel_vec_f,
-        thrust_acc_min   : float = 0.0e+0  ,
-        thrust_acc_max   : float = 1.0e+1  ,
-        k_heaviside      : float = 0.0     ,
-        min_type         : str   = 'energy',
-        include_jacobian : bool  = False   ,
+def tpbvp_objective_and_jacobian(
+        decision_state               : np.ndarray                     ,
+        time_span                    : np.ndarray                     ,
+        boundary_condition_pos_vec_o : np.ndarray                     ,
+        boundary_condition_vel_vec_o : np.ndarray                     ,
+        boundary_condition_pos_vec_f : np.ndarray                     ,
+        boundary_condition_vel_vec_f : np.ndarray                     ,
+        thrust_acc_min               : np.float64 = np.float64(0.0e+0),
+        thrust_acc_max               : np.float64 = np.float64(1.0e+1),
+        k_heaviside                  : np.float64 = np.float64(0.0e+0),
+        min_type                     : str        = 'energy'          ,
+        include_jacobian             : bool       = False             ,
     ):
     """
     Objective function that also returns the analytical Jacobian.
@@ -453,7 +500,7 @@ def objective_and_jacobian(
             lambda time, totalstate: \
                 freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
                     time, totalstate,
-                    thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, k_heaviside=k_heaviside, include_scstm=include_scstm,
+                    include_scstm=include_scstm, use_thrust_acc_limits=True, thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, k_heaviside=k_heaviside,
                 )
         soln = \
             solve_ivp(
@@ -547,7 +594,7 @@ def generate_guess(
         decision_state_idx = np.hstack([copos_vec_o, covel_vec_o])
         
         error_idx = \
-            objective_and_jacobian(
+            tpbvp_objective_and_jacobian(
                 decision_state_idx,
                 time_span,
                 boundary_condition_pos_vec_o,
@@ -579,17 +626,18 @@ def generate_guess(
 
 
 def optimal_trajectory_solve(
-        min_type,
-        time_span,
-        boundary_condition_pos_vec_o,
-        boundary_condition_vel_vec_o,
-        boundary_condition_pos_vec_f,
-        boundary_condition_vel_vec_f,
-        thrust_acc_min,
-        thrust_acc_max,
-        k_idxinitguess,
-        k_idxfinsoln, 
-        k_idxdivs,
+        min_type                             ,
+        time_span                            ,
+        boundary_condition_pos_vec_o         ,
+        boundary_condition_vel_vec_o         ,
+        boundary_condition_pos_vec_f         ,
+        boundary_condition_vel_vec_f         ,
+        thrust_acc_min                       ,
+        thrust_acc_max                       ,
+        k_idxinitguess                       ,
+        k_idxfinsoln                         , 
+        k_idxdivs                            ,
+        mass_o                       = 1.0e+3,
     ):
     """
     Main solver that implements the two-stage continuation process
@@ -623,7 +671,7 @@ def optimal_trajectory_solve(
         for idx, k_idx in enumerate(k_idxinitguess_to_idxfinsoln):
             root_func = \
                 lambda decisionstate_initguess: \
-                    objective_and_jacobian(
+                    tpbvp_objective_and_jacobian(
                         decisionstate_initguess, 
                         time_span, boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, boundary_condition_pos_vec_f, boundary_condition_vel_vec_f,
                         thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, k_heaviside=k_idx, min_type=min_type, include_jacobian=include_jacobian,
@@ -647,7 +695,7 @@ def optimal_trajectory_solve(
                     lambda time, state_costate_scstm: \
                         freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
                             time, state_costate_scstm,
-                            thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, k_heaviside=k_idx, include_scstm=include_scstm,
+                            include_scstm=include_scstm, use_thrust_acc_limits=True, thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, k_heaviside=k_idx,
                         )
                 soln_ivp = \
                     solve_ivp(
@@ -673,7 +721,7 @@ def optimal_trajectory_solve(
         # Final solution: no heaviside approximation
         root_func = \
             lambda decisionstate: \
-                objective_and_jacobian(
+                tpbvp_objective_and_jacobian(
                     decisionstate, 
                     time_span, boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, boundary_condition_pos_vec_f, boundary_condition_vel_vec_f,
                     thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, min_type=min_type, include_jacobian=include_jacobian,
@@ -686,17 +734,17 @@ def optimal_trajectory_solve(
                 tol    = 1e-11         ,
                 jac    = True          ,
             )
-        decisionstate_initguess = soln_root.x
-        state_costate_o         = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decisionstate_initguess])
-        include_stm             = True
-        scstm_oo                = np.identity(8).flatten()
-        state_costate_scstm_o   = np.concatenate([state_costate_o, scstm_oo])
-        time_eval_points        = np.linspace(time_span[0], time_span[1], 401)
+        
+        decisionstate_initguess     = soln_root.x
+        state_costate_o             = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decisionstate_initguess])
+        optimal_control_objective_o = np.float64(0.0)
+        state_costate_scstm_o       = np.hstack([state_costate_o, mass_o, optimal_control_objective_o])
+        time_eval_points            = np.linspace(time_span[0], time_span[1], 401)
         solve_ivp_func = \
             lambda time, state_costate_scstm: \
                 freebodydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
                     time, state_costate_scstm,
-                    thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, k_heaviside=0.0, include_scstm=include_scstm,
+                    include_scstm=False, use_thrust_acc_limits=True, thrust_acc_min=thrust_acc_min, thrust_acc_max=thrust_acc_max, k_heaviside=np.float64(0.0), post_process=True,
                 )
         soln_ivp = \
             solve_ivp(
@@ -705,7 +753,7 @@ def optimal_trajectory_solve(
                 state_costate_scstm_o          ,
                 t_eval       = time_eval_points,
                 dense_output = True            , 
-                method       = 'RK45'          , # DOP853 | RK45
+                method       = 'RK45'          ,
                 rtol         = 1e-12           ,
                 atol         = 1e-12           ,
             )
@@ -748,7 +796,7 @@ def optimal_trajectory_solve(
         # Root solve two-point boundary-value problem
         root_func = \
             lambda decisionstate: \
-                objective_and_jacobian(
+                tpbvp_objective_and_jacobian(
                     decisionstate, 
                     time_span, boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, boundary_condition_pos_vec_f, boundary_condition_vel_vec_f,
                     min_type=min_type, include_jacobian=include_jacobian,
@@ -832,9 +880,11 @@ def plot_final_results(
     
     # Unpack state and costate histories
     time_t                                     = results_finsoln.t
-    states_t                                   = results_finsoln.y
-    pos_x_t, pos_y_t, vel_x_t, vel_y_t         = states_t[0:4]
-    copos_x_t, copos_y_t, covel_x_t, covel_y_t = states_t[4:8]
+    state_t                                    = results_finsoln.y
+    pos_x_t, pos_y_t, vel_x_t, vel_y_t         = state_t[0:4]
+    copos_x_t, copos_y_t, covel_x_t, covel_y_t = state_t[4:8]
+    mass_t                                     = state_t[-2]
+    opt_ctrl_obj_t                             = state_t[-1]
     
     # Recalculate the thrust profile to match the dynamics function
     if min_type == 'fuel':
@@ -860,8 +910,8 @@ def plot_final_results(
     
     # Create trajectory figure
     mplt.style.use('seaborn-v0_8-whitegrid')
-    fig = mplt.figure(figsize=(15, 8))
-    gs  = fig.add_gridspec(3, 2)
+    fig = mplt.figure(figsize=(15,8))
+    gs  = fig.add_gridspec(5,2)
 
     # Configure figure
     if min_type == 'fuel':
@@ -880,7 +930,7 @@ def plot_final_results(
     )
 
     # 2D Trajectory Path
-    ax1 = fig.add_subplot(gs[0:3, 0])
+    ax1 = fig.add_subplot(gs[0:5,0])
     ax1.plot(                     pos_x_t    ,                      pos_y_t    , color=mcolors.CSS4_COLORS['black'], linewidth=2.0,                                                                                                                                         label='Trajectory' )
     ax1.plot(boundary_condition_pos_vec_o[ 0], boundary_condition_pos_vec_o[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=20, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
     ax1.plot(boundary_condition_pos_vec_f[ 0], boundary_condition_pos_vec_f[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=20, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
@@ -938,13 +988,19 @@ def plot_final_results(
     ax1.axis('equal')
     ax1.legend()
 
-    # Thrust Profile
+    # Optimal Control Objective vs. Time
     ax2 = fig.add_subplot(gs[0,1])
+    ax2.plot(time_t, opt_ctrl_obj_t, color=mcolors.CSS4_COLORS['black'], linewidth=2.0, label='Mass')
+    ax2.set_xticklabels([])
+    ax2.set_ylabel('Objective [m/s]')
+
+    # Thrust Profile
+    ax3 = fig.add_subplot(gs[1,1])
     if min_type=='fuel':
-        ax2.axhline(y=thrust_acc_min, color=mcolors.CSS4_COLORS['black'], linestyle=':' , linewidth=2.0, label=f'Thrust Acc Min')
-        ax2.axhline(y=thrust_acc_max, color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Max')
-    ax2.plot(time_t, thrust_acc_mag_t, color=mcolors.CSS4_COLORS['red'], linewidth=2.0, label='Thrust Acc Mag')
-    ax2.fill_between(
+        ax3.axhline(y=thrust_acc_min, color=mcolors.CSS4_COLORS['black'], linestyle=':' , linewidth=2.0, label=f'Thrust Acc Min')
+        ax3.axhline(y=thrust_acc_max, color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Max')
+    ax3.plot(time_t, thrust_acc_mag_t, color=mcolors.CSS4_COLORS['red'], linewidth=2.0, label='Thrust Acc Mag')
+    ax3.fill_between(
         time_t,
         thrust_acc_mag_t,
         where     = (thrust_acc_mag_t > thrust_acc_min),
@@ -952,62 +1008,68 @@ def plot_final_results(
         edgecolor = 'none',
         alpha     = 0.5
     )
-    ax2.set_xticklabels([])
-    ax2.set_ylabel('Thrust Acc Mag [m/s2]')
-    ax2.grid(True)
+    ax3.set_xticklabels([])
+    ax3.set_ylabel('Thrust Acc Mag [m/s2]')
+    ax3.grid(True)
     if min_type=='fuel':
         plot_thrust_acc_min = 0.0
         plot_thrust_acc_max = thrust_acc_max
     elif min_type=='energy':
         plot_thrust_acc_min = 0.0
         plot_thrust_acc_max = max(thrust_acc_mag_t)
-    ax2.set_ylim(
+    ax3.set_ylim(
         plot_thrust_acc_min - (plot_thrust_acc_max - plot_thrust_acc_min) * 0.1, # type: ignore
         plot_thrust_acc_max + (plot_thrust_acc_max - plot_thrust_acc_min) * 0.1, # type: ignore
     )
 
+    # Mass vs. Time
+    ax4 = fig.add_subplot(gs[2,1])
+    ax4.plot(time_t, mass_t, color=mcolors.CSS4_COLORS['black'], linewidth=2.0, label='Mass')
+    ax4.set_xticklabels([])
+    ax4.set_ylabel('Mass [kg]')
+
     # Position vs. Time
-    ax3 = fig.add_subplot(gs[1,1])
-    ax3.plot(time_t[ 0], boundary_condition_pos_vec_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax3.plot(time_t[-1], boundary_condition_pos_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax3.plot(time_t    ,                      pos_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
-    ax3.plot(time_t[ 0],                      pos_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax3.plot(time_t[-1],                      pos_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax3.plot(time_t[ 0], boundary_condition_pos_vec_o[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax3.plot(time_t[-1], boundary_condition_pos_vec_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax3.plot(time_t    ,                      pos_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
-    ax3.plot(time_t[ 0],                      pos_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax3.plot(time_t[-1],                      pos_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax3.set_xticklabels([])
-    ax3.set_ylabel('Position [m]')
-    ax3.legend()
-    ax3.grid(True)
+    ax5 = fig.add_subplot(gs[3,1])
+    ax5.plot(time_t[ 0], boundary_condition_pos_vec_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5.plot(time_t[-1], boundary_condition_pos_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5.plot(time_t    ,                      pos_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
+    ax5.plot(time_t[ 0],                      pos_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5.plot(time_t[-1],                      pos_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5.plot(time_t[ 0], boundary_condition_pos_vec_o[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5.plot(time_t[-1], boundary_condition_pos_vec_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5.plot(time_t    ,                      pos_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
+    ax5.plot(time_t[ 0],                      pos_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5.plot(time_t[-1],                      pos_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5.set_xticklabels([])
+    ax5.set_ylabel('Position [m]')
+    ax5.legend()
+    ax5.grid(True)
     min_ylim = min(min(pos_x_t), min(pos_y_t))
     max_ylim = max(max(pos_x_t), max(pos_y_t))
-    ax3.set_ylim(
+    ax5.set_ylim(
         min_ylim - (max_ylim - min_ylim) * 0.2,
         max_ylim + (max_ylim - min_ylim) * 0.2,
     )
 
     # Velocity vs. Time
-    ax4 = fig.add_subplot(gs[2,1])
-    ax4.plot(time_t[ 0], boundary_condition_vel_vec_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax4.plot(time_t[-1], boundary_condition_vel_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax4.plot(time_t    ,                      vel_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
-    ax4.plot(time_t[ 0],                      vel_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax4.plot(time_t[-1],                      vel_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax4.plot(time_t[ 0], boundary_condition_vel_vec_o[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax4.plot(time_t[-1], boundary_condition_vel_vec_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax4.plot(time_t    ,                      vel_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
-    ax4.plot(time_t[ 0],                      vel_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax4.plot(time_t[-1],                      vel_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax4.set_xlabel('Time [s]')
-    ax4.set_ylabel('Velocity [m/s]')
-    ax4.legend()
-    ax4.grid(True)
+    ax6 = fig.add_subplot(gs[4,1])
+    ax6.plot(time_t[ 0], boundary_condition_vel_vec_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6.plot(time_t[-1], boundary_condition_vel_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6.plot(time_t    ,                      vel_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
+    ax6.plot(time_t[ 0],                      vel_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6.plot(time_t[-1],                      vel_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6.plot(time_t[ 0], boundary_condition_vel_vec_o[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6.plot(time_t[-1], boundary_condition_vel_vec_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6.plot(time_t    ,                      vel_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
+    ax6.plot(time_t[ 0],                      vel_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6.plot(time_t[-1],                      vel_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6.set_xlabel('Time [s]')
+    ax6.set_ylabel('Velocity [m/s]')
+    ax6.legend()
+    ax6.grid(True)
     min_ylim = min(min(vel_x_t), min(vel_y_t))
     max_ylim = max(max(vel_x_t), max(vel_y_t))
-    ax4.set_ylim(
+    ax6.set_ylim(
         min_ylim - (max_ylim - min_ylim) * 0.2,
         max_ylim + (max_ylim - min_ylim) * 0.2,
     )
@@ -1086,6 +1148,7 @@ def proceess_input(
     k_idxinitguess = parameters_with_units['k_idxinitguess'].to_value(u.one     ) # type: ignore
     k_idxfinsoln   = parameters_with_units[  'k_idxfinsoln'].to_value(u.one     ) # type: ignore
     k_idxdivs      = parameters_with_units[     'k_idxdivs'].to_value(u.one     ) # type: ignore
+    mass_o         = parameters_with_units[        'mass_o'].to_value(u.kg      ) # type: ignore
 
     # Enforce types
     k_idxdivs = int(k_idxdivs)
@@ -1098,17 +1161,18 @@ def proceess_input(
 
     # Pack up variable input
     return (
-        min_type,
-        time_span,
+        min_type                    ,
+        time_span                   ,
         boundary_condition_pos_vec_o,
         boundary_condition_vel_vec_o,
         boundary_condition_pos_vec_f,
         boundary_condition_vel_vec_f,
-        thrust_acc_min,
-        thrust_acc_max,
-        k_idxinitguess,
-        k_idxfinsoln, 
-        k_idxdivs,
+        thrust_acc_min              ,
+        thrust_acc_max              ,
+        k_idxinitguess              ,
+        k_idxfinsoln                , 
+        k_idxdivs                   ,
+        mass_o                      ,
     )
 
 
@@ -1117,7 +1181,7 @@ def optimal_trajectory_input():
     parameters_input = read_input()
 
     # Process input
-    return proceess_input( parameters_input )
+    return proceess_input(parameters_input)
 
 
 # Main
@@ -1125,33 +1189,35 @@ if __name__ == '__main__':
 
     # Optimal trajectory input
     (
-        min_type,
-        time_span,
+        min_type                    ,
+        time_span                   ,
         boundary_condition_pos_vec_o,
         boundary_condition_vel_vec_o,
         boundary_condition_pos_vec_f,
         boundary_condition_vel_vec_f,
-        thrust_acc_min,
-        thrust_acc_max,
-        k_idxinitguess,
-        k_idxfinsoln, 
-        k_idxdivs,
+        thrust_acc_min              ,
+        thrust_acc_max              ,
+        k_idxinitguess              ,
+        k_idxfinsoln                , 
+        k_idxdivs                   ,
+        mass_o                      ,
     ) = \
         optimal_trajectory_input()
 
     # Optimal trajectory solve
     optimal_trajectory_solve(
-        min_type,
-        time_span,
-        boundary_condition_pos_vec_o,
-        boundary_condition_vel_vec_o,
-        boundary_condition_pos_vec_f,
-        boundary_condition_vel_vec_f,
-        thrust_acc_min,
-        thrust_acc_max,
-        k_idxinitguess,
-        k_idxfinsoln, 
-        k_idxdivs,
+        min_type                             ,
+        time_span                            ,
+        boundary_condition_pos_vec_o         ,
+        boundary_condition_vel_vec_o         ,
+        boundary_condition_pos_vec_f         ,
+        boundary_condition_vel_vec_f         ,
+        thrust_acc_min                       ,
+        thrust_acc_max                       ,
+        k_idxinitguess                       ,
+        k_idxfinsoln                         , 
+        k_idxdivs                            ,
+        mass_o                       = mass_o,
     )
 
 

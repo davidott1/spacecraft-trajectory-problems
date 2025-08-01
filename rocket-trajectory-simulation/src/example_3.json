@@ -5,6 +5,7 @@
     "vel_vec_o"      : { "value": [  0.0e+0,  1.0e+0 ], "unit": "m/s"   },
     "pos_vec_f"      : { "value": [  1.0e+1,  1.0e+1 ], "unit": "m"     },
     "vel_vec_f"      : { "value": [  1.0e+0,  1.0e+0 ], "unit": "m/s"   },
+    "mass_o"         : { "value":             1.0e+3  , "unit": "kg"    },
     "thrust_acc_min" : { "value":             0.0e+0  , "unit": "m/s^2" },
     "thrust_acc_max" : { "value":             1.0e-1  , "unit": "m/s^2" },
     "k_idxinitguess" : { "value":             1.0e-1  , "unit": "None"  },
