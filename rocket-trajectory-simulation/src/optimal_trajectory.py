@@ -253,11 +253,11 @@ def freebodydynamics__indirect_thrustaccmax_heaviside_stm(
 
             # Row 3
             #   d(dvel_x/dtime)/dcovel_x
-            ddstatedtime__dstate[2,6] = np.float64(1.0)
+            ddstatedtime__dstate[2,6] = np.float64(-1.0)
 
             # Row 4
             #   d(dvel_y/dtime)/dcovel_y
-            ddstatedtime__dstate[3,7] = np.float64(1.0)
+            ddstatedtime__dstate[3,7] = np.float64(-1.0)
 
     
         # Row 7
@@ -510,10 +510,10 @@ def tpbvp_objective_and_jacobian(
         boundary_condition_vel_vec_o : np.ndarray                     ,
         boundary_condition_pos_vec_f : np.ndarray                     ,
         boundary_condition_vel_vec_f : np.ndarray                     ,
+        min_type                     : str        = 'energy'          ,
         thrust_acc_min               : np.float64 = np.float64(0.0e+0),
         thrust_acc_max               : np.float64 = np.float64(1.0e+1),
         k_heaviside                  : np.float64 = np.float64(0.0e+0),
-        min_type                     : str        = 'energy'          ,
         include_jacobian             : bool       = False             ,
     ):
     """
@@ -531,7 +531,7 @@ def tpbvp_objective_and_jacobian(
         state_costate_scstm_o = state_costate_o
     
     # Integrate
-    if min_type=='fuel':
+    if min_type == 'fuel':
         solve_ivp_func = \
             lambda time, state_costate_scstm: \
                 freebodydynamics__indirect_thrustaccmax_heaviside_stm(
@@ -546,25 +546,6 @@ def tpbvp_objective_and_jacobian(
                 )
         soln = \
             solve_ivp(
-                solve_ivp_func        ,
-                time_span             ,
-                state_costate_scstm_o ,
-                dense_output = True   ,
-                method       = 'RK45' ,
-                rtol         = 1.0e-12,
-                atol         = 1.0e-12,
-            )
-    elif min_type=='energy':
-        solve_ivp_func = \
-            lambda time, state_costate_scstm: \
-                freebodydynamics__indirect_thrustaccmax_heaviside_stm(
-                    time                               ,
-                    state_costate_scstm                ,
-                    include_scstm       = include_scstm,
-                    min_type            = min_type     ,
-                )
-        soln = \
-            solve_ivp(
                 solve_ivp_func                 ,
                 time_span                      ,
                 state_costate_scstm_o          ,
@@ -574,14 +555,16 @@ def tpbvp_objective_and_jacobian(
                 atol                  = 1.0e-12,
             )
     else: # assume energy
+        # breakpoint()
         solve_ivp_func = \
             lambda time, state_costate_scstm: \
                 freebodydynamics__indirect_thrustaccmax_heaviside_stm(
-                    time                          ,
-                    state_costate_scstm           ,
-                    include_scstm       = True    ,
-                    min_type            = min_type,
+                    time                               ,
+                    state_costate_scstm                ,
+                    include_scstm       = include_scstm,
+                    min_type            = min_type     ,
                 )
+        # breakpoint()
         soln = \
             solve_ivp(
                 solve_ivp_func                 ,
@@ -618,10 +601,10 @@ def generate_guess(
         boundary_condition_vel_vec_o : np.ndarray                     ,
         boundary_condition_pos_vec_f : np.ndarray                     ,
         boundary_condition_vel_vec_f : np.ndarray                     ,
+        min_type                     : str        = 'energy'          ,
         thrust_acc_min               : np.float64 = np.float64(1.0e-1),
         thrust_acc_max               : np.float64 = np.float64(1.0e+1),
-        k_heaviside                  : np.float64 = np.float64(0.0)   ,
-        min_type                     : str        = 'energy'          ,
+        k_heaviside                  : np.float64 = np.float64(0.0e+0),
     ):
     """
     Generates a robust initial guess for the co-states: copos_vec, covel_vec
@@ -630,24 +613,24 @@ def generate_guess(
 
     # Loop through random guesses for the costates
     error_mag_min = np.Inf
-    for idx in range(2000):
+    for idx in range(20000):
         copos_vec_o        = np.random.uniform(low=-1, high=1, size=2)
         covel_vec_o        = np.random.uniform(low=-1, high=1, size=2)
         decision_state_idx = np.hstack([copos_vec_o, covel_vec_o])
         
         error_idx = \
             tpbvp_objective_and_jacobian(
-                decision_state_idx          ,
-                time_span                   ,
-                boundary_condition_pos_vec_o,
-                boundary_condition_vel_vec_o,
-                boundary_condition_pos_vec_f,
-                boundary_condition_vel_vec_f,
-                thrust_acc_min              ,
-                thrust_acc_max              ,
-                k_heaviside                 ,
-                min_type         = min_type ,
-                include_jacobian = False    ,
+                decision_state_idx                           ,
+                time_span                                    ,
+                boundary_condition_pos_vec_o                 ,
+                boundary_condition_vel_vec_o                 ,
+                boundary_condition_pos_vec_f                 ,
+                boundary_condition_vel_vec_f                 ,
+                thrust_acc_min               = thrust_acc_min,
+                thrust_acc_max               = thrust_acc_max,
+                k_heaviside                  = k_heaviside   ,
+                min_type                     = min_type      ,
+                include_jacobian             = False         ,
             )
 
         error_mag_idx = np.linalg.norm(error_idx)
@@ -689,22 +672,22 @@ def optimal_trajectory_solve(
     # Generate initial guess for the costates
     decisionstate_initguess = \
         generate_guess(
-            time_span                   ,
-            boundary_condition_pos_vec_o,
-            boundary_condition_vel_vec_o,
-            boundary_condition_pos_vec_f,
-            boundary_condition_vel_vec_f,
-            thrust_acc_min              ,
-            thrust_acc_max              ,
-            k_heaviside = k_idxinitguess,
-            min_type    = min_type      ,
+            time_span                                    ,
+            boundary_condition_pos_vec_o                 ,
+            boundary_condition_vel_vec_o                 ,
+            boundary_condition_pos_vec_f                 ,
+            boundary_condition_vel_vec_f                 ,
+            min_type                     = min_type      ,
+            thrust_acc_min               = thrust_acc_min,
+            thrust_acc_max               = thrust_acc_max,
+            k_heaviside                  = k_idxinitguess,
         )
 
     # Select minimization type
     if min_type == "fuel":
 
-        # Set arguments
-        include_jacobian = True
+        # # Set arguments
+        # include_jacobian = True
 
         # K-Continuation Process
         print(f"\nK-Continuation Process")
@@ -724,7 +707,7 @@ def optimal_trajectory_solve(
                         thrust_acc_min               = thrust_acc_min  ,
                         thrust_acc_max               = thrust_acc_max  ,
                         k_heaviside                  = k_idx           ,
-                        include_jacobian             = include_jacobian,
+                        include_jacobian             = True            ,
                     )
             soln_root = \
                 root(
@@ -787,7 +770,7 @@ def optimal_trajectory_solve(
                     thrust_acc_min   = thrust_acc_min,
                     thrust_acc_max   = thrust_acc_max,
                     min_type         = min_type,
-                    include_jacobian = include_jacobian,
+                    include_jacobian = True,
                 )
         soln_root = \
             root(
@@ -858,18 +841,20 @@ def optimal_trajectory_solve(
             min_type                     = min_type      ,
         )
 
-    elif min_type == "energy":
-
-        # Set arguments
-        include_jacobian = True
+    else: # assume energy
 
         # Root solve two-point boundary-value problem
         root_func = \
             lambda decisionstate: \
                 tpbvp_objective_and_jacobian(
-                    decisionstate, 
-                    time_span, boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, boundary_condition_pos_vec_f, boundary_condition_vel_vec_f,
-                    min_type=min_type, include_jacobian=include_jacobian,
+                    decisionstate                          , 
+                    time_span                              ,
+                    boundary_condition_pos_vec_o           ,
+                    boundary_condition_vel_vec_o           ,
+                    boundary_condition_pos_vec_f           ,
+                    boundary_condition_vel_vec_f           ,
+                    min_type                     = min_type,
+                    include_jacobian             = True    ,
                 )
         soln_root = \
             root(
@@ -889,10 +874,10 @@ def optimal_trajectory_solve(
             solve_ivp_func = \
                 lambda time, state_costate_scstm: \
                     freebodydynamics__indirect_thrustaccmax_heaviside_stm(
-                        time                         ,
-                        state_costate_scstm          ,
-                        include_scstm = include_scstm,
-                        min_type      = min_type     ,
+                        time                               ,
+                        state_costate_scstm                ,
+                        include_scstm       = include_scstm,
+                        min_type            = min_type     ,
                     )
             soln_ivp = \
                 solve_ivp(
