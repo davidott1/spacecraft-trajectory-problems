@@ -613,7 +613,7 @@ def generate_guess(
 
     # Loop through random guesses for the costates
     error_mag_min = np.Inf
-    for idx in range(20000):
+    for idx in range(2000):
         copos_vec_o        = np.random.uniform(low=-1, high=1, size=2)
         covel_vec_o        = np.random.uniform(low=-1, high=1, size=2)
         decision_state_idx = np.hstack([copos_vec_o, covel_vec_o])
