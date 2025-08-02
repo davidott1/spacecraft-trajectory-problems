@@ -5,10 +5,10 @@
     "vel_vec_o"      : { "value": [ -1.0e+1, -1.0e+1 ], "unit": "m/s"   , "fixed_or_free": "fixed" },
     "pos_vec_f"      : { "value": [ 16.0e+1, 16.0e+1 ], "unit": "m"     , "fixed_or_free": "fixed" },
     "vel_vec_f"      : { "value": [ -1.0e+1,  1.0e+0 ], "unit": "m/s"   , "fixed_or_free": "fixed" },
-    "mass_o"         : { "value":             1.0e+3  , "unit": "kg"    },
-    "thrust_acc_min" : { "value":             0.0e+0  , "unit": "m/s^2" },
-    "thrust_acc_max" : { "value":             3.5e-1  , "unit": "m/s^2" },
-    "k_idxinitguess" : { "value":             1.0e-1  , "unit": "None"  },
-    "k_idxfinsoln"   : { "value":             1.0e+2  , "unit": "None"  },
-    "k_idxdivs"      : { "value":                 10  , "unit": "None"  }
+    "mass_o"         : { "value":             1.0e+3  , "unit": "kg"                               },
+    "thrust_acc_min" : { "value":             0.0e+0  , "unit": "m/s^2"                            },
+    "thrust_acc_max" : { "value":             3.5e-1  , "unit": "m/s^2"                            },
+    "k_idxinitguess" : { "value":             1.0e-1  , "unit": "None"                             },
+    "k_idxfinsoln"   : { "value":             1.0e+2  , "unit": "None"                             },
+    "k_idxdivs"      : { "value":                 10  , "unit": "None"                             }
 }
