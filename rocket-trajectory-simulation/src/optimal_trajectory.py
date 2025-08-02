@@ -111,8 +111,8 @@ def freebodydynamics__indirect_thrustaccmax_heaviside_stm(
         else: # assume energy
             thrust_mag       = np.float64(0.0e+0)
             thrust_acc_mag   = np.float64(0.0e+0) # thrust_mag / mass
-            thrust_acc_x_dir = -covel_x / covel_mag
-            thrust_acc_y_dir = -covel_y / covel_mag
+            thrust_acc_x_dir = covel_x / covel_mag
+            thrust_acc_y_dir = covel_y / covel_mag
             thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
             thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
     else: # use_thrust_acc_limits
@@ -832,7 +832,7 @@ def plot_final_results(
         thrust_acc_dir_t = np.array([ -covel_x_t/covel_mag_t, -covel_y_t/covel_mag_t ])
         thrust_acc_vec_t = thrust_acc_mag_t * thrust_acc_dir_t
     else: # assumes energy
-        thrust_acc_vec_t = np.array([ -covel_x_t, -covel_y_t ])
+        thrust_acc_vec_t = np.array([ covel_x_t, covel_y_t ])
         thrust_acc_dir_t = thrust_acc_vec_t / np.linalg.norm(thrust_acc_vec_t, axis=0, keepdims=True)
         thrust_acc_mag_t = np.sqrt( thrust_acc_vec_t[0]**2 + thrust_acc_vec_t[1]**2 )
     thrust_mag_t = mass_t * thrust_acc_mag_t
@@ -937,29 +937,6 @@ def plot_final_results(
     ax1_vel.grid(True)
     ax1_vel.axis('equal')
     ax1_vel.legend(loc='upper left')
-
-    # ax1_vel_xy_scale_factor = 1.5
-    # ax1_vel.set_xlim(-ax1_vel_xy_scale_factor,ax1_vel_xy_scale_factor)
-    # ax1_vel.set_ylim(-ax1_vel_xy_scale_factor,ax1_vel_xy_scale_factor)
-
-    # x_min, x_max = min(vel_x_t), max(vel_x_t)
-    # y_min, y_max = min(vel_y_t), max(vel_y_t)
-    # x_center = (x_max + x_min) / 2
-    # y_center = (y_max + y_min) / 2
-    # max_range = max(x_max - x_min, y_max - y_min)
-    # padding = 1.1 
-    # half_range_padded = (max_range / 2) * padding
-    # ax1_vel.set_xlim(x_center - half_range_padded, x_center + half_range_padded)
-    # ax1_vel.set_ylim(y_center - half_range_padded, y_center + half_range_padded)
-
-    # ax1_vel.set_xlim(
-    #     min(min(vel_x_t), min(vel_y_t)) - 0.1 * (max(max(vel_x_t), max(vel_y_t)) - min(min(vel_x_t), min(vel_y_t))),
-    #     max(max(vel_x_t), max(vel_y_t)) + 0.1 * (max(max(vel_x_t), max(vel_y_t)) - min(min(vel_x_t), min(vel_y_t))),
-    # )
-    # ax1_vel.set_ylim(
-    #     min(min(vel_x_t), min(vel_y_t)) - 0.1 * (max(max(vel_x_t), max(vel_y_t)) - min(min(vel_x_t), min(vel_y_t))),
-    #     max(max(vel_x_t), max(vel_y_t)) + 0.1 * (max(max(vel_x_t), max(vel_y_t)) - min(min(vel_x_t), min(vel_y_t))),
-    # )
     
     # Create a button to swap pos and vel plots
     ax_button = fig.add_axes([0.015, 0.02, 0.04, 0.04]) # [left, bottom, width, height] # type: ignore
@@ -980,6 +957,7 @@ def plot_final_results(
         # Redraw the canvas to show the changes
         fig.canvas.draw_idle()
     button.on_clicked(_swap_plots)
+    fig._button = button # type: ignore
 
     # Optimal Control Objective vs. Time
     ax2 = fig.add_subplot(gs[0,1])
@@ -1116,52 +1094,69 @@ def proceess_input(
         parameters_input,
     ):
 
-    # Create parameters dictionary and print to screen
     print("\nInput Parameters")
-    print(f"  {'Variable':<14s} : {'Value':>{2*14+2}s} {'Unit':<14s}")
-    parameters_with_units = {}
-    for variable, value_unit in parameters_input.items():
-        if isinstance(value_unit, dict):
 
+    # Create parameters dictionary and print to screen
+    max_parameter_length = max([len(parameter) for parameter in parameters_input.keys()])
+    max_value_length     = 14
+    print(f"  {'Variable':<{max_parameter_length}s} : {'Value':>{2*max_value_length+2}s} {'Unit':<{max_value_length}s}")
+    parameters_with_units = {}
+    for parameter, value_unit in parameters_input.items():
+        if isinstance(value_unit, dict):
+            # Handle value_unit as dictionary
+            
             # Unpack
             value    = value_unit['value']
             unit_str = value_unit['unit']
 
             # Handle parameters with unit
             if unit_str not in ("None", None):
-                parameters_with_units[variable] = value * u.Unit(unit_str)
+                parameters_with_units[parameter] = value * u.Unit(unit_str)
                 if np.asarray(value_unit['value']).ndim == 0: # type: ignore
-                    value_str = str(f"{value_unit['value']:>14.6e}") # type: ignore
+                    value_str = str(f"{value_unit['value']:>{max_value_length}.6e}") # type: ignore
                 else:
-                    value_str = ', '.join([str(f"{val:>14.6e}") for val in value_unit['value']])
+                    value_str = ', '.join([str(f"{val:>{max_value_length}.6e}") for val in value_unit['value']])
 
-            # Handle parameters without unit
+            # Handle parameters with None unit
             else:
-                parameters_with_units[variable] = value * u.one
-                unit_str = ""
+                if isinstance(value, (str, bool)):
+                    parameters_with_units[parameter] = value
+                    value_str = str(value)
+                    unit_str  = ""
+                elif isinstance(value, (int, float)): 
+                    parameters_with_units[parameter] = value * u.one
+                    value_str = str(value)
+                    unit_str  = ""
             
             # Print row: variable, value, and unit
-            print(f"  {variable:<14s} : {value_str:>{2*14+2}s} {unit_str:<14s}") # type: ignore
+            print(f"  {parameter:<{max_parameter_length}s} : {value_str:>{2*max_value_length+2}s} {unit_str:<{max_value_length}s}") # type: ignore
 
         elif isinstance(value_unit, str):
-            parameters_with_units[variable] = value_unit
+            # Handle value_unit as string
+
+            # Assign parameter value
+            parameters_with_units[parameter] = value_unit
 
             # Print row: variable, value
-            print(f"  {variable:<14s} : {value_unit:>{2*14+2}s}")
+            print(f"  {parameter:<14s} : {value_unit:>{2*max_value_length+2}s}")
 
     # Convert to standard units: seconds, meters, kilograms, one
-    min_type       = parameters_with_units[      'min_type']
-    time_span      = parameters_with_units[     'time_span'].to_value(u.s       ) # type: ignore
-    pos_vec_o      = parameters_with_units[     'pos_vec_o'].to_value(u.m       ) # type: ignore
-    vel_vec_o      = parameters_with_units[     'vel_vec_o'].to_value(u.m/u.s   ) # type: ignore
-    pos_vec_f      = parameters_with_units[     'pos_vec_f'].to_value(u.m       ) # type: ignore
-    vel_vec_f      = parameters_with_units[     'vel_vec_f'].to_value(u.m/u.s   ) # type: ignore
-    thrust_acc_min = parameters_with_units['thrust_acc_min'].to_value(u.m/u.s**2) # type: ignore
-    thrust_acc_max = parameters_with_units['thrust_acc_max'].to_value(u.m/u.s**2) # type: ignore
-    k_idxinitguess = parameters_with_units['k_idxinitguess'].to_value(u.one     ) # type: ignore
-    k_idxfinsoln   = parameters_with_units[  'k_idxfinsoln'].to_value(u.one     ) # type: ignore
-    k_idxdivs      = parameters_with_units[     'k_idxdivs'].to_value(u.one     ) # type: ignore
-    mass_o         = parameters_with_units[        'mass_o'].to_value(u.kg      ) # type: ignore
+    min_type              = parameters_with_units.get(             'min_type', 'energy'                            )
+    time_span             = parameters_with_units.get(            'time_span', [ 0.0e+0, 1.0e+1 ] * u.s            ).to_value(u.s            ) # type: ignore
+    pos_vec_o             = parameters_with_units.get(            'pos_vec_o', [ 0.0e+0, 0.0e+0 ] * u.m            ).to_value(u.m            ) # type: ignore
+    vel_vec_o             = parameters_with_units.get(            'vel_vec_o', [ 0.0e+0, 0.0e+0 ] * u.m/u.s        ).to_value(u.m/u.s        ) # type: ignore
+    pos_vec_f             = parameters_with_units.get(            'pos_vec_f', [ 1.0e+1, 1.0e+1 ] * u.m            ).to_value(u.m            ) # type: ignore
+    vel_vec_f             = parameters_with_units.get(            'vel_vec_f', [ 1.0e+0, 1.0e+0 ] * u.m/u.s        ).to_value(u.m/u.s        ) # type: ignore
+    use_thrust_acc_limits = parameters_with_units.get('use_thrust_acc_limits', False                               )
+    thrust_acc_min        = parameters_with_units.get(       'thrust_acc_min', 0.0e+0             * u.m/u.s**2     ).to_value(u.m/u.s**2     ) # type: ignore
+    thrust_acc_max        = parameters_with_units.get(       'thrust_acc_max', 1.0e+0             * u.m/u.s**2     ).to_value(u.m/u.s**2     ) # type: ignore
+    use_thrust_limits     = parameters_with_units.get(    'use_thrust_limits', False                               )
+    thrust_min            = parameters_with_units.get(           'thrust_min', 0.0e+0             * u.kg*u.m/u.s**2).to_value(u.kg*u.m/u.s**2) # type: ignore
+    thrust_max            = parameters_with_units.get(           'thrust_max', 1.0e+0             * u.kg*u.m/u.s**2).to_value(u.kg*u.m/u.s**2) # type: ignore
+    k_idxinitguess        = parameters_with_units.get(       'k_idxinitguess', 1.0e-1             * u.one          ).to_value(u.one          ) # type: ignore
+    k_idxfinsoln          = parameters_with_units.get(         'k_idxfinsoln', 1.0e+1             * u.one          ).to_value(u.one          ) # type: ignore
+    k_idxdivs             = parameters_with_units.get(            'k_idxdivs', 10                 * u.one          ).to_value(u.one          ) # type: ignore
+    mass_o                = parameters_with_units.get(               'mass_o', 1.0e+3             * u.kg           ).to_value(u.kg           ) # type: ignore
 
     # Enforce types
     k_idxdivs = int(k_idxdivs)
@@ -1172,6 +1167,13 @@ def proceess_input(
     boundary_condition_pos_vec_f = pos_vec_f
     boundary_condition_vel_vec_f = vel_vec_f
 
+    # Check input
+    if use_thrust_acc_limits and use_thrust_limits:
+        use_thrust_acc_limits = True
+        use_thrust_limits     = False
+        print("\nWarning: Cannot use both thrust acceleration limits and thrust limits."
+              + f" Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}.")
+
     # Pack up variable input
     return (
         min_type                    ,
@@ -1180,8 +1182,12 @@ def proceess_input(
         boundary_condition_vel_vec_o,
         boundary_condition_pos_vec_f,
         boundary_condition_vel_vec_f,
+        use_thrust_acc_limits       ,
         thrust_acc_min              ,
         thrust_acc_max              ,
+        use_thrust_limits           ,
+        thrust_min                  ,
+        thrust_max                  ,
         k_idxinitguess              ,
         k_idxfinsoln                , 
         k_idxdivs                   ,
@@ -1208,8 +1214,12 @@ if __name__ == '__main__':
         boundary_condition_vel_vec_o,
         boundary_condition_pos_vec_f,
         boundary_condition_vel_vec_f,
+        use_thrust_acc_limits       ,
         thrust_acc_min              ,
         thrust_acc_max              ,
+        use_thrust_limits           ,
+        thrust_min                  ,
+        thrust_max                  ,
         k_idxinitguess              ,
         k_idxfinsoln                , 
         k_idxdivs                   ,
