@@ -385,8 +385,12 @@ def tpbvp_objective_and_jacobian(
         boundary_condition_pos_vec_f : np.ndarray                     ,
         boundary_condition_vel_vec_f : np.ndarray                     ,
         min_type                     : str        = 'energy'          ,
+        use_thrust_acc_limits        : bool       = True              ,
         thrust_acc_min               : np.float64 = np.float64(0.0e+0),
         thrust_acc_max               : np.float64 = np.float64(1.0e+1),
+        use_thrust_limits            : bool       = False             ,
+        thrust_min                   : np.float64 = np.float64(0.0e+0),
+        thrust_max                   : np.float64 = np.float64(1.0e+1),
         k_heaviside                  : np.float64 = np.float64(0.0e+0),
         include_jacobian             : bool       = False             ,
     ):
@@ -476,8 +480,12 @@ def generate_guess(
         boundary_condition_pos_vec_f : np.ndarray                     ,
         boundary_condition_vel_vec_f : np.ndarray                     ,
         min_type                     : str        = 'energy'          ,
-        thrust_acc_min               : np.float64 = np.float64(1.0e-1),
+        use_thrust_acc_limits        : bool       = True              ,
+        thrust_acc_min               : np.float64 = np.float64(0.0e+0),
         thrust_acc_max               : np.float64 = np.float64(1.0e+1),
+        use_thrust_limits            : bool       = False             ,
+        thrust_min                   : np.float64 = np.float64(0.0e+0),
+        thrust_max                   : np.float64 = np.float64(1.0e+1),
         k_heaviside                  : np.float64 = np.float64(0.0e+0),
     ):
     """
@@ -494,17 +502,18 @@ def generate_guess(
         
         error_idx = \
             tpbvp_objective_and_jacobian(
-                decision_state_idx                           ,
-                time_span                                    ,
-                boundary_condition_pos_vec_o                 ,
-                boundary_condition_vel_vec_o                 ,
-                boundary_condition_pos_vec_f                 ,
-                boundary_condition_vel_vec_f                 ,
-                thrust_acc_min               = thrust_acc_min,
-                thrust_acc_max               = thrust_acc_max,
-                k_heaviside                  = k_heaviside   ,
-                min_type                     = min_type      ,
-                include_jacobian             = False         ,
+                decision_state_idx                                  ,
+                time_span                                           ,
+                boundary_condition_pos_vec_o                        ,
+                boundary_condition_vel_vec_o                        ,
+                boundary_condition_pos_vec_f                        ,
+                boundary_condition_vel_vec_f                        ,
+                use_thrust_acc_limits        = use_thrust_acc_limits,
+                thrust_acc_min               = thrust_acc_min       ,
+                thrust_acc_max               = thrust_acc_max       ,
+                k_heaviside                  = k_heaviside          ,
+                min_type                     = min_type             ,
+                include_jacobian             = False                ,
             )
 
         error_mag_idx = np.linalg.norm(error_idx)
@@ -531,8 +540,12 @@ def optimal_trajectory_solve(
         boundary_condition_pos_vec_f : np.ndarray                     ,
         boundary_condition_vel_vec_f : np.ndarray                     ,
         min_type                     : str        = 'energy'          ,
-        thrust_acc_min               : np.float64 = np.float64(1.0e-1),
+        use_thrust_acc_limits        : bool       = True              ,
+        thrust_acc_min               : np.float64 = np.float64(0.0e+0),
         thrust_acc_max               : np.float64 = np.float64(1.0e+1),
+        use_thrust_limits            : bool       = False             ,
+        thrust_min                   : np.float64 = np.float64(0.0e+0),
+        thrust_max                   : np.float64 = np.float64(1.0e+1),
         k_idxinitguess               : np.float64 = np.float64(1.0e-1),
         k_idxfinsoln                 : np.float64 = np.float64(1.0e+1),
         k_idxdivs                    : int        = 100               ,
@@ -546,15 +559,19 @@ def optimal_trajectory_solve(
     # Generate initial guess for the costates
     decisionstate_initguess = \
         generate_guess(
-            time_span                                    ,
-            boundary_condition_pos_vec_o                 ,
-            boundary_condition_vel_vec_o                 ,
-            boundary_condition_pos_vec_f                 ,
-            boundary_condition_vel_vec_f                 ,
-            min_type                     = min_type      ,
-            thrust_acc_min               = thrust_acc_min,
-            thrust_acc_max               = thrust_acc_max,
-            k_heaviside                  = k_idxinitguess,
+            time_span                                           ,
+            boundary_condition_pos_vec_o                        ,
+            boundary_condition_vel_vec_o                        ,
+            boundary_condition_pos_vec_f                        ,
+            boundary_condition_vel_vec_f                        ,
+            min_type                     = min_type             ,
+            use_thrust_acc_limits        = use_thrust_acc_limits,
+            thrust_acc_min               = thrust_acc_min       ,
+            thrust_acc_max               = thrust_acc_max       ,
+            use_thrust_limits            = use_thrust_limits    ,
+            thrust_min                   = thrust_min           ,
+            thrust_max                   = thrust_max           ,
+            k_heaviside                  = k_idxinitguess       ,
         )
 
     # Select minimization type
@@ -571,17 +588,18 @@ def optimal_trajectory_solve(
             root_func = \
                 lambda decisionstate_initguess: \
                     tpbvp_objective_and_jacobian(
-                        decisionstate_initguess                        , 
-                        time_span                                      ,
-                        boundary_condition_pos_vec_o                   ,
-                        boundary_condition_vel_vec_o                   ,
-                        boundary_condition_pos_vec_f                   ,
-                        boundary_condition_vel_vec_f                   ,
-                        min_type                     = min_type        ,
-                        thrust_acc_min               = thrust_acc_min  ,
-                        thrust_acc_max               = thrust_acc_max  ,
-                        k_heaviside                  = k_idx           ,
-                        include_jacobian             = True            ,
+                        decisionstate_initguess                             , 
+                        time_span                                           ,
+                        boundary_condition_pos_vec_o                        ,
+                        boundary_condition_vel_vec_o                        ,
+                        boundary_condition_pos_vec_f                        ,
+                        boundary_condition_vel_vec_f                        ,
+                        min_type                     = min_type             ,
+                        use_thrust_acc_limits        = use_thrust_acc_limits,
+                        thrust_acc_min               = thrust_acc_min       ,
+                        thrust_acc_max               = thrust_acc_max       ,
+                        k_heaviside                  = k_idx                ,
+                        include_jacobian             = True                 ,
                     )
             soln_root = \
                 root(
@@ -601,14 +619,14 @@ def optimal_trajectory_solve(
                 solve_ivp_func = \
                     lambda time, state_costate_scstm: \
                         freebodydynamics__indirect_thrustaccmax_heaviside_stm(
-                            time                                  ,
-                            state_costate_scstm                   ,
-                            include_scstm         = include_scstm ,
-                            min_type              = min_type      ,
-                            use_thrust_acc_limits = True          ,
-                            thrust_acc_min        = thrust_acc_min,
-                            thrust_acc_max        = thrust_acc_max,
-                            k_heaviside           = k_idx         ,
+                            time                                         ,
+                            state_costate_scstm                          ,
+                            include_scstm         = include_scstm        ,
+                            min_type              = min_type             ,
+                            use_thrust_acc_limits = use_thrust_acc_limits,
+                            thrust_acc_min        = thrust_acc_min       ,
+                            thrust_acc_max        = thrust_acc_max       ,
+                            k_heaviside           = k_idx                ,
                         )
                 soln_ivp = \
                     solve_ivp(
@@ -635,24 +653,25 @@ def optimal_trajectory_solve(
         root_func = \
             lambda decisionstate: \
                 tpbvp_objective_and_jacobian(
-                    decisionstate, 
-                    time_span,
-                    boundary_condition_pos_vec_o,
-                    boundary_condition_vel_vec_o,
-                    boundary_condition_pos_vec_f,
-                    boundary_condition_vel_vec_f,
-                    thrust_acc_min   = thrust_acc_min,
-                    thrust_acc_max   = thrust_acc_max,
-                    min_type         = min_type,
-                    include_jacobian = True,
+                    decisionstate                                       , 
+                    time_span                                           ,
+                    boundary_condition_pos_vec_o                        ,
+                    boundary_condition_vel_vec_o                        ,
+                    boundary_condition_pos_vec_f                        ,
+                    boundary_condition_vel_vec_f                        ,
+                    use_thrust_acc_limits        = use_thrust_acc_limits,
+                    thrust_acc_min               = thrust_acc_min       ,
+                    thrust_acc_max               = thrust_acc_max       ,
+                    min_type                     = min_type             ,
+                    include_jacobian             = True                 ,
                 )
         soln_root = \
             root(
-                root_func              ,
-                decisionstate_initguess,
-                method = 'lm'          ,
-                tol    = 1e-11         ,
-                jac    = True          ,
+                root_func                               ,
+                decisionstate_initguess                 ,
+                method                  = 'lm'          ,
+                tol                     = 1e-11         ,
+                jac                     = True          ,
             )
         
         decisionstate_initguess     = soln_root.x
@@ -663,26 +682,26 @@ def optimal_trajectory_solve(
         solve_ivp_func = \
             lambda time, state_costate_scstm: \
                 freebodydynamics__indirect_thrustaccmax_heaviside_stm(
-                    time                                   ,
-                    state_costate_scstm                    ,
-                    include_scstm         = False          ,
-                    min_type              = min_type       ,
-                    use_thrust_acc_limits = True           ,
-                    thrust_acc_min        = thrust_acc_min ,
-                    thrust_acc_max        = thrust_acc_max ,
-                    k_heaviside           = np.float64(0.0),
-                    post_process          = True           ,
+                    time                                         ,
+                    state_costate_scstm                          ,
+                    include_scstm         = False                ,
+                    min_type              = min_type             ,
+                    use_thrust_acc_limits = use_thrust_acc_limits,
+                    thrust_acc_min        = thrust_acc_min       ,
+                    thrust_acc_max        = thrust_acc_max       ,
+                    k_heaviside           = np.float64(0.0)      ,
+                    post_process          = True                 ,
                 )
         soln_ivp = \
             solve_ivp(
-                solve_ivp_func                 ,
-                time_span                      ,
-                state_costate_scstm_o          ,
-                t_eval       = time_eval_points,
-                dense_output = True            , 
-                method       = 'RK45'          ,
-                rtol         = 1e-12           ,
-                atol         = 1e-12           ,
+                solve_ivp_func                          ,
+                time_span                               ,
+                state_costate_scstm_o                   ,
+                t_eval                = time_eval_points,
+                dense_output          = True            , 
+                method                = 'RK45'          ,
+                rtol                  = 1e-12           ,
+                atol                  = 1e-12           ,
             )
         results_finalsoln = soln_ivp
         state_f_finalsoln = results_finalsoln.y[0:4, -1]
@@ -705,14 +724,15 @@ def optimal_trajectory_solve(
 
         # Plot the results
         plot_final_results(
-            results_finalsoln                            ,
-            boundary_condition_pos_vec_o                 ,
-            boundary_condition_vel_vec_o                 ,
-            boundary_condition_pos_vec_f                 ,
-            boundary_condition_vel_vec_f                 ,
-            thrust_acc_min               = thrust_acc_min,
-            thrust_acc_max               = thrust_acc_max,
-            min_type                     = min_type      ,
+            results_finalsoln                                   ,
+            boundary_condition_pos_vec_o                        ,
+            boundary_condition_vel_vec_o                        ,
+            boundary_condition_pos_vec_f                        ,
+            boundary_condition_vel_vec_f                        ,
+            use_thrust_acc_limits        = use_thrust_acc_limits,
+            thrust_acc_min               = thrust_acc_min       ,
+            thrust_acc_max               = thrust_acc_max       ,
+            min_type                     = min_type             ,
         )
 
     else: # assume energy
@@ -800,8 +820,12 @@ def plot_final_results(
         boundary_condition_vel_vec_o : np.ndarray                     ,
         boundary_condition_pos_vec_f : np.ndarray                     ,
         boundary_condition_vel_vec_f : np.ndarray                     ,
-        thrust_acc_min               : np.float64 = np.float64(0.0e+0), 
+        use_thrust_acc_limits        : bool       = True              ,
+        thrust_acc_min               : np.float64 = np.float64(0.0e+0),
         thrust_acc_max               : np.float64 = np.float64(1.0e+1),
+        use_thrust_limits            : bool       = False             ,
+        thrust_min                   : np.float64 = np.float64(0.0e+0),
+        thrust_max                   : np.float64 = np.float64(1.0e+1),
         min_type                     : str        = 'energy'          ,
     ):
     """
@@ -842,8 +866,6 @@ def plot_final_results(
     # Create trajectory figure
     mplt.style.use('seaborn-v0_8-whitegrid')
     fig = mplt.figure(figsize=(15,8))
-    # fig, axes = mplt.subplots(2, 2, figsize=(12, 10))
-    # gs = fig.add_gridspec(5,2)
     gs = fig.add_gridspec(5, 2, width_ratios=[8, 7])
 
     # Configure figure
@@ -878,17 +900,15 @@ def plot_final_results(
     min_pos = min(min(pos_x_t), min(pos_y_t))
     max_pos = max(max(pos_x_t), max(pos_y_t))
 
-    if min_type=='fuel':
-        plot_thrust_acc_max = thrust_acc_max
-    elif min_type=='energy':
+    if use_thrust_acc_limits:
         plot_thrust_acc_max = max(thrust_acc_mag_t)
-    thrust_acc_vec_scale = 0.2 * (max_pos - min_pos) / plot_thrust_acc_max
-    end_x = pos_x_t + thrust_acc_vec_t[0] * thrust_acc_vec_scale
-    end_y = pos_y_t + thrust_acc_vec_t[1] * thrust_acc_vec_scale
+        thrust_acc_vec_scale = 0.2 * (max_pos - min_pos) / plot_thrust_acc_max
+        end_x = pos_x_t + thrust_acc_vec_t[0] * thrust_acc_vec_scale
+        end_y = pos_y_t + thrust_acc_vec_t[1] * thrust_acc_vec_scale
 
     # Find contiguous segments where thrust is active
-    thrust_magnitude = np.linalg.norm(thrust_acc_vec_t, axis=0)
-    is_thrust_on     = thrust_magnitude > 1e-9  # Use a small threshold for float precision
+    # thrust_acc_mag_t = np.linalg.norm(thrust_acc_vec_t, axis=0)
+    is_thrust_on = thrust_acc_mag_t > 1.0e-9
 
     # Find the start and end indices of each 'True' block
     padded = np.concatenate(([False], is_thrust_on, [False]))
@@ -1229,18 +1249,22 @@ if __name__ == '__main__':
 
     # Optimal trajectory solve
     optimal_trajectory_solve(
-        time_span                                    ,
-        boundary_condition_pos_vec_o                 ,
-        boundary_condition_vel_vec_o                 ,
-        boundary_condition_pos_vec_f                 ,
-        boundary_condition_vel_vec_f                 ,
-        min_type                     = min_type      ,
-        thrust_acc_min               = thrust_acc_min,
-        thrust_acc_max               = thrust_acc_max,
-        k_idxinitguess               = k_idxinitguess,
-        k_idxfinsoln                 = k_idxfinsoln  , 
-        k_idxdivs                    = k_idxdivs     ,
-        mass_o                       = mass_o        ,
+        time_span                                           ,
+        boundary_condition_pos_vec_o                        ,
+        boundary_condition_vel_vec_o                        ,
+        boundary_condition_pos_vec_f                        ,
+        boundary_condition_vel_vec_f                        ,
+        min_type                     = min_type             ,
+        use_thrust_acc_limits        = use_thrust_acc_limits,
+        thrust_acc_min               = thrust_acc_min       ,
+        thrust_acc_max               = thrust_acc_max       ,
+        use_thrust_limits            = use_thrust_limits    ,
+        thrust_min                   = thrust_min           ,
+        thrust_max                   = thrust_max           ,
+        k_idxinitguess               = k_idxinitguess       ,
+        k_idxfinsoln                 = k_idxfinsoln         , 
+        k_idxdivs                    = k_idxdivs            ,
+        mass_o                       = mass_o               ,
     )
 
 
