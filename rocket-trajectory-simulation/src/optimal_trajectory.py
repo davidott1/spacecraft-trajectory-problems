@@ -5,12 +5,16 @@ from scipy.integrate import solve_ivp
 from scipy.optimize import root
 import matplotlib.pyplot as mplt
 import matplotlib.colors as mcolors
+import matplotlib.ticker as mticker
+from matplotlib.widgets import Button
+
 import json
 import random
 np.random.seed(42)
 import astropy.units as u
 from functools import partial
 from typing import Optional
+
 
 # Dynamics functions
 def freebodydynamics__indirect_thrustaccmax_heaviside_stm(
@@ -735,19 +739,18 @@ def optimal_trajectory_solve(
                 jac    = True          ,
             )
         if soln_root.success:
-            decisionstate_initguess = soln_root.x
-            state_costate_o         = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decisionstate_initguess])
-            include_scstm           = True
-            scstm_oo                = np.identity(8).flatten()
-            state_costate_scstm_o   = np.hstack([state_costate_o, scstm_oo])
-            time_eval_points        = np.linspace(time_span[0], time_span[1], 201)
+            decisionstate_initguess     = soln_root.x
+            state_costate_o             = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decisionstate_initguess])
+            optimal_control_objective_o = np.float64(0.0)
+            state_costate_scstm_o       = np.hstack([state_costate_o, mass_o, optimal_control_objective_o])
+            time_eval_points            = np.linspace(time_span[0], time_span[1], 201)
             solve_ivp_func = \
                 lambda time, state_costate_scstm: \
                     freebodydynamics__indirect_thrustaccmax_heaviside_stm(
-                        time                               ,
-                        state_costate_scstm                ,
-                        include_scstm       = include_scstm,
-                        min_type            = min_type     ,
+                        time                          ,
+                        state_costate_scstm           ,
+                        min_type            = min_type,
+                        post_process        = True    ,
                     )
             soln_ivp = \
                 solve_ivp(
@@ -828,17 +831,20 @@ def plot_final_results(
                 thrust_acc_mag_t[idx] = thrust_acc_min
         thrust_acc_dir_t = np.array([ -covel_x_t/covel_mag_t, -covel_y_t/covel_mag_t ])
         thrust_acc_vec_t = thrust_acc_mag_t * thrust_acc_dir_t
-    elif min_type == 'energy':
-        thrust_acc_vec_t = np.array([ -covel_x_t, -covel_y_t ])
-        thrust_acc_mag_t = np.sqrt( thrust_acc_vec_t[0]**2 + thrust_acc_vec_t[1]**2 )
     else: # assumes energy
         thrust_acc_vec_t = np.array([ -covel_x_t, -covel_y_t ])
+        thrust_acc_dir_t = thrust_acc_vec_t / np.linalg.norm(thrust_acc_vec_t, axis=0, keepdims=True)
         thrust_acc_mag_t = np.sqrt( thrust_acc_vec_t[0]**2 + thrust_acc_vec_t[1]**2 )
-    
+    thrust_mag_t = mass_t * thrust_acc_mag_t
+    thrust_dir_t = thrust_acc_dir_t # same
+    thrust_vec_t = thrust_mag_t * thrust_dir_t
+
     # Create trajectory figure
     mplt.style.use('seaborn-v0_8-whitegrid')
     fig = mplt.figure(figsize=(15,8))
-    gs  = fig.add_gridspec(5,2)
+    # fig, axes = mplt.subplots(2, 2, figsize=(12, 10))
+    # gs = fig.add_gridspec(5,2)
+    gs = fig.add_gridspec(5, 2, width_ratios=[8, 7])
 
     # Configure figure
     if min_type == 'fuel':
@@ -856,11 +862,15 @@ def plot_final_results(
         fontweight = 'normal'        ,
     )
 
-    # 2D Trajectory Path
-    ax1 = fig.add_subplot(gs[0:5,0])
+    # 2D position path: pos-x vs. pos-y
+    fig_w, fig_h  = fig.get_size_inches()
+    ax_height     = 0.75
+    ax_width      = ax_height * (fig_h / fig_w)
+    square_coords = [0.07, 0.1, ax_width, ax_height]
+    ax1           = fig.add_axes(square_coords) # type: ignore
     ax1.plot(                     pos_x_t    ,                      pos_y_t    , color=mcolors.CSS4_COLORS['black'], linewidth=2.0,                                                                                                                                         label='Trajectory' )
     ax1.plot(boundary_condition_pos_vec_o[ 0], boundary_condition_pos_vec_o[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=20, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
-    ax1.plot(boundary_condition_pos_vec_f[ 0], boundary_condition_pos_vec_f[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=20, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
+    ax1.plot(boundary_condition_pos_vec_f[ 0], boundary_condition_pos_vec_f[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=16, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
     ax1.plot(                     pos_x_t[ 0],                      pos_y_t[ 0], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='Start'      )
     ax1.plot(                     pos_x_t[-1],                      pos_y_t[-1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='End'        )
 
@@ -872,7 +882,6 @@ def plot_final_results(
         plot_thrust_acc_max = thrust_acc_max
     elif min_type=='energy':
         plot_thrust_acc_max = max(thrust_acc_mag_t)
-
     thrust_acc_vec_scale = 0.2 * (max_pos - min_pos) / plot_thrust_acc_max
     end_x = pos_x_t + thrust_acc_vec_t[0] * thrust_acc_vec_scale
     end_y = pos_y_t + thrust_acc_vec_t[1] * thrust_acc_vec_scale
@@ -913,62 +922,130 @@ def plot_final_results(
     ax1.set_ylabel('Position Y [m]')
     ax1.grid(True)
     ax1.axis('equal')
-    ax1.legend()
+    ax1.legend(loc='upper left')
+
+    # 2D velocity path: vel-x vs. vel-y
+    ax1_vel = fig.add_axes(square_coords) # type: ignore
+    ax1_vel.set_visible(False)
+    ax1_vel.plot(                     vel_x_t    ,                      vel_y_t    , color=mcolors.CSS4_COLORS['black'], linewidth=2.0,                                                                                                                                          label='Trajectory' )
+    ax1_vel.plot(boundary_condition_vel_vec_o[ 0], boundary_condition_vel_vec_o[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=20, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
+    ax1_vel.plot(boundary_condition_vel_vec_f[ 0], boundary_condition_vel_vec_f[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=16, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
+    ax1_vel.plot(                     vel_x_t[ 0],                      vel_y_t[ 0], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='Start'      )
+    ax1_vel.plot(                     vel_x_t[-1],                      vel_y_t[-1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='End'        )
+    ax1_vel.set_xlabel("Velocity X [m/s]", labelpad=2)
+    ax1_vel.set_ylabel("Velocity Y [m/s]", labelpad=10)
+    ax1_vel.grid(True)
+    ax1_vel.axis('equal')
+    ax1_vel.legend(loc='upper left')
+
+    # ax1_vel_xy_scale_factor = 1.5
+    # ax1_vel.set_xlim(-ax1_vel_xy_scale_factor,ax1_vel_xy_scale_factor)
+    # ax1_vel.set_ylim(-ax1_vel_xy_scale_factor,ax1_vel_xy_scale_factor)
+
+    # x_min, x_max = min(vel_x_t), max(vel_x_t)
+    # y_min, y_max = min(vel_y_t), max(vel_y_t)
+    # x_center = (x_max + x_min) / 2
+    # y_center = (y_max + y_min) / 2
+    # max_range = max(x_max - x_min, y_max - y_min)
+    # padding = 1.1 
+    # half_range_padded = (max_range / 2) * padding
+    # ax1_vel.set_xlim(x_center - half_range_padded, x_center + half_range_padded)
+    # ax1_vel.set_ylim(y_center - half_range_padded, y_center + half_range_padded)
+
+    # ax1_vel.set_xlim(
+    #     min(min(vel_x_t), min(vel_y_t)) - 0.1 * (max(max(vel_x_t), max(vel_y_t)) - min(min(vel_x_t), min(vel_y_t))),
+    #     max(max(vel_x_t), max(vel_y_t)) + 0.1 * (max(max(vel_x_t), max(vel_y_t)) - min(min(vel_x_t), min(vel_y_t))),
+    # )
+    # ax1_vel.set_ylim(
+    #     min(min(vel_x_t), min(vel_y_t)) - 0.1 * (max(max(vel_x_t), max(vel_y_t)) - min(min(vel_x_t), min(vel_y_t))),
+    #     max(max(vel_x_t), max(vel_y_t)) + 0.1 * (max(max(vel_x_t), max(vel_y_t)) - min(min(vel_x_t), min(vel_y_t))),
+    # )
+    
+    # Create a button to swap pos and vel plots
+    ax_button = fig.add_axes([0.015, 0.02, 0.04, 0.04]) # [left, bottom, width, height] # type: ignore
+    button = Button(ax_button, "Swap", color=mcolors.CSS4_COLORS['darkgrey'], hovercolor='0.975')
+    def _swap_plots(event):
+        """
+        Toggles visibility of the position and velocity plots.
+        """
+        # Switch visibility of the position and velocity axes
+        is_pos_visible = ax1.get_visible()
+        if ax1.get_visible():
+            ax1.set_visible(False)
+            ax1_vel.set_visible(True)
+        else:
+            ax1.set_visible(True)
+            ax1_vel.set_visible(False)
+
+        # Redraw the canvas to show the changes
+        fig.canvas.draw_idle()
+    button.on_clicked(_swap_plots)
 
     # Optimal Control Objective vs. Time
     ax2 = fig.add_subplot(gs[0,1])
     ax2.plot(time_t, opt_ctrl_obj_t, color=mcolors.CSS4_COLORS['black'], linewidth=2.0, label='Mass')
     ax2.set_xticklabels([])
-    ax2.set_ylabel('Objective [m/s]')
+    ax2.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
+    ax2.set_ylabel('Objective\n[m/s]')
 
     # Thrust Profile
-    ax3 = fig.add_subplot(gs[1,1])
+    ax3L = fig.add_subplot(gs[1,1])
+    ax3R = ax3L.twinx()
     if min_type=='fuel':
-        ax3.axhline(y=thrust_acc_min, color=mcolors.CSS4_COLORS['black'], linestyle=':' , linewidth=2.0, label=f'Thrust Acc Min')
-        ax3.axhline(y=thrust_acc_max, color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Max')
-    ax3.plot(time_t, thrust_acc_mag_t, color=mcolors.CSS4_COLORS['red'], linewidth=2.0, label='Thrust Acc Mag')
-    ax3.fill_between(
+        ax3L.axhline(y=float(thrust_acc_min), color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Min')
+        ax3L.axhline(y=float(thrust_acc_max), color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Max')
+    ax3L.plot(time_t, thrust_acc_mag_t, color=mcolors.CSS4_COLORS['red' ], linewidth=2.0, label='Thrust Acc Mag')
+    ax3R.plot(time_t, thrust_mag_t    , color=mcolors.CSS4_COLORS['blue'], linewidth=2.0, label='Thrust Mag'    )
+    ax3L.fill_between(
         time_t,
         thrust_acc_mag_t,
         where     = (thrust_acc_mag_t > thrust_acc_min),
-        facecolor = mcolors.CSS4_COLORS['red'],      # Use 'facecolor' to specify the fill color
+        facecolor = mcolors.CSS4_COLORS['red'],
         edgecolor = 'none',
         alpha     = 0.5
     )
-    ax3.set_xticklabels([])
-    ax3.set_ylabel('Thrust Acc Mag [m/s2]')
-    ax3.grid(True)
-    if min_type=='fuel':
-        plot_thrust_acc_min = 0.0
-        plot_thrust_acc_max = thrust_acc_max
-    elif min_type=='energy':
-        plot_thrust_acc_min = 0.0
-        plot_thrust_acc_max = max(thrust_acc_mag_t)
-    ax3.set_ylim(
-        plot_thrust_acc_min - (plot_thrust_acc_max - plot_thrust_acc_min) * 0.1, # type: ignore
-        plot_thrust_acc_max + (plot_thrust_acc_max - plot_thrust_acc_min) * 0.1, # type: ignore
+    ax3L.set_xticklabels([])
+    ax3L.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
+    ax3R.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
+    ax3L.set_ylabel('Thrust Acc Mag\n[m/s2]', color=mcolors.CSS4_COLORS['red' ])
+    ax3R.set_ylabel('Thrust Mag\n[kg⋅m/s2]' , color=mcolors.CSS4_COLORS['blue'])
+    ax3R.grid(True, axis='y', color=mcolors.CSS4_COLORS['blue'], alpha=1.0)
+    ax3L.grid(True, axis='y', color=mcolors.CSS4_COLORS['red'] , alpha=1.0)
+    plot_thrust_acc_min = 0.0
+    plot_thrust_acc_max = max(thrust_acc_mag_t)
+    ax3L.set_ylim(
+        plot_thrust_acc_min - (plot_thrust_acc_max - plot_thrust_acc_min) * 0.1,
+        plot_thrust_acc_max + (plot_thrust_acc_max - plot_thrust_acc_min) * 0.1,
+    )
+    plot_thrust_min = 0.0
+    plot_thrust_max = max(thrust_mag_t)
+    ax3R.set_ylim(
+        plot_thrust_min - (plot_thrust_max - plot_thrust_min) * 0.1,
+        plot_thrust_max + (plot_thrust_max - plot_thrust_min) * 0.1,
     )
 
     # Mass vs. Time
     ax4 = fig.add_subplot(gs[2,1])
     ax4.plot(time_t, mass_t, color=mcolors.CSS4_COLORS['black'], linewidth=2.0, label='Mass')
     ax4.set_xticklabels([])
-    ax4.set_ylabel('Mass [kg]')
+    ax4.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
+    ax4.set_ylabel('Mass\n[kg]')
 
     # Position vs. Time
     ax5 = fig.add_subplot(gs[3,1])
     ax5.plot(time_t[ 0], boundary_condition_pos_vec_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax5.plot(time_t[-1], boundary_condition_pos_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5.plot(time_t[-1], boundary_condition_pos_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
     ax5.plot(time_t    ,                      pos_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
     ax5.plot(time_t[ 0],                      pos_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
     ax5.plot(time_t[-1],                      pos_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
     ax5.plot(time_t[ 0], boundary_condition_pos_vec_o[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax5.plot(time_t[-1], boundary_condition_pos_vec_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5.plot(time_t[-1], boundary_condition_pos_vec_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
     ax5.plot(time_t    ,                      pos_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
     ax5.plot(time_t[ 0],                      pos_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
     ax5.plot(time_t[-1],                      pos_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
     ax5.set_xticklabels([])
-    ax5.set_ylabel('Position [m]')
+    ax5.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
+    ax5.set_ylabel('Position\n[m]')
     ax5.legend()
     ax5.grid(True)
     min_ylim = min(min(pos_x_t), min(pos_y_t))
@@ -981,17 +1058,18 @@ def plot_final_results(
     # Velocity vs. Time
     ax6 = fig.add_subplot(gs[4,1])
     ax6.plot(time_t[ 0], boundary_condition_vel_vec_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax6.plot(time_t[-1], boundary_condition_vel_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6.plot(time_t[-1], boundary_condition_vel_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
     ax6.plot(time_t    ,                      vel_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
     ax6.plot(time_t[ 0],                      vel_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
     ax6.plot(time_t[-1],                      vel_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
     ax6.plot(time_t[ 0], boundary_condition_vel_vec_o[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax6.plot(time_t[-1], boundary_condition_vel_vec_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6.plot(time_t[-1], boundary_condition_vel_vec_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
     ax6.plot(time_t    ,                      vel_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
     ax6.plot(time_t[ 0],                      vel_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
     ax6.plot(time_t[-1],                      vel_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
     ax6.set_xlabel('Time [s]')
-    ax6.set_ylabel('Velocity [m/s]')
+    ax6.set_ylabel('Velocity\n[m/s]')
     ax6.legend()
     ax6.grid(True)
     min_ylim = min(min(vel_x_t), min(vel_y_t))
@@ -1002,7 +1080,13 @@ def plot_final_results(
     )
 
     # Configure figure
-    mplt.tight_layout(rect=[0.0, 0.0, 1.0, 1.0]) # type: ignore
+    fig.subplots_adjust(
+        left   = 0.05,
+        right  = 0.95,
+        top    = 0.83,
+        hspace = 0.25, # 0.25
+        wspace = 0.15, # 0.15
+    )
     fig.align_ylabels()
     mplt.show()
 
