@@ -6,6 +6,7 @@ from scipy.optimize import root
 import matplotlib.pyplot as mplt
 import matplotlib.colors as mcolors
 import matplotlib.ticker as mticker
+import matplotlib.axes   as maxes
 from matplotlib.widgets import Button
 
 import json
@@ -895,49 +896,65 @@ def plot_final_results(
     ax1.plot(boundary_condition_pos_vec_f[ 0], boundary_condition_pos_vec_f[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=16, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
     ax1.plot(                     pos_x_t[ 0],                      pos_y_t[ 0], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='Start'      )
     ax1.plot(                     pos_x_t[-1],                      pos_y_t[-1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='End'        )
+    def _plot_thrust_on_position_space(
+            ax                    : maxes.Axes                     ,
+            pos_x_t               : np.ndarray                     ,
+            pos_y_t               : np.ndarray                     ,
+            thrust_acc_vec_t      : np.ndarray                     ,
+            thrust_acc_mag_t      : np.ndarray                     ,
+            use_thrust_acc_limits : bool       = True              ,
+            thrust_acc_min        : np.float64 = np.float64(0.0e+0),
+            thrust_acc_max        : np.float64 = np.float64(1.0e+1),
+        ):
 
-    # Calculate the boundary points for the entire trajectory
-    min_pos = min(min(pos_x_t), min(pos_y_t))
-    max_pos = max(max(pos_x_t), max(pos_y_t))
+        min_pos = min(min(pos_x_t), min(pos_y_t))
+        max_pos = max(max(pos_x_t), max(pos_y_t))
+        if use_thrust_acc_limits:
+            plot_thrust_acc_max = max(thrust_acc_mag_t)
+            thrust_acc_vec_scale = 0.2 * (max_pos - min_pos) / plot_thrust_acc_max
+            end_x = pos_x_t + thrust_acc_vec_t[0] * thrust_acc_vec_scale
+            end_y = pos_y_t + thrust_acc_vec_t[1] * thrust_acc_vec_scale
 
-    if use_thrust_acc_limits:
-        plot_thrust_acc_max = max(thrust_acc_mag_t)
-        thrust_acc_vec_scale = 0.2 * (max_pos - min_pos) / plot_thrust_acc_max
-        end_x = pos_x_t + thrust_acc_vec_t[0] * thrust_acc_vec_scale
-        end_y = pos_y_t + thrust_acc_vec_t[1] * thrust_acc_vec_scale
+        # Find contiguous segments where thrust is active
+        is_thrust_on = thrust_acc_mag_t > 1.0e-9
 
-    # Find contiguous segments where thrust is active
-    # thrust_acc_mag_t = np.linalg.norm(thrust_acc_vec_t, axis=0)
-    is_thrust_on = thrust_acc_mag_t > 1.0e-9
+        # Find the start and end indices of each 'True' block
+        padded = np.concatenate(([False], is_thrust_on, [False]))
+        diffs  = np.diff(padded.astype(int))
+        starts = np.where(diffs == +1)[0]
+        stops  = np.where(diffs == -1)[0]
 
-    # Find the start and end indices of each 'True' block
-    padded = np.concatenate(([False], is_thrust_on, [False]))
-    diffs  = np.diff(padded.astype(int))
-    starts = np.where(diffs == +1)[0]
-    stops  = np.where(diffs == -1)[0]
+        # Loop through each segment and draw a separate polygon
+        for idx, (start_idx, stop_idx) in enumerate(zip(starts, stops)):
 
-    # Loop through each segment and draw a separate polygon
-    for idx, (start_idx, stop_idx) in enumerate(zip(starts, stops)):
+            # Slice the data arrays to get just the points for this segment
+            segment_pos_x = pos_x_t[start_idx:stop_idx]
+            segment_pos_y = pos_y_t[start_idx:stop_idx]
+            segment_end_x = end_x  [start_idx:stop_idx]
+            segment_end_y = end_y  [start_idx:stop_idx]
 
-        # Slice the data arrays to get just the points for this segment
-        segment_pos_x = pos_x_t[start_idx:stop_idx]
-        segment_pos_y = pos_y_t[start_idx:stop_idx]
-        segment_end_x = end_x  [start_idx:stop_idx]
-        segment_end_y = end_y  [start_idx:stop_idx]
+            # Construct the polygon for this segment
+            poly_x = np.concatenate([segment_pos_x, segment_end_x[::-1]])
+            poly_y = np.concatenate([segment_pos_y, segment_end_y[::-1]])
 
-        # Construct the polygon for this segment
-        poly_x = np.concatenate([segment_pos_x, segment_end_x[::-1]])
-        poly_y = np.concatenate([segment_pos_y, segment_end_y[::-1]])
-
-        # Draw the polygon for the current segment
-        ax1.fill(
-            poly_x,
-            poly_y, 
-            facecolor = mcolors.CSS4_COLORS['red'],
-            alpha     = 0.5,
-            edgecolor = 'none',
-        )
-
+            # Draw the polygon for the current segment
+            ax.fill(
+                poly_x,
+                poly_y, 
+                facecolor = mcolors.CSS4_COLORS['red'],
+                alpha     = 0.5,
+                edgecolor = 'none',
+            )
+    _plot_thrust_on_position_space(
+        ax                    = ax1                  ,
+        pos_x_t               = pos_x_t              ,
+        pos_y_t               = pos_y_t              ,
+        thrust_acc_vec_t      = thrust_acc_vec_t     ,
+        thrust_acc_mag_t      = thrust_acc_mag_t     ,
+        use_thrust_acc_limits = use_thrust_acc_limits,
+        thrust_acc_min        = thrust_acc_min       ,
+        thrust_acc_max        = thrust_acc_max       ,
+    )
     ax1.set_xlabel('Position X [m]')
     ax1.set_ylabel('Position Y [m]')
     ax1.grid(True)
@@ -952,6 +969,65 @@ def plot_final_results(
     ax1_vel.plot(boundary_condition_vel_vec_f[ 0], boundary_condition_vel_vec_f[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=16, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
     ax1_vel.plot(                     vel_x_t[ 0],                      vel_y_t[ 0], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='Start'      )
     ax1_vel.plot(                     vel_x_t[-1],                      vel_y_t[-1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='End'        )
+    def _plot_thrust_on_velocity_space(
+            ax                    : maxes.Axes                     ,
+            vel_x_t               : np.ndarray                     ,
+            vel_y_t               : np.ndarray                     ,
+            thrust_acc_vec_t      : np.ndarray                     ,
+            thrust_acc_mag_t      : np.ndarray                     ,
+            use_thrust_acc_limits : bool       = True              ,
+            thrust_acc_min        : np.float64 = np.float64(0.0e+0),
+            thrust_acc_max        : np.float64 = np.float64(1.0e+1),
+        ):
+
+        min_vel = min(min(vel_x_t), min(vel_y_t))
+        max_vel = max(max(vel_x_t), max(vel_y_t))
+        if use_thrust_acc_limits:
+            plot_thrust_acc_max = max(thrust_acc_mag_t)
+            thrust_acc_vec_scale = 1.0 * (max_vel - min_vel) / plot_thrust_acc_max
+            end_x = vel_x_t + thrust_acc_vec_t[0] * thrust_acc_vec_scale
+            end_y = vel_y_t + thrust_acc_vec_t[1] * thrust_acc_vec_scale
+
+        # Find contiguous segments where thrust is active
+        is_thrust_on = thrust_acc_mag_t > 1.0e-9
+
+        # Find the start and end indices of each 'True' block
+        padded = np.concatenate(([False], is_thrust_on, [False]))
+        diffs  = np.diff(padded.astype(int))
+        starts = np.where(diffs == +1)[0]
+        stops  = np.where(diffs == -1)[0]
+
+        # Loop through each segment and draw a separate polygon
+        for idx, (start_idx, stop_idx) in enumerate(zip(starts, stops)):
+
+            # Slice the data arrays to get just the points for this segment
+            segment_vel_x = vel_x_t[start_idx:stop_idx]
+            segment_vel_y = vel_y_t[start_idx:stop_idx]
+            segment_end_x = end_x  [start_idx:stop_idx]
+            segment_end_y = end_y  [start_idx:stop_idx]
+
+            # Construct the polygon for this segment
+            poly_x = np.concatenate([segment_vel_x, segment_end_x[::-1]])
+            poly_y = np.concatenate([segment_vel_y, segment_end_y[::-1]])
+
+            # Draw the polygon for the current segment
+            ax.fill(
+                poly_x,
+                poly_y, 
+                facecolor = mcolors.CSS4_COLORS['red'],
+                alpha     = 0.5,
+                edgecolor = 'none',
+            )
+    _plot_thrust_on_velocity_space(
+        ax                    = ax1_vel              ,
+        vel_x_t               = vel_x_t              ,
+        vel_y_t               = vel_y_t              ,
+        thrust_acc_vec_t      = thrust_acc_vec_t     ,
+        thrust_acc_mag_t      = thrust_acc_mag_t     ,
+        use_thrust_acc_limits = use_thrust_acc_limits,
+        thrust_acc_min        = thrust_acc_min       ,
+        thrust_acc_max        = thrust_acc_max       ,
+    )
     ax1_vel.set_xlabel("Velocity X [m/s]", labelpad=2)
     ax1_vel.set_ylabel("Velocity Y [m/s]", labelpad=10)
     ax1_vel.grid(True)
@@ -987,14 +1063,15 @@ def plot_final_results(
     ax2.set_ylabel('Objective\n[m/s]')
 
     # Thrust Profile
-    ax3L = fig.add_subplot(gs[1,1])
-    ax3R = ax3L.twinx()
+    ax3 = fig.add_subplot(gs[1,1])
     if min_type=='fuel':
-        ax3L.axhline(y=float(thrust_acc_min), color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Min')
-        ax3L.axhline(y=float(thrust_acc_max), color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Max')
-    ax3L.plot(time_t, thrust_acc_mag_t, color=mcolors.CSS4_COLORS['red' ], linewidth=2.0, label='Thrust Acc Mag')
-    ax3R.plot(time_t, thrust_mag_t    , color=mcolors.CSS4_COLORS['blue'], linewidth=2.0, label='Thrust Mag'    )
-    ax3L.fill_between(
+        ax3.axhline(y=float(thrust_acc_min), color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Min')
+        ax3.axhline(y=float(thrust_acc_max), color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Max')
+    if use_thrust_limits:
+        ax3.plot(time_t, thrust_mag_t    , color=mcolors.CSS4_COLORS['blue'], linewidth=2.0, label='Thrust Mag'    )
+    else: # assume use_thrust_limits
+        ax3.plot(time_t, thrust_acc_mag_t, color=mcolors.CSS4_COLORS['red' ], linewidth=2.0, label='Thrust Acc Mag')
+    ax3.fill_between(
         time_t,
         thrust_acc_mag_t,
         where     = (thrust_acc_mag_t > thrust_acc_min),
@@ -1002,26 +1079,26 @@ def plot_final_results(
         edgecolor = 'none',
         alpha     = 0.5
     )
-    ax3L.set_xticklabels([])
-    ax3L.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
-    ax3R.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
-    ax3L.set_ylabel('Thrust Acc Mag' + '\n' + '[m/s$^2$]'         , color=mcolors.CSS4_COLORS['red' ])
-    ax3R.set_ylabel('Thrust Mag'     + '\n' + '[kg$\cdot$m/s$^2$]', color=mcolors.CSS4_COLORS['blue'])
-
-    ax3R.grid(True, axis='y', color=mcolors.CSS4_COLORS['blue'], alpha=1.0)
-    ax3L.grid(True, axis='y', color=mcolors.CSS4_COLORS['red'] , alpha=1.0)
-    plot_thrust_acc_min = 0.0
-    plot_thrust_acc_max = max(thrust_acc_mag_t)
-    ax3L.set_ylim(
-        plot_thrust_acc_min - (plot_thrust_acc_max - plot_thrust_acc_min) * 0.1,
-        plot_thrust_acc_max + (plot_thrust_acc_max - plot_thrust_acc_min) * 0.1,
-    )
-    plot_thrust_min = 0.0
-    plot_thrust_max = max(thrust_mag_t)
-    ax3R.set_ylim(
-        plot_thrust_min - (plot_thrust_max - plot_thrust_min) * 0.1,
-        plot_thrust_max + (plot_thrust_max - plot_thrust_min) * 0.1,
-    )
+    ax3.set_xticklabels([])
+    ax3.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
+    if use_thrust_limits:
+        ax3.set_ylabel('Thrust Mag'     + '\n' + '[kg$\cdot$m/s$^2$]')
+    else: # assume use_thrust_limits
+        ax3.set_ylabel('Thrust Acc Mag' + '\n' + '[m/s$^2$]'         )
+    if use_thrust_limits:
+        plot_thrust_min = 0.0
+        plot_thrust_max = max(thrust_mag_t)
+        ax3.set_ylim(
+            plot_thrust_min - (plot_thrust_max - plot_thrust_min) * 0.1,
+            plot_thrust_max + (plot_thrust_max - plot_thrust_min) * 0.1,
+        )
+    else: # assume use_thrust_limits
+        plot_thrust_acc_min = 0.0
+        plot_thrust_acc_max = max(thrust_acc_mag_t)
+        ax3.set_ylim(
+            plot_thrust_acc_min - (plot_thrust_acc_max - plot_thrust_acc_min) * 0.1,
+            plot_thrust_acc_max + (plot_thrust_acc_max - plot_thrust_acc_min) * 0.1,
+        )
 
     # Mass vs. Time
     ax4 = fig.add_subplot(gs[2,1])
