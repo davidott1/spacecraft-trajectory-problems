@@ -1007,8 +1007,9 @@ def plot_final_results(
     ax3L.set_xticklabels([])
     ax3L.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
     ax3R.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
-    ax3L.set_ylabel('Thrust Acc Mag\n[m/s2]', color=mcolors.CSS4_COLORS['red' ])
-    ax3R.set_ylabel('Thrust Mag\n[kg⋅m/s2]' , color=mcolors.CSS4_COLORS['blue'])
+    ax3L.set_ylabel('Thrust Acc Mag' + '\n' + '[m/s$^2$]'         , color=mcolors.CSS4_COLORS['red' ])
+    ax3R.set_ylabel('Thrust Mag'     + '\n' + '[kg$\cdot$m/s$^2$]', color=mcolors.CSS4_COLORS['blue'])
+
     ax3R.grid(True, axis='y', color=mcolors.CSS4_COLORS['blue'], alpha=1.0)
     ax3L.grid(True, axis='y', color=mcolors.CSS4_COLORS['red'] , alpha=1.0)
     plot_thrust_acc_min = 0.0
