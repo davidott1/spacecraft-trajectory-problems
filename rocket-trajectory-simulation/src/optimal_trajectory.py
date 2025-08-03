@@ -8,7 +8,6 @@ import matplotlib.colors as mcolors
 import matplotlib.ticker as mticker
 import matplotlib.axes   as maxes
 from matplotlib.widgets import Button
-
 import json
 import random
 np.random.seed(42)
@@ -16,8 +15,23 @@ import astropy.units as u
 from functools import partial
 from typing import Optional
 
+def smax(val1, val2, k):
+    """
+    Smooth maximum using Log-Sum-Exp. This expression is mumerically stable and produces a value 
+    slightly larger than max(val1,val2), depending on k.
+    """
+    m = np.maximum(k * val1, k * val2)
+    return (1.0 / k) * (m + np.log(np.exp(k * val1 - m) + np.exp(k * val2 - m)))
 
-# Dynamics functions
+def smin(val1, val2, k):
+    """
+    Smooth minimum using Log-Sum-Exp. This expression is mumerically stable and produces a value 
+    slightly smaller than min(val1,val2), depending on k.
+    """
+    m = np.maximum(-k * val1, -k * val2)
+    return (-1.0 / k) * (m + np.log(np.exp(-k * val1 - m) + np.exp(-k * val2 - m)))
+
+# Free-body dynamics
 def freebodydynamics__indirect_thrustaccmax_heaviside_stm(
         time                  : np.float64                     ,
         state_costate_scstm   : np.ndarray                     ,
@@ -73,7 +87,10 @@ def freebodydynamics__indirect_thrustaccmax_heaviside_stm(
     # Set default values
     if use_thrust_acc_limits and use_thrust_limits:
         use_thrust_limits = False
-    if use_thrust_acc_limits is False and use_thrust_limits is False:
+    if (
+            min_type=='fuel' 
+            and use_thrust_acc_limits is False and use_thrust_limits is False
+        ):
         use_thrust_acc_limits = True
         use_thrust_limits     = False
 
@@ -93,7 +110,7 @@ def freebodydynamics__indirect_thrustaccmax_heaviside_stm(
 
     # Control: thrust acceleration
     #   fuel   : thrust_acc_vec = -covel_vec / cvel_mag
-    #   energy : thrust_acc_vec = -covel_vec
+    #   energy : thrust_acc_vec =  covel_vec
     epsilon = np.float64(1.0e-6)
     if min_type == 'fuel':
         covel_mag      = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
@@ -103,22 +120,25 @@ def freebodydynamics__indirect_thrustaccmax_heaviside_stm(
 
     if use_thrust_limits:
         if min_type == 'fuel':
-            thrust_mag       = np.float64(0.0e+0)
-            thrust_acc_mag   = np.float64(0.0e+0) # thrust_mag / mass
-            thrust_acc_x_dir = -covel_x / covel_mag
-            thrust_acc_y_dir = -covel_y / covel_mag
-            thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
-            thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
+            # thrust_mag       = np.float64(0.0e+0)
+            # thrust_acc_mag   = np.float64(0.0e+0) # thrust_mag / mass
+            # thrust_acc_x_dir = -covel_x / covel_mag
+            # thrust_acc_y_dir = -covel_y / covel_mag
+            # thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
+            # thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
+            ...
         else: # assume energy
-            thrust_mag       = np.float64(0.0e+0)
-            thrust_acc_mag   = np.float64(0.0e+0) # thrust_mag / mass
-            thrust_acc_x_dir = covel_x / covel_mag
-            thrust_acc_y_dir = covel_y / covel_mag
-            thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
-            thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
+            # thrust_mag       = np.float64(0.0e+0)
+            # thrust_acc_mag   = np.float64(0.0e+0) # thrust_mag / mass
+            # thrust_acc_x_dir = covel_x / covel_mag
+            # thrust_acc_y_dir = covel_y / covel_mag
+            # thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
+            # thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
+            ...
     else: # use_thrust_acc_limits
         if min_type == 'fuel':
             if k_heaviside == np.float64(0.0):
+                # Heaviside approx is not used
                 if switching_func > np.float64(0.0):
                     thrust_acc_mag = thrust_acc_max
                 elif switching_func < np.float64(0.0):
@@ -126,6 +146,7 @@ def freebodydynamics__indirect_thrustaccmax_heaviside_stm(
                 else:
                     thrust_acc_mag = thrust_acc_min # undetermined. choose thrust_acc_min.
             else:
+                # Heaviside approx is used
                 heaviside_approx = np.float64(0.5) + np.float64(0.5) * np.tanh(k_heaviside * switching_func)
                 thrust_acc_mag   = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx
             thrust_acc_x_dir = -covel_x / covel_mag
@@ -133,9 +154,22 @@ def freebodydynamics__indirect_thrustaccmax_heaviside_stm(
             thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
             thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
         else: # assume energy
-            thrust_acc_x   = covel_x
-            thrust_acc_y   = covel_y
-            thrust_acc_mag = covel_mag
+            
+            if k_heaviside == np.float64(0.0):
+                # No thrust or thrust-acc constraint smoothing
+                thrust_acc_mag = max( min( covel_mag, thrust_acc_max), thrust_acc_min)
+            else:
+                # Thrust or thrust-acc constraint smoothing
+                # heaviside_approx = np.float64(0.5) + np.float64(0.5) * np.tanh(k_heaviside * switching_func)
+                # thrust_acc_mag   = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx
+                k_steepness    = k_heaviside
+                thrust_acc_mag = covel_mag
+                thrust_acc_mag = smax(thrust_acc_mag, thrust_acc_min, k_steepness) # min thrust-acc constraint
+                thrust_acc_mag = smin(thrust_acc_mag, thrust_acc_max, k_steepness) # max thrust-acc constraint
+            thrust_acc_x_dir = covel_x / covel_mag
+            thrust_acc_y_dir = covel_y / covel_mag
+            thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
+            thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
 
     # Dynamics: free-body
     #   dstate/dtime = dynamics(time,state)
@@ -290,7 +324,7 @@ def freebodydynamics__indirect_thrustaccmax_heaviside_stm(
         else:
             return dstate_costate__dtime
 
-
+# Constant-gravity dynamics
 def constantgravitydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
         time             : float              ,
         state            : np.ndarray         ,
@@ -377,7 +411,7 @@ def constantgravitydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
         dcovel_y__dtime,
     ])
 
-
+# Two-point boundary-value-problem objective and the associated jacobian
 def tpbvp_objective_and_jacobian(
         decision_state               : np.ndarray                     ,
         time_span                    : np.ndarray                     ,
@@ -473,7 +507,7 @@ def tpbvp_objective_and_jacobian(
     else:
         return error
 
-
+# Generate guess
 def generate_guess(
         time_span                    : np.ndarray                     ,
         boundary_condition_pos_vec_o : np.ndarray                     ,
@@ -533,7 +567,7 @@ def generate_guess(
     print(f"MIN: *** {idx_min:>5d} {error_mag_min:>14.6e} {decision_state_min_str} ***")
     return costate_o_guess
 
-
+# Optimal trajectory solver
 def optimal_trajectory_solve(
         time_span                    : np.ndarray                     ,
         boundary_condition_pos_vec_o : np.ndarray                     ,
@@ -814,7 +848,7 @@ def optimal_trajectory_solve(
     # End
     print()
 
-
+# Plot final results
 def plot_final_results(
         results_finsoln                                               ,
         boundary_condition_pos_vec_o : np.ndarray                     ,
@@ -1062,14 +1096,14 @@ def plot_final_results(
     ax2.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
     ax2.set_ylabel('Objective\n[m/s]')
 
-    # Thrust Profile
+    # Thrust-Acc or Thrust Profile
     ax3 = fig.add_subplot(gs[1,1])
     if min_type=='fuel':
         ax3.axhline(y=float(thrust_acc_min), color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Min')
         ax3.axhline(y=float(thrust_acc_max), color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Max')
     if use_thrust_limits:
         ax3.plot(time_t, thrust_mag_t    , color=mcolors.CSS4_COLORS['blue'], linewidth=2.0, label='Thrust Mag'    )
-    else: # assume use_thrust_limits
+    else: # assume use_thrust_acc_limits
         ax3.plot(time_t, thrust_acc_mag_t, color=mcolors.CSS4_COLORS['red' ], linewidth=2.0, label='Thrust Acc Mag')
     ax3.fill_between(
         time_t,
@@ -1083,7 +1117,7 @@ def plot_final_results(
     ax3.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
     if use_thrust_limits:
         ax3.set_ylabel('Thrust Mag'     + '\n' + '[kg$\cdot$m/s$^2$]')
-    else: # assume use_thrust_limits
+    else: # assume use_thrust_acc_limits
         ax3.set_ylabel('Thrust Acc Mag' + '\n' + '[m/s$^2$]'         )
     if use_thrust_limits:
         plot_thrust_min = 0.0
@@ -1092,7 +1126,7 @@ def plot_final_results(
             plot_thrust_min - (plot_thrust_max - plot_thrust_min) * 0.1,
             plot_thrust_max + (plot_thrust_max - plot_thrust_min) * 0.1,
         )
-    else: # assume use_thrust_limits
+    else: # assume use_thrust_acc_limits
         plot_thrust_acc_min = 0.0
         plot_thrust_acc_max = max(thrust_acc_mag_t)
         ax3.set_ylim(
@@ -1166,7 +1200,7 @@ def plot_final_results(
     fig.align_ylabels()
     mplt.show()
 
-
+# Read input
 def read_input():
     print("\nReading Input")
 
@@ -1186,7 +1220,7 @@ def read_input():
 
     return parameters_input
 
-
+# Process input: units, valid checks
 def proceess_input(
         parameters_input,
     ):
@@ -1250,7 +1284,7 @@ def proceess_input(
     use_thrust_limits     = parameters_with_units.get(    'use_thrust_limits', False                               )
     thrust_min            = parameters_with_units.get(           'thrust_min', 0.0e+0             * u.kg*u.m/u.s**2).to_value(u.kg*u.m/u.s**2) # type: ignore
     thrust_max            = parameters_with_units.get(           'thrust_max', 1.0e+0             * u.kg*u.m/u.s**2).to_value(u.kg*u.m/u.s**2) # type: ignore
-    k_idxinitguess        = parameters_with_units.get(       'k_idxinitguess', 1.0e-1             * u.one          ).to_value(u.one          ) # type: ignore
+    k_idxinitguess        = parameters_with_units.get(       'k_idxinitguess', None                                )
     k_idxfinsoln          = parameters_with_units.get(         'k_idxfinsoln', 1.0e+1             * u.one          ).to_value(u.one          ) # type: ignore
     k_idxdivs             = parameters_with_units.get(            'k_idxdivs', 10                 * u.one          ).to_value(u.one          ) # type: ignore
     mass_o                = parameters_with_units.get(               'mass_o', 1.0e+3             * u.kg           ).to_value(u.kg           ) # type: ignore
@@ -1265,11 +1299,30 @@ def proceess_input(
     boundary_condition_vel_vec_f = vel_vec_f
 
     # Check input
+
+    # Check if both thrust and thrust-acc constraints are set
     if use_thrust_acc_limits and use_thrust_limits:
         use_thrust_acc_limits = True
         use_thrust_limits     = False
         print("\nWarning: Cannot use both thrust acceleration limits and thrust limits."
               + f" Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}.")
+    
+    # Check if min-type fuel is set but no thrust or thrust-acc constraint
+    if (
+            min_type=='fuel' 
+            and use_thrust_acc_limits is False and use_thrust_limits is False
+        ):
+        use_thrust_acc_limits = True
+        use_thrust_limits     = False
+        print("\nWarning: Min type is fuel, but no thrust or thrust-acc constraint is set."
+              + f" Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}.")
+
+    # Determine the first k value based on thrust or thrust-acc constraints if not an input
+    if k_idxinitguess is None:
+        if use_thrust_limits:
+            k_idxinitguess = 4.0 / (thrust_max - thrust_min)
+        elif use_thrust_acc_limits:
+            k_idxinitguess = 4.0 / (thrust_acc_max - thrust_acc_min)
 
     # Pack up variable input
     return (
@@ -1291,14 +1344,13 @@ def proceess_input(
         mass_o                      ,
     )
 
-
+# Optimal trajectory input
 def optimal_trajectory_input():
     # Read input
     parameters_input = read_input()
 
     # Process input
     return proceess_input(parameters_input)
-
 
 # Main
 if __name__ == '__main__':

@@ -9,7 +9,6 @@
     "use_thrust_acc_limits" : { "value":               true  , "unit": "None"                            },
     "thrust_acc_min"        : { "value":             0.0e+0  , "unit": "m/s^2"                           },
     "thrust_acc_max"        : { "value":             5.0e-2  , "unit": "m/s^2"                           },
-    "k_idxinitguess"        : { "value":             1.0e-1  , "unit": "None"                            },
     "k_idxfinsoln"          : { "value":             1.0e+2  , "unit": "None"                            },
     "k_idxdivs"             : { "value":                 10  , "unit": "None"                            }
 }
