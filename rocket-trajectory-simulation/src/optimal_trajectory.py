@@ -45,7 +45,6 @@ def dsmin__dval1(val1, val2, k):
     Calculates the partial derivative of smin with respect to val1.
     """
     return np.exp(-k * (val1 - smin(val1, val2, k)))
-
 def dsmin__dval2(val1, val2, k):
     """
     Calculates the partial derivative of smin with respect to val2.
@@ -105,6 +104,22 @@ def freebodydynamics__indirect(
           dcopos_x__dtime, dcopos_y__dtime, dcovel_x__dtime, dcovel_y__dtime  ]
     """
 
+    # fuel
+    #   thrust_limits
+    #     no_thrust_smoothing
+    #     no_thrust_smoothing
+    #   thrust_acc_limits
+    #     no_thrust_acc_smoothing
+    #     no_thrust_acc_smoothing
+    # energy
+    #   thrust_limits
+    #     no_thrust_smoothing
+    #     no_thrust_smoothing
+    #   thrust_acc_limits
+    #     no_thrust_acc_smoothing
+    #     no_thrust_acc_smoothing
+    #   no_limits
+
     # Set default values
     if use_thrust_acc_limits and use_thrust_limits:
         use_thrust_limits = False
@@ -156,7 +171,7 @@ def freebodydynamics__indirect(
             # thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
             # thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
             ...
-    else: # use_thrust_acc_limits
+    elif use_thrust_acc_limits:
         if min_type == 'fuel':
             if k_heaviside == np.float64(0.0):
                 # Heaviside approx is not used
@@ -176,6 +191,7 @@ def freebodydynamics__indirect(
             thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
         else: # assume energy
             if k_heaviside == np.float64(0.0):
+                breakpoint()
                 # No thrust or thrust-acc constraint smoothing
                 thrust_acc_mag = covel_mag
                 thrust_acc_mag = min( thrust_acc_mag, thrust_acc_max ) # max thrust-acc constraint
@@ -190,6 +206,12 @@ def freebodydynamics__indirect(
             thrust_acc_y_dir = covel_y / covel_mag
             thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
             thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
+    else: # assume energy with no thrust or thrust-acc limits
+        thrust_acc_mag   = covel_mag
+        thrust_acc_x_dir = covel_x / covel_mag
+        thrust_acc_y_dir = covel_y / covel_mag
+        thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
+        thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
 
     # Dynamics: free-body
     #   dstate/dtime = dynamics(time,state)
@@ -222,6 +244,22 @@ def freebodydynamics__indirect(
 
     # Variational Dynamics: free-body
     #   stm_dot = jacobian * stm
+    # fuel
+    #   thrust_limits
+    #     no_thrust_smoothing
+    #     no_thrust_smoothing
+    #   thrust_acc_limits
+    #     no_thrust_acc_smoothing
+    #     no_thrust_acc_smoothing
+    # energy
+    #   thrust_limits
+    #     no_thrust_smoothing
+    #     no_thrust_smoothing
+    #   thrust_acc_limits
+    #     no_thrust_acc_smoothing
+    #     no_thrust_acc_smoothing
+    #   no_limits
+
     if include_scstm:
 
         # Jacobian: free-body
@@ -304,55 +342,61 @@ def freebodydynamics__indirect(
 
         else: # assume energy
 
-            # # Row 3
-            # #   d(dvel_x/dtime)/dcovel_x
-            # ddstatedtime__dstate[2,6] = np.float64(+1.0)
-
-            # # Row 4
-            # #   d(dvel_y/dtime)/dcovel_y
-            # ddstatedtime__dstate[3,7] = np.float64(+1.0)
-
-            if k_heaviside == np.float64(0.0e+0):
-                # No thrust-acc constraint smoothing
-                # thrust_acc_mag = covel_mag
-                # thrust_acc_mag = min( thrust_acc_mag, thrust_acc_max ) # max thrust-acc constraint
-                # thrust_acc_mag = max( thrust_acc_mag, thrust_acc_min ) # min thrust-acc constraint
-                # thrust_acc_x_dir = covel_x / covel_mag
-                # thrust_acc_y_dir = covel_y / covel_mag
-                # thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
-                # thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
+            if use_thrust_limits:
                 ...
+            elif use_thrust_acc_limits:
+
+                if k_heaviside == np.float64(0.0e+0):
+                    # No thrust-acc constraint smoothing
+                    # thrust_acc_mag = covel_mag
+                    # thrust_acc_mag = min( thrust_acc_mag, thrust_acc_max ) # max thrust-acc constraint
+                    # thrust_acc_mag = max( thrust_acc_mag, thrust_acc_min ) # min thrust-acc constraint
+                    # thrust_acc_x_dir = covel_x / covel_mag
+                    # thrust_acc_y_dir = covel_y / covel_mag
+                    # thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
+                    # thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
+                    ...
+                else:
+                    # Thrust-acc constraint smoothing
+                    
+                    # Common terms
+                    dcovel_mag__dcovel_x = covel_x / covel_mag
+                    dcovel_mag__dcovel_y = covel_y / covel_mag
+
+                    thrust_acc_mag = covel_mag
+                    thrust_acc_mag = smin( thrust_acc_mag, thrust_acc_max, k_steepness ) # max thrust-acc constraint
+                    thrust_acc_mag = smax( thrust_acc_mag, thrust_acc_min, k_steepness ) # min thrust-acc constraint
+
+                    dthrust_acc_mag__dcovel_x = dsmax__dval1( smin(covel_mag, thrust_acc_max, k_steepness), thrust_acc_min, k_steepness ) * dsmin__dval1(covel_mag, thrust_acc_max, k_steepness) * dcovel_mag__dcovel_x
+                    dthrust_acc_mag__dcovel_y = dsmax__dval1( smin(covel_mag, thrust_acc_max, k_steepness), thrust_acc_min, k_steepness ) * dsmin__dval1(covel_mag, thrust_acc_max, k_steepness) * dcovel_mag__dcovel_y
+
+                    thrust_acc_x_dir = covel_x / covel_mag
+                    thrust_acc_y_dir = covel_y / covel_mag
+
+                    dthrust_acc_x_dir__dcovel_x = np.float64(1.0) / covel_mag - covel_x * (np.float64(1.0) / covel_mag**2) * dcovel_mag__dcovel_x
+                    dthrust_acc_x_dir__dcovel_y =                             - covel_x * (np.float64(1.0) / covel_mag**2) * dcovel_mag__dcovel_y
+                    dthrust_acc_y_dir__dcovel_y = np.float64(1.0) / covel_mag - covel_y * (np.float64(1.0) / covel_mag**2) * dcovel_mag__dcovel_y
+                    dthrust_acc_y_dir__dcovel_x =                             - covel_y * (np.float64(1.0) / covel_mag**2) * dcovel_mag__dcovel_x
+
+                    # Row 3
+                    #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
+                    ddstatedtime__dstate[2,6] = dthrust_acc_mag__dcovel_x * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
+                    ddstatedtime__dstate[2,7] = dthrust_acc_mag__dcovel_y * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_y
+
+                    # Row 4
+                    #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
+                    ddstatedtime__dstate[3,6] = dthrust_acc_mag__dcovel_x * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_x
+                    ddstatedtime__dstate[3,7] = dthrust_acc_mag__dcovel_y * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
+
             else:
-                # Thrust-acc constraint smoothing
-                
-                # Common terms
-                dcovel_mag__dcovel_x = covel_x / covel_mag
-                dcovel_mag__dcovel_y = covel_y / covel_mag
-
-                thrust_acc_mag = covel_mag
-                thrust_acc_mag = smin( thrust_acc_mag, thrust_acc_max, k_steepness ) # max thrust-acc constraint
-                thrust_acc_mag = smax( thrust_acc_mag, thrust_acc_min, k_steepness ) # min thrust-acc constraint
-
-                dthrust_acc_mag__dcovel_x = dsmax__dval1( smin(covel_mag, thrust_acc_max, k_steepness), thrust_acc_min, k_steepness ) * dsmin__dval1(covel_mag, thrust_acc_max, k_steepness) * dcovel_mag__dcovel_x
-                dthrust_acc_mag__dcovel_y = dsmax__dval1( smin(covel_mag, thrust_acc_max, k_steepness), thrust_acc_min, k_steepness ) * dsmin__dval1(covel_mag, thrust_acc_max, k_steepness) * dcovel_mag__dcovel_y
-
-                thrust_acc_x_dir = covel_x / covel_mag
-                thrust_acc_y_dir = covel_y / covel_mag
-
-                dthrust_acc_x_dir__dcovel_x = np.float64(1.0) / covel_mag - covel_x * (np.float64(1.0) / covel_mag**2) * dcovel_mag__dcovel_x
-                dthrust_acc_x_dir__dcovel_y =                             - covel_x * (np.float64(1.0) / covel_mag**2) * dcovel_mag__dcovel_y
-                dthrust_acc_y_dir__dcovel_y = np.float64(1.0) / covel_mag - covel_y * (np.float64(1.0) / covel_mag**2) * dcovel_mag__dcovel_y
-                dthrust_acc_y_dir__dcovel_x =                             - covel_y * (np.float64(1.0) / covel_mag**2) * dcovel_mag__dcovel_x
 
                 # Row 3
-                #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
-                ddstatedtime__dstate[2,6] = dthrust_acc_mag__dcovel_x * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
-                ddstatedtime__dstate[2,7] = dthrust_acc_mag__dcovel_y * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_y
+                #   d(dvel_x/dtime)/dcovel_x
+                ddstatedtime__dstate[2,6] = np.float64(+1.0)
 
                 # Row 4
-                #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
-                ddstatedtime__dstate[3,6] = dthrust_acc_mag__dcovel_x * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_x
-                ddstatedtime__dstate[3,7] = dthrust_acc_mag__dcovel_y * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
+                #   d(dvel_y/dtime)/dcovel_y
+                ddstatedtime__dstate[3,7] = np.float64(+1.0)
 
     
         # Row 7
@@ -536,6 +580,7 @@ def tpbvp_objective_and_jacobian(
                     thrust_acc_max        = thrust_acc_max       ,
                     k_heaviside           = k_heaviside          ,
                 )
+        breakpoint
         soln = \
             solve_ivp(
                 solve_ivp_func                 ,
@@ -1337,7 +1382,7 @@ def read_input():
     return parameters_input
 
 # Process input: units, valid checks
-def proceess_input(
+def process_input(
         parameters_input,
     ):
 
@@ -1439,9 +1484,13 @@ def proceess_input(
             k_idxinitguess = 4.0 / (thrust_max - thrust_min)
         elif use_thrust_acc_limits:
             k_idxinitguess = 4.0 / (thrust_acc_max - thrust_acc_min)
+        else:
+            k_idxinitguess = 0.0 
     else:
         k_idxinitguess = k_idxinitguess.to_value(u.one) # type: ignore
-    
+
+    # means no thrust or thrust-acc smoothing ??? xxx
+
     # Pack up variable input
     return (
         min_type                    ,
@@ -1468,7 +1517,7 @@ def optimal_trajectory_input():
     parameters_input = read_input()
 
     # Process input
-    return proceess_input(parameters_input)
+    return process_input(parameters_input)
 
 # Main
 if __name__ == '__main__':
