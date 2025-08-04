@@ -785,8 +785,9 @@ def optimal_trajectory_solve(
                 method                  = 'lm' ,
                 tol                     = 1e-11,
                 jac                     = include_jacobian,
-                options                 = {'maxiter': 100},
+                options                 = {'maxiter': 10000},
             )
+        print(soln_root)
         if soln_root.success or True:
             decisionstate_initguess     = soln_root.x
             state_costate_o             = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decisionstate_initguess])
@@ -1012,14 +1013,14 @@ def plot_final_results(
                 edgecolor = 'none',
             )
 
-            # Draw some thrust or thrust-acc vectors
-            for idx in np.linspace(0,len(pos_x_t)-1,20).astype(int):
-                ax.plot(
-                    [pos_x_t[idx], end_x[idx]]            ,
-                    [pos_y_t[idx], end_y[idx]]            ,
-                    color     = mcolors.CSS4_COLORS['red'],
-                    linewidth = 2.0                       ,
-                )
+        # Draw some thrust or thrust-acc vectors
+        for idx in np.linspace(0,len(pos_x_t)-1,20).astype(int):
+            ax.plot(
+                [pos_x_t[idx], end_x[idx]]            ,
+                [pos_y_t[idx], end_y[idx]]            ,
+                color     = mcolors.CSS4_COLORS['red'],
+                linewidth = 2.0                       ,
+            )
     _plot_thrust_on_position_space(
         ax                    = ax1                  ,
         pos_x_t               = pos_x_t              ,
@@ -1071,7 +1072,6 @@ def plot_final_results(
             end_x                = vel_x_t + thrust_acc_vec_t[0] * thrust_acc_vec_scale
             end_y                = vel_y_t + thrust_acc_vec_t[1] * thrust_acc_vec_scale
 
-
         # Find contiguous segments where thrust is active
         is_thrust_on = thrust_acc_mag_t > 1.0e-9
 
@@ -1101,6 +1101,15 @@ def plot_final_results(
                 facecolor = mcolors.CSS4_COLORS['red'],
                 alpha     = 0.5,
                 edgecolor = 'none',
+            )
+
+        # Draw some thrust or thrust-acc vectors
+        for idx in np.linspace(0,len(vel_x_t)-1,20).astype(int):
+            ax.plot(
+                [vel_x_t[idx], end_x[idx]]            ,
+                [vel_y_t[idx], end_y[idx]]            ,
+                color     = mcolors.CSS4_COLORS['red'],
+                linewidth = 2.0                       ,
             )
     _plot_thrust_on_velocity_space(
         ax                    = ax1_vel              ,
