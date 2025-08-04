@@ -107,17 +107,17 @@ def freebodydynamics__indirect(
     # fuel
     #   thrust_limits
     #     no_thrust_smoothing
-    #     no_thrust_smoothing
+    #     thrust_smoothing
     #   thrust_acc_limits
     #     no_thrust_acc_smoothing
-    #     no_thrust_acc_smoothing
+    #     thrust_acc_smoothing
     # energy
     #   thrust_limits
     #     no_thrust_smoothing
-    #     no_thrust_smoothing
+    #     thrust_smoothing
     #   thrust_acc_limits
     #     no_thrust_acc_smoothing
-    #     no_thrust_acc_smoothing
+    #     thrust_acc_smoothing
     #   no_limits
 
     # Set default values
@@ -244,20 +244,21 @@ def freebodydynamics__indirect(
 
     # Variational Dynamics: free-body
     #   stm_dot = jacobian * stm
+    
     # fuel
     #   thrust_limits
     #     no_thrust_smoothing
-    #     no_thrust_smoothing
+    #     thrust_smoothing
     #   thrust_acc_limits
     #     no_thrust_acc_smoothing
-    #     no_thrust_acc_smoothing
+    #     thrust_acc_smoothing
     # energy
     #   thrust_limits
     #     no_thrust_smoothing
-    #     no_thrust_smoothing
+    #     thrust_smoothing
     #   thrust_acc_limits
     #     no_thrust_acc_smoothing
-    #     no_thrust_acc_smoothing
+    #     thrust_acc_smoothing
     #   no_limits
 
     if include_scstm:
@@ -397,7 +398,6 @@ def freebodydynamics__indirect(
                 # Row 4
                 #   d(dvel_y/dtime)/dcovel_y
                 ddstatedtime__dstate[3,7] = np.float64(+1.0)
-
     
         # Row 7
         #   d(dcovel_x_dtime)/dcopos_x
@@ -1255,7 +1255,11 @@ def plot_final_results(
     ax2.plot(time_t, opt_ctrl_obj_t, color=mcolors.CSS4_COLORS['black'], linewidth=2.0, label='Mass')
     ax2.set_xticklabels([])
     ax2.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
-    ax2.set_ylabel('Objective\n[m/s]')
+    if min_type == 'fuel':
+        obj_label_unit = '[m/s]'
+    elif min_type == 'energy':
+        obj_label_unit = '[m$^2$/$s^3$]'
+    ax2.set_ylabel(f'Objective\n{obj_label_unit}')
 
     # Thrust-Acc or Thrust Profile
     ax3 = fig.add_subplot(gs[1,1])
