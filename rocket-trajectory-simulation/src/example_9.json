@@ -1,0 +1,18 @@
+{
+    "min_type"              : { "value":            "energy" , "unit": "None"                               },
+    "time_span"             : { "value": [  0.0e+0,  2.0e+1 ], "unit": "s"       , "fixed_or_free": "fixed" },
+    "pos_vec_o"             : { "value": [  0.0e+0,  0.0e+0 ], "unit": "m"       , "fixed_or_free": "fixed" },
+    "vel_vec_o"             : { "value": [  0.0e+0,  1.0e-0 ], "unit": "m/s"     , "fixed_or_free": "fixed" },
+    "pos_vec_f"             : { "value": [  1.0e+1,  0.0e+1 ], "unit": "m"       , "fixed_or_free": "fixed" },
+    "vel_vec_f"             : { "value": [  0.0e+0,  1.0e-0 ], "unit": "m/s"     , "fixed_or_free": "fixed" },
+    "mass_o"                : { "value":             1.0e+3  , "unit": "kg"                                 },
+    "use_thrust_acc_limits" : { "value":              false  , "unit": "None"                               },
+    "thrust_acc_min"        : { "value":             0.0e-1  , "unit": "m/s^2"                              },
+    "thrust_acc_max"        : { "value":             2.0e+1  , "unit": "m/s^2"                              },
+    "use_thrust_limits"     : { "value":              false  , "unit": "None"                               },
+    "thrust_min"            : { "value":             0.0e+0  , "unit": "kg*m/s^2"                           },
+    "thrust_max"            : { "value":             5.0e+0  , "unit": "kg*m/s^2"                           },
+    "k_idxinitguess"        : { "value":             1.0e+3  , "unit": "None"                               },
+    "k_idxfinsoln"          : { "value":             1.0e+2  , "unit": "None"                               },
+    "k_idxdivs"             : { "value":                 10  , "unit": "None"                               }
+}
