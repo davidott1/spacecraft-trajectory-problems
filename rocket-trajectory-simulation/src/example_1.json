@@ -1,5 +1,5 @@
 {
-    "min_type"              : { "value":            "energy" , "unit": "None"                               },
+    "min_type"              : { "value":              "fuel" , "unit": "None"                               },
     "time_span"             : { "value": [  0.0e+0,  5.0e+1 ], "unit": "s"       , "fixed_or_free": "fixed" },
     "pos_vec_o"             : { "value": [  0.0e+0,  0.0e+0 ], "unit": "m"       , "fixed_or_free": "fixed" },
     "vel_vec_o"             : { "value": [  0.0e+0,  0.0e+0 ], "unit": "m/s"     , "fixed_or_free": "fixed" },
