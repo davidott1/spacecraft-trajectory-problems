@@ -726,6 +726,7 @@ def generate_guess(
         thrust_min                   : np.float64 = np.float64(0.0e+0),
         thrust_max                   : np.float64 = np.float64(1.0e+1),
         k_heaviside                  : np.float64 = np.float64(0.0e+0),
+        init_guess_steps             : int        = 3000              ,
     ):
     """
     Generates a robust initial guess for the co-states: copos_vec, covel_vec
@@ -734,43 +735,44 @@ def generate_guess(
 
     # Loop through random guesses for the costates
     print("\nRandom Initial Guess Generation")
-    error_mag_min = np.Inf
-    for idx in range(3000):
-        copos_vec_o        = np.random.uniform(low=-1, high=1, size=2)
-        covel_vec_o        = np.random.uniform(low=-1, high=1, size=2)
-        decision_state_idx = np.hstack([copos_vec_o, covel_vec_o])
-        
-        error_idx = \
-            tpbvp_objective_and_jacobian(
-                decision_state_idx                                  ,
-                time_span                                           ,
-                boundary_condition_pos_vec_o                        ,
-                boundary_condition_vel_vec_o                        ,
-                boundary_condition_pos_vec_f                        ,
-                boundary_condition_vel_vec_f                        ,
-                use_thrust_acc_limits        = use_thrust_acc_limits,
-                use_thrust_acc_smoothing     = True                 ,
-                thrust_acc_min               = thrust_acc_min       ,
-                thrust_acc_max               = thrust_acc_max       ,
-                k_heaviside                  = k_heaviside          ,
-                min_type                     = min_type             ,
-                include_jacobian             = False                ,
-            )
+    with tqdm(range(init_guess_steps), desc="Processing items", leave=False) as pbar:
+        error_mag_min = np.Inf
+        for idx in pbar:
+            copos_vec_o        = np.random.uniform(low=-1, high=1, size=2)
+            covel_vec_o        = np.random.uniform(low=-1, high=1, size=2)
+            decision_state_idx = np.hstack([copos_vec_o, covel_vec_o])
+            
+            error_idx = \
+                tpbvp_objective_and_jacobian(
+                    decision_state_idx                                  ,
+                    time_span                                           ,
+                    boundary_condition_pos_vec_o                        ,
+                    boundary_condition_vel_vec_o                        ,
+                    boundary_condition_pos_vec_f                        ,
+                    boundary_condition_vel_vec_f                        ,
+                    use_thrust_acc_limits        = use_thrust_acc_limits,
+                    use_thrust_acc_smoothing     = True                 ,
+                    thrust_acc_min               = thrust_acc_min       ,
+                    thrust_acc_max               = thrust_acc_max       ,
+                    k_heaviside                  = k_heaviside          ,
+                    min_type                     = min_type             ,
+                    include_jacobian             = False                ,
+                )
 
-        error_mag_idx = np.linalg.norm(error_idx)
-        if error_mag_idx < error_mag_min:
-            idx_min            = idx
-            error_mag_min      = error_mag_idx
-            decision_state_min = decision_state_idx
-            if idx==0:
-                print(f"                                     {'Decision-State':>{4*14+3}s}")
-                print(f"                {'Step':>5s} {'Error-Mag':>14s} {'Co-Pos-X':>14s} {'Co-Pos-Y':>14s} {'Co-Vel-X':>14s} {'Co-Vel-Y':>14s}")
-            decision_state_min_str = ' '.join(f"{x:>14.6e}" for x in decision_state_idx)
-            print(f"           {idx_min:>5d}/{3000:>4d} {error_mag_min:>14.6e} {decision_state_min_str}")
+            error_mag_idx = np.linalg.norm(error_idx)
+            if error_mag_idx < error_mag_min:
+                idx_min            = idx
+                error_mag_min      = error_mag_idx
+                decision_state_min = decision_state_idx
+                if idx==0:
+                    tqdm.write(f"                                     {'Decision-State':>{4*14+3}s}")
+                    tqdm.write(f"                {'Step':>5s} {'Error-Mag':>14s} {'Co-Pos-X':>14s} {'Co-Pos-Y':>14s} {'Co-Vel-X':>14s} {'Co-Vel-Y':>14s}")
+                decision_state_min_str = ' '.join(f"{x:>14.6e}" for x in decision_state_idx)
+                tqdm.write(f"           {idx_min:>5d}/{init_guess_steps:>4d} {error_mag_min:>14.6e} {decision_state_min_str}")
 
     # Pack up and print solution
     costate_o_guess = decision_state_min
-    print(f"  MIN: *** {idx_min:>5d}/{3000:>4d} {error_mag_min:>14.6e} {decision_state_min_str} ***")
+    print(f"  MIN: *** {idx_min:>5d}/{init_guess_steps:>4d} {error_mag_min:>14.6e} {decision_state_min_str} ***")
     return costate_o_guess
 
 # Optimal trajectory solver
@@ -790,6 +792,7 @@ def optimal_trajectory_solve(
         k_idxinitguess               : np.float64 = np.float64(1.0e-1),
         k_idxfinsoln                 : np.float64 = np.float64(1.0e+1),
         k_idxdivs                    : int        = 100               ,
+        init_guess_steps             : int        = 3000              ,
         mass_o                       : np.float64 = np.float64(1.0e+3),
     ):
     """
@@ -813,6 +816,7 @@ def optimal_trajectory_solve(
             thrust_min                   = thrust_min           ,
             thrust_max                   = thrust_max           ,
             k_heaviside                  = k_idxinitguess       ,
+            init_guess_steps             = init_guess_steps     ,
         )
 
     # Optimize and enforce thrust or thrust-acc constraints
@@ -1574,6 +1578,7 @@ def process_input(
     vel_vec_o             = parameters_with_units.get(            'vel_vec_o', [ 0.0e+0, 0.0e+0 ] * u.m/u.s        ).to_value(u.m/u.s        ) # type: ignore
     pos_vec_f             = parameters_with_units.get(            'pos_vec_f', [ 1.0e+1, 1.0e+1 ] * u.m            ).to_value(u.m            ) # type: ignore
     vel_vec_f             = parameters_with_units.get(            'vel_vec_f', [ 1.0e+0, 1.0e+0 ] * u.m/u.s        ).to_value(u.m/u.s        ) # type: ignore
+    mass_o                = parameters_with_units.get(               'mass_o', 1.0e+3             * u.kg           ).to_value(u.kg           ) # type: ignore
     use_thrust_acc_limits = parameters_with_units.get('use_thrust_acc_limits', False                               )
     thrust_acc_min        = parameters_with_units.get(       'thrust_acc_min', 0.0e+0             * u.m/u.s**2     ).to_value(u.m/u.s**2     ) # type: ignore
     thrust_acc_max        = parameters_with_units.get(       'thrust_acc_max', 1.0e+0             * u.m/u.s**2     ).to_value(u.m/u.s**2     ) # type: ignore
@@ -1583,10 +1588,11 @@ def process_input(
     k_idxinitguess        = parameters_with_units.get(       'k_idxinitguess', None                                )
     k_idxfinsoln          = parameters_with_units.get(         'k_idxfinsoln', 1.0e+1             * u.one          ).to_value(u.one          ) # type: ignore
     k_idxdivs             = parameters_with_units.get(            'k_idxdivs', 10                 * u.one          ).to_value(u.one          ) # type: ignore
-    mass_o                = parameters_with_units.get(               'mass_o', 1.0e+3             * u.kg           ).to_value(u.kg           ) # type: ignore
+    init_guess_steps      = parameters_with_units.get(     'init_guess_steps', 3000               * u.one          ).to_value(u.one          ) # type: ignore
 
     # Enforce types
-    k_idxdivs = int(k_idxdivs)
+    k_idxdivs        = int(k_idxdivs)
+    init_guess_steps = int(init_guess_steps)
 
     # Create boundary conditions
     boundary_condition_pos_vec_o = pos_vec_o
@@ -1594,7 +1600,7 @@ def process_input(
     boundary_condition_pos_vec_f = pos_vec_f
     boundary_condition_vel_vec_f = vel_vec_f
 
-    # Check input
+    # Validate input
 
     # Check if both thrust and thrust-acc constraints are set
     if use_thrust_acc_limits and use_thrust_limits:
@@ -1616,9 +1622,9 @@ def process_input(
     # Determine the first k value based on thrust or thrust-acc constraints if not an input
     if k_idxinitguess is None:
         if use_thrust_limits:
-            k_idxinitguess =  np.float64(4.0 / (thrust_max - thrust_min))
+            k_idxinitguess = np.float64(4.0 / (thrust_max - thrust_min + 1.0e-9))
         elif use_thrust_acc_limits:
-            k_idxinitguess = np.float64(4.0 / (thrust_acc_max - thrust_acc_min))
+            k_idxinitguess = np.float64(4.0 / (thrust_acc_max - thrust_acc_min + 1.0e-9))
         else:
             k_idxinitguess = np.float64(0.0e+0)
     else:
@@ -1643,6 +1649,7 @@ def process_input(
         k_idxinitguess              ,
         k_idxfinsoln                , 
         k_idxdivs                   ,
+        init_guess_steps            ,
         mass_o                      ,
     )
 
@@ -1675,8 +1682,9 @@ if __name__ == '__main__':
         thrust_min                  ,
         thrust_max                  ,
         k_idxinitguess              ,
-        k_idxfinsoln                , 
+        k_idxfinsoln                ,
         k_idxdivs                   ,
+        init_guess_steps            ,
         mass_o                      ,
     ) = \
         optimal_trajectory_input()
@@ -1698,6 +1706,7 @@ if __name__ == '__main__':
         k_idxinitguess               = k_idxinitguess       ,
         k_idxfinsoln                 = k_idxfinsoln         , 
         k_idxdivs                    = k_idxdivs            ,
+        init_guess_steps             = init_guess_steps     ,
         mass_o                       = mass_o               ,
     )
 
