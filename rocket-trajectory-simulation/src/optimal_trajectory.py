@@ -175,7 +175,7 @@ def freebodydynamics__indirect(
     # Control: thrust acceleration
     #   fuel   : thrust_acc_vec = -covel_vec / cvel_mag
     #   energy : thrust_acc_vec =  covel_vec
-    epsilon = np.float64(1.0e-6)
+    # epsilon = np.float64(1.0e-6)
     # if min_type == 'fuel':
     #     covel_mag      = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
     #     switching_func = covel_mag - np.float64(1.0)
@@ -836,10 +836,6 @@ def generate_guess(
 
     # Loop through random guesses for the costates
     print("\nRandom Initial Guess Generation")
-    # with tqdm(range(init_guess_steps), desc="Processing", leave=False) as range_init_guess_steps:
-    #     error_mag_min = np.Inf
-    #     for idx in range_init_guess_steps:
-    # tqdm(enumerate(k_idxinitguess_to_idxfinsoln), desc="Processing", leave=False, total=len(k_idxinitguess_to_idxfinsoln)):
     error_mag_min = np.Inf
     for idx in tqdm(range(init_guess_steps), desc="Processing", leave=False, total=init_guess_steps):
         copos_vec_o        = np.random.uniform(low=-1, high=1, size=2)
