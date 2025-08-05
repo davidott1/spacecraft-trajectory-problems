@@ -14,5 +14,6 @@
     "thrust_max"            : { "value":             5.0e-2  , "unit": "kg*m/s^2"                           },
     "k_idxinitguess"        : { "value":             1.0e-1  , "unit": "None"                               },
     "k_idxfinsoln"          : { "value":             1.0e+2  , "unit": "None"                               },
-    "k_idxdivs"             : { "value":                 10  , "unit": "None"                               }
+    "k_idxdivs"             : { "value":                 10  , "unit": "None"                               },
+    "init_guess_steps"      : { "value":               1000  , "unit": "None"                               }
 }
