@@ -166,7 +166,7 @@ def freebodydynamics__indirect(
 
     # Unpack: state
     pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y = state_costate
-    # (0.0, 0.0, 0.0, 0.0, 6.24329529326677, -2.9187504341232944, 67.01328194035983, -54.31181894170258)
+
     # Unpack: post-process states mass and objective
     if post_process:
         mass                      = state_costate_scstm[-2]
@@ -175,13 +175,6 @@ def freebodydynamics__indirect(
     # Control: thrust acceleration
     #   fuel   : thrust_acc_vec = -covel_vec / cvel_mag
     #   energy : thrust_acc_vec =  covel_vec
-    # epsilon = np.float64(1.0e-6)
-    # if min_type == 'fuel':
-    #     covel_mag      = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
-    #     switching_func = covel_mag - np.float64(1.0)
-    # else: # assume energy
-    #     covel_mag = np.sqrt(covel_x**2 + covel_y**2)
-
     if min_type == 'fuel':
         epsilon        = np.float64(1.0e-6)
         covel_mag      = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
@@ -246,64 +239,6 @@ def freebodydynamics__indirect(
             thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
             thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
 
-    # if use_thrust_limits:
-    #     if min_type == 'fuel':
-    #         # thrust_mag       = np.float64(0.0e+0)
-    #         # thrust_acc_mag   = np.float64(0.0e+0) # thrust_mag / mass
-    #         # thrust_acc_x_dir = -covel_x / covel_mag
-    #         # thrust_acc_y_dir = -covel_y / covel_mag
-    #         # thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
-    #         # thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
-    #         ...
-    #     else: # assume energy
-    #         # thrust_mag       = np.float64(0.0e+0)
-    #         # thrust_acc_mag   = np.float64(0.0e+0) # thrust_mag / mass
-    #         # thrust_acc_x_dir = covel_x / covel_mag
-    #         # thrust_acc_y_dir = covel_y / covel_mag
-    #         # thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
-    #         # thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
-    #         ...
-    # elif use_thrust_acc_limits:
-    #     if min_type == 'fuel':
-    #         if k_heaviside == np.float64(0.0):
-    #             # Heaviside approx is not used
-    #             if switching_func > np.float64(0.0):
-    #                 thrust_acc_mag = thrust_acc_max
-    #             elif switching_func < np.float64(0.0):
-    #                 thrust_acc_mag = thrust_acc_min
-    #             else:
-    #                 thrust_acc_mag = thrust_acc_min # undetermined. choose thrust_acc_min.
-    #         else:
-    #             # Heaviside approx is used
-    #             heaviside_approx = np.float64(0.5) + np.float64(0.5) * np.tanh(k_heaviside * switching_func)
-    #             thrust_acc_mag   = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx
-    #         thrust_acc_x_dir = -covel_x / covel_mag
-    #         thrust_acc_y_dir = -covel_y / covel_mag
-    #         thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
-    #         thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
-    #     else: # assume energy
-    #         if k_heaviside == np.float64(0.0):
-    #             # No thrust or thrust-acc constraint smoothing
-    #             thrust_acc_mag = covel_mag
-    #             thrust_acc_mag = min( thrust_acc_mag, thrust_acc_max ) # max thrust-acc constraint
-    #             thrust_acc_mag = max( thrust_acc_mag, thrust_acc_min ) # min thrust-acc constraint
-    #         else:
-    #             # Thrust or thrust-acc constraint smoothing
-    #             k_steepness    = k_heaviside
-    #             thrust_acc_mag = covel_mag
-    #             thrust_acc_mag = smin( thrust_acc_mag, thrust_acc_max, k_steepness ) # max thrust-acc constraint
-    #             thrust_acc_mag = smax( thrust_acc_mag, thrust_acc_min, k_steepness ) # min thrust-acc constraint
-    #         thrust_acc_x_dir = covel_x / covel_mag
-    #         thrust_acc_y_dir = covel_y / covel_mag
-    #         thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
-    #         thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
-    # else: # assume energy with no thrust or thrust-acc limits
-    #     thrust_acc_mag   = covel_mag
-    #     thrust_acc_x_dir = covel_x / covel_mag
-    #     thrust_acc_y_dir = covel_y / covel_mag
-    #     thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
-    #     thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
-
     # Dynamics: free-body
     #   dstate/dtime = dynamics(time,state)
     dpos_x__dtime   = vel_x
@@ -356,22 +291,6 @@ def freebodydynamics__indirect(
         #       [                      0.0,                      0.0,                      0.0,                      0.0, d(dcovel_x/dtime)/dcopos_x,                        0.0,                        0.0,                        0.0 ]
         #       [                      0.0,                      0.0,                      0.0,                      0.0,                        0.0, d(dcovel_y/dtime)/dcopos_y,                        0.0,                        0.0 ]
         ddstatedtime__dstate = np.zeros((n_state_costate, n_state_costate))
-
-        # fuel
-        #   thrust_limits
-        #     no_thrust_smoothing
-        #     thrust_smoothing
-        #   thrust_acc_limits
-        #     no_thrust_acc_smoothing
-        #     thrust_acc_smoothing
-        # energy
-        #   thrust_limits
-        #     no_thrust_smoothing
-        #     thrust_smoothing
-        #   thrust_acc_limits
-        #     no_thrust_acc_smoothing
-        #     thrust_acc_smoothing
-        #   no_limits
 
         # Row 1
         #   d(dpos_x/dtime)/dvel_x
@@ -489,125 +408,6 @@ def freebodydynamics__indirect(
 
         # Combine: time-derivative of state-transition matrix
         dscstm__dtime = np.dot(ddstatedtime__dstate, scstm)
-
-        # # Minization type: fuel or energy
-        # if min_type == 'fuel':
-
-        #     # Common terms
-        #     dcovel_mag__dcovel_x = covel_x / covel_mag
-        #     dcovel_mag__dcovel_y = covel_y / covel_mag
-
-        #     dthrust_acc_x_dir__dcovel_x = np.float64(-1.0) / covel_mag - covel_x * (np.float64(-1.0) / covel_mag**2) * dcovel_mag__dcovel_x
-        #     dthrust_acc_x_dir__dcovel_y =                              - covel_x * (np.float64(-1.0) / covel_mag**2) * dcovel_mag__dcovel_y
-        #     dthrust_acc_y_dir__dcovel_y = np.float64(-1.0) / covel_mag - covel_y * (np.float64(-1.0) / covel_mag**2) * dcovel_mag__dcovel_y
-        #     dthrust_acc_y_dir__dcovel_x =                              - covel_y * (np.float64(-1.0) / covel_mag**2) * dcovel_mag__dcovel_x
-
-        #     # If-else for heaviside inclusion
-        #     if k_heaviside==0.0:
-
-        #         # Row 3
-        #         #   d(dvel_x__dtime)/dcovel_x
-        #         ddstatedtime__dstate[2,6] = thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
-
-        #         # Row 3
-        #         #   d(dvel_x__dtime)/dcovel_y
-        #         ddstatedtime__dstate[2,7] = thrust_acc_mag * dthrust_acc_x_dir__dcovel_y
-
-        #         # Row 4
-        #         #   d(dvel_y__dtime)/dcovel_x
-        #         ddstatedtime__dstate[3,6] = thrust_acc_mag * dthrust_acc_y_dir__dcovel_x
-
-        #         # Row 4
-        #         #   d(dvel_y__dtime)/dcovel_y
-        #         ddstatedtime__dstate[3,7] = thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
-
-        #     else:
-                
-        #         # Common terms
-        #         one_mns_tanhsq              = np.float64(1.0) - np.tanh(k_heaviside * switching_func)**2
-        #         dheaviside_approx__dcovel_x = np.float64(0.5) * k_heaviside * one_mns_tanhsq * dcovel_mag__dcovel_x
-        #         dheaviside_approx__dcovel_y = np.float64(0.5) * k_heaviside * one_mns_tanhsq * dcovel_mag__dcovel_y
-        #         dthrust_acc_mag__dcovel_x   = (thrust_acc_max - thrust_acc_min) * dheaviside_approx__dcovel_x
-        #         dthrust_acc_mag__dcovel_y   = (thrust_acc_max - thrust_acc_min) * dheaviside_approx__dcovel_y
-
-        #         # Row 3
-        #         #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
-        #         ddstatedtime__dstate[2,6] = dthrust_acc_mag__dcovel_x * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
-        #         ddstatedtime__dstate[2,7] = dthrust_acc_mag__dcovel_y * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_y
-
-        #         # Row 4
-        #         #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
-        #         ddstatedtime__dstate[3,6] = dthrust_acc_mag__dcovel_x * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_x
-        #         ddstatedtime__dstate[3,7] = dthrust_acc_mag__dcovel_y * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
-
-        # else: # assume energy
-
-        #     # if use_thrust_limits:
-        #     #     ...
-        #     # elif use_thrust_acc_limits:
-
-        #     #     if k_heaviside == np.float64(0.0e+0):
-        #     #         # No thrust-acc constraint smoothing
-        #     #         # thrust_acc_mag = covel_mag
-        #     #         # thrust_acc_mag = min( thrust_acc_mag, thrust_acc_max ) # max thrust-acc constraint
-        #     #         # thrust_acc_mag = max( thrust_acc_mag, thrust_acc_min ) # min thrust-acc constraint
-        #     #         # thrust_acc_x_dir = covel_x / covel_mag
-        #     #         # thrust_acc_y_dir = covel_y / covel_mag
-        #     #         # thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
-        #     #         # thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
-        #     #         ...
-        #     #     else:
-        #     #         # Thrust-acc constraint smoothing
-                    
-        #     #         # Common terms
-        #     #         dcovel_mag__dcovel_x = covel_x / covel_mag
-        #     #         dcovel_mag__dcovel_y = covel_y / covel_mag
-
-        #     #         thrust_acc_mag = covel_mag
-        #     #         thrust_acc_mag = smin( thrust_acc_mag, thrust_acc_max, k_steepness ) # max thrust-acc constraint
-        #     #         thrust_acc_mag = smax( thrust_acc_mag, thrust_acc_min, k_steepness ) # min thrust-acc constraint
-
-        #     #         dthrust_acc_mag__dcovel_x = dsmax__dval1( smin(covel_mag, thrust_acc_max, k_steepness), thrust_acc_min, k_steepness ) * dsmin__dval1(covel_mag, thrust_acc_max, k_steepness) * dcovel_mag__dcovel_x
-        #     #         dthrust_acc_mag__dcovel_y = dsmax__dval1( smin(covel_mag, thrust_acc_max, k_steepness), thrust_acc_min, k_steepness ) * dsmin__dval1(covel_mag, thrust_acc_max, k_steepness) * dcovel_mag__dcovel_y
-
-        #     #         thrust_acc_x_dir = covel_x / covel_mag
-        #     #         thrust_acc_y_dir = covel_y / covel_mag
-
-        #     #         dthrust_acc_x_dir__dcovel_x = np.float64(1.0) / covel_mag - covel_x * (np.float64(1.0) / covel_mag**2) * dcovel_mag__dcovel_x
-        #     #         dthrust_acc_x_dir__dcovel_y =                             - covel_x * (np.float64(1.0) / covel_mag**2) * dcovel_mag__dcovel_y
-        #     #         dthrust_acc_y_dir__dcovel_y = np.float64(1.0) / covel_mag - covel_y * (np.float64(1.0) / covel_mag**2) * dcovel_mag__dcovel_y
-        #     #         dthrust_acc_y_dir__dcovel_x =                             - covel_y * (np.float64(1.0) / covel_mag**2) * dcovel_mag__dcovel_x
-
-        #     #         # Row 3
-        #     #         #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
-        #     #         ddstatedtime__dstate[2,6] = dthrust_acc_mag__dcovel_x * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
-        #     #         ddstatedtime__dstate[2,7] = dthrust_acc_mag__dcovel_y * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_y
-
-        #     #         # Row 4
-        #     #         #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
-        #     #         ddstatedtime__dstate[3,6] = dthrust_acc_mag__dcovel_x * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_x
-        #     #         ddstatedtime__dstate[3,7] = dthrust_acc_mag__dcovel_y * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
-
-        #     # else:
-
-        #     #     # Row 3
-        #     #     #   d(dvel_x/dtime)/dcovel_x
-        #     #     ddstatedtime__dstate[2,6] = np.float64(+1.0)
-
-        #     #     # Row 4
-        #     #     #   d(dvel_y/dtime)/dcovel_y
-        #     #     ddstatedtime__dstate[3,7] = np.float64(+1.0)
-    
-        # # Row 7
-        # #   d(dcovel_x_dtime)/dcopos_x
-        # ddstatedtime__dstate[6,4] = np.float64(-1.0)
-
-        # # Row 8
-        # #   d(dcovel_y__dttime)/dcopos_y
-        # ddstatedtime__dstate[7,5] = np.float64(-1.0)
-
-        # # Combine: time-derivative of state-transition matrix
-        # dscstm__dtime = np.dot(ddstatedtime__dstate, scstm)
 
     # Pack up: time-derivative of state or state+stm
     if include_scstm:
