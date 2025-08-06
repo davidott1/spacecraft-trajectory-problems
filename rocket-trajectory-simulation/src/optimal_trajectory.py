@@ -934,9 +934,6 @@ def optimal_trajectory_solve(
         results_k_idx = {}
 
         # Loop
-        # k_idxinitguess_to_idxfinsoln = np.logspace( np.log(k_idxinitguess), np.log(k_idxfinsoln), k_idxdivs )
-        # with tqdm(enumerate(k_idxinitguess_to_idxfinsoln), desc="Processing", leave=False) as tqdm_k_values:
-        #     for idx, k_idx in tqdm_k_values:
         k_idxinitguess_to_idxfinsoln = np.logspace(np.log(k_idxinitguess), np.log(k_idxfinsoln), k_idxdivs)
         for idx, k_idx in tqdm(enumerate(k_idxinitguess_to_idxfinsoln), desc="Processing", leave=False, total=len(k_idxinitguess_to_idxfinsoln)):
             root_func = \
@@ -1092,7 +1089,7 @@ def optimal_trajectory_solve(
 
         # Loop through k's
         k_idxinitguess_to_idxfinsoln = np.logspace( np.log(k_idxinitguess), np.log(k_idxfinsoln), k_idxdivs )
-        for idx, k_idx in enumerate(k_idxinitguess_to_idxfinsoln):
+        for idx, k_idx in tqdm(enumerate(k_idxinitguess_to_idxfinsoln), desc="Processing", leave=False, total=len(k_idxinitguess_to_idxfinsoln)):
         
             root_func = \
                 lambda decisionstate: \
@@ -1154,11 +1151,10 @@ def optimal_trajectory_solve(
                 results_k_idx[k_idx] = soln_ivp
                 error_mag = np.linalg.norm(soln_root.fun)
                 if idx==0:
-                    print(f"       {'Step':>5s} {'k':>14s} {'Error Mag':>14s}")
-                print(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
+                    tqdm.write(f"       {'Step':>5s} {'k':>14s} {'Error Mag':>14s}")
+                tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
 
         # Final solution: no thrust or thrust-acc smoothing
-        # xxx
         print()
         print("Final Solution")
         print("\nRoot-Solve Results")
@@ -1691,13 +1687,9 @@ def process_input(
     thrust_min            = parameters_with_units.get(           'thrust_min', 0.0e+0             * u.kg*u.m/u.s**2).to_value(u.kg*u.m/u.s**2) # type: ignore
     thrust_max            = parameters_with_units.get(           'thrust_max', 1.0e+0             * u.kg*u.m/u.s**2).to_value(u.kg*u.m/u.s**2) # type: ignore
     k_idxinitguess        = parameters_with_units.get(       'k_idxinitguess', None                                )
-    k_idxfinsoln          = parameters_with_units.get(         'k_idxfinsoln', 1.0e+1             * u.one          ).to_value(u.one          ) # type: ignore
+    k_idxfinsoln          = parameters_with_units.get(         'k_idxfinsoln', None                                )
     k_idxdivs             = parameters_with_units.get(            'k_idxdivs', 10                 * u.one          ).to_value(u.one          ) # type: ignore
     init_guess_steps      = parameters_with_units.get(     'init_guess_steps', 3000               * u.one          ).to_value(u.one          ) # type: ignore
-
-    # Enforce types
-    k_idxdivs        = int(k_idxdivs)
-    init_guess_steps = int(init_guess_steps)
 
     # Create boundary conditions
     boundary_condition_pos_vec_o = pos_vec_o
@@ -1706,13 +1698,19 @@ def process_input(
     boundary_condition_vel_vec_f = vel_vec_f
 
     # Validate input
+    print("\nValidate Input")
+
+    # Enforce types
+    k_idxdivs        = int(k_idxdivs)
+    init_guess_steps = int(init_guess_steps)
 
     # Check if both thrust and thrust-acc constraints are set
+    print("  Check thrust and thrust-acc constraints")
     if use_thrust_acc_limits and use_thrust_limits:
         use_thrust_acc_limits = True
         use_thrust_limits     = False
-        print("\nWarning: Cannot use both thrust acceleration limits and thrust limits."
-              + f" Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}.")
+        print("\n    Warning: Cannot use both thrust acceleration limits and thrust limits."
+              + f"   Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}.")
     
     # Check if min-type fuel is set but no thrust or thrust-acc constraint
     if (
@@ -1721,21 +1719,28 @@ def process_input(
         ):
         use_thrust_acc_limits = True
         use_thrust_limits     = False
-        print("\nWarning: Min type is fuel, but no thrust or thrust-acc constraint is set."
-              + f" Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}.")
+        print("\n    Warning: Min type is fuel, but no thrust or thrust-acc constraint is set."
+              + f"   Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}.")
 
     # Determine the first k value based on thrust or thrust-acc constraints if not an input
+    print("  Compute k-continuation parameters")
     if k_idxinitguess is None:
         if use_thrust_limits:
             k_idxinitguess = np.float64(4.0 / (thrust_max - thrust_min + 1.0e-9))
         elif use_thrust_acc_limits:
             k_idxinitguess = np.float64(4.0 / (thrust_acc_max - thrust_acc_min + 1.0e-9))
         else:
-            k_idxinitguess = np.float64(0.0e+0)
+            k_idxinitguess = np.float64(1.0e+0)
+        print(f"    Initial k-steepness : {k_idxinitguess:<{max_value_length}.6e}")
     else:
-        k_idxinitguess = np.float64(k_idxinitguess.to_value(u.one)) # type: ignore
+        k_idxinitguess = np.float64(k_idxinitguess) # type: ignore
 
-    # means no thrust or thrust-acc smoothing ??? xxx
+    # Determine last k value
+    if k_idxfinsoln is None:
+        k_idxfinsoln = np.float64(10.0 * k_idxinitguess)
+        print(f"    Final k-steepness   : {k_idxfinsoln:<{max_value_length}.6e}")
+    else:
+        k_idxfinsoln = np.float64(k_idxfinsoln) # type: ignore
 
     # Pack up variable input
     return (
