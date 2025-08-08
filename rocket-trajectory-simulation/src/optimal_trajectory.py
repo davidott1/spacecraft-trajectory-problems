@@ -1032,14 +1032,6 @@ def optimal_trajectory_solve(
                     tqdm.write(f"       {'Step':>5s} {'k':>14s} {'Error Mag':>14s}")
                 tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
 
-        # # Final solution: no thrust or thrust-acc smoothing
-        # print()
-        # print("Final Solution")
-        # print("\nRoot-Solve Results")
-        # print(soln_root)
-        # results_finalsoln = soln_ivp
-        # state_f_finalsoln = results_finalsoln.y[0:4, -1]
-
         # Final solution: no thrust or thrust-acc smoothing
         root_func = \
             lambda decisionstate: \
@@ -1228,7 +1220,7 @@ def plot_final_results(
     ax_height     = 0.75
     ax_width      = ax_height * (fig_h / fig_w)
     square_coords = [0.07, 0.1, ax_width, ax_height]
-    ax1           = fig.add_axes(square_coords) # type: ignore
+    ax1_pos       = fig.add_axes(square_coords) # type: ignore
     def _plot_thrust_on_position_space(
             ax                    : maxes.Axes                     ,
             pos_x_t               : np.ndarray                     ,
@@ -1296,7 +1288,7 @@ def plot_final_results(
                 linewidth = 2.0                       ,
             )
     _plot_thrust_on_position_space(
-        ax                    = ax1                  ,
+        ax                    = ax1_pos              ,
         pos_x_t               = pos_x_t              ,
         pos_y_t               = pos_y_t              ,
         thrust_acc_vec_t      = thrust_acc_vec_t     ,
@@ -1305,16 +1297,16 @@ def plot_final_results(
         thrust_acc_min        = thrust_acc_min       ,
         thrust_acc_max        = thrust_acc_max       ,
     )
-    ax1.plot(boundary_condition_pos_vec_o[ 0], boundary_condition_pos_vec_o[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=20, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
-    ax1.plot(boundary_condition_pos_vec_f[ 0], boundary_condition_pos_vec_f[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=16, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
-    ax1.plot(                     pos_x_t[ 0],                      pos_y_t[ 0], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='Start'      )
-    ax1.plot(                     pos_x_t[-1],                      pos_y_t[-1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='End'        )
-    ax1.plot(                     pos_x_t    ,                      pos_y_t    , color=mcolors.CSS4_COLORS['black'], linewidth=2.0,                                                                                                                                          label='Trajectory' )
-    ax1.set_xlabel('Position X [m]')
-    ax1.set_ylabel('Position Y [m]')
-    ax1.grid(True)
-    ax1.axis('equal')
-    ax1.legend(loc='upper left')
+    ax1_pos.plot(boundary_condition_pos_vec_o[ 0], boundary_condition_pos_vec_o[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=20, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
+    ax1_pos.plot(boundary_condition_pos_vec_f[ 0], boundary_condition_pos_vec_f[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=16, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
+    ax1_pos.plot(                     pos_x_t[ 0],                      pos_y_t[ 0], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='Start'      )
+    ax1_pos.plot(                     pos_x_t[-1],                      pos_y_t[-1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='End'        )
+    ax1_pos.plot(                     pos_x_t    ,                      pos_y_t    , color=mcolors.CSS4_COLORS['black'], linewidth=2.0,                                                                                                                                          label='Trajectory' )
+    ax1_pos.set_xlabel('Position X [m]')
+    ax1_pos.set_ylabel('Position Y [m]')
+    ax1_pos.grid(True)
+    ax1_pos.axis('equal')
+    ax1_pos.legend(loc='upper left')
 
     # 2D velocity path: vel-x vs. vel-y
     ax1_vel = fig.add_axes(square_coords) # type: ignore
@@ -1407,25 +1399,21 @@ def plot_final_results(
     ax1_vel.legend(loc='upper left')
     
     # Create a button to swap pos and vel plots
-    ax_button = fig.add_axes([0.015, 0.02, 0.04, 0.04]) # [left, bottom, width, height] # type: ignore
-    button = Button(ax_button, "Swap", color=mcolors.CSS4_COLORS['darkgrey'], hovercolor='0.975')
-    def _swap_plots(event):
-        """
-        Toggles visibility of the position and velocity plots.
-        """
+    ax_button_posxposy_vs_velxvely = fig.add_axes([0.025, 0.026, 0.03, 0.05]) # [left, bottom, width, height] # type: ignore
+    button_posxposy_vs_velxvely = Button(ax_button_posxposy_vs_velxvely, "Swap", color=mcolors.CSS4_COLORS['darkgrey'], hovercolor='0.975')
+    def _swap_posxposy_vs_velxvely(event):
         # Switch visibility of the position and velocity axes
-        is_pos_visible = ax1.get_visible()
-        if ax1.get_visible():
-            ax1.set_visible(False)
+        if ax1_pos.get_visible():
+            ax1_pos.set_visible(False)
             ax1_vel.set_visible(True)
         else:
-            ax1.set_visible(True)
+            ax1_pos.set_visible(True)
             ax1_vel.set_visible(False)
 
         # Redraw the canvas to show the changes
         fig.canvas.draw_idle()
-    button.on_clicked(_swap_plots)
-    fig._button = button # type: ignore
+    button_posxposy_vs_velxvely.on_clicked(_swap_posxposy_vs_velxvely)
+    fig._button_posxposy_vs_velxvely = button_posxposy_vs_velxvely # type: ignore
 
     # Optimal Control Objective vs. Time
     ax2 = fig.add_subplot(gs[0,1])
@@ -1484,52 +1472,136 @@ def plot_final_results(
     ax4.set_ylabel('Mass\n[kg]')
 
     # Position vs. Time
-    ax5 = fig.add_subplot(gs[3,1])
-    ax5.plot(time_t[ 0], boundary_condition_pos_vec_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax5.plot(time_t[-1], boundary_condition_pos_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax5.plot(time_t    ,                      pos_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
-    ax5.plot(time_t[ 0],                      pos_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax5.plot(time_t[-1],                      pos_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax5.plot(time_t[ 0], boundary_condition_pos_vec_o[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax5.plot(time_t[-1], boundary_condition_pos_vec_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax5.plot(time_t    ,                      pos_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
-    ax5.plot(time_t[ 0],                      pos_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax5.plot(time_t[-1],                      pos_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax5.set_xticklabels([])
-    ax5.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
-    ax5.set_ylabel('Position\n[m]')
-    ax5.legend()
-    ax5.grid(True)
+    ax5_timepos = fig.add_subplot(gs[3,1])
+    ax5_timepos.plot(time_t[ 0], boundary_condition_pos_vec_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5_timepos.plot(time_t[-1], boundary_condition_pos_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5_timepos.plot(time_t    ,                      pos_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
+    ax5_timepos.plot(time_t[ 0],                      pos_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5_timepos.plot(time_t[-1],                      pos_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5_timepos.plot(time_t[ 0], boundary_condition_pos_vec_o[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5_timepos.plot(time_t[-1], boundary_condition_pos_vec_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5_timepos.plot(time_t    ,                      pos_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
+    ax5_timepos.plot(time_t[ 0],                      pos_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5_timepos.plot(time_t[-1],                      pos_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5_timepos.set_xticklabels([])
+    ax5_timepos.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
+    ax5_timepos.set_ylabel('Position\n[m]')
+    ax5_timepos.legend()
+    ax5_timepos.grid(True)
     min_ylim = min(min(pos_x_t), min(pos_y_t))
     max_ylim = max(max(pos_x_t), max(pos_y_t))
-    ax5.set_ylim(
+    ax5_timepos.set_ylim(
         min_ylim - (max_ylim - min_ylim) * 0.2,
         max_ylim + (max_ylim - min_ylim) * 0.2,
     )
 
-    # Velocity vs. Time
-    ax6 = fig.add_subplot(gs[4,1])
-    ax6.plot(time_t[ 0], boundary_condition_vel_vec_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax6.plot(time_t[-1], boundary_condition_vel_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax6.plot(time_t    ,                      vel_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
-    ax6.plot(time_t[ 0],                      vel_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax6.plot(time_t[-1],                      vel_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax6.plot(time_t[ 0], boundary_condition_vel_vec_o[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax6.plot(time_t[-1], boundary_condition_vel_vec_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax6.plot(time_t    ,                      vel_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
-    ax6.plot(time_t[ 0],                      vel_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax6.plot(time_t[-1],                      vel_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax6.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
-    ax6.set_xlabel('Time [s]')
-    ax6.set_ylabel('Velocity\n[m/s]')
-    ax6.legend()
-    ax6.grid(True)
-    min_ylim = min(min(vel_x_t), min(vel_y_t))
-    max_ylim = max(max(vel_x_t), max(vel_y_t))
-    ax6.set_ylim(
+    # Co-Position vs. Time
+    ax5_timecopos = fig.add_subplot(gs[3,1])
+    ax5_timecopos.set_visible(False)
+    # ax5_timecopos.plot(time_t[ 0], boundary_condition_pos_vec_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    # ax5_timecopos.plot(time_t[-1], boundary_condition_pos_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5_timecopos.plot(time_t    ,                    copos_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
+    ax5_timecopos.plot(time_t[ 0],                    copos_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5_timecopos.plot(time_t[-1],                    copos_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    # ax5_timecopos.plot(time_t[ 0], boundary_condition_pos_vec_o[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    # ax5_timecopos.plot(time_t[-1], boundary_condition_pos_vec_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5_timecopos.plot(time_t    ,                    copos_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
+    ax5_timecopos.plot(time_t[ 0],                    copos_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5_timecopos.plot(time_t[-1],                    copos_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5_timecopos.set_xticklabels([])
+    ax5_timecopos.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
+    ax5_timecopos.set_ylabel('Co-Position')
+    ax5_timecopos.legend()
+    ax5_timecopos.grid(True)
+    min_ylim = min(min(copos_x_t), min(copos_y_t))
+    max_ylim = max(max(copos_x_t), max(copos_y_t))
+    ax5_timecopos.set_ylim(
         min_ylim - (max_ylim - min_ylim) * 0.2,
         max_ylim + (max_ylim - min_ylim) * 0.2,
     )
+
+    # Create a button to swap pos and copos
+    ax_button_timepos_vs_timecopos = fig.add_axes([0.960, 0.295, 0.03, 0.05]) # [left, bottom, width, height] # type: ignore
+    button_timepos_vs_timecopos = Button(ax_button_timepos_vs_timecopos, "Swap", color=mcolors.CSS4_COLORS['darkgrey'], hovercolor='0.975')
+    def _swap_timepos_vs_timecopos(event):
+        # Switch visibility of the position and velocity axes
+        if ax5_timepos.get_visible():
+            ax5_timepos.set_visible(False)
+            ax5_timecopos.set_visible(True)
+        else:
+            ax5_timepos.set_visible(True)
+            ax5_timecopos.set_visible(False)
+
+        # Redraw the canvas to show the changes
+        fig.canvas.draw_idle()
+    button_timepos_vs_timecopos.on_clicked(_swap_timepos_vs_timecopos)
+    fig._button_timepos_vs_timecopos = button_timepos_vs_timecopos # type: ignore
+
+    # Velocity vs. Time
+    ax6_timevel = fig.add_subplot(gs[4,1])
+    ax6_timevel.plot(time_t[ 0], boundary_condition_vel_vec_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6_timevel.plot(time_t[-1], boundary_condition_vel_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6_timevel.plot(time_t    ,                      vel_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
+    ax6_timevel.plot(time_t[ 0],                      vel_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6_timevel.plot(time_t[-1],                      vel_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6_timevel.plot(time_t[ 0], boundary_condition_vel_vec_o[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6_timevel.plot(time_t[-1], boundary_condition_vel_vec_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6_timevel.plot(time_t    ,                      vel_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
+    ax6_timevel.plot(time_t[ 0],                      vel_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6_timevel.plot(time_t[-1],                      vel_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6_timevel.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
+    ax6_timevel.set_xlabel('Time [s]')
+    ax6_timevel.set_ylabel('Velocity\n[m/s]')
+    ax6_timevel.legend()
+    ax6_timevel.grid(True)
+    min_ylim = min(min(vel_x_t), min(vel_y_t))
+    max_ylim = max(max(vel_x_t), max(vel_y_t))
+    ax6_timevel.set_ylim(
+        min_ylim - (max_ylim - min_ylim) * 0.2,
+        max_ylim + (max_ylim - min_ylim) * 0.2,
+    )
+
+    # Co-Velocity vs. Time
+    ax6_timecovel = fig.add_subplot(gs[4,1])
+    ax6_timecovel.set_visible(False)
+    # ax6_timecovel.plot(time_t[ 0], boundary_condition_pos_vec_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    # ax6_timecovel.plot(time_t[-1], boundary_condition_pos_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6_timecovel.plot(time_t    ,                    covel_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
+    ax6_timecovel.plot(time_t[ 0],                    covel_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6_timecovel.plot(time_t[-1],                    covel_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    # ax6_timecovel.plot(time_t[ 0], boundary_condition_pos_vec_o[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    # ax6_timecovel.plot(time_t[-1], boundary_condition_pos_vec_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6_timecovel.plot(time_t    ,                    covel_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
+    ax6_timecovel.plot(time_t[ 0],                    covel_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6_timecovel.plot(time_t[-1],                    covel_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6_timecovel.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
+    ax6_timecovel.set_xlabel('Time [s]')
+    ax6_timecovel.set_ylabel('Co-Velocity')
+    ax6_timecovel.legend()
+    ax6_timecovel.grid(True)
+    min_ylim = min(min(covel_x_t), min(covel_y_t))
+    max_ylim = max(max(covel_x_t), max(covel_y_t))
+    ax6_timecovel.set_ylim(
+        min_ylim - (max_ylim - min_ylim) * 0.2,
+        max_ylim + (max_ylim - min_ylim) * 0.2,
+    )
+
+    # Create a button to swap vel and covel
+    ax_button_timevel_vs_timecovel = fig.add_axes([0.960, 0.145, 0.03, 0.05]) # [left, bottom, width, height] # type: ignore
+    button_timevel_vs_timecovel = Button(ax_button_timevel_vs_timecovel, "Swap", color=mcolors.CSS4_COLORS['darkgrey'], hovercolor='0.975')
+    def _swap_timevel_vs_timecovel(event):
+        # Switch visibility of the position and velocity axes
+        if ax6_timevel.get_visible():
+            ax6_timevel.set_visible(False)
+            ax6_timecovel.set_visible(True)
+        else:
+            ax6_timevel.set_visible(True)
+            ax6_timecovel.set_visible(False)
+
+        # Redraw the canvas to show the changes
+        fig.canvas.draw_idle()
+    button_timevel_vs_timecovel.on_clicked(_swap_timevel_vs_timecovel)
+    fig._button_timevel_vs_timecovel = button_timevel_vs_timecovel # type: ignore
 
     # Configure figure
     fig.subplots_adjust(
