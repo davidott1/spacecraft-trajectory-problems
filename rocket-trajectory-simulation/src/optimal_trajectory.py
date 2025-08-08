@@ -1498,6 +1498,7 @@ def plot_final_results(
     # Co-Position vs. Time
     ax5_timecopos = fig.add_subplot(gs[3,1])
     ax5_timecopos.set_visible(False)
+    units_label = '[1/s]' if min_type=='fuel' else '[m/s$^3$]'
     # ax5_timecopos.plot(time_t[ 0], boundary_condition_pos_vec_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
     # ax5_timecopos.plot(time_t[-1], boundary_condition_pos_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
     ax5_timecopos.plot(time_t    ,                    copos_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
@@ -1510,7 +1511,7 @@ def plot_final_results(
     ax5_timecopos.plot(time_t[-1],                    copos_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
     ax5_timecopos.set_xticklabels([])
     ax5_timecopos.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
-    ax5_timecopos.set_ylabel('Co-Position')
+    ax5_timecopos.set_ylabel('Co-Position\n'+units_label)
     ax5_timecopos.legend()
     ax5_timecopos.grid(True)
     min_ylim = min(min(copos_x_t), min(copos_y_t))
@@ -1564,6 +1565,7 @@ def plot_final_results(
     # Co-Velocity vs. Time
     ax6_timecovel = fig.add_subplot(gs[4,1])
     ax6_timecovel.set_visible(False)
+    units_label = '[1]' if min_type=='fuel' else '[m/s$^2$]'
     # ax6_timecovel.plot(time_t[ 0], boundary_condition_pos_vec_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
     # ax6_timecovel.plot(time_t[-1], boundary_condition_pos_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
     ax6_timecovel.plot(time_t    ,                    covel_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
@@ -1576,7 +1578,7 @@ def plot_final_results(
     ax6_timecovel.plot(time_t[-1],                    covel_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
     ax6_timecovel.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
     ax6_timecovel.set_xlabel('Time [s]')
-    ax6_timecovel.set_ylabel('Co-Velocity')
+    ax6_timecovel.set_ylabel('Co-Velocity\n'+units_label)
     ax6_timecovel.legend()
     ax6_timecovel.grid(True)
     min_ylim = min(min(covel_x_t), min(covel_y_t))
