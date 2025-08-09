@@ -50,15 +50,20 @@ def dsmin__dval2(val1, val2, k):
     """
     Calculates the partial derivative of smin with respect to val2.
     """
-    return dsmin_dval1(val2, val1, k)
+    return dsmin__dval1(val2, val1, k)
 
-def bounded_smooth_func(funcval, min_bound, max_bound, k):
+def             bounded_smooth_func(funcval, min_bound, max_bound, k):
     """
     General function that is smoothly bounded between a min and max. 
     """
     max_bound_funcval     = smin(          funcval, max_bound, k) # max bound
     min_max_bound_funcval = smax(max_bound_funcval, min_bound, k) # min bound
     return min_max_bound_funcval
+def derivative__bounded_smooth_func(funcval, min_bound, max_bound, k):
+    """
+    Derivative of a general function that is smoothly bounded between a min and max. 
+    """
+    return dsmax__dval1( smin(funcval, max_bound, k), min_bound, k ) * dsmin__dval1(funcval, max_bound, k)
 def             bounded_nonsmooth_func(funcval, min_bound, max_bound):
     """
     General function that is nonsmoothly bounded between a min and max. 
@@ -66,12 +71,12 @@ def             bounded_nonsmooth_func(funcval, min_bound, max_bound):
     max_bound_funcval     = min(          funcval, max_bound) # max bound
     min_max_bound_funcval = max(max_bound_funcval, min_bound) # min bound
     return min_max_bound_funcval
-def derivative__bounded_nonsmooth_func(funcval, dfuncval__dx, min_bound, max_bound):
+def derivative__bounded_nonsmooth_func(funcval, min_bound, max_bound):
     """
     Derivative of a general function that is nonsmoothly bounded between a min and max. 
     """
     if min_bound < funcval < max_bound:
-        dbounded_nonsmooth_func__dfuncval = dfuncval__dx
+        dbounded_nonsmooth_func__dfuncval = 1.0
     elif funcval < min_bound or max_bound < funcval:
         dbounded_nonsmooth_func__dfuncval = 0.0
     else: # funcval == min_bound or funcval == max_bound
@@ -80,7 +85,7 @@ def derivative__bounded_nonsmooth_func(funcval, dfuncval__dx, min_bound, max_bou
 
 
 # Free-body dynamics
-def freebodydynamics__indirect(
+def free_body_dynamics__indirect(
         time                     : np.float64                     ,
         state_costate_scstm      : np.ndarray                     ,
         include_scstm            : bool       = False             ,
@@ -207,6 +212,7 @@ def freebodydynamics__indirect(
     if min_type == 'fuel':
         epsilon        = np.float64(1.0e-6)
         covel_mag      = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
+        covel_mag_inv  = covel_mag**-1
         switching_func = covel_mag - np.float64(1.0)
         if use_thrust_limits:
             # thrust_mag       = np.float64(0.0e+0)
@@ -235,7 +241,8 @@ def freebodydynamics__indirect(
         thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
         thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
     else: # assume 'energy'
-        covel_mag = np.sqrt(covel_x**2 + covel_y**2)
+        covel_mag      = np.sqrt(covel_x**2 + covel_y**2)
+        covel_mag_inv  = covel_mag**-1
         thrust_acc_mag = covel_mag
         if use_thrust_limits:
             breakpoint()
@@ -391,26 +398,28 @@ def freebodydynamics__indirect(
             elif use_thrust_acc_limits:
 
                 # Common terms
-                thrust_acc_x_dir = covel_x / covel_mag
-                thrust_acc_y_dir = covel_y / covel_mag
+                thrust_acc_x_dir = covel_x * covel_mag_inv
+                thrust_acc_y_dir = covel_y * covel_mag_inv
 
-                dcovel_mag__dcovel_x = covel_x / covel_mag
-                dcovel_mag__dcovel_y = covel_y / covel_mag
+                dcovel_mag__dcovel_x = covel_x * covel_mag_inv
+                dcovel_mag__dcovel_y = covel_y * covel_mag_inv
                 
                 if use_thrust_acc_smoothing:
-
-                    dthrust_acc_mag__dcovel_x = dsmax__dval1( smin(covel_mag, thrust_acc_max, k_steepness), thrust_acc_min, k_steepness ) * dsmin__dval1(covel_mag, thrust_acc_max, k_steepness) * dcovel_mag__dcovel_x
-                    dthrust_acc_mag__dcovel_y = dsmax__dval1( smin(covel_mag, thrust_acc_max, k_steepness), thrust_acc_min, k_steepness ) * dsmin__dval1(covel_mag, thrust_acc_max, k_steepness) * dcovel_mag__dcovel_y
-
+                    dthrust_acc_mag__dcovel_mag = derivative__bounded_smooth_func(covel_mag, thrust_acc_min, thrust_acc_max, k_steepness)
                 else: # use_no_thrust_acc_smoothing
+                    dthrust_acc_mag__dcovel_mag = derivative__bounded_nonsmooth_func(covel_mag, thrust_acc_min, thrust_acc_max)
 
-                    dthrust_acc_mag__dcovel_x = derivative__bounded_nonsmooth_func(covel_mag, dcovel_mag__dcovel_x, thrust_acc_min, thrust_acc_max) #* dcovel_mag__dcovel_x
-                    dthrust_acc_mag__dcovel_y = derivative__bounded_nonsmooth_func(covel_mag, dcovel_mag__dcovel_y, thrust_acc_min, thrust_acc_max) #* dcovel_mag__dcovel_y
+                dthrust_acc_mag__dcovel_x = dthrust_acc_mag__dcovel_mag * dcovel_mag__dcovel_x
+                dthrust_acc_mag__dcovel_y = dthrust_acc_mag__dcovel_mag * dcovel_mag__dcovel_y
 
-                dthrust_acc_x_dir__dcovel_x = np.float64(1.0) / covel_mag - covel_x * (np.float64(1.0) / covel_mag**2) * dcovel_mag__dcovel_x
-                dthrust_acc_x_dir__dcovel_y =                             - covel_x * (np.float64(1.0) / covel_mag**2) * dcovel_mag__dcovel_y
-                dthrust_acc_y_dir__dcovel_y = np.float64(1.0) / covel_mag - covel_y * (np.float64(1.0) / covel_mag**2) * dcovel_mag__dcovel_y
-                dthrust_acc_y_dir__dcovel_x =                             - covel_y * (np.float64(1.0) / covel_mag**2) * dcovel_mag__dcovel_x
+                dcovel_mag_inv__dcovel_mag = -np.float64(1.0) / covel_mag**2
+                dcovel_x__covel_x          = np.float64(1.0)
+                dcovel_y__covel_y          = np.float64(1.0)
+
+                dthrust_acc_x_dir__dcovel_x = dcovel_x__covel_x * covel_mag_inv + covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
+                dthrust_acc_x_dir__dcovel_y =                                   + covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
+                dthrust_acc_y_dir__dcovel_y = dcovel_y__covel_y * covel_mag_inv + covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
+                dthrust_acc_y_dir__dcovel_x =                                   + covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
 
                 # Row 3
                 #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
@@ -582,7 +591,7 @@ def tpbvp_objective_and_jacobian(
     if min_type == 'fuel':
         solve_ivp_func = \
             lambda time, state_costate_scstm: \
-                freebodydynamics__indirect(
+                free_body_dynamics__indirect(
                     time                                               ,
                     state_costate_scstm                                ,
                     include_scstm            = include_scstm           ,
@@ -606,7 +615,7 @@ def tpbvp_objective_and_jacobian(
     else: # assume energy
         solve_ivp_func = \
             lambda time, state_costate_scstm: \
-                freebodydynamics__indirect(
+                free_body_dynamics__indirect(
                     time                                               ,
                     state_costate_scstm                                ,
                     include_scstm            = include_scstm           ,
@@ -802,7 +811,7 @@ def optimal_trajectory_solve(
             time_eval_points        = np.linspace(time_span[0], time_span[1], 201)
             solve_ivp_func = \
                 lambda time, state_costate_scstm: \
-                    freebodydynamics__indirect(
+                    free_body_dynamics__indirect(
                         time                                            ,
                         state_costate_scstm                             ,
                         include_scstm            = include_scstm        ,
@@ -870,7 +879,7 @@ def optimal_trajectory_solve(
     time_eval_points            = np.linspace(time_span[0], time_span[1], 401)
     solve_ivp_func = \
         lambda time, state_costate_scstm: \
-            freebodydynamics__indirect(
+            free_body_dynamics__indirect(
                 time                                            ,
                 state_costate_scstm                             ,
                 include_scstm            = False                ,
