@@ -40,15 +40,6 @@ def smin(val1, val2, k):
     slightly smaller than min(val1,val2), depending on k.
     """
     m = np.maximum(-k * val1, -k * val2)
-    # try:
-    #     xxx = (-1.0 / k) * (m + np.log(np.exp(-k * val1 - m) + np.exp(-k * val2 - m)))
-    # except:
-    #     breakpoint()
-
-    # # if k==0.0 or 
-    # #     breakpoint()
-    # print( k, m, val1, val2 )
-    if k == 0: breakpoint()
     return (-1.0 / k) * (m + np.log(np.exp(-k * val1 - m) + np.exp(-k * val2 - m)))
 def dsmin__dval1(val1, val2, k):
     """
@@ -218,7 +209,6 @@ def free_body_dynamics__indirect(
     # Control: thrust acceleration
     #   fuel   : thrust_acc_vec = -covel_vec / cvel_mag
     #   energy : thrust_acc_vec =  covel_vec
-    # breakpoint()
     if min_type == 'fuel':
         epsilon        = np.float64(1.0e-6)
         covel_mag      = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
@@ -412,7 +402,6 @@ def free_body_dynamics__indirect(
                 ddstatedtime__dstate[3,6] = dthrust_acc_mag__dcovel_x * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_x
                 ddstatedtime__dstate[3,7] = dthrust_acc_mag__dcovel_y * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
             elif use_thrust_acc_limits:
-
                 # Common terms
                 # thrust_acc_x_dir = covel_x * covel_mag_inv
                 # thrust_acc_y_dir = covel_y * covel_mag_inv
@@ -446,7 +435,6 @@ def free_body_dynamics__indirect(
                 #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
                 ddstatedtime__dstate[3,6] = dthrust_acc_mag__dcovel_x * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_x
                 ddstatedtime__dstate[3,7] = dthrust_acc_mag__dcovel_y * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
-
             else: # no_limits
 
                 # Row 3
@@ -789,12 +777,12 @@ def optimal_trajectory_solve(
         'xtol'    : 1e-8, # 1e-8
         'gtol'    : 1e-8, # 1e-8
     }
-
+    k_idxinitguess_to_idxfinsoln = np.logspace(np.log(k_idxinitguess), np.log(k_idxfinsoln), k_idxdivs)
+    
     # Loop
-    #     (Pdb) decision_state_min
-    # array([-1.92000000e-03,7.68000000e-03,6.40000000e-02,-9.60000000e-02])
-    k_idxinitguess_to_idxfinsoln = np.logspace(np.log(k_idxinitguess), np.log(k_idxfinsoln), k_idxdivs) # k_idxdivs
     for idx, k_idx in tqdm(enumerate(k_idxinitguess_to_idxfinsoln), desc="Processing", leave=False, total=len(k_idxinitguess_to_idxfinsoln)):
+        
+        # Define root function
         root_func = \
             lambda decision_state: \
                 tpbvp_objective_and_jacobian(
@@ -818,6 +806,7 @@ def optimal_trajectory_solve(
                     include_jacobian             = include_jacobian     ,
                 )
 
+        # Root solve
         soln_root = \
             root(
                 root_func                                 ,
@@ -827,9 +816,9 @@ def optimal_trajectory_solve(
                 jac                     = include_jacobian,
                 options                 = options_root    ,
             )
-        # if soln_root.success or True:
+        
+        # Compute progress
         decision_state_initguess = soln_root.x
-
         state_costate_o          = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decision_state_initguess])
         if use_thrust_limits:
             state_costate_mass_o = np.hstack([state_costate_o, mass_o])
@@ -866,13 +855,14 @@ def optimal_trajectory_solve(
             )
         results_k_idx[k_idx] = soln_ivp
         error_mag = np.linalg.norm(soln_root.fun)
-        if idx==0:
-            tqdm.write(f"       {'Step':>5s} {'k':>14s} {'Error-Mag':>14s}")
-        tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
-
-        # else:
-        #     print(f"Convergence Failed for k={k_idx:>14.6e}. Stopping.")
-        #     break
+        if min_type == 'energy' and not use_thrust_acc_limits and not use_thrust_limits:
+            if idx==0:
+                tqdm.write(f"       {'Step':>5s} {'Error-Mag':>14s}")
+            tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {error_mag:>14.6e}")
+        else:
+            if idx==0:
+                tqdm.write(f"       {'Step':>5s} {'k':>14s} {'Error-Mag':>14s}")
+            tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
 
     # Final solution: no thrust or thrust-acc smoothing
     root_func = \
@@ -1675,8 +1665,10 @@ def process_input(
     if use_thrust_acc_limits and use_thrust_limits:
         use_thrust_acc_limits = True
         use_thrust_limits     = False
-        print("    Warning: Cannot use both thrust acceleration limits and thrust limits."
-              + f" Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}.")
+        print(
+            "    Warning: Cannot use both thrust acceleration limits and thrust limits."
+            + f" Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}."
+        )
     
     # Check if min-type fuel is set but no thrust or thrust-acc constraint
     if (
@@ -1685,11 +1677,27 @@ def process_input(
         ):
         use_thrust_acc_limits = True
         use_thrust_limits     = False
-        print("\n    Warning: Min type is fuel, but no thrust or thrust-acc constraint is set."
-              + f"   Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}.")
+        print(
+            "    Warning: Min type is fuel, but no thrust or thrust-acc constraint is set."
+            + f"   Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}."
+        )
+
+    # Determine k values
+    print("  Compute k-continuation parameters for thrust smoothing")
+
+    # Check if k_idxdivs is valid
+    if min_type == 'energy' and not use_thrust_acc_limits and not use_thrust_limits:
+        if k_idxdivs != 1:
+            print(
+                f"    Warning: Thrust smoothing is not needed using a k-continuation method:"
+                + f" min_type is {min_type},"
+                + f" use_thrust_acc_limits is {use_thrust_acc_limits},"
+                + f" and use_thrust_limits is {use_thrust_limits}."
+                + f" \n             k_idxdivs = {k_idxdivs} is not valid. Setting k_idxdivs = 1."
+            )
+            k_idxdivs = 1 # k has no purpose, but the loop needs to run once
 
     # Determine the first k value based on thrust or thrust-acc constraints if not an input
-    print("  Compute k-continuation parameters")
     if k_idxinitguess is None:
         if min_type == 'fuel':
             k_idxinitguess = np.float64(4.0e+0)
