@@ -203,7 +203,7 @@ def free_body_dynamics__indirect(
     n_state_costate = 8
     state_costate   = state_costate_scstm[:n_state_costate]
     if include_scstm:
-        scstm = state_costate_scstm[n_state_costate:].reshape((n_state_costate, n_state_costate))
+        scstm = state_costate_scstm[n_state_costate:n_state_costate+n_state_costate**2].reshape((n_state_costate, n_state_costate))
 
     # Unpack: state
     pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y = state_costate
@@ -257,19 +257,12 @@ def free_body_dynamics__indirect(
         if use_thrust_limits:
             thrust_acc_min = thrust_min / mass
             thrust_acc_max = thrust_max / mass
-            if use_thrust_smoothing:
-                thrust_acc_mag = bounded_smooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max, k_steepness)
-            else: # use_no_thrust_smoothing
-                thrust_acc_mag = bounded_nonsmooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max)
-        elif use_thrust_acc_limits:
-            if use_thrust_acc_smoothing:
-                thrust_acc_mag = bounded_smooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max, k_steepness)
-            else: # use_no_thrust_acc_smoothing
-                thrust_acc_mag = bounded_nonsmooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max)
-        else: # no_limits
-            pass
-        thrust_acc_x_dir = covel_x / covel_mag
-        thrust_acc_y_dir = covel_y / covel_mag
+        if use_thrust_smoothing or use_thrust_acc_smoothing:
+            thrust_acc_mag = bounded_smooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max, k_steepness)
+        else: # no use_thrust_smoothing and no use_thrust_acc_smoothing
+            thrust_acc_mag = bounded_nonsmooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max)
+        thrust_acc_x_dir = covel_x * covel_mag_inv
+        thrust_acc_y_dir = covel_y * covel_mag_inv
         thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
         thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
 
@@ -385,31 +378,58 @@ def free_body_dynamics__indirect(
 
         else: # assume 'energy'
             if use_thrust_limits:
+                # if use_thrust_limits:
+                #     thrust_acc_min = thrust_min / mass
+                #     thrust_acc_max = thrust_max / mass
+                # if use_thrust_smoothing or use_thrust_acc_smoothing:
+                #     thrust_acc_mag = bounded_smooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max, k_steepness)
+                # else: # no use_thrust_smoothing and no use_thrust_acc_smoothing
+                #     thrust_acc_mag = bounded_nonsmooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max)
+
                 # thrust_acc_min = thrust_min / mass
                 # thrust_acc_max = thrust_max / mass
                 # if use_thrust_smoothing:
                 #     thrust_acc_mag = bounded_smooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max, k_steepness)
                 # else: # use_no_thrust_smoothing
                 #     thrust_acc_mag = bounded_nonsmooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max)
+
+                thrust_acc_min = thrust_min / mass
+                thrust_acc_max = thrust_max / mass
+
                 if use_thrust_smoothing:
-                    ...
-                    # # Row 3
-                    # #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
-                    # ddstatedtime__dstate[2,6] = dthrust_acc_mag__dcovel_x * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
-                    # ddstatedtime__dstate[2,7] = dthrust_acc_mag__dcovel_y * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_y
+                    dthrust_acc_mag__dcovel_mag = derivative__bounded_smooth_func(covel_mag, thrust_acc_min, thrust_acc_max, k_steepness)
+                else: # no use_thrust_smoothing
+                    dthrust_acc_mag__dcovel_mag = derivative__bounded_nonsmooth_func(covel_mag, thrust_acc_min, thrust_acc_max)
 
-                    # # Row 4
-                    # #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
-                    # ddstatedtime__dstate[3,6] = dthrust_acc_mag__dcovel_x * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_x
-                    # ddstatedtime__dstate[3,7] = dthrust_acc_mag__dcovel_y * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
+                dcovel_mag__dcovel_x = covel_x * covel_mag_inv
+                dcovel_mag__dcovel_y = covel_y * covel_mag_inv
 
-                else: # use_no_thrust_smoothing
-                    ...
+                dthrust_acc_mag__dcovel_x = dthrust_acc_mag__dcovel_mag * dcovel_mag__dcovel_x
+                dthrust_acc_mag__dcovel_y = dthrust_acc_mag__dcovel_mag * dcovel_mag__dcovel_y
+
+                dcovel_x__covel_x          = np.float64(1.0)
+                dcovel_y__covel_y          = np.float64(1.0)
+                dcovel_mag_inv__dcovel_mag = -np.float64(1.0) / covel_mag**2
+
+                dthrust_acc_x_dir__dcovel_x = dcovel_x__covel_x * covel_mag_inv + covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
+                dthrust_acc_x_dir__dcovel_y =                                   + covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
+                dthrust_acc_y_dir__dcovel_y = dcovel_y__covel_y * covel_mag_inv + covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
+                dthrust_acc_y_dir__dcovel_x =                                   + covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
+
+                # Row 3
+                #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
+                ddstatedtime__dstate[2,6] = dthrust_acc_mag__dcovel_x * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
+                ddstatedtime__dstate[2,7] = dthrust_acc_mag__dcovel_y * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_y
+
+                # Row 4
+                #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
+                ddstatedtime__dstate[3,6] = dthrust_acc_mag__dcovel_x * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_x
+                ddstatedtime__dstate[3,7] = dthrust_acc_mag__dcovel_y * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
             elif use_thrust_acc_limits:
 
                 # Common terms
-                thrust_acc_x_dir = covel_x * covel_mag_inv
-                thrust_acc_y_dir = covel_y * covel_mag_inv
+                # thrust_acc_x_dir = covel_x * covel_mag_inv
+                # thrust_acc_y_dir = covel_y * covel_mag_inv
 
                 dcovel_mag__dcovel_x = covel_x * covel_mag_inv
                 dcovel_mag__dcovel_y = covel_y * covel_mag_inv
@@ -422,9 +442,9 @@ def free_body_dynamics__indirect(
                 dthrust_acc_mag__dcovel_x = dthrust_acc_mag__dcovel_mag * dcovel_mag__dcovel_x
                 dthrust_acc_mag__dcovel_y = dthrust_acc_mag__dcovel_mag * dcovel_mag__dcovel_y
 
-                dcovel_mag_inv__dcovel_mag = -np.float64(1.0) / covel_mag**2
                 dcovel_x__covel_x          = np.float64(1.0)
                 dcovel_y__covel_y          = np.float64(1.0)
+                dcovel_mag_inv__dcovel_mag = -np.float64(1.0) / covel_mag**2
 
                 dthrust_acc_x_dir__dcovel_x = dcovel_x__covel_x * covel_mag_inv + covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
                 dthrust_acc_x_dir__dcovel_y =                                   + covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
@@ -577,7 +597,7 @@ def tpbvp_objective_and_jacobian(
         boundary_condition_vel_vec_f : np.ndarray                     ,
         min_type                     : str        = 'energy'          ,
         mass_o                       : np.float64 = np.float64(1.0e+3),
-        use_thrust_acc_limits        : bool       = True              ,
+        use_thrust_acc_limits        : bool       = False             ,
         use_thrust_acc_smoothing     : bool       = False             ,
         thrust_acc_min               : np.float64 = np.float64(0.0e+0),
         thrust_acc_max               : np.float64 = np.float64(1.0e+1),
@@ -637,7 +657,7 @@ def tpbvp_objective_and_jacobian(
     state_costate_scstm_f = soln.sol(time_span[1])
     state_costate_f       = state_costate_scstm_f[:8]
     if include_jacobian:
-        stm_of = state_costate_scstm_f[8:].reshape((8,8))
+        stm_of = state_costate_scstm_f[8:8+8**2].reshape((8,8))
     
     # Calculate the error vector and error vector Jacobian
     #   jacobian = d(state_final) / d(costate_initial)
@@ -776,9 +796,9 @@ def optimal_trajectory_solve(
 
     # Loop initialization
     results_k_idx    = {}
-    include_jacobian = False
-    options          = {
-        'maxiter' : 100 * len(decision_state), # 100 * n
+    include_jacobian = True # temp
+    options_root     = {
+        'maxiter' : 100 * len(decision_state_initguess), # 100 * n
         'ftol'    : 1e-8, # 1e-8
         'xtol'    : 1e-8, # 1e-8
         'gtol'    : 1e-8, # 1e-8
@@ -819,10 +839,11 @@ def optimal_trajectory_solve(
                 method                  = 'lm'            ,
                 tol                     = 1e-11           ,
                 jac                     = include_jacobian,
-                options                 = options         ,
+                options                 = options_root    ,
             )
         # if soln_root.success or True:
         decision_state_initguess = soln_root.x
+
         state_costate_o          = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decision_state_initguess])
         if use_thrust_limits:
             state_costate_mass_o = np.hstack([state_costate_o, mass_o])
@@ -880,7 +901,7 @@ def optimal_trajectory_solve(
                 min_type                     = min_type             ,
                 mass_o                       = mass_o               ,
                 use_thrust_acc_limits        = use_thrust_acc_limits,
-                use_thrust_acc_smoothing     = False                ,
+                use_thrust_acc_smoothing     = True                 ,
                 thrust_acc_min               = thrust_acc_min       ,
                 thrust_acc_max               = thrust_acc_max       ,
                 use_thrust_limits            = use_thrust_limits    ,
@@ -897,47 +918,46 @@ def optimal_trajectory_solve(
             method                   = 'lm'            ,
             tol                      = 1e-11           ,
             jac                      = include_jacobian,
-            options                  = options         ,
+            options                  = options_root    ,
         )
     print()
-    # breakpoint()
     print("Final Solution")
     print("\nRoot-Solve Results")
     print(soln_root)
-    decisionstate_initguess     = soln_root.x
-    state_costate_o             = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decisionstate_initguess])
-    optimal_control_objective_o = np.float64(0.0)
-    state_costate_scstm_o       = np.hstack([state_costate_o, mass_o, optimal_control_objective_o])
-    time_eval_points            = np.linspace(time_span[0], time_span[1], 401)
+    decision_state_initguess       = soln_root.x
+    state_costate_o                = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decision_state_initguess])
+    optimal_control_objective_o    = np.float64(0.0)
+    state_costate_scstm_mass_obj_o = np.hstack([state_costate_o, mass_o, optimal_control_objective_o])
+    time_eval_points               = np.linspace(time_span[0], time_span[1], 401)
     solve_ivp_func = \
-        lambda time, state_costate_scstm: \
+        lambda time, state_costate_scstm_mass_obj: \
             free_body_dynamics__indirect(
-                time                                            ,
-                state_costate_scstm                             ,
-                include_scstm            = False                ,
-                min_type                 = min_type             ,
-                use_thrust_acc_limits    = use_thrust_acc_limits,
-                use_thrust_acc_smoothing = True                 ,
-                thrust_acc_min           = thrust_acc_min       ,
-                thrust_acc_max           = thrust_acc_max       ,
-                use_thrust_limits        = use_thrust_limits    ,
-                use_thrust_smoothing     = True                 ,
-                thrust_min               = thrust_min           ,
-                thrust_max               = thrust_max           ,
-                post_process             = True                 ,
-                k_steepness              = k_idx                ,
+                time                                                ,
+                state_costate_scstm_mass_obj                        ,
+                include_scstm                = False                ,
+                min_type                     = min_type             ,
+                use_thrust_acc_limits        = use_thrust_acc_limits,
+                use_thrust_acc_smoothing     = True                 ,
+                thrust_acc_min               = thrust_acc_min       ,
+                thrust_acc_max               = thrust_acc_max       ,
+                use_thrust_limits            = use_thrust_limits    ,
+                use_thrust_smoothing         = True                 ,
+                thrust_min                   = thrust_min           ,
+                thrust_max                   = thrust_max           ,
+                post_process                 = True                 ,
+                k_steepness                  = k_idx                ,
             )
     soln_ivp = \
         solve_ivp(
-            solve_ivp_func                          ,
-            time_span                               ,
-            state_costate_scstm_o                   ,
-            t_eval                = time_eval_points,
-            dense_output          = True            , 
-            method                = 'RK45'          ,
-            rtol                  = 1e-12           ,
-            atol                  = 1e-12           ,
-        )
+            solve_ivp_func                                   ,
+            time_span                                        ,
+            state_costate_scstm_mass_obj_o                   ,
+            t_eval                         = time_eval_points,
+            dense_output                   = True            , 
+            method                         = 'RK45'          ,
+            rtol                           = 1e-12           ,
+            atol                           = 1e-12           ,
+        ) 
     results_finalsoln = soln_ivp
     state_f_finalsoln = results_finalsoln.y[0:4, -1]
 
@@ -959,14 +979,12 @@ def optimal_trajectory_solve(
     print(f"  Error  : {         error_finalsoln_vec[0]:>14.6e} {         error_finalsoln_vec[1]:>14.3e} {         error_finalsoln_vec[2]:>14.6e} {         error_finalsoln_vec[3]:>14.6e}")
 
     # Enforce initial and final co-state boundary conditions (trivial right now)
-    boundary_condition_copos_vec_o = decisionstate_initguess[0:2]
-    boundary_condition_covel_vec_o = decisionstate_initguess[2:4]
+    boundary_condition_copos_vec_o = decision_state_initguess[0:2]
+    boundary_condition_covel_vec_o = decision_state_initguess[2:4]
     boundary_condition_copos_vec_f = results_finalsoln.y[4:6, -1]
     boundary_condition_covel_vec_f = results_finalsoln.y[6:8, -1]
 
     # Plot the results
-    use_thrust_acc_smoothing = False
-    use_thrust_smoothing     = True
     plot_final_results(
         results_finalsoln                                        ,
         boundary_condition_pos_vec_o                             ,
@@ -979,11 +997,11 @@ def optimal_trajectory_solve(
         boundary_condition_covel_vec_f                           ,
         min_type                       = min_type                ,
         use_thrust_acc_limits          = use_thrust_acc_limits   ,
-        use_thrust_acc_smoothing       = use_thrust_acc_smoothing,
+        use_thrust_acc_smoothing       = False                   ,
         thrust_acc_min                 = thrust_acc_min          ,
         thrust_acc_max                 = thrust_acc_max          ,
         use_thrust_limits              = use_thrust_limits       ,
-        use_thrust_smoothing           = use_thrust_smoothing    ,
+        use_thrust_smoothing           = False                   ,
         thrust_min                     = thrust_min              ,
         thrust_max                     = thrust_max              ,
         k_steepness                    = k_idx                   ,
