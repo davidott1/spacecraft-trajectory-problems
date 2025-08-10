@@ -257,10 +257,11 @@ def free_body_dynamics__indirect(
         if use_thrust_limits:
             thrust_acc_min = thrust_min / mass
             thrust_acc_max = thrust_max / mass
-        if use_thrust_smoothing or use_thrust_acc_smoothing:
-            thrust_acc_mag = bounded_smooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max, k_steepness)
-        else: # no use_thrust_smoothing and no use_thrust_acc_smoothing
-            thrust_acc_mag = bounded_nonsmooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max)
+        if use_thrust_limits or use_thrust_acc_limits:
+            if use_thrust_smoothing or use_thrust_acc_smoothing:
+                thrust_acc_mag = bounded_smooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max, k_steepness)
+            else: # no use_thrust_smoothing and no use_thrust_acc_smoothing
+                thrust_acc_mag = bounded_nonsmooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max)
         thrust_acc_x_dir = covel_x * covel_mag_inv
         thrust_acc_y_dir = covel_y * covel_mag_inv
         thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
@@ -378,21 +379,6 @@ def free_body_dynamics__indirect(
 
         else: # assume 'energy'
             if use_thrust_limits:
-                # if use_thrust_limits:
-                #     thrust_acc_min = thrust_min / mass
-                #     thrust_acc_max = thrust_max / mass
-                # if use_thrust_smoothing or use_thrust_acc_smoothing:
-                #     thrust_acc_mag = bounded_smooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max, k_steepness)
-                # else: # no use_thrust_smoothing and no use_thrust_acc_smoothing
-                #     thrust_acc_mag = bounded_nonsmooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max)
-
-                # thrust_acc_min = thrust_min / mass
-                # thrust_acc_max = thrust_max / mass
-                # if use_thrust_smoothing:
-                #     thrust_acc_mag = bounded_smooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max, k_steepness)
-                # else: # use_no_thrust_smoothing
-                #     thrust_acc_mag = bounded_nonsmooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max)
-
                 thrust_acc_min = thrust_min / mass
                 thrust_acc_max = thrust_max / mass
 
@@ -605,7 +591,7 @@ def tpbvp_objective_and_jacobian(
         use_thrust_smoothing         : bool       = False             ,
         thrust_min                   : np.float64 = np.float64(0.0e+0),
         thrust_max                   : np.float64 = np.float64(1.0e+1),
-        k_steepness                  : np.float64 = np.float64(0.0e+0),
+        k_steepness                  : np.float64 = np.float64(1.0e+0),
         include_jacobian             : bool       = False             ,
     ):
     """
