@@ -722,7 +722,7 @@ def generate_guess(
     # Pack up and print solution
     # -1.92000000e-03  7.68000000e-03  6.40000000e-02 -9.60000000e-02
     costate_o_guess = decision_state_min
-    costate_o_guess = np.array([-1.92000000e-03,7.68000000e-03,6.40000000e-02,-9.60000000e-02])
+    # costate_o_guess = np.array([-1.92000000e-03,7.68000000e-03,6.40000000e-02,-9.60000000e-02])
     print(f"  MIN: *** {idx_min:>5d}/{init_guess_steps:>4d} {error_mag_min:>14.6e} {integ_state_min_str} ***")
     return costate_o_guess
 
