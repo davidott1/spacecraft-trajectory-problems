@@ -696,7 +696,7 @@ def generate_guess(
                 min_type                     = min_type             ,
                 mass_o                       = mass_o               ,
                 use_thrust_acc_limits        = use_thrust_acc_limits,
-                use_thrust_acc_smoothing     = False                 ,
+                use_thrust_acc_smoothing     = True                 ,
                 thrust_acc_min               = thrust_acc_min       ,
                 thrust_acc_max               = thrust_acc_max       ,
                 use_thrust_limits            = use_thrust_limits    ,
@@ -1114,6 +1114,18 @@ def plot_final_results(
     thrust_dir_t = thrust_acc_dir_t # same
     thrust_vec_t = thrust_mag_t * thrust_dir_t
 
+    # Thrust plotting parameters
+    if use_thrust_limits:
+        color_thrust      = mcolors.CSS4_COLORS['blue']
+        label_thrust_name = 'Thrust Mag'
+        label_thrust_unit = '[kg$\cdot$m/s$^2$]'
+        title_thrust      = 'Thrust Max'
+    else: # assume use_thrust_acc_limits
+        color_thrust      = mcolors.CSS4_COLORS['red']
+        label_thrust_name = 'Thrust Acc Mag'
+        label_thrust_unit = '[m/s$^2$]'
+        title_thrust      = 'Thrust Acceleration Max'
+
     # Create trajectory figure
     mplt.style.use('seaborn-v0_8-whitegrid')
     fig = mplt.figure(figsize=(15,8))
@@ -1130,9 +1142,9 @@ def plot_final_results(
         f"OPTIMAL TRAJECTORY: {title_min_type}"
         + "\nFree-Body Dynamics"
         + "\nFixed Time-of-Flight | Fixed-Initial-Position, Fixed-Initial-Velocity to Fixed-Final-Position, Fixed-Final-Velocity"
-        + "\nThrust Acceleration Max",
-        fontsize   = 16              ,
-        fontweight = 'normal'        ,
+        + f"\n{title_thrust}",
+        fontsize   = 16      ,
+        fontweight = 'normal',
     )
 
     # 2D position path: pos-x vs. pos-y
@@ -1142,17 +1154,18 @@ def plot_final_results(
     square_coords = [0.07, 0.1, ax_width, ax_height]
     ax1_pos       = fig.add_axes(square_coords) # type: ignore
     def _plot_thrust_on_position_space(
-            ax                    : maxes.Axes                     ,
-            pos_x_t               : np.ndarray                     ,
-            pos_y_t               : np.ndarray                     ,
-            thrust_acc_vec_t      : np.ndarray                     ,
-            thrust_acc_mag_t      : np.ndarray                     ,
-            use_thrust_acc_limits : bool       = True              ,
-            thrust_acc_min        : np.float64 = np.float64(0.0e+0),
-            thrust_acc_max        : np.float64 = np.float64(1.0e+1),
-            use_thrust_limits     : bool       = False             ,
-            thrust_min            : np.float64 = np.float64(0.0e+0),
-            thrust_max            : np.float64 = np.float64(1.0e+1),
+            ax1_pos               : maxes.Axes                             ,
+            pos_x_t               : np.ndarray                             ,
+            pos_y_t               : np.ndarray                             ,
+            thrust_acc_vec_t      : np.ndarray                             ,
+            thrust_acc_mag_t      : np.ndarray                             ,
+            use_thrust_acc_limits : bool       = True                      ,
+            thrust_acc_min        : np.float64 = np.float64(0.0e+0)        ,
+            thrust_acc_max        : np.float64 = np.float64(1.0e+1)        ,
+            use_thrust_limits     : bool       = False                     ,
+            thrust_min            : np.float64 = np.float64(0.0e+0)        ,
+            thrust_max            : np.float64 = np.float64(1.0e+1)        ,
+            color_thrust                       = mcolors.CSS4_COLORS['red'],
         ):
 
         min_pos = min(min(pos_x_t), min(pos_y_t))
@@ -1191,24 +1204,24 @@ def plot_final_results(
             poly_y = np.concatenate([segment_pos_y, segment_end_y[::-1]])
 
             # Draw the polygon for the current segment
-            ax.fill(
-                poly_x,
-                poly_y, 
-                facecolor = mcolors.CSS4_COLORS['red'],
-                alpha     = 0.5,
-                edgecolor = 'none',
+            ax1_pos.fill(
+                poly_x                  ,
+                poly_y                  , 
+                facecolor = color_thrust,
+                alpha     = 0.5         ,
+                edgecolor = 'none'      ,
             )
 
         # Draw some thrust or thrust-acc vectors
         for idx in np.linspace(0,len(pos_x_t)-1,20).astype(int):
-            ax.plot(
-                [pos_x_t[idx], end_x[idx]]            ,
-                [pos_y_t[idx], end_y[idx]]            ,
-                color     = mcolors.CSS4_COLORS['red'],
-                linewidth = 2.0                       ,
+            ax1_pos.plot(
+                [pos_x_t[idx], end_x[idx]],
+                [pos_y_t[idx], end_y[idx]],
+                color     = color_thrust  ,
+                linewidth = 2.0           ,
             )
     _plot_thrust_on_position_space(
-        ax                    = ax1_pos              ,
+        ax1_pos               = ax1_pos              ,
         pos_x_t               = pos_x_t              ,
         pos_y_t               = pos_y_t              ,
         thrust_acc_vec_t      = thrust_acc_vec_t     ,
@@ -1219,6 +1232,7 @@ def plot_final_results(
         use_thrust_limits     = use_thrust_limits    ,
         thrust_min            = thrust_min           ,
         thrust_max            = thrust_max           ,
+        color_thrust          = color_thrust         ,
     )
     ax1_pos.plot(boundary_condition_pos_vec_o[ 0], boundary_condition_pos_vec_o[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=20, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
     ax1_pos.plot(boundary_condition_pos_vec_f[ 0], boundary_condition_pos_vec_f[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=16, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
@@ -1235,17 +1249,18 @@ def plot_final_results(
     ax1_vel = fig.add_axes(square_coords) # type: ignore
     ax1_vel.set_visible(False)
     def _plot_thrust_on_velocity_space(
-            ax                    : maxes.Axes                     ,
-            vel_x_t               : np.ndarray                     ,
-            vel_y_t               : np.ndarray                     ,
-            thrust_acc_vec_t      : np.ndarray                     ,
-            thrust_acc_mag_t      : np.ndarray                     ,
-            use_thrust_acc_limits : bool       = True              ,
-            thrust_acc_min        : np.float64 = np.float64(0.0e+0),
-            thrust_acc_max        : np.float64 = np.float64(1.0e+1),
-            use_thrust_limits     : bool       = False             ,
-            thrust_min            : np.float64 = np.float64(0.0e+0),
-            thrust_max            : np.float64 = np.float64(1.0e+1),
+            ax                    : maxes.Axes                             ,
+            vel_x_t               : np.ndarray                             ,
+            vel_y_t               : np.ndarray                             ,
+            thrust_acc_vec_t      : np.ndarray                             ,
+            thrust_acc_mag_t      : np.ndarray                             ,
+            use_thrust_acc_limits : bool       = True                      ,
+            thrust_acc_min        : np.float64 = np.float64(0.0e+0)        ,
+            thrust_acc_max        : np.float64 = np.float64(1.0e+1)        ,
+            use_thrust_limits     : bool       = False                     ,
+            thrust_min            : np.float64 = np.float64(0.0e+0)        ,
+            thrust_max            : np.float64 = np.float64(1.0e+1)        ,
+            color_thrust                       = mcolors.CSS4_COLORS['red'],
         ):
 
         min_vel = min(min(vel_x_t), min(vel_y_t))
@@ -1287,7 +1302,7 @@ def plot_final_results(
             ax.fill(
                 poly_x,
                 poly_y, 
-                facecolor = mcolors.CSS4_COLORS['red'],
+                facecolor = color_thrust,
                 alpha     = 0.5,
                 edgecolor = 'none',
             )
@@ -1295,10 +1310,10 @@ def plot_final_results(
         # Draw some thrust or thrust-acc vectors
         for idx in np.linspace(0,len(vel_x_t)-1,20).astype(int):
             ax.plot(
-                [vel_x_t[idx], end_x[idx]]            ,
-                [vel_y_t[idx], end_y[idx]]            ,
-                color     = mcolors.CSS4_COLORS['red'],
-                linewidth = 2.0                       ,
+                [vel_x_t[idx], end_x[idx]],
+                [vel_y_t[idx], end_y[idx]],
+                color     = color_thrust  ,
+                linewidth = 2.0           ,
             )
     _plot_thrust_on_velocity_space(
         ax                    = ax1_vel              ,
@@ -1312,6 +1327,7 @@ def plot_final_results(
         use_thrust_limits     = use_thrust_limits    ,
         thrust_min            = thrust_min           ,
         thrust_max            = thrust_max           ,
+        color_thrust          = color_thrust         ,
     )
     ax1_vel.plot(boundary_condition_vel_vec_o[ 0], boundary_condition_vel_vec_o[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=20, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
     ax1_vel.plot(boundary_condition_vel_vec_f[ 0], boundary_condition_vel_vec_f[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=16, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
@@ -1358,23 +1374,26 @@ def plot_final_results(
         ax3.axhline(y=float(thrust_acc_min), color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Min')
         ax3.axhline(y=float(thrust_acc_max), color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Max')
     if use_thrust_limits:
-        ax3.plot(time_t, thrust_mag_t    , color=mcolors.CSS4_COLORS['blue'], linewidth=2.0, label='Thrust Mag'    )
+        ax3.fill_between(
+            time_t                             ,
+            thrust_mag_t                       ,
+            where        = (thrust_mag_t > 0.0), # type: ignore
+            facecolor    = color_thrust        ,
+            edgecolor    = 'none'              ,
+            alpha        = 0.5                 ,
+        )
     else: # assume use_thrust_acc_limits
-        ax3.plot(time_t, thrust_acc_mag_t, color=mcolors.CSS4_COLORS['red' ], linewidth=2.0, label='Thrust Acc Mag')
-    ax3.fill_between(
-        time_t,
-        thrust_acc_mag_t,
-        where     = (thrust_acc_mag_t > 0.0), # type: ignore
-        facecolor = mcolors.CSS4_COLORS['red'],
-        edgecolor = 'none',
-        alpha     = 0.5
-    )
+        ax3.fill_between(
+            time_t                                     ,
+            thrust_acc_mag_t                           ,
+            where            = (thrust_acc_mag_t > 0.0), # type: ignore
+            facecolor        = color_thrust            ,
+            edgecolor        = 'none'                  ,
+            alpha            = 0.5                     ,
+        )
     ax3.set_xticklabels([])
     ax3.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
-    if use_thrust_limits:
-        ax3.set_ylabel('Thrust Mag'     + '\n' + '[kg$\cdot$m/s$^2$]')
-    else: # assume use_thrust_acc_limits
-        ax3.set_ylabel('Thrust Acc Mag' + '\n' + '[m/s$^2$]'         )
+    ax3.set_ylabel(label_thrust_name + '\n' + label_thrust_unit)
     if use_thrust_limits:
         plot_thrust_min = 0.0
         plot_thrust_max = max(thrust_mag_t)
@@ -1389,6 +1408,37 @@ def plot_final_results(
             plot_thrust_acc_min - (plot_thrust_acc_max - plot_thrust_acc_min) * 0.1,
             plot_thrust_acc_max + (plot_thrust_acc_max - plot_thrust_acc_min) * 0.1,
         )
+    def _plot_thrust_vectors_on_thrust_vs_time(
+            ax3                   : maxes.Axes        ,
+            time_t                : np.ndarray        ,
+            thrust_acc_mag_t      : np.ndarray        ,
+            thrust_mag_t          : np.ndarray        ,
+            use_thrust_acc_limits : bool       = False,
+            use_thrust_limits     : bool       = False,
+        ):
+
+        if use_thrust_limits:
+            end_t = thrust_mag_t
+        elif use_thrust_acc_limits:
+            end_t = thrust_acc_mag_t
+        else: # assume min_type 'energy' with no thrust max or thrust-acc max
+            end_t = thrust_acc_mag_t
+
+        for idx in np.linspace(0,len(time_t)-1,20).astype(int):
+            ax3.plot(
+                [time_t[idx], time_t[idx]],
+                [        0.0,  end_t[idx]], # type: ignore
+                color     = color_thrust  ,
+                linewidth = 2.0           ,
+            )
+    _plot_thrust_vectors_on_thrust_vs_time(
+        ax3                   = ax3                  ,
+        time_t                = time_t               ,
+        thrust_acc_mag_t      = thrust_acc_mag_t     ,
+        thrust_mag_t          = thrust_mag_t         ,
+        use_thrust_acc_limits = use_thrust_acc_limits,
+        use_thrust_limits     = use_thrust_limits    ,
+    )
 
     # Mass vs. Time
     ax4 = fig.add_subplot(gs[2,1])
