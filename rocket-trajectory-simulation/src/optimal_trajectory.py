@@ -645,9 +645,6 @@ def tpbvp_objective_and_jacobian(
     if include_jacobian:
         error_jacobian = stm_of[0:4, 4:8]
 
-    # print(f"state_costate_f[:]{state_costate_f[0:8]}")
-    # print(f"  error{error}")
-
     # Pack up: error and error-jacobian
     if include_jacobian:
         return error, error_jacobian
@@ -718,11 +715,9 @@ def generate_guess(
                 tqdm.write(f"                {'Step':>5s} {'Error-Mag':>14s} {'Pos-Xo':>14s} {'Pos-Yo':>14s} {'Vel-Xo':>14s} {'Vel-Yo':>14s} {'Co-Pos-Xo':>14s} {'Co-Pos-Yo':>14s} {'Co-Vel-Xo':>14s} {'Co-Vel-Yo':>14s}")
             integ_state_min_str = ' '.join(f"{x:>14.6e}" for x in integ_state_min)
             tqdm.write(f"           {idx_min:>5d}/{init_guess_steps:>4d} {error_mag_min:>14.6e} {integ_state_min_str}")
-    # breakpoint()
+
     # Pack up and print solution
-    # -1.92000000e-03  7.68000000e-03  6.40000000e-02 -9.60000000e-02
     costate_o_guess = decision_state_min
-    # costate_o_guess = np.array([-1.92000000e-03,7.68000000e-03,6.40000000e-02,-9.60000000e-02])
     print(f"  MIN: *** {idx_min:>5d}/{init_guess_steps:>4d} {error_mag_min:>14.6e} {integ_state_min_str} ***")
     return costate_o_guess
 
@@ -752,7 +747,7 @@ def optimal_trajectory_solve(
     """
 
     # Generate initial guess for the costates
-    decisionstate_initguess = \
+    decision_state_initguess = \
         generate_guess(
             time_span                                           ,
             boundary_condition_pos_vec_o                        ,
@@ -782,18 +777,22 @@ def optimal_trajectory_solve(
     # Loop initialization
     results_k_idx    = {}
     include_jacobian = False
-    options = {'maxiter': 100}
+    options          = {
+        'maxiter' : 100 * len(decision_state), # 100 * n
+        'ftol'    : 1e-8, # 1e-8
+        'xtol'    : 1e-8, # 1e-8
+        'gtol'    : 1e-8, # 1e-8
+    }
 
     # Loop
-#     (Pdb) decision_state_min
-# array([-1.92000000e-03,7.68000000e-03,6.40000000e-02,-9.60000000e-02])
-    # breakpoint()
+    #     (Pdb) decision_state_min
+    # array([-1.92000000e-03,7.68000000e-03,6.40000000e-02,-9.60000000e-02])
     k_idxinitguess_to_idxfinsoln = np.logspace(np.log(k_idxinitguess), np.log(k_idxfinsoln), k_idxdivs) # k_idxdivs
     for idx, k_idx in tqdm(enumerate(k_idxinitguess_to_idxfinsoln), desc="Processing", leave=False, total=len(k_idxinitguess_to_idxfinsoln)):
         root_func = \
-            lambda decisionstate_initguess: \
+            lambda decision_state: \
                 tpbvp_objective_and_jacobian(
-                    decisionstate_initguess                             , 
+                    decision_state                                      , 
                     time_span                                           ,
                     boundary_condition_pos_vec_o                        ,
                     boundary_condition_vel_vec_o                        ,
@@ -802,7 +801,7 @@ def optimal_trajectory_solve(
                     min_type                     = min_type             ,
                     mass_o                       = mass_o               ,
                     use_thrust_acc_limits        = use_thrust_acc_limits,
-                    use_thrust_acc_smoothing     = False                ,
+                    use_thrust_acc_smoothing     = True                 ,
                     thrust_acc_min               = thrust_acc_min       ,
                     thrust_acc_max               = thrust_acc_max       ,
                     use_thrust_limits            = use_thrust_limits    ,
@@ -812,95 +811,67 @@ def optimal_trajectory_solve(
                     k_steepness                  = k_idx                ,
                     include_jacobian             = include_jacobian     ,
                 )
-        
-        # ####
-        # root_func = \
-        #     lambda decisionstate: \
-        #         tpbvp_objective_and_jacobian(
-        #             decisionstate                                       , 
-        #             time_span                                           ,
-        #             boundary_condition_pos_vec_o                        ,
-        #             boundary_condition_vel_vec_o                        ,
-        #             boundary_condition_pos_vec_f                        ,
-        #             boundary_condition_vel_vec_f                        ,
-        #             min_type                     = min_type             ,
-        #             mass_o                       = mass_o               ,
-        #             use_thrust_acc_limits        = use_thrust_acc_limits,
-        #             use_thrust_acc_smoothing     = False                ,
-        #             thrust_acc_min               = thrust_acc_min       ,
-        #             thrust_acc_max               = thrust_acc_max       ,
-        #             use_thrust_limits            = use_thrust_limits    ,
-        #             use_thrust_smoothing         = True                ,
-        #             thrust_min                   = thrust_min           ,
-        #             thrust_max                   = thrust_max           ,
-        #             k_steepness                  = k_idx                ,
-        #             include_jacobian             = include_jacobian     ,
-        #         )
-        # ####
 
         soln_root = \
             root(
                 root_func                                 ,
-                decisionstate_initguess                   ,
+                decision_state_initguess                  ,
                 method                  = 'lm'            ,
                 tol                     = 1e-11           ,
                 jac                     = include_jacobian,
-                options=options,
+                options                 = options         ,
             )
-        if soln_root.success or True:
-            # breakpoint()
-            decisionstate_initguess = soln_root.x
-            state_costate_o          = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decisionstate_initguess])
-            include_scstm           = False
-            stm_oo                  = np.identity(8).flatten()
-            # state_costate_scstm_o   = np.concatenate([statecostate_o, stm_oo])
-            state_costate_scstm_o   = np.hstack([state_costate_o])
-            if use_thrust_limits:
-                state_costate_scstm_o = np.hstack([state_costate_scstm_o, mass_o])
-            time_eval_points        = np.linspace(time_span[0], time_span[1], 201)
-            solve_ivp_func = \
-                lambda time, state_costate_scstm: \
-                    free_body_dynamics__indirect(
-                        time                                            ,
-                        state_costate_scstm                             ,
-                        include_scstm            = include_scstm        ,
-                        min_type                 = min_type             ,
-                        use_thrust_acc_limits    = use_thrust_acc_limits,
-                        use_thrust_acc_smoothing = False                 ,
-                        thrust_acc_min           = thrust_acc_min       ,
-                        thrust_acc_max           = thrust_acc_max       ,
-                        use_thrust_limits        = use_thrust_limits    ,
-                        use_thrust_smoothing     = True                 ,
-                        thrust_min               = thrust_min           ,
-                        thrust_max               = thrust_max           ,
-                        k_steepness              = k_idx                ,
-                    )
-            soln_ivp = \
-                solve_ivp(
-                    solve_ivp_func                 ,
-                    time_span                      ,
-                    state_costate_scstm_o          ,
-                    t_eval       = time_eval_points,
-                    dense_output = True            , 
-                    method       = 'RK45'          ,
-                    rtol         = 1e-12           ,
-                    atol         = 1e-12           ,
-                )
-            results_k_idx[k_idx] = soln_ivp
-            error_mag = np.linalg.norm(soln_root.fun)
-            if idx==0:
-                tqdm.write(f"       {'Step':>5s} {'k':>14s} {'Error-Mag':>14s}")
-            tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
-
+        # if soln_root.success or True:
+        decision_state_initguess = soln_root.x
+        state_costate_o          = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decision_state_initguess])
+        if use_thrust_limits:
+            state_costate_mass_o = np.hstack([state_costate_o, mass_o])
         else:
-            print(f"Convergence Failed for k={k_idx:>14.6e}. Stopping.")
-            break
+            state_costate_mass_o = state_costate_o
+        time_eval_points = np.linspace(time_span[0], time_span[1], 201)
+        solve_ivp_func = \
+            lambda time, state_costate_scstm: \
+                free_body_dynamics__indirect(
+                    time                                            ,
+                    state_costate_scstm                             ,
+                    include_scstm            = False                ,
+                    min_type                 = min_type             ,
+                    use_thrust_acc_limits    = use_thrust_acc_limits,
+                    use_thrust_acc_smoothing = True                 ,
+                    thrust_acc_min           = thrust_acc_min       ,
+                    thrust_acc_max           = thrust_acc_max       ,
+                    use_thrust_limits        = use_thrust_limits    ,
+                    use_thrust_smoothing     = True                 ,
+                    thrust_min               = thrust_min           ,
+                    thrust_max               = thrust_max           ,
+                    k_steepness              = k_idx                ,
+                )
+        soln_ivp = \
+            solve_ivp(
+                solve_ivp_func                 ,
+                time_span                      ,
+                state_costate_mass_o           ,
+                t_eval       = time_eval_points,
+                dense_output = True            , 
+                method       = 'RK45'          ,
+                rtol         = 1e-12           ,
+                atol         = 1e-12           ,
+            )
+        results_k_idx[k_idx] = soln_ivp
+        error_mag = np.linalg.norm(soln_root.fun)
+        if idx==0:
+            tqdm.write(f"       {'Step':>5s} {'k':>14s} {'Error-Mag':>14s}")
+        tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
+
+        # else:
+        #     print(f"Convergence Failed for k={k_idx:>14.6e}. Stopping.")
+        #     break
 
     # Final solution: no thrust or thrust-acc smoothing
     root_func = \
-        lambda decisionstate: \
+        lambda decision_state: \
             tpbvp_objective_and_jacobian(
-                decisionstate                                       , 
+                decision_state                                      , 
                 time_span                                           ,
                 boundary_condition_pos_vec_o                        ,
                 boundary_condition_vel_vec_o                        ,
@@ -913,20 +884,20 @@ def optimal_trajectory_solve(
                 thrust_acc_min               = thrust_acc_min       ,
                 thrust_acc_max               = thrust_acc_max       ,
                 use_thrust_limits            = use_thrust_limits    ,
-                use_thrust_smoothing         = True                ,
+                use_thrust_smoothing         = True                 ,
                 thrust_min                   = thrust_min           ,
                 thrust_max                   = thrust_max           ,
-                include_jacobian             = include_jacobian     ,
                 k_steepness                  = k_idx                ,
+                include_jacobian             = include_jacobian     ,
             )
     soln_root = \
         root(
-            root_func                                 ,
-            decisionstate_initguess                   ,
-            method                  = 'lm'            ,
-            tol                     = 1e-11           ,
-            jac                     = include_jacobian,
-            options = options,
+            root_func                                  ,
+            decision_state_initguess                   ,
+            method                   = 'lm'            ,
+            tol                      = 1e-11           ,
+            jac                      = include_jacobian,
+            options                  = options         ,
         )
     print()
     # breakpoint()
@@ -946,11 +917,11 @@ def optimal_trajectory_solve(
                 include_scstm            = False                ,
                 min_type                 = min_type             ,
                 use_thrust_acc_limits    = use_thrust_acc_limits,
-                use_thrust_acc_smoothing = True                ,
+                use_thrust_acc_smoothing = True                 ,
                 thrust_acc_min           = thrust_acc_min       ,
                 thrust_acc_max           = thrust_acc_max       ,
                 use_thrust_limits        = use_thrust_limits    ,
-                use_thrust_smoothing     = True                ,
+                use_thrust_smoothing     = True                 ,
                 thrust_min               = thrust_min           ,
                 thrust_max               = thrust_max           ,
                 post_process             = True                 ,
@@ -1133,11 +1104,11 @@ def plot_final_results(
 
     # Configure figure
     if min_type == 'fuel':
-        title_min_type = "Minimize Fuel"
+        title_min_type = "Minimum Fuel"
     elif min_type == 'energy':
-        title_min_type = "Minimize Energy"
+        title_min_type = "Minimum Energy"
     else: # assume energy
-        title_min_type = "Minimize Energy"
+        title_min_type = "Minimum Energy"
     fig.suptitle(
         f"OPTIMAL TRAJECTORY: {title_min_type}"
         + "\nFree-Body Dynamics"
