@@ -75,7 +75,6 @@ def derivative__bounded_nonsmooth_func(funcval, min_bound, max_bound):
     in_bounds = (min_bound < funcval) & (funcval < max_bound)
     return np.where(in_bounds, 1.0, 0.0)
 
-
 # Free-body dynamics
 def free_body_dynamics__indirect(
         time                     : np.float64                     ,
