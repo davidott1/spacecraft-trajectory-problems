@@ -1,22 +1,17 @@
 # Imports
-# import sys
 import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.optimize import root
-# import matplotlib.pyplot as mplt
-# import matplotlib.colors as mcolors
-# import matplotlib.ticker as mticker
-# import matplotlib.axes   as maxes
-# from matplotlib.widgets import Button
-# import json
 import random
 np.random.seed(42)
 import astropy.units as u
 from typing import Optional
 from tqdm import tqdm
-from src.loader.readers import read_general
+from pathlib import Path
+from src.loader.readers import configure_files_folders
 from src.loader.process import process_input
 from src.plotters.final_results import plot_final_results
+from src.utility.bounding_functions import bounded_smooth_func, bounded_nonsmooth_func, derivative__bounded_smooth_func, derivative__bounded_nonsmooth_func
 
 # Free-body dynamics
 def free_body_dynamics__indirect(
@@ -546,24 +541,25 @@ def generate_guess(
 
 # Optimal trajectory solver
 def optimal_trajectory_solve(
-        time_span                    : np.ndarray                     ,
-        boundary_condition_pos_vec_o : np.ndarray                     ,
-        boundary_condition_vel_vec_o : np.ndarray                     ,
-        boundary_condition_pos_vec_f : np.ndarray                     ,
-        boundary_condition_vel_vec_f : np.ndarray                     ,
-        min_type                     : str        = 'energy'          ,
-        use_thrust_acc_limits        : bool       = True              ,
-        thrust_acc_min               : np.float64 = np.float64(0.0e+0),
-        thrust_acc_max               : np.float64 = np.float64(1.0e+1),
-        use_thrust_limits            : bool       = False             ,
-        thrust_min                   : np.float64 = np.float64(0.0e+0),
-        thrust_max                   : np.float64 = np.float64(1.0e+1),
-        k_idxinitguess               : np.float64 = np.float64(1.0e-1),
-        k_idxfinsoln                 : np.float64 = np.float64(1.0e+1),
-        k_idxdivs                    : int        = 100               ,
-        init_guess_steps             : int        = 3000              ,
-        mass_o                       : np.float64 = np.float64(1.0e+3),
-        input_filename               : str        = 'blank.json'      ,
+        time_span                    : np.ndarray                                         ,
+        boundary_condition_pos_vec_o : np.ndarray                                         ,
+        boundary_condition_vel_vec_o : np.ndarray                                         ,
+        boundary_condition_pos_vec_f : np.ndarray                                         ,
+        boundary_condition_vel_vec_f : np.ndarray                                         ,
+        min_type                     : str        = 'energy'                              ,
+        use_thrust_acc_limits        : bool       = True                                  ,
+        thrust_acc_min               : np.float64 = np.float64(0.0e+0)                    ,
+        thrust_acc_max               : np.float64 = np.float64(1.0e+1)                    ,
+        use_thrust_limits            : bool       = False                                 ,
+        thrust_min                   : np.float64 = np.float64(0.0e+0)                    ,
+        thrust_max                   : np.float64 = np.float64(1.0e+1)                    ,
+        k_idxinitguess               : np.float64 = np.float64(1.0e-1)                    ,
+        k_idxfinsoln                 : np.float64 = np.float64(1.0e+1)                    ,
+        k_idxdivs                    : int        = 100                                   ,
+        init_guess_steps             : int        = 3000                                  ,
+        mass_o                       : np.float64 = np.float64(1.0e+3)                    ,
+        input_filepath               : Path       = Path('input/examples/example_01.json'),
+        output_folderpath            : Path       = Path('output/')                       ,
     ):
     """
     Main solver that implements the two-stage continuation process
@@ -814,7 +810,8 @@ def optimal_trajectory_solve(
         k_steepness                    = k_idx                ,
         plot_show                      = True                 ,
         plot_save                      = True                 ,
-        input_filename                 = input_filename       ,
+        input_filepath                 = input_filepath       ,
+        output_folderpath              = output_folderpath    ,
     )
 
     # End
@@ -825,10 +822,10 @@ def optimal_trajectory_solve(
 def optimal_trajectory_input():
 
     # Read input
-    input_files_params = read_general()
+    input_files_folders_params = configure_files_folders()
 
     # Process input
-    input_processed = process_input(input_files_params)
+    input_processed = process_input(input_files_folders_params)
 
     return input_processed
 
@@ -857,7 +854,8 @@ if __name__ == '__main__':
         k_idxdivs                   ,
         init_guess_steps            ,
         mass_o                      ,
-        input_filename              ,
+        input_filepath              ,
+        output_folderpath           ,
     ) = \
         optimal_trajectory_input()
 
@@ -880,7 +878,8 @@ if __name__ == '__main__':
         k_idxdivs                    = k_idxdivs            ,
         init_guess_steps             = init_guess_steps     ,
         mass_o                       = mass_o               ,
-        input_filename               = input_filename       ,
+        input_filepath               = input_filepath       ,
+        output_folderpath            = output_folderpath    ,
     )
 
     # End optimization trajectory program

@@ -4,31 +4,33 @@ import matplotlib.pyplot as mplt
 import matplotlib.axes   as maxes
 from matplotlib.widgets import Button
 from src.utility.bounding_functions import bounded_smooth_func
+from pathlib import Path
 
 
 def plot_final_results(
-        results_finsoln                                                 ,
-        boundary_condition_pos_vec_o   : np.ndarray                     ,
-        boundary_condition_vel_vec_o   : np.ndarray                     ,
-        boundary_condition_pos_vec_f   : np.ndarray                     ,
-        boundary_condition_vel_vec_f   : np.ndarray                     ,
-        boundary_condition_copos_vec_o : np.ndarray                     ,
-        boundary_condition_covel_vec_o : np.ndarray                     ,
-        boundary_condition_copos_vec_f : np.ndarray                     ,
-        boundary_condition_covel_vec_f : np.ndarray                     ,
-        min_type                       : str        = 'energy'          ,
-        use_thrust_acc_limits          : bool       = False             ,
-        use_thrust_acc_smoothing       : bool       = False             ,
-        thrust_acc_min                 : np.float64 = np.float64(0.0e+0),
-        thrust_acc_max                 : np.float64 = np.float64(1.0e+1),
-        use_thrust_limits              : bool       = False             ,
-        use_thrust_smoothing           : bool       = False             ,
-        thrust_min                     : np.float64 = np.float64(0.0e+0),
-        thrust_max                     : np.float64 = np.float64(1.0e+1),
-        k_steepness                    : np.float64 = np.float64(0.0e+0),
-        plot_show                      : bool       = True              ,
-        plot_save                      : bool       = False             ,
-        input_filename                 : str        = 'blank.json'      ,
+        results_finsoln                                                                     ,
+        boundary_condition_pos_vec_o   : np.ndarray                                         ,
+        boundary_condition_vel_vec_o   : np.ndarray                                         ,
+        boundary_condition_pos_vec_f   : np.ndarray                                         ,
+        boundary_condition_vel_vec_f   : np.ndarray                                         ,
+        boundary_condition_copos_vec_o : np.ndarray                                         ,
+        boundary_condition_covel_vec_o : np.ndarray                                         ,
+        boundary_condition_copos_vec_f : np.ndarray                                         ,
+        boundary_condition_covel_vec_f : np.ndarray                                         ,
+        min_type                       : str        = 'energy'                              ,
+        use_thrust_acc_limits          : bool       = False                                 ,
+        use_thrust_acc_smoothing       : bool       = False                                 ,
+        thrust_acc_min                 : np.float64 = np.float64(0.0e+0)                    ,
+        thrust_acc_max                 : np.float64 = np.float64(1.0e+1)                    ,
+        use_thrust_limits              : bool       = False                                 ,
+        use_thrust_smoothing           : bool       = False                                 ,
+        thrust_min                     : np.float64 = np.float64(0.0e+0)                    ,
+        thrust_max                     : np.float64 = np.float64(1.0e+1)                    ,
+        k_steepness                    : np.float64 = np.float64(0.0e+0)                    ,
+        plot_show                      : bool       = True                                  ,
+        plot_save                      : bool       = False                                 ,
+        input_filepath                 : Path       = Path('input/examples/example_01.json'),
+        output_folderpath              : Path       = Path('output/')                       ,
     ):
     """
     Calculates and plots all relevant results for the final trajectory solution.
@@ -579,7 +581,7 @@ def plot_final_results(
     fig.align_ylabels()
 
     if plot_save:
-        fig.savefig(f"output/optimal_trajectory_{input_filename}.png")
+        fig.savefig(output_folderpath / f"{input_filepath.stem}_optimal_trajectory.png")
 
     if plot_show:
         mplt.show()

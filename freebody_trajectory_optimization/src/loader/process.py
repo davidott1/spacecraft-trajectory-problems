@@ -10,8 +10,9 @@ def process_input(
     # Print
     print("\nInput Parameters")
 
-    # Unpack
-    input_filename = Path(input_files_params['input_filename']).stem
+    # Unpack filepaths and folderpaths
+    input_filepath    = Path(input_files_params[   'input_filepath'])
+    output_folderpath = Path(input_files_params['output_folderpath'])
 
     # Create parameters dictionary and print to screen
     max_parameter_length = max([len(parameter) for parameter in input_files_params['input_parameters'].keys()])
@@ -167,5 +168,6 @@ def process_input(
         k_idxdivs                   ,
         init_guess_steps            ,
         mass_o                      ,
-        input_filename              ,
+        input_filepath              ,
+        output_folderpath           ,
     )
