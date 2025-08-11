@@ -16,6 +16,7 @@ from functools import partial
 from typing import Optional
 from tqdm import tqdm
 
+# Smoouth min and max functions and their dereivatives
 def smax(val1, val2, k):
     """
     Smooth maximum using Log-Sum-Exp. This expression is mumerically stable and produces a value 
@@ -33,7 +34,6 @@ def dsmax__dval2(val1, val2, k):
     Calculates the partial derivative of smax(val1, val2, k) with respect to val2.
     """
     return dsmax_dval1(val2, val1, k)
-
 def smin(val1, val2, k):
     """
     Smooth minimum using Log-Sum-Exp. This expression is mumerically stable and produces a value 
@@ -51,7 +51,6 @@ def dsmin__dval2(val1, val2, k):
     Calculates the partial derivative of smin with respect to val2.
     """
     return dsmin__dval1(val2, val1, k)
-
 def             bounded_smooth_func(funcval, min_bound, max_bound, k):
     """
     General function that is smoothly bounded between a min and max. 
@@ -68,20 +67,13 @@ def             bounded_nonsmooth_func(funcval, min_bound, max_bound):
     """
     General function that is nonsmoothly bounded between a min and max. 
     """
-    max_bound_funcval     = min(          funcval, max_bound) # max bound
-    min_max_bound_funcval = max(max_bound_funcval, min_bound) # min bound
-    return min_max_bound_funcval
+    return np.clip(funcval, min_bound, max_bound)
 def derivative__bounded_nonsmooth_func(funcval, min_bound, max_bound):
     """
     Derivative of a general function that is nonsmoothly bounded between a min and max. 
     """
-    if min_bound < funcval < max_bound:
-        dbounded_nonsmooth_func__dfuncval = 1.0
-    elif funcval < min_bound or max_bound < funcval:
-        dbounded_nonsmooth_func__dfuncval = 0.0
-    else: # funcval == min_bound or funcval == max_bound
-        dbounded_nonsmooth_func__dfuncval = 0.0 # undefined, so choose 0.0
-    return dbounded_nonsmooth_func__dfuncval
+    in_bounds = (min_bound < funcval) & (funcval < max_bound)
+    return np.where(in_bounds, 1.0, 0.0)
 
 
 # Free-body dynamics
@@ -139,22 +131,6 @@ def free_body_dynamics__indirect(
           dcopos_x__dtime, dcopos_y__dtime, dcovel_x__dtime, dcovel_y__dtime  ]
     """
 
-    # fuel
-    #   thrust_limits
-    #     no_thrust_smoothing
-    #     thrust_smoothing
-    #   thrust_acc_limits
-    #     no_thrust_acc_smoothing
-    #     thrust_acc_smoothing
-    # energy
-    #   thrust_limits
-    #     no_thrust_smoothing
-    #     thrust_smoothing
-    #   thrust_acc_limits
-    #     no_thrust_acc_smoothing
-    #     thrust_acc_smoothing
-    #   no_limits
-
     # Validate input
     if use_thrust_acc_limits and use_thrust_limits:
         use_thrust_limits = False
@@ -185,45 +161,25 @@ def free_body_dynamics__indirect(
     #   fuel   : thrust_acc_vec = -covel_vec / cvel_mag
     #   energy : thrust_acc_vec =  covel_vec
     if min_type == 'fuel':
-        epsilon        = np.float64(1.0e-6)
-        covel_mag      = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
-        covel_mag_inv  = covel_mag**-1
-        switching_func = covel_mag - np.float64(1.0)
-        if use_thrust_limits:
-            thrust_acc_min = thrust_min / mass
-            thrust_acc_max = thrust_max / mass
-            if use_thrust_smoothing:
-                heaviside_approx = np.float64(0.5) + np.float64(0.5) * np.tanh(k_steepness * switching_func)
-                thrust_acc_mag   = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx
-            else: # use_no_thrust_smoothing
-                if switching_func > np.float64(0.0):
-                    thrust_acc_mag = thrust_acc_max
-                elif switching_func < np.float64(0.0):
-                    thrust_acc_mag = thrust_acc_min
-                else:
-                    thrust_acc_mag = thrust_acc_min # undetermined, thrust_acc_min chosen
-        elif use_thrust_acc_limits:
-            if use_thrust_acc_smoothing:
-                heaviside_approx = np.float64(0.5) + np.float64(0.5) * np.tanh(k_steepness * switching_func)
-                thrust_acc_mag   = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx
-            else: # use_no_thrust_acc_smoothing
-                if switching_func > np.float64(0.0):
-                    thrust_acc_mag = thrust_acc_max
-                elif switching_func < np.float64(0.0):
-                    thrust_acc_mag = thrust_acc_min
-                else:
-                    thrust_acc_mag = thrust_acc_min # undetermined, thrust_acc_min chosen
-        thrust_acc_x_dir = -covel_x / covel_mag
-        thrust_acc_y_dir = -covel_y / covel_mag
-        thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
-        thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
+        epsilon   = 1.0e-6
+        covel_mag = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
     else: # assume 'energy'
-        covel_mag      = np.sqrt(covel_x**2 + covel_y**2)
-        covel_mag_inv  = 1.0 / covel_mag
+        covel_mag = np.sqrt(covel_x**2 + covel_y**2)
+    covel_mag_inv = 1.0 / covel_mag
+    if use_thrust_limits:
+        thrust_acc_min = thrust_min / mass
+        thrust_acc_max = thrust_max / mass
+    if min_type == 'fuel':
+        switching_func = covel_mag - 1.0
+        if use_thrust_smoothing or use_thrust_acc_smoothing:
+            heaviside_approx = 0.5 + 0.5 * np.tanh(k_steepness * switching_func)
+            thrust_acc_mag   = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx
+        else: # no use_thrust_smoothing and no use_thrust_acc_smoothing
+            thrust_acc_mag = np.where(switching_func > 0.0, thrust_acc_max, thrust_acc_min)
+        thrust_acc_x_dir = -covel_x * covel_mag_inv
+        thrust_acc_y_dir = -covel_y * covel_mag_inv
+    else: # assume 'energy'
         thrust_acc_mag = covel_mag
-        if use_thrust_limits:
-            thrust_acc_min = thrust_min / mass
-            thrust_acc_max = thrust_max / mass
         if use_thrust_limits or use_thrust_acc_limits:
             if use_thrust_smoothing or use_thrust_acc_smoothing:
                 thrust_acc_mag = bounded_smooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max, k_steepness)
@@ -231,8 +187,8 @@ def free_body_dynamics__indirect(
                 thrust_acc_mag = bounded_nonsmooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max)
         thrust_acc_x_dir = covel_x * covel_mag_inv
         thrust_acc_y_dir = covel_y * covel_mag_inv
-        thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
-        thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
+    thrust_acc_x = thrust_acc_mag * thrust_acc_x_dir
+    thrust_acc_y = thrust_acc_mag * thrust_acc_y_dir
 
     # Dynamics: free-body
     #   dstate/dtime = dynamics(time,state)
@@ -1769,7 +1725,7 @@ def optimal_trajectory_input():
 # Main
 if __name__ == '__main__':
 
-    # Start optimization
+    # Start optimization trajectory program
     print(f"\nOPTIMAL TRAJECTORY PROGRAM")
 
     # Optimal trajectory input
@@ -1815,5 +1771,6 @@ if __name__ == '__main__':
         mass_o                       = mass_o               ,
     )
 
-
+    # End optimization trajectory program
+    print()
 
