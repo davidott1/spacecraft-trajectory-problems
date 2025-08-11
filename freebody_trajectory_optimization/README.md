@@ -38,6 +38,4 @@ This project requires the following Python packages:
 - `numpy`: For numerical computations.
 - `astropy`: For handling physical quantities and units.
 
-## Contributing
 
-Contributions are welcome! Please feel free to submit a pull request or open an issue for any enhancements or bug fixes.
