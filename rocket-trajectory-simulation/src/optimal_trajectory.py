@@ -196,8 +196,8 @@ def free_body_dynamics__indirect(
     dpos_y__dtime   = vel_y
     dvel_x__dtime   = thrust_acc_x
     dvel_y__dtime   = thrust_acc_y
-    dcopos_x__dtime = np.float64(0.0)
-    dcopos_y__dtime = np.float64(0.0)
+    dcopos_x__dtime = 0.0
+    dcopos_y__dtime = 0.0
     dcovel_x__dtime = -copos_x
     dcovel_y__dtime = -copos_y
     if post_process or use_thrust_limits:
@@ -246,77 +246,42 @@ def free_body_dynamics__indirect(
 
         # Row 1
         #   d(dpos_x/dtime)/dvel_x
-        ddstatedtime__dstate[0,2] = np.float64(1.0)
+        ddstatedtime__dstate[0,2] = 1.0
 
         # Row 2
         #   d(dpos_y/dtime)/dvel_y
-        ddstatedtime__dstate[1,3] = np.float64(1.0)
+        ddstatedtime__dstate[1,3] = 1.0
 
         if min_type == 'fuel':
-            if use_thrust_limits:
+            if use_thrust_limits or use_thrust_acc_limits:
 
                 # Common terms
-                thrust_acc_min = thrust_min / mass
-                thrust_acc_max = thrust_max / mass
+                if use_thrust_limits:
+                    thrust_acc_min = thrust_min / mass
+                    thrust_acc_max = thrust_max / mass
 
-                dcovel_mag__dcovel_x = covel_x / covel_mag
-                dcovel_mag__dcovel_y = covel_y / covel_mag
+                dcovel_mag__dcovel_x = covel_x * covel_mag_inv
+                dcovel_mag__dcovel_y = covel_y * covel_mag_inv
 
-                dthrust_acc_x_dir__dcovel_x = np.float64(-1.0) / covel_mag - covel_x * (np.float64(-1.0) / covel_mag**2) * dcovel_mag__dcovel_x
-                dthrust_acc_x_dir__dcovel_y =                              - covel_x * (np.float64(-1.0) / covel_mag**2) * dcovel_mag__dcovel_y
-                dthrust_acc_y_dir__dcovel_y = np.float64(-1.0) / covel_mag - covel_y * (np.float64(-1.0) / covel_mag**2) * dcovel_mag__dcovel_y
-                dthrust_acc_y_dir__dcovel_x =                              - covel_y * (np.float64(-1.0) / covel_mag**2) * dcovel_mag__dcovel_x
+                dcovel_x__covel_x          = 1.0
+                dcovel_y__covel_y          = 1.0
+                dcovel_mag_inv__dcovel_mag = -1.0 / covel_mag**2
+
+                dthrust_acc_x_dir__dcovel_x = -dcovel_x__covel_x * covel_mag_inv - covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
+                dthrust_acc_x_dir__dcovel_y =                                    - covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
+                dthrust_acc_y_dir__dcovel_y = -dcovel_y__covel_y * covel_mag_inv - covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
+                dthrust_acc_y_dir__dcovel_x =                                    - covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
 
                 if use_thrust_acc_smoothing:
                     
                     # Common terms
-                    one_mns_tanhsq              = np.float64(1.0) - np.tanh(k_steepness * switching_func)**2
-                    dheaviside_approx__dcovel_x = np.float64(0.5) * k_steepness * one_mns_tanhsq * dcovel_mag__dcovel_x
-                    dheaviside_approx__dcovel_y = np.float64(0.5) * k_steepness * one_mns_tanhsq * dcovel_mag__dcovel_y
-                    dthrust_acc_mag__dcovel_x   = (thrust_acc_max - thrust_acc_min) * dheaviside_approx__dcovel_x
-                    dthrust_acc_mag__dcovel_y   = (thrust_acc_max - thrust_acc_min) * dheaviside_approx__dcovel_y
-
-                    # Row 3
-                    #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
-                    ddstatedtime__dstate[2,6] = dthrust_acc_mag__dcovel_x * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
-                    ddstatedtime__dstate[2,7] = dthrust_acc_mag__dcovel_y * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_y
-
-                    # Row 4
-                    #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
-                    ddstatedtime__dstate[3,6] = dthrust_acc_mag__dcovel_x * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_x
-                    ddstatedtime__dstate[3,7] = dthrust_acc_mag__dcovel_y * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
-
-                else: # use_no_thrust_acc_smoothing
-                    
-                    # Row 3
-                    #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
-                    ddstatedtime__dstate[2,6] = thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
-                    ddstatedtime__dstate[2,7] = thrust_acc_mag * dthrust_acc_x_dir__dcovel_y
-
-                    # Row 4
-                    #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
-                    ddstatedtime__dstate[3,6] = thrust_acc_mag * dthrust_acc_y_dir__dcovel_x
-                    ddstatedtime__dstate[3,7] = thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
-                
-            elif use_thrust_acc_limits:
-
-                # Common terms
-                dcovel_mag__dcovel_x = covel_x / covel_mag
-                dcovel_mag__dcovel_y = covel_y / covel_mag
-
-                dthrust_acc_x_dir__dcovel_x = np.float64(-1.0) / covel_mag - covel_x * (np.float64(-1.0) / covel_mag**2) * dcovel_mag__dcovel_x
-                dthrust_acc_x_dir__dcovel_y =                              - covel_x * (np.float64(-1.0) / covel_mag**2) * dcovel_mag__dcovel_y
-                dthrust_acc_y_dir__dcovel_y = np.float64(-1.0) / covel_mag - covel_y * (np.float64(-1.0) / covel_mag**2) * dcovel_mag__dcovel_y
-                dthrust_acc_y_dir__dcovel_x =                              - covel_y * (np.float64(-1.0) / covel_mag**2) * dcovel_mag__dcovel_x
-
-                if use_thrust_acc_smoothing:
-                    
-                    # Common terms
-                    one_mns_tanhsq              = np.float64(1.0) - np.tanh(k_steepness * switching_func)**2
-                    dheaviside_approx__dcovel_x = np.float64(0.5) * k_steepness * one_mns_tanhsq * dcovel_mag__dcovel_x
-                    dheaviside_approx__dcovel_y = np.float64(0.5) * k_steepness * one_mns_tanhsq * dcovel_mag__dcovel_y
-                    dthrust_acc_mag__dcovel_x   = (thrust_acc_max - thrust_acc_min) * dheaviside_approx__dcovel_x
-                    dthrust_acc_mag__dcovel_y   = (thrust_acc_max - thrust_acc_min) * dheaviside_approx__dcovel_y
+                    one_mns_tanhsq                 = 1.0 - np.tanh(k_steepness * switching_func)**2
+                    onehalf_times_k_one_mns_tanhsq = 0.5 * k_steepness * one_mns_tanhsq
+                    dheaviside_approx__dcovel_x    = onehalf_times_k_one_mns_tanhsq * dcovel_mag__dcovel_x
+                    dheaviside_approx__dcovel_y    = onehalf_times_k_one_mns_tanhsq * dcovel_mag__dcovel_y
+                    delta_thrust_acc_max2min       = thrust_acc_max - thrust_acc_min
+                    dthrust_acc_mag__dcovel_x      = delta_thrust_acc_max2min * dheaviside_approx__dcovel_x
+                    dthrust_acc_mag__dcovel_y      = delta_thrust_acc_max2min * dheaviside_approx__dcovel_y
 
                     # Row 3
                     #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
@@ -341,13 +306,15 @@ def free_body_dynamics__indirect(
                     ddstatedtime__dstate[3,7] = thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
 
         else: # assume 'energy'
-            if use_thrust_limits:
+
+            if use_thrust_limits or use_thrust_acc_limits:
 
                 # Common terms
-                thrust_acc_min = thrust_min / mass
-                thrust_acc_max = thrust_max / mass
+                if use_thrust_limits:
+                    thrust_acc_min = thrust_min / mass
+                    thrust_acc_max = thrust_max / mass
 
-                if use_thrust_smoothing:
+                if use_thrust_smoothing or use_thrust_acc_smoothing:
                     dthrust_acc_mag__dcovel_mag = derivative__bounded_smooth_func(covel_mag, thrust_acc_min, thrust_acc_max, k_steepness)
                 else: # no use_thrust_smoothing
                     dthrust_acc_mag__dcovel_mag = derivative__bounded_nonsmooth_func(covel_mag, thrust_acc_min, thrust_acc_max)
@@ -358,9 +325,9 @@ def free_body_dynamics__indirect(
                 dthrust_acc_mag__dcovel_x = dthrust_acc_mag__dcovel_mag * dcovel_mag__dcovel_x
                 dthrust_acc_mag__dcovel_y = dthrust_acc_mag__dcovel_mag * dcovel_mag__dcovel_y
 
-                dcovel_x__covel_x          = np.float64(1.0)
-                dcovel_y__covel_y          = np.float64(1.0)
-                dcovel_mag_inv__dcovel_mag = -np.float64(1.0) / covel_mag**2
+                dcovel_x__covel_x          = 1.0
+                dcovel_y__covel_y          = 1.0
+                dcovel_mag_inv__dcovel_mag = -1.0 / covel_mag**2
 
                 dthrust_acc_x_dir__dcovel_x = dcovel_x__covel_x * covel_mag_inv + covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
                 dthrust_acc_x_dir__dcovel_y =                                   + covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
@@ -376,55 +343,24 @@ def free_body_dynamics__indirect(
                 #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
                 ddstatedtime__dstate[3,6] = dthrust_acc_mag__dcovel_x * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_x
                 ddstatedtime__dstate[3,7] = dthrust_acc_mag__dcovel_y * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
-            elif use_thrust_acc_limits:
 
-                # Common terms
-                if use_thrust_acc_smoothing:
-                    dthrust_acc_mag__dcovel_mag = derivative__bounded_smooth_func(covel_mag, thrust_acc_min, thrust_acc_max, k_steepness)
-                else: # use_no_thrust_acc_smoothing
-                    dthrust_acc_mag__dcovel_mag = derivative__bounded_nonsmooth_func(covel_mag, thrust_acc_min, thrust_acc_max)
-
-                dcovel_mag__dcovel_x = covel_x * covel_mag_inv
-                dcovel_mag__dcovel_y = covel_y * covel_mag_inv
-
-                dthrust_acc_mag__dcovel_x = dthrust_acc_mag__dcovel_mag * dcovel_mag__dcovel_x
-                dthrust_acc_mag__dcovel_y = dthrust_acc_mag__dcovel_mag * dcovel_mag__dcovel_y
-
-                dcovel_x__covel_x          = np.float64(1.0)
-                dcovel_y__covel_y          = np.float64(1.0)
-                dcovel_mag_inv__dcovel_mag = -np.float64(1.0) / covel_mag**2
-
-                dthrust_acc_x_dir__dcovel_x = dcovel_x__covel_x * covel_mag_inv + covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
-                dthrust_acc_x_dir__dcovel_y =                                   + covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
-                dthrust_acc_y_dir__dcovel_y = dcovel_y__covel_y * covel_mag_inv + covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
-                dthrust_acc_y_dir__dcovel_x =                                   + covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
-
-                # Row 3
-                #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
-                ddstatedtime__dstate[2,6] = dthrust_acc_mag__dcovel_x * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
-                ddstatedtime__dstate[2,7] = dthrust_acc_mag__dcovel_y * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_y
-
-                # Row 4
-                #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
-                ddstatedtime__dstate[3,6] = dthrust_acc_mag__dcovel_x * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_x
-                ddstatedtime__dstate[3,7] = dthrust_acc_mag__dcovel_y * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
             else: # no_limits
 
                 # Row 3
                 #   d(dvel_x/dtime)/dcovel_x
-                ddstatedtime__dstate[2,6] = np.float64(+1.0)
+                ddstatedtime__dstate[2,6] = 1.0
 
                 # Row 4
                 #   d(dvel_y/dtime)/dcovel_y
-                ddstatedtime__dstate[3,7] = np.float64(+1.0)
+                ddstatedtime__dstate[3,7] = 1.0
 
         # Row 7
         #   d(dcovel_x_dtime)/dcopos_x
-        ddstatedtime__dstate[6,4] = np.float64(-1.0)
+        ddstatedtime__dstate[6,4] = -1.0
 
         # Row 8
         #   d(dcovel_y__dttime)/dcopos_y
-        ddstatedtime__dstate[7,5] = np.float64(-1.0)
+        ddstatedtime__dstate[7,5] = -1.0
 
         # Combine: time-derivative of state-transition matrix
         dscstm__dtime = np.dot(ddstatedtime__dstate, scstm)
