@@ -1,3 +1,4 @@
+output/
 untracked/
 __pycache__/
 *.pyc
