@@ -1,6 +1,6 @@
-# Rocket Trajectory Simulation
+# Free-Body Trajectory Optimization
 
-This project simulates the trajectory of a rocket using basic physics principles. It computes the dynamics of the rocket based on its state, including position, velocity, and mass, and integrates these dynamics over time to produce a trajectory.
+xxx
 
 ## Project Structure
 
@@ -25,7 +25,7 @@ pip install -r requirements.txt
 
 ## Usage
 
-To run the simulation, execute the `simulation.py` file. This will initialize the rocket's state and compute its trajectory based on the defined dynamics.
+xxx
 
 ```bash
 python src/simulation.py
