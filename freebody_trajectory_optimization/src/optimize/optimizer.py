@@ -138,7 +138,7 @@ def optimal_trajectory_solve(
         )
 
     # Optimize and enforce thrust or thrust-acc constraints
-    print("\nOptimization Process")
+    print("\n\nOPTIMIZATION PROCESS")
 
     # Solve for the optimal min-fuel or min-energy trajectory
 
@@ -274,7 +274,7 @@ def optimal_trajectory_solve(
             jac                      = include_jacobian,
             options                  = options_root    ,
         )
-    print("\nFinal Solution Process")
+    print("\n\nFINAL SOLUTION PROCESS")
     print("  Root-Solve Results")
     # print(soln_root)
     for key, value in soln_root.items():
@@ -283,10 +283,10 @@ def optimal_trajectory_solve(
                 value_construct = '  '.join([str(f"{val:>13.6e}") for val in value])
             elif len(value.shape) == 2:
                 value_construct = ['  '.join( str(f"{val:>13.6e}") for val in row) for row in value]
-                value_construct = '\n              : '.join(value_construct)
+                value_construct = '\n            : '.join(value_construct)
         else:
             value_construct = value
-        print(f"      {key:>7s} : {value_construct}")
+        print(f"    {key:>7s} : {value_construct}")
     decision_state_initguess       = soln_root.x
     state_costate_o                = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decision_state_initguess])
     optimal_control_objective_o    = np.float64(0.0)
@@ -396,7 +396,7 @@ def generate_guess(
     """
     Generates a robust initial guess for the co-states: copos_vec, covel_vec
     """
-    print("\nInitial Guess Process")
+    print("\n\nINITIAL GUESS PROCESS")
 
     # Loop through random guesses for the costates
     print("  Random Initial Guess Generation")

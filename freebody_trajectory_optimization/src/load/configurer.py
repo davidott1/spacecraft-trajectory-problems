@@ -99,7 +99,7 @@ def configure_validate_input(
         use_thrust_limits     = False
         print(
             "      Warning: Cannot use both thrust acceleration limits and thrust limits."
-            + f"   Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}."
+            + f" Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}."
         )
     
     # Check if min-type fuel is set but no thrust or thrust-acc constraint
@@ -111,7 +111,7 @@ def configure_validate_input(
         use_thrust_limits     = False
         print(
             "      Warning: Min type is fuel, but no thrust or thrust-acc constraint is set."
-            + f"     Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}."
+            + f" Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}."
         )
 
     # Determine k values
@@ -181,10 +181,3 @@ def configure_output(output_folderpath_input):
     return output_folderpath
 
 
-def optimal_trajectory_input():
-
-    print("\nInput Process")
-    files_folders_params_input = parse_read_configure()
-    files_folders_params       = configure_validate_input(files_folders_params_input)
-
-    return files_folders_params
