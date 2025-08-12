@@ -1,6 +1,7 @@
 import numpy as np
 from src.utility.bounding_functions import bounded_smooth_func, bounded_nonsmooth_func, derivative__bounded_smooth_func, derivative__bounded_nonsmooth_func
 
+
 def free_body_dynamics__indirect(
         time                     : np.float64                     ,
         state_costate_scstm      : np.ndarray                     ,
@@ -285,7 +286,7 @@ def free_body_dynamics__indirect(
         else:
             return dstate_costate__dtime
 
-# Constant-gravity dynamics
+
 def constantgravitydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
         time             : float              ,
         state            : np.ndarray         ,
