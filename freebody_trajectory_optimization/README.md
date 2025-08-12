@@ -13,6 +13,7 @@ rocket-trajectory-simulation
 │       └── index.py         # Defines custom types and data structures
 ├── requirements.txt          # Lists project dependencies
 └── README.md                 # Project documentation
+xxx
 ```
 
 ## Installation
@@ -27,7 +28,7 @@ pip install -r requirements.txt
 
 To run the simulation, execute the `simulation.py` file. This will initialize the rocket's state and compute its trajectory based on the defined dynamics.
 
-```bash
+```
 python src/simulation.py
 ```
 
@@ -35,8 +36,13 @@ python src/simulation.py
 
 This project requires the following Python packages:
 
-- `numpy`: For numerical computations.
-- `astropy`: For handling physical quantities and units.
+```
+argparse==1.40
+astropy==6.0.1
+matplotlib==3.9.4
+numpy==1.26.4
+scipy== 1.13.1
+```
 
 ## Contributing
 
