@@ -1,21 +1,11 @@
 # Imports
 import random
 import numpy as np
-from src.load.reader           import parse_read_configure
-from src.load.processor        import configure_validate_input
-from src.optimize.optimizer    import optimal_trajectory_solve
+from src.load.processor     import optimal_trajectory_input
+from src.optimize.optimizer import optimal_trajectory_solve
 
 np.random.seed(42)
 
-# # Optimal trajectory input
-# def optimal_trajectory_input():
-
-#     # Input Process
-#     print("\nInput Process")
-#     files_folders_params_input = parse_read_configure()
-#     files_folders_params       = configure_validate_input(files_folders_params_input)
-
-#     return files_folders_params
 
 # Main
 def main():
