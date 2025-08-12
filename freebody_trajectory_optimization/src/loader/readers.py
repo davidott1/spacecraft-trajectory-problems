@@ -1,22 +1,34 @@
 import sys
 import json
+import argparse
 
-def configure_files_folders():
+def configure_and_read():
     """
-    General function to configure input and output files and folders
+    General function to configure input and output folder and read input parameters
     - filenpath of the input
     - folderpath of the output
     """ 
-    print("\nConfiguring and Reading Files and Folders")
 
-    # Grab command line input
-    input_filepath_input    = sys.argv[1]
-    output_folderpath_input = sys.argv[2]
+    # Configure input and output folders
+    print("\nConfigure Input and Output Folders")
+    parser = argparse.ArgumentParser(description="Configure input and output files and folders")
+    parser.add_argument(
+        "input_filepath"                          ,
+        help            = "Path to the input file",
+    )
+    parser.add_argument(
+        "output_folderpath"                                    ,
+        default = "output"                                     ,
+        nargs   = "?"                                          ,
+        help    = "Path to the output folder (default: output)",
+    )
+    args                    = parser.parse_args()
+    input_filepath_input    = args.input_filepath
+    output_folderpath_input = args.output_folderpath
 
-    # Setting reader booleans
+    # Read input parameters
     use_json_reader = False
 
-    # Check input filename extension
     if input_filepath_input.endswith('.json'):
         input_filepath = input_filepath_input
         use_json_reader = True
@@ -24,7 +36,6 @@ def configure_files_folders():
         input_filepath = f"{input_filepath_input}.json"
         use_json_reader = True
     
-    # Use particular reader
     if use_json_reader:
         input_parameters = read_json(input_filepath)
 

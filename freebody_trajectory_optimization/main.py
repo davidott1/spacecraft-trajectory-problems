@@ -8,7 +8,7 @@ import astropy.units as u
 from typing import Optional
 from tqdm import tqdm
 from pathlib import Path
-from src.loader.readers import configure_files_folders
+from src.loader.readers import configure_and_read
 from src.loader.process import process_input
 from src.plotters.final_results import plot_final_results
 from src.utility.bounding_functions import bounded_smooth_func, bounded_nonsmooth_func, derivative__bounded_smooth_func, derivative__bounded_nonsmooth_func
@@ -822,7 +822,7 @@ def optimal_trajectory_solve(
 def optimal_trajectory_input():
 
     # Read input
-    input_files_folders_params = configure_files_folders()
+    input_files_folders_params = configure_and_read()
 
     # Process input
     input_processed = process_input(input_files_folders_params)
