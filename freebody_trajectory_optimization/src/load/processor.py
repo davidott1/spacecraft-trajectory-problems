@@ -3,22 +3,24 @@ import astropy.units as u
 from pathlib import Path
 
 
-def process_input(
+def modify_raw_input(
         input_files_params,
     ):
-
-    # Print
-    print("\nRead Input Parameters")
 
     # Unpack filepaths and folderpaths
     input_filepath    = Path(input_files_params[   'input_filepath'])
     output_folderpath = Path(input_files_params['output_folderpath'])
 
     # Create parameters dictionary and print to screen
+
+    # Loop initialization
+    print("\n  Read and Modify Input Parameters")
     max_parameter_length = max([len(parameter) for parameter in input_files_params['input_parameters'].keys()])
     max_value_length     = 14
-    print(f"  {'Variable':<{max_parameter_length}s} : {'Value':>{2*max_value_length+2}s} {'Unit':<{max_value_length}s}")
+    print(f"    {'Variable':<{max_parameter_length}s} : {'Value':>{2*max_value_length+2}s} {'Unit':<{max_value_length}s}")
     parameters_with_units = {}
+
+    # Loop
     for parameter, value_unit in input_files_params['input_parameters'].items():
         if isinstance(value_unit, dict):
             # Handle value_unit as dictionary
@@ -47,7 +49,7 @@ def process_input(
                     unit_str  = ""
             
             # Print row: variable, value, and unit
-            print(f"  {parameter:<{max_parameter_length}s} : {value_str:>{2*max_value_length+2}s} {unit_str:<{max_value_length}s}") # type: ignore
+            print(f"    {parameter:<{max_parameter_length}s} : {value_str:>{2*max_value_length+2}s} {unit_str:<{max_value_length}s}") # type: ignore
 
         elif isinstance(value_unit, str):
             # Handle value_unit as string
@@ -84,20 +86,20 @@ def process_input(
     boundary_condition_vel_vec_f = vel_vec_f
 
     # Validate input
-    print("\nValidate Input")
+    print("\n  Validate Input")
 
     # Enforce types
     k_idxdivs        = int(k_idxdivs)
     init_guess_steps = int(init_guess_steps)
 
     # Check if both thrust and thrust-acc constraints are set
-    print("  Check thrust and thrust-acc constraints")
+    print("    Check thrust and thrust-acc constraints")
     if use_thrust_acc_limits and use_thrust_limits:
         use_thrust_acc_limits = True
         use_thrust_limits     = False
         print(
-            "    Warning: Cannot use both thrust acceleration limits and thrust limits."
-            + f" Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}."
+            "      Warning: Cannot use both thrust acceleration limits and thrust limits."
+            + f"   Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}."
         )
     
     # Check if min-type fuel is set but no thrust or thrust-acc constraint
@@ -108,22 +110,22 @@ def process_input(
         use_thrust_acc_limits = True
         use_thrust_limits     = False
         print(
-            "    Warning: Min type is fuel, but no thrust or thrust-acc constraint is set."
-            + f"   Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}."
+            "      Warning: Min type is fuel, but no thrust or thrust-acc constraint is set."
+            + f"     Choosing use_thrust_acc_limits = {use_thrust_acc_limits} and use_thrust_limits = {use_thrust_limits}."
         )
 
     # Determine k values
-    print("  Compute k-continuation parameters for thrust smoothing")
+    print("    Compute k-continuation parameters for thrust smoothing")
 
     # Check if k_idxdivs is valid
     if min_type == 'energy' and not use_thrust_acc_limits and not use_thrust_limits:
         if k_idxdivs != 1:
             print(
-                f"    Warning: Thrust smoothing is not needed using a k-continuation method:"
+                f"      Warning: Thrust smoothing is not needed using a k-continuation method:"
                 + f" min_type is {min_type},"
                 + f" use_thrust_acc_limits is {use_thrust_acc_limits},"
                 + f" and use_thrust_limits is {use_thrust_limits}."
-                + f" \n             k_idxdivs = {k_idxdivs} is not valid. Setting k_idxdivs = 1."
+                + f" \n               k_idxdivs = {k_idxdivs} is not valid. Setting k_idxdivs = 1."
             )
             k_idxdivs = 1 # k has no purpose, but the loop needs to run once
 
@@ -138,14 +140,14 @@ def process_input(
                 k_idxinitguess = np.float64(4.0e+0 / (thrust_acc_max - thrust_acc_min + 1.0e-9))
             else:
                 k_idxinitguess = np.float64(4.0e+0)
-        print(f"    Initial k-steepness : {k_idxinitguess:<{max_value_length}.6e}")
+        print(f"      Initial k-steepness : {k_idxinitguess:<{max_value_length}.6e}")
     else:
         k_idxinitguess = np.float64(k_idxinitguess) # type: ignore
 
     # Determine last k value
     if k_idxfinsoln is None:
         k_idxfinsoln = np.float64(1.0e+1 * k_idxinitguess)
-        print(f"    Final k-steepness   : {k_idxfinsoln:<{max_value_length}.6e}")
+        print(f"      Final k-steepness   : {k_idxfinsoln:<{max_value_length}.6e}")
     else:
         k_idxfinsoln = np.float64(k_idxfinsoln) # type: ignore
 

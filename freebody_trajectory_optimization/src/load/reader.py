@@ -53,7 +53,7 @@ def read_input_parameters(
         use_json_reader = True
     if use_json_reader:
         input_parameters = read_json(input_filepath)
-        print(f"  Input Filepath    : {input_filepath}")
+        print(f"    Input Filepath    : {input_filepath}")
     return (
         input_filepath, 
         input_parameters,

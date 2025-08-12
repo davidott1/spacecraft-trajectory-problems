@@ -8,7 +8,7 @@ def parse_command_line_interface_input():
     """ 
 
     # Parse file and folderpath
-    print("\nParse Filepaths and Folderpaths")
+    print("  Parse Filepaths and Folderpaths")
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "input_filepath"               ,
