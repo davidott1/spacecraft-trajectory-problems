@@ -8,7 +8,7 @@ def process_input(
     ):
 
     # Print
-    print("\nInput Parameters")
+    print("\nRead Input Parameters")
 
     # Unpack filepaths and folderpaths
     input_filepath    = Path(input_files_params[   'input_filepath'])

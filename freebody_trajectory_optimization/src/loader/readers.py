@@ -10,7 +10,7 @@ def configure_and_read():
     """ 
 
     # Parse file and folderpath
-    print("Parse Filepaths and Folderpaths")
+    print("\nParse Filepaths and Folderpaths")
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "input_filepath"               ,
@@ -27,7 +27,6 @@ def configure_and_read():
     output_folderpath_input = args.output_folderpath
 
     # Read input parameters
-    print("\nRead Input Parameters")
     use_json_reader = False
     if input_filepath_input.endswith('.json'):
         input_filepath = input_filepath_input
@@ -37,12 +36,12 @@ def configure_and_read():
         use_json_reader = True
     if use_json_reader:
         input_parameters = read_json(input_filepath)
-        print(f"  Input  : {input_filepath}")
+        print(f"  Input Filepath    : {input_filepath}")
 
     # Output folderpath
     output_folderpath = output_folderpath_input # do nothing for now
-    print(f"  Output : {output_folderpath}")
-
+    print(f"  Output Folderpath : {output_folderpath}")
+    
     # Pack up
     return {
         'input_filepath'    : input_filepath   ,

@@ -493,7 +493,7 @@ def generate_guess(
     print("\nInitial Guess Process")
 
     # Loop through random guesses for the costates
-    print("\nRandom Initial Guess Generation")
+    print("  Random Initial Guess Generation")
     error_mag_min = np.Inf
     for idx in tqdm(range(init_guess_steps), desc="Processing", leave=False, total=init_guess_steps):
         copos_vec_o        = np.random.uniform(low=-1, high=1, size=2)
@@ -536,7 +536,6 @@ def generate_guess(
 
     # Pack up and print solution
     costate_o_guess = decision_state_min
-    print(f"  MIN: *** {idx_min:>5d}/{init_guess_steps:>4d} {error_mag_min:>14.6e} {integ_state_min_str} ***")
     return costate_o_guess
 
 # Optimal trajectory solver
@@ -593,7 +592,7 @@ def optimal_trajectory_solve(
 
     # Thrust- or Thrust-Acc-Steepness Continuation Process
     if use_thrust_acc_limits or use_thrust_limits:
-        print("\nThrust- or Thrust-Acc-Steepness Continuation Process")
+        print("  Thrust- or Thrust-Acc-Steepness Continuation Process")
 
     # Loop initialization
     results_k_idx    = {}
@@ -723,10 +722,19 @@ def optimal_trajectory_solve(
             jac                      = include_jacobian,
             options                  = options_root    ,
         )
-    print()
-    print("Final Solution")
-    print("\nRoot-Solve Results")
-    print(soln_root)
+    print("\n  Final Solution")
+    print("    Root-Solve Results")
+    # print(soln_root)
+    for key, value in soln_root.items():
+        if isinstance(value, np.ndarray):
+            if len(value.shape) == 1:
+                value_construct = '  '.join([str(f"{val:>13.6e}") for val in value])
+            elif len(value.shape) == 2:
+                value_construct = ['  '.join( str(f"{val:>13.6e}") for val in row) for row in value]
+                value_construct = '\n              : '.join(value_construct)
+        else:
+            value_construct = value
+        print(f"      {key:>7s} : {value_construct}")
     decision_state_initguess       = soln_root.x
     state_costate_o                = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decision_state_initguess])
     optimal_control_objective_o    = np.float64(0.0)
@@ -772,14 +780,14 @@ def optimal_trajectory_solve(
     error_approx_finalsoln_vec = state_f_approx_finalsoln - np.hstack([boundary_condition_pos_vec_f, boundary_condition_vel_vec_f])
     error_finalsoln_vec        = state_f_finalsoln        - np.hstack([boundary_condition_pos_vec_f, boundary_condition_vel_vec_f])
 
-    print("\nState Error Check")
-    print(f"           {'Pos-Xf':>14s} {'Pos-Yf':>14s} {'Vel-Xf':>14s} {'Vel-Yf':>14s}")
-    print(f"           {    'm':>14s} {    'm':>14s} {  'm/s':>14s} {  'm/s':>14s}")
-    print(f"  Target : {boundary_condition_pos_vec_f[0]:>14.6e} {boundary_condition_pos_vec_f[1]:>14.6e} {boundary_condition_vel_vec_f[0]:>14.6e} {boundary_condition_vel_vec_f[1]:>14.6e}")
-    print(f"  Approx : {    state_f_approx_finalsoln[0]:>14.6e} {    state_f_approx_finalsoln[1]:>14.6e} {    state_f_approx_finalsoln[2]:>14.6e} {    state_f_approx_finalsoln[3]:>14.6e}")
-    print(f"  Error  : {  error_approx_finalsoln_vec[0]:>14.6e} {  error_approx_finalsoln_vec[1]:>14.3e} {  error_approx_finalsoln_vec[2]:>14.6e} {  error_approx_finalsoln_vec[3]:>14.6e}")
-    print(f"  Actual : {           state_f_finalsoln[0]:>14.6e} {           state_f_finalsoln[1]:>14.6e} {           state_f_finalsoln[2]:>14.6e} {           state_f_finalsoln[3]:>14.6e}")
-    print(f"  Error  : {         error_finalsoln_vec[0]:>14.6e} {         error_finalsoln_vec[1]:>14.3e} {         error_finalsoln_vec[2]:>14.6e} {         error_finalsoln_vec[3]:>14.6e}")
+    print("\n    State Error Check")
+    print(f"               {'Pos-Xf':>14s} {'Pos-Yf':>14s} {'Vel-Xf':>14s} {'Vel-Yf':>14s}")
+    print(f"               {    'm':>14s} {    'm':>14s} {  'm/s':>14s} {  'm/s':>14s}")
+    print(f"      Target : {boundary_condition_pos_vec_f[0]:>14.6e} {boundary_condition_pos_vec_f[1]:>14.6e} {boundary_condition_vel_vec_f[0]:>14.6e} {boundary_condition_vel_vec_f[1]:>14.6e}")
+    print(f"      Approx : {    state_f_approx_finalsoln[0]:>14.6e} {    state_f_approx_finalsoln[1]:>14.6e} {    state_f_approx_finalsoln[2]:>14.6e} {    state_f_approx_finalsoln[3]:>14.6e}")
+    print(f"      Error  : {  error_approx_finalsoln_vec[0]:>14.6e} {  error_approx_finalsoln_vec[1]:>14.3e} {  error_approx_finalsoln_vec[2]:>14.6e} {  error_approx_finalsoln_vec[3]:>14.6e}")
+    print(f"      Actual : {           state_f_finalsoln[0]:>14.6e} {           state_f_finalsoln[1]:>14.6e} {           state_f_finalsoln[2]:>14.6e} {           state_f_finalsoln[3]:>14.6e}")
+    print(f"      Error  : {         error_finalsoln_vec[0]:>14.6e} {         error_finalsoln_vec[1]:>14.3e} {         error_finalsoln_vec[2]:>14.6e} {         error_finalsoln_vec[3]:>14.6e}")
 
     # Enforce initial and final co-state boundary conditions (trivial right now)
     boundary_condition_copos_vec_o = decision_state_initguess[0:2]
@@ -813,9 +821,6 @@ def optimal_trajectory_solve(
         input_filepath                 = input_filepath       ,
         output_folderpath              = output_folderpath    ,
     )
-
-    # End
-    print()
 
 
 # Optimal trajectory input
