@@ -8,9 +8,9 @@ import astropy.units as u
 from typing import Optional
 from tqdm import tqdm
 from pathlib import Path
-from src.loader.readers import configure_and_read
-from src.loader.process import process_input
-from src.plotters.final_results import plot_final_results
+from src.load.reader import configure_and_read
+from src.load.processor import process_input
+from src.plot.final_results import plot_final_results
 from src.utility.bounding_functions import bounded_smooth_func, bounded_nonsmooth_func, derivative__bounded_smooth_func, derivative__bounded_nonsmooth_func
 
 # Free-body dynamics
@@ -529,10 +529,10 @@ def generate_guess(
             decision_state_min = decision_state_idx
             integ_state_min    = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decision_state_min])
             if idx==0:
-                tqdm.write(f"                                     {'Fixed':>14s} {'Fixed':>14s} {'Fixed':>14s} {'Fixed':>14s} {'Free':>14s} {'Free':>14s} {'Free':>14s} {'Free':>14s}")
-                tqdm.write(f"                {'Step':>5s} {'Error-Mag':>14s} {'Pos-Xo':>14s} {'Pos-Yo':>14s} {'Vel-Xo':>14s} {'Vel-Yo':>14s} {'Co-Pos-Xo':>14s} {'Co-Pos-Yo':>14s} {'Co-Vel-Xo':>14s} {'Co-Vel-Yo':>14s}")
+                tqdm.write(f"                               {'Fixed':>14s} {'Fixed':>14s} {'Fixed':>14s} {'Fixed':>14s} {'Free':>14s} {'Free':>14s} {'Free':>14s} {'Free':>14s}")
+                tqdm.write(f"          {'Step':>5s} {'Error-Mag':>14s} {'Pos-Xo':>14s} {'Pos-Yo':>14s} {'Vel-Xo':>14s} {'Vel-Yo':>14s} {'Co-Pos-Xo':>14s} {'Co-Pos-Yo':>14s} {'Co-Vel-Xo':>14s} {'Co-Vel-Yo':>14s}")
             integ_state_min_str = ' '.join(f"{x:>14.6e}" for x in integ_state_min)
-            tqdm.write(f"           {idx_min:>5d}/{init_guess_steps:>4d} {error_mag_min:>14.6e} {integ_state_min_str}")
+            tqdm.write(f"     {idx_min:>5d}/{init_guess_steps:>4d} {error_mag_min:>14.6e} {integ_state_min_str}")
 
     # Pack up and print solution
     costate_o_guess = decision_state_min
@@ -586,7 +586,7 @@ def optimal_trajectory_solve(
         )
 
     # Optimize and enforce thrust or thrust-acc constraints
-    print("\nOptimizing Process")
+    print("\nOptimization Process")
 
     # Solve for the optimal min-fuel or min-energy trajectory
 
@@ -703,11 +703,11 @@ def optimal_trajectory_solve(
                 min_type                     = min_type             ,
                 mass_o                       = mass_o               ,
                 use_thrust_acc_limits        = use_thrust_acc_limits,
-                use_thrust_acc_smoothing     = False                 , # temp
+                use_thrust_acc_smoothing     = False                ,
                 thrust_acc_min               = thrust_acc_min       ,
                 thrust_acc_max               = thrust_acc_max       ,
                 use_thrust_limits            = use_thrust_limits    ,
-                use_thrust_smoothing         = False                 , # temp
+                use_thrust_smoothing         = False                ,
                 thrust_min                   = thrust_min           ,
                 thrust_max                   = thrust_max           ,
                 k_steepness                  = k_idx                ,
@@ -722,8 +722,8 @@ def optimal_trajectory_solve(
             jac                      = include_jacobian,
             options                  = options_root    ,
         )
-    print("\n  Final Solution")
-    print("    Root-Solve Results")
+    print("\nFinal Solution Process")
+    print("  Root-Solve Results")
     # print(soln_root)
     for key, value in soln_root.items():
         if isinstance(value, np.ndarray):
@@ -748,11 +748,11 @@ def optimal_trajectory_solve(
                 include_scstm                = False                ,
                 min_type                     = min_type             ,
                 use_thrust_acc_limits        = use_thrust_acc_limits,
-                use_thrust_acc_smoothing     = False                 , # temp
+                use_thrust_acc_smoothing     = False                ,
                 thrust_acc_min               = thrust_acc_min       ,
                 thrust_acc_max               = thrust_acc_max       ,
                 use_thrust_limits            = use_thrust_limits    ,
-                use_thrust_smoothing         = False                 , # temp
+                use_thrust_smoothing         = False                ,
                 thrust_min                   = thrust_min           ,
                 thrust_max                   = thrust_max           ,
                 post_process                 = True                 ,
@@ -780,14 +780,14 @@ def optimal_trajectory_solve(
     error_approx_finalsoln_vec = state_f_approx_finalsoln - np.hstack([boundary_condition_pos_vec_f, boundary_condition_vel_vec_f])
     error_finalsoln_vec        = state_f_finalsoln        - np.hstack([boundary_condition_pos_vec_f, boundary_condition_vel_vec_f])
 
-    print("\n    State Error Check")
-    print(f"               {'Pos-Xf':>14s} {'Pos-Yf':>14s} {'Vel-Xf':>14s} {'Vel-Yf':>14s}")
-    print(f"               {    'm':>14s} {    'm':>14s} {  'm/s':>14s} {  'm/s':>14s}")
-    print(f"      Target : {boundary_condition_pos_vec_f[0]:>14.6e} {boundary_condition_pos_vec_f[1]:>14.6e} {boundary_condition_vel_vec_f[0]:>14.6e} {boundary_condition_vel_vec_f[1]:>14.6e}")
-    print(f"      Approx : {    state_f_approx_finalsoln[0]:>14.6e} {    state_f_approx_finalsoln[1]:>14.6e} {    state_f_approx_finalsoln[2]:>14.6e} {    state_f_approx_finalsoln[3]:>14.6e}")
-    print(f"      Error  : {  error_approx_finalsoln_vec[0]:>14.6e} {  error_approx_finalsoln_vec[1]:>14.3e} {  error_approx_finalsoln_vec[2]:>14.6e} {  error_approx_finalsoln_vec[3]:>14.6e}")
-    print(f"      Actual : {           state_f_finalsoln[0]:>14.6e} {           state_f_finalsoln[1]:>14.6e} {           state_f_finalsoln[2]:>14.6e} {           state_f_finalsoln[3]:>14.6e}")
-    print(f"      Error  : {         error_finalsoln_vec[0]:>14.6e} {         error_finalsoln_vec[1]:>14.3e} {         error_finalsoln_vec[2]:>14.6e} {         error_finalsoln_vec[3]:>14.6e}")
+    print("\n  State Error Check")
+    print(f"             {'Pos-Xf':>14s} {'Pos-Yf':>14s} {'Vel-Xf':>14s} {'Vel-Yf':>14s}")
+    print(f"             {    'm':>14s} {    'm':>14s} {  'm/s':>14s} {  'm/s':>14s}")
+    print(f"    Target : {boundary_condition_pos_vec_f[0]:>14.6e} {boundary_condition_pos_vec_f[1]:>14.6e} {boundary_condition_vel_vec_f[0]:>14.6e} {boundary_condition_vel_vec_f[1]:>14.6e}")
+    print(f"    Approx : {    state_f_approx_finalsoln[0]:>14.6e} {    state_f_approx_finalsoln[1]:>14.6e} {    state_f_approx_finalsoln[2]:>14.6e} {    state_f_approx_finalsoln[3]:>14.6e}")
+    print(f"    Error  : {  error_approx_finalsoln_vec[0]:>14.6e} {  error_approx_finalsoln_vec[1]:>14.3e} {  error_approx_finalsoln_vec[2]:>14.6e} {  error_approx_finalsoln_vec[3]:>14.6e}")
+    print(f"    Actual : {           state_f_finalsoln[0]:>14.6e} {           state_f_finalsoln[1]:>14.6e} {           state_f_finalsoln[2]:>14.6e} {           state_f_finalsoln[3]:>14.6e}")
+    print(f"    Error  : {         error_finalsoln_vec[0]:>14.6e} {         error_finalsoln_vec[1]:>14.3e} {         error_finalsoln_vec[2]:>14.6e} {         error_finalsoln_vec[3]:>14.6e}")
 
     # Enforce initial and final co-state boundary conditions (trivial right now)
     boundary_condition_copos_vec_o = decision_state_initguess[0:2]
@@ -796,6 +796,7 @@ def optimal_trajectory_solve(
     boundary_condition_covel_vec_f = results_finalsoln.y[6:8, -1]
 
     # Plot the results
+    print("\n  Plot Final Solution Trajectory")
     plot_final_results(
         results_finalsoln                                     ,
         boundary_condition_pos_vec_o                          ,
