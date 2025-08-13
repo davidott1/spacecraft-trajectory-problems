@@ -5,14 +5,34 @@ This project simulates the trajectory of a rocket using basic physics principles
 ## Project Structure
 
 ```
-rocket-trajectory-simulation
+freebody_trajectory_optimization
+├── input
+│   └── examples
+│       ├── example_01.json
+│       ├── example_02.json
+│       ├── example_03.json
+│       ├── example_04.json
+│       ├── example_05.json
+│       ├── example_06.json
+│       ├── example_07.json
+│       ├── example_08.json
+│       ├── example_09.json
+│       └── example_10.json
+├── outpurt
+│   └── examples
 ├── src
-│   ├── rocket_dynamics.py   # Contains the rocket_dynamics function for computing dynamics
-│   ├── simulation.py         # Responsible for simulating the rocket trajectory
-│   └── types
-│       └── index.py         # Defines custom types and data structures
-├── requirements.txt          # Lists project dependencies
-└── README.md                 # Project documentation
+│   ├── data
+│   ├── initial_guess
+│   ├── load
+│   ├── model
+│   ├── optimize
+│   ├── plot
+│   └── utility
+├── tests
+├── untracked
+├── main.py                   # main driver
+├── README.md                 # Project documentation
+└── requirements.txt          # Lists project dependencies
 xxx
 ```
 
