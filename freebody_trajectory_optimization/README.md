@@ -1,6 +1,10 @@
-# Rocket Trajectory Simulation
+# Free-body Trajectory Optimization
 
-This project simulates the trajectory of a rocket using basic physics principles. It computes the dynamics of the rocket based on its state, including position, velocity, and mass, and integrates these dynamics over time to produce a trajectory.
+This project simulates the optimal trajectory of a free-body. The spacecraft dynamics is free or uses no external acceleration. The optimal control law uses an indirect method, leveraging the Hamiltonian. The flight time is fixed and boundary conditions are fixed. The spacecraft travels from a fixed position and velocity to a fixed position and velocity. 
+
+## Derivation
+
+xxx
 
 ## Project Structure
 
