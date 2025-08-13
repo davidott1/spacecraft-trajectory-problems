@@ -23,17 +23,26 @@ freebody_trajectory_optimization/
 ├── src/
 │   ├── data/
 │   ├── initial_guess/
+│   │   └── guesser.py
 │   ├── load/
+│   │   ├── configurer.py
+│   │   ├── parser.py
+│   │   ├── processor.py
+│   │   └── reader.py
 │   ├── model/
+│   │   └── dynamics.py
 │   ├── optimize/
+│   │   └── optimizer.py
 │   ├── plot/
+│   │   └── final_results.py
 │   └── utility/
-├── tests/
-├── untracked/
-├── main.py                   # main driver
-├── README.md                 # documentation
-└── requirements.txt          # required external packages
-xxx
+│       └── bounding_functions.py
+├── tests/                        : collection of tests
+├── untracked/                    : untracked files for convenience
+├── .gitignore                    : contains files and folders to ignore by git
+├── main.py                       : main driver
+├── README.md                     : documentation
+└── requirements.txt              : required external packages
 ```
 
 ## Installation
