@@ -121,29 +121,32 @@ def optimal_trajectory_solve(
     """
 
     # Generate initial guess for the costates
-    # decision_state_initguess = \
-    #     generate_guess(
-    #         time_span                                           ,
-    #         boundary_condition_pos_vec_o                        ,
-    #         boundary_condition_vel_vec_o                        ,
-    #         boundary_condition_pos_vec_f                        ,
-    #         boundary_condition_vel_vec_f                        ,
-    #         min_type                     = min_type             ,
-    #         mass_o                       = mass_o               ,
-    #         use_thrust_acc_limits        = use_thrust_acc_limits,
-    #         thrust_acc_min               = thrust_acc_min       ,
-    #         thrust_acc_max               = thrust_acc_max       ,
-    #         use_thrust_limits            = use_thrust_limits    ,
-    #         thrust_min                   = thrust_min           ,
-    #         thrust_max                   = thrust_max           ,
-    #         k_steepness                  = k_idxinitguess       ,
-    #         init_guess_steps             = init_guess_steps     ,
-    #     )
     decision_state_initguess = \
         generate_guess(
             files_folders_params,
         )
 
+    # Unpack files and folders parameters
+    time_span                    = files_folders_params['time_span'                   ]
+    boundary_condition_pos_vec_o = files_folders_params['boundary_condition_pos_vec_o']
+    boundary_condition_vel_vec_o = files_folders_params['boundary_condition_vel_vec_o']
+    boundary_condition_pos_vec_f = files_folders_params['boundary_condition_pos_vec_f']
+    boundary_condition_vel_vec_f = files_folders_params['boundary_condition_vel_vec_f']
+    input_filepath               = files_folders_params['input_filepath'       ]
+    output_folderpath            = files_folders_params['output_folderpath'    ]
+    min_type                     = files_folders_params.get('min_type'             , 'energy')
+    mass_o                       = files_folders_params.get('mass_o'               , 1.0e+3  )
+    use_thrust_acc_limits        = files_folders_params.get('use_thrust_acc_limits', True    )
+    thrust_acc_min               = files_folders_params.get('thrust_acc_min'       , 0.0e+0  )
+    thrust_acc_max               = files_folders_params.get('thrust_acc_max'       , 1.0e+1  )
+    use_thrust_limits            = files_folders_params.get('use_thrust_limits'    , False   )
+    thrust_min                   = files_folders_params.get('thrust_min'           , 0.0e+0  )
+    thrust_max                   = files_folders_params.get('thrust_max'           , 1.0e+1  )
+    k_idxinitguess               = files_folders_params.get('k_idxinitguess'       , 1.0e-1  )
+    k_idxfinsoln                 = files_folders_params.get('k_idxfinsoln'         , 1.0e+1  )
+    k_idxdivs                    = files_folders_params.get('k_idxdivs'            , 100     )
+    init_guess_steps             = files_folders_params.get('init_guess_steps'     , 3000    )
+    
     # Optimize and enforce thrust or thrust-acc constraints
     print("\n\nOPTIMIZATION PROCESS")
 
@@ -383,23 +386,6 @@ def optimal_trajectory_solve(
     )
 
 
-# def generate_guess(
-#         time_span                    : np.ndarray                     ,
-#         boundary_condition_pos_vec_o : np.ndarray                     ,
-#         boundary_condition_vel_vec_o : np.ndarray                     ,
-#         boundary_condition_pos_vec_f : np.ndarray                     ,
-#         boundary_condition_vel_vec_f : np.ndarray                     ,
-#         min_type                     : str        = 'energy'          ,
-#         mass_o                       : np.float64 = np.float64(1.0e+3),
-#         use_thrust_acc_limits        : bool       = True              ,
-#         thrust_acc_min               : np.float64 = np.float64(0.0e+0),
-#         thrust_acc_max               : np.float64 = np.float64(1.0e+1),
-#         use_thrust_limits            : bool       = False             ,
-#         thrust_min                   : np.float64 = np.float64(0.0e+0),
-#         thrust_max                   : np.float64 = np.float64(1.0e+1),
-#         k_steepness                  : np.float64 = np.float64(0.0e+0),
-#         init_guess_steps             : int        = 3000              ,
-#     ):
 def generate_guess(
         files_folders_params,
     ):
@@ -407,7 +393,24 @@ def generate_guess(
     Generates a robust initial guess for the co-states: copos_vec, covel_vec
     """
     print("\n\nINITIAL GUESS PROCESS")
-    breakpoint() # startheere files_folders_params
+
+    # Unpack
+    time_span                    = files_folders_params['time_span'                   ]
+    boundary_condition_pos_vec_o = files_folders_params['boundary_condition_pos_vec_o']
+    boundary_condition_vel_vec_o = files_folders_params['boundary_condition_vel_vec_o']
+    boundary_condition_pos_vec_f = files_folders_params['boundary_condition_pos_vec_f']
+    boundary_condition_vel_vec_f = files_folders_params['boundary_condition_vel_vec_f']
+    min_type                     = files_folders_params.get('min_type'             , 'energy')
+    mass_o                       = files_folders_params.get('mass_o'               , 1.0e+3  )
+    use_thrust_acc_limits        = files_folders_params.get('use_thrust_acc_limits', True    )
+    thrust_acc_min               = files_folders_params.get('thrust_acc_min'       , 0.0e+0  )
+    thrust_acc_max               = files_folders_params.get('thrust_acc_max'       , 1.0e+1  )
+    use_thrust_limits            = files_folders_params.get('use_thrust_limits'    , False   )
+    thrust_min                   = files_folders_params.get('thrust_min'           , 0.0e+0  )
+    thrust_max                   = files_folders_params.get('thrust_max'           , 1.0e+1  )
+    k_steepness                  = files_folders_params.get('k_steepness'          , 1.0e+0  )
+    init_guess_steps             = files_folders_params.get('init_guess_steps'     , 3000    )
+
     # Loop through random guesses for the costates
     print("  Random Initial Guess Generation")
     error_mag_min = np.Inf

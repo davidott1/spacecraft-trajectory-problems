@@ -214,7 +214,9 @@ def configure_validate_input(
             print(f"      Final k-steepness   : {pwu['k_idxfinsoln']:<{max_value_length}.6e}")
         else:
             pwu['k_idxfinsoln'] = np.float64(pwu['k_idxfinsoln']) # type: ignore
-    _validate_input(parameters_without_units)
+    _validate_input(
+        parameters_without_units,
+    )
 
     return {
         **parameters_without_units                                   ,
@@ -226,52 +228,13 @@ def configure_validate_input(
         'output_folderpath'            : output_folderpath           ,
     }
 
-    # # Unpack locally for convenience
-    # min_type              = parameters_without_units['min_type']
-    # time_span             = parameters_without_units['time_span']
-    # pos_vec_o             = parameters_without_units['pos_vec_o']
-    # vel_vec_o             = parameters_without_units['vel_vec_o']
-    # pos_vec_f             = parameters_without_units['pos_vec_f']
-    # vel_vec_f             = parameters_without_units['vel_vec_f']
-    # mass_o                = parameters_without_units['mass_o']
-    # use_thrust_acc_limits = parameters_without_units['use_thrust_acc_limits']
-    # thrust_acc_min        = parameters_without_units['thrust_acc_min']
-    # thrust_acc_max        = parameters_without_units['thrust_acc_max']
-    # use_thrust_limits     = parameters_without_units['use_thrust_limits']
-    # thrust_min            = parameters_without_units['thrust_min']
-    # thrust_max            = parameters_without_units['thrust_max']
-    # k_idxinitguess        = parameters_without_units['k_idxinitguess']
-    # k_idxfinsoln          = parameters_without_units['k_idxfinsoln']
-    # k_idxdivs             = parameters_without_units['k_idxdivs']
-    # init_guess_steps      = parameters_without_units['init_guess_steps']
 
-    # # Pack up variable input
-    # return (
-    #     min_type                    ,
-    #     time_span                   ,
-    #     boundary_condition_pos_vec_o,
-    #     boundary_condition_vel_vec_o,
-    #     boundary_condition_pos_vec_f,
-    #     boundary_condition_vel_vec_f,
-    #     use_thrust_acc_limits       ,
-    #     thrust_acc_min              ,
-    #     thrust_acc_max              ,
-    #     use_thrust_limits           ,
-    #     thrust_min                  ,
-    #     thrust_max                  ,
-    #     k_idxinitguess              ,
-    #     k_idxfinsoln                ,
-    #     k_idxdivs                   ,
-    #     init_guess_steps            ,
-    #     mass_o                      ,
-    #     input_filepath              ,
-    #     output_folderpath           ,
-    # )
-
-
-def configure_output(output_folderpath_input):
-    output_folderpath = output_folderpath_input
+def configure_output(
+        output_folderpath_input: str,
+    ):
+    output_folderpath = Path(output_folderpath_input)
+    output_folderpath.mkdir(parents=True, exist_ok=True)
     print(f"    Output Folderpath : {output_folderpath}")
-    return output_folderpath
+    return str(output_folderpath)
 
 
