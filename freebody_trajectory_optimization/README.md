@@ -5,9 +5,9 @@ This project simulates the trajectory of a rocket using basic physics principles
 ## Project Structure
 
 ```
-freebody_trajectory_optimization
-├── input
-│   └── examples
+freebody_trajectory_optimization/
+├── input/
+│   └── examples/
 │       ├── example_01.json
 │       ├── example_02.json
 │       ├── example_03.json
@@ -18,28 +18,27 @@ freebody_trajectory_optimization
 │       ├── example_08.json
 │       ├── example_09.json
 │       └── example_10.json
-├── outpurt
-│   └── examples
-├── src
-│   ├── data
-│   ├── initial_guess
-│   ├── load
-│   ├── model
-│   ├── optimize
-│   ├── plot
-│   └── utility
-├── tests
-├── untracked
+├── output/
+│   └── examples/
+├── src/
+│   ├── data/
+│   ├── initial_guess/
+│   ├── load/
+│   ├── model/
+│   ├── optimize/
+│   ├── plot/
+│   └── utility/
+├── tests/
+├── untracked/
 ├── main.py                   # main driver
-├── README.md                 # Project documentation
-└── requirements.txt          # Lists project dependencies
+├── README.md                 # documentation
+└── requirements.txt          # required external packages
 xxx
 ```
 
 ## Installation
 
-To install the required dependencies, run the following command:
-
+To install the required external packages, run the following command:
 ```
 pip install -r requirements.txt
 ```
@@ -47,7 +46,6 @@ pip install -r requirements.txt
 ## Usage
 
 To run the simulation, execute the `simulation.py` file. This will initialize the rocket's state and compute its trajectory based on the defined dynamics.
-
 ```
 python main.py <input_filepath> [<output_folderpath>]
 ```
@@ -60,7 +58,6 @@ python main.py input/examples/example_01.json output/examples
 ## Dependencies
 
 This project requires the following Python packages:
-
 ```
 argparse==1.40
 astropy==6.0.1
