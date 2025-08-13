@@ -91,26 +91,29 @@ def tpbvp_objective_and_jacobian(
         return error
     
 
+# def optimal_trajectory_solve(
+#         time_span                    : np.ndarray                                         ,
+#         boundary_condition_pos_vec_o : np.ndarray                                         ,
+#         boundary_condition_vel_vec_o : np.ndarray                                         ,
+#         boundary_condition_pos_vec_f : np.ndarray                                         ,
+#         boundary_condition_vel_vec_f : np.ndarray                                         ,
+#         min_type                     : str        = 'energy'                              ,
+#         use_thrust_acc_limits        : bool       = True                                  ,
+#         thrust_acc_min               : np.float64 = np.float64(0.0e+0)                    ,
+#         thrust_acc_max               : np.float64 = np.float64(1.0e+1)                    ,
+#         use_thrust_limits            : bool       = False                                 ,
+#         thrust_min                   : np.float64 = np.float64(0.0e+0)                    ,
+#         thrust_max                   : np.float64 = np.float64(1.0e+1)                    ,
+#         k_idxinitguess               : np.float64 = np.float64(1.0e-1)                    ,
+#         k_idxfinsoln                 : np.float64 = np.float64(1.0e+1)                    ,
+#         k_idxdivs                    : int        = 100                                   ,
+#         init_guess_steps             : int        = 3000                                  ,
+#         mass_o                       : np.float64 = np.float64(1.0e+3)                    ,
+#         input_filepath               : Path       = Path('input/examples/example_01.json'),
+#         output_folderpath            : Path       = Path('output/')                       ,
+#     ):
 def optimal_trajectory_solve(
-        time_span                    : np.ndarray                                         ,
-        boundary_condition_pos_vec_o : np.ndarray                                         ,
-        boundary_condition_vel_vec_o : np.ndarray                                         ,
-        boundary_condition_pos_vec_f : np.ndarray                                         ,
-        boundary_condition_vel_vec_f : np.ndarray                                         ,
-        min_type                     : str        = 'energy'                              ,
-        use_thrust_acc_limits        : bool       = True                                  ,
-        thrust_acc_min               : np.float64 = np.float64(0.0e+0)                    ,
-        thrust_acc_max               : np.float64 = np.float64(1.0e+1)                    ,
-        use_thrust_limits            : bool       = False                                 ,
-        thrust_min                   : np.float64 = np.float64(0.0e+0)                    ,
-        thrust_max                   : np.float64 = np.float64(1.0e+1)                    ,
-        k_idxinitguess               : np.float64 = np.float64(1.0e-1)                    ,
-        k_idxfinsoln                 : np.float64 = np.float64(1.0e+1)                    ,
-        k_idxdivs                    : int        = 100                                   ,
-        init_guess_steps             : int        = 3000                                  ,
-        mass_o                       : np.float64 = np.float64(1.0e+3)                    ,
-        input_filepath               : Path       = Path('input/examples/example_01.json'),
-        output_folderpath            : Path       = Path('output/')                       ,
+        files_folders_params : dict,
     ):
     """
     Main solver that implements the two-stage continuation process
@@ -118,23 +121,27 @@ def optimal_trajectory_solve(
     """
 
     # Generate initial guess for the costates
+    # decision_state_initguess = \
+    #     generate_guess(
+    #         time_span                                           ,
+    #         boundary_condition_pos_vec_o                        ,
+    #         boundary_condition_vel_vec_o                        ,
+    #         boundary_condition_pos_vec_f                        ,
+    #         boundary_condition_vel_vec_f                        ,
+    #         min_type                     = min_type             ,
+    #         mass_o                       = mass_o               ,
+    #         use_thrust_acc_limits        = use_thrust_acc_limits,
+    #         thrust_acc_min               = thrust_acc_min       ,
+    #         thrust_acc_max               = thrust_acc_max       ,
+    #         use_thrust_limits            = use_thrust_limits    ,
+    #         thrust_min                   = thrust_min           ,
+    #         thrust_max                   = thrust_max           ,
+    #         k_steepness                  = k_idxinitguess       ,
+    #         init_guess_steps             = init_guess_steps     ,
+    #     )
     decision_state_initguess = \
         generate_guess(
-            time_span                                           ,
-            boundary_condition_pos_vec_o                        ,
-            boundary_condition_vel_vec_o                        ,
-            boundary_condition_pos_vec_f                        ,
-            boundary_condition_vel_vec_f                        ,
-            min_type                     = min_type             ,
-            mass_o                       = mass_o               ,
-            use_thrust_acc_limits        = use_thrust_acc_limits,
-            thrust_acc_min               = thrust_acc_min       ,
-            thrust_acc_max               = thrust_acc_max       ,
-            use_thrust_limits            = use_thrust_limits    ,
-            thrust_min                   = thrust_min           ,
-            thrust_max                   = thrust_max           ,
-            k_steepness                  = k_idxinitguess       ,
-            init_guess_steps             = init_guess_steps     ,
+            files_folders_params,
         )
 
     # Optimize and enforce thrust or thrust-acc constraints
@@ -376,28 +383,31 @@ def optimal_trajectory_solve(
     )
 
 
+# def generate_guess(
+#         time_span                    : np.ndarray                     ,
+#         boundary_condition_pos_vec_o : np.ndarray                     ,
+#         boundary_condition_vel_vec_o : np.ndarray                     ,
+#         boundary_condition_pos_vec_f : np.ndarray                     ,
+#         boundary_condition_vel_vec_f : np.ndarray                     ,
+#         min_type                     : str        = 'energy'          ,
+#         mass_o                       : np.float64 = np.float64(1.0e+3),
+#         use_thrust_acc_limits        : bool       = True              ,
+#         thrust_acc_min               : np.float64 = np.float64(0.0e+0),
+#         thrust_acc_max               : np.float64 = np.float64(1.0e+1),
+#         use_thrust_limits            : bool       = False             ,
+#         thrust_min                   : np.float64 = np.float64(0.0e+0),
+#         thrust_max                   : np.float64 = np.float64(1.0e+1),
+#         k_steepness                  : np.float64 = np.float64(0.0e+0),
+#         init_guess_steps             : int        = 3000              ,
+#     ):
 def generate_guess(
-        time_span                    : np.ndarray                     ,
-        boundary_condition_pos_vec_o : np.ndarray                     ,
-        boundary_condition_vel_vec_o : np.ndarray                     ,
-        boundary_condition_pos_vec_f : np.ndarray                     ,
-        boundary_condition_vel_vec_f : np.ndarray                     ,
-        min_type                     : str        = 'energy'          ,
-        mass_o                       : np.float64 = np.float64(1.0e+3),
-        use_thrust_acc_limits        : bool       = True              ,
-        thrust_acc_min               : np.float64 = np.float64(0.0e+0),
-        thrust_acc_max               : np.float64 = np.float64(1.0e+1),
-        use_thrust_limits            : bool       = False             ,
-        thrust_min                   : np.float64 = np.float64(0.0e+0),
-        thrust_max                   : np.float64 = np.float64(1.0e+1),
-        k_steepness                  : np.float64 = np.float64(0.0e+0),
-        init_guess_steps             : int        = 3000              ,
+        files_folders_params,
     ):
     """
     Generates a robust initial guess for the co-states: copos_vec, covel_vec
     """
     print("\n\nINITIAL GUESS PROCESS")
-
+    breakpoint() # startheere files_folders_params
     # Loop through random guesses for the costates
     print("  Random Initial Guess Generation")
     error_mag_min = np.Inf
