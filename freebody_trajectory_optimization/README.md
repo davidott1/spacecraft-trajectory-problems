@@ -29,12 +29,12 @@ pip install -r requirements.txt
 To run the simulation, execute the `simulation.py` file. This will initialize the rocket's state and compute its trajectory based on the defined dynamics.
 
 ```
-python3c main.py <input_filepath> [<output_folderpath>]
+python main.py <input_filepath> [<output_folderpath>]
 ```
 
 Example
 ```
-python3c main.py input/examples/example_01.json output/examples
+python main.py input/examples/example_01.json output/examples
 ```
 
 ## Dependencies
@@ -48,7 +48,3 @@ matplotlib==3.9.4
 numpy==1.26.4
 scipy== 1.13.1
 ```
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a pull request or open an issue for any enhancements or bug fixes.
