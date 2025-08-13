@@ -54,11 +54,15 @@ pip install -r requirements.txt
 
 ## Usage
 
-To run the program, execute the following general command
+To run the program, change directory to `freebody_trajectory_optimization`:
+```
+cd ~/github/spacecraft-trajectory-problems/freebody_trajectory_optimization/
+```
+Execute the following general command
 ```
 python main.py <input_filepath> [<output_folderpath>]
 ```
-An example execution is
+Example
 ```
 python main.py input/examples/example_01.json output/examples
 ```
