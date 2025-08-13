@@ -62,7 +62,7 @@ Execute the following general command
 ```
 python main.py <input_filepath> [<output_folderpath>]
 ```
-Example
+or more specifically
 ```
 python main.py input/examples/example_01.json output/examples
 ```
@@ -76,4 +76,56 @@ astropy==6.0.1
 matplotlib==3.9.4
 numpy==1.26.4
 scipy== 1.13.1
+```
+
+## Examples
+
+### Example 01: `input/examples/example_01.json`
+```
+python main.py input/examples/example_01.json output/examples
+```
+
+### Example 02: `input/examples/example_02.json`
+```
+python main.py input/examples/example_02.json output/examples
+```
+
+### Example 03: `input/examples/example_03.json`
+```
+python main.py input/examples/example_03.json output/examples
+```
+
+### Example 04: `input/examples/example_04.json`
+```
+python main.py input/examples/example_04.json output/examples
+```
+
+### Example 05: `input/examples/example_05.json`
+```
+python main.py input/examples/example_05.json output/examples
+```
+
+### Example 06: `input/examples/example_06.json`
+```
+python main.py input/examples/example_06.json output/examples
+```
+
+### Example 07: `input/examples/example_07.json`
+```
+python main.py input/examples/example_07.json output/examples
+```
+
+### Example 08: `input/examples/example_08.json`
+```
+python main.py input/examples/example_08.json output/examples
+```
+
+### Example 09: `input/examples/example_09.json`
+```
+python main.py input/examples/example_09.json output/examples
+```
+
+### Example 10: `input/examples/example_10.json`
+```
+python main.py input/examples/example_10.json output/examples
 ```
