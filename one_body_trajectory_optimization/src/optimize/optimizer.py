@@ -3,36 +3,99 @@ from tqdm                      import tqdm
 from pathlib                   import Path
 from scipy.integrate           import solve_ivp
 from scipy.optimize            import root
-from src.model.dynamics        import free_body_dynamics__indirect
+from src.model.dynamics        import one_body_dynamics__indirect
 # from src.initial_guess.guesser import generate_guess
 from src.plot.final_results    import plot_final_results
 
+
+def generate_guess(
+        system_parameters           ,
+        optimization_parameters     ,
+        integration_state_parameters,
+        equality_parameters         ,
+        inequality_parameters       ,
+    ):
+    """
+    Generates a robust initial guess for the co-states: copos_vec, covel_vec
+    """
+    print("\n\nINITIAL GUESS PROCESS")
+
+    # Unpack
+    init_guess_steps = optimization_parameters['init_guess_steps']
+    pos_vec_o_mns    =     equality_parameters['pos_vec_o_mns'   ]
+    vel_vec_o_mns    =     equality_parameters['vel_vec_o_mns'   ]
+    pos_vec_f_pls    =     equality_parameters['pos_vec_f_pls'   ]
+    vel_vec_f_pls    =     equality_parameters['vel_vec_f_pls'   ]
+
+    # Initialize loop for random guesses
+    optimization_parameters['include_jacobian'] = False
+
+    # Loop through random guesses for the costates
+    print("  Random Initial Guess Generation")
+    error_mag_min = np.Inf
+    for idx in tqdm(range(init_guess_steps), desc="Processing", leave=False, total=init_guess_steps):
+        copos_vec_o        = np.random.uniform(low=-1, high=1, size=2)
+        covel_vec_o        = np.random.uniform(low=-1, high=1, size=2)
+        decision_state_idx = np.hstack([copos_vec_o, covel_vec_o])
+        
+        error_idx = \
+            tpbvp_objective_and_jacobian(
+                decision_state_idx          ,
+                optimization_parameters     ,
+                integration_state_parameters,
+                equality_parameters         ,
+                inequality_parameters       ,
+            )
+
+        error_mag_idx = np.linalg.norm(error_idx)
+        if error_mag_idx < error_mag_min:
+            idx_min            = idx
+            error_mag_min      = error_mag_idx
+            decision_state_min = decision_state_idx
+            integ_state_min    = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state_min])
+            if idx==0:
+                tqdm.write(f"                               {'Fixed':>14s} {'Fixed':>14s} {'Fixed':>14s} {'Fixed':>14s} {'Free':>14s} {'Free':>14s} {'Free':>14s} {'Free':>14s}")
+                tqdm.write(f"          {'Step':>5s} {'Error-Mag':>14s} {'Pos-Xo':>14s} {'Pos-Yo':>14s} {'Vel-Xo':>14s} {'Vel-Yo':>14s} {'Co-Pos-Xo':>14s} {'Co-Pos-Yo':>14s} {'Co-Vel-Xo':>14s} {'Co-Vel-Yo':>14s}")
+            integ_state_min_str = ' '.join(f"{x:>14.6e}" for x in integ_state_min)
+            tqdm.write(f"     {idx_min:>5d}/{init_guess_steps:>4d} {error_mag_min:>14.6e} {integ_state_min_str}")
+
+    # Pack up and print solution
+    costate_o_guess = decision_state_min
+    return costate_o_guess
+
+
 def tpbvp_objective_and_jacobian(
-        decision_state               : np.ndarray                     ,
-        time_span                    : np.ndarray                     ,
-        boundary_condition_pos_vec_o : np.ndarray                     ,
-        boundary_condition_vel_vec_o : np.ndarray                     ,
-        boundary_condition_pos_vec_f : np.ndarray                     ,
-        boundary_condition_vel_vec_f : np.ndarray                     ,
-        min_type                     : str        = 'energy'          ,
-        mass_o                       : np.float64 = np.float64(1.0e+3),
-        use_thrust_acc_limits        : bool       = False             ,
-        use_thrust_acc_smoothing     : bool       = False             ,
-        thrust_acc_min               : np.float64 = np.float64(0.0e+0),
-        thrust_acc_max               : np.float64 = np.float64(1.0e+1),
-        use_thrust_limits            : bool       = False             ,
-        use_thrust_smoothing         : bool       = False             ,
-        thrust_min                   : np.float64 = np.float64(0.0e+0),
-        thrust_max                   : np.float64 = np.float64(1.0e+1),
-        k_steepness                  : np.float64 = np.float64(1.0e+0),
-        include_jacobian             : bool       = False             ,
+        decision_state               : np.ndarray,
+        optimization_parameters      : dict      ,
+        integration_state_parameters : dict      ,
+        equality_parameters          : dict      ,
+        inequality_parameters        : dict      ,
     ):
     """
     Objective function that also returns the analytical Jacobian.
     """
 
+    # Unpack
+    min_type                 =      optimization_parameters['min_type'                ]
+    include_jacobian         =      optimization_parameters['include_jacobian'        ]
+    time_span                = integration_state_parameters['time_span'               ]
+    mass_o                   = integration_state_parameters['mass_o'                  ]
+    pos_vel_o_mns            =          equality_parameters['pos_vec_o_mns'           ]
+    vel_vel_o_mns            =          equality_parameters['vel_vec_o_mns'           ]
+    pos_vel_f_pls            =          equality_parameters['pos_vec_f_pls'           ]
+    vel_vel_f_pls            =          equality_parameters['vel_vec_f_pls'           ]
+    use_thrust_acc_limits    =        inequality_parameters['use_thrust_acc_limits'   ]
+    use_thrust_acc_smoothing =        inequality_parameters['use_thrust_acc_smoothing']
+    thrust_acc_min           =        inequality_parameters['thrust_acc_min'          ]
+    thrust_acc_max           =        inequality_parameters['thrust_acc_max'          ]
+    use_thrust_limits        =        inequality_parameters['use_thrust_limits'       ]
+    use_thrust_smoothing     =        inequality_parameters['use_thrust_smoothing'    ]
+    thrust_min               =        inequality_parameters['thrust_min'              ]
+    thrust_max               =        inequality_parameters['thrust_max'              ]
+    k_steepness              =        inequality_parameters['k_steepness'             ]
+
     # Initial state and stm
-    state_costate_o = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decision_state])
+    state_costate_o = np.hstack([pos_vel_o_mns, vel_vel_o_mns, decision_state])
     if include_jacobian:
         include_scstm         = True
         stm_oo                = np.identity(8).flatten()
@@ -46,7 +109,7 @@ def tpbvp_objective_and_jacobian(
     # Integrate
     solve_ivp_func = \
         lambda time, state_costate_scstm: \
-            free_body_dynamics__indirect(
+            one_body_dynamics__indirect(
                 time                                               ,
                 state_costate_scstm                                ,
                 include_scstm            = include_scstm           ,
@@ -80,7 +143,7 @@ def tpbvp_objective_and_jacobian(
     
     # Calculate the error vector and error vector Jacobian
     #   jacobian = d(state_final) / d(costate_initial)
-    error = state_costate_f[:4] - np.hstack([boundary_condition_pos_vec_f, boundary_condition_vel_vec_f])
+    error = state_costate_f[:4] - np.hstack([pos_vel_f_pls, vel_vel_f_pls])
     if include_jacobian:
         error_jacobian = stm_of[0:4, 4:8]
 
@@ -91,29 +154,13 @@ def tpbvp_objective_and_jacobian(
         return error
     
 
-# def optimal_trajectory_solve(
-#         time_span                    : np.ndarray                                         ,
-#         boundary_condition_pos_vec_o : np.ndarray                                         ,
-#         boundary_condition_vel_vec_o : np.ndarray                                         ,
-#         boundary_condition_pos_vec_f : np.ndarray                                         ,
-#         boundary_condition_vel_vec_f : np.ndarray                                         ,
-#         min_type                     : str        = 'energy'                              ,
-#         use_thrust_acc_limits        : bool       = True                                  ,
-#         thrust_acc_min               : np.float64 = np.float64(0.0e+0)                    ,
-#         thrust_acc_max               : np.float64 = np.float64(1.0e+1)                    ,
-#         use_thrust_limits            : bool       = False                                 ,
-#         thrust_min                   : np.float64 = np.float64(0.0e+0)                    ,
-#         thrust_max                   : np.float64 = np.float64(1.0e+1)                    ,
-#         k_idxinitguess               : np.float64 = np.float64(1.0e-1)                    ,
-#         k_idxfinsoln                 : np.float64 = np.float64(1.0e+1)                    ,
-#         k_idxdivs                    : int        = 100                                   ,
-#         init_guess_steps             : int        = 3000                                  ,
-#         mass_o                       : np.float64 = np.float64(1.0e+3)                    ,
-#         input_filepath               : Path       = Path('input/examples/example_01.json'),
-#         output_folderpath            : Path       = Path('output/')                       ,
-#     ):
 def optimal_trajectory_solve(
-        files_folders_params : dict,
+        files_folders_parameters    ,
+        system_parameters           ,
+        optimization_parameters     ,
+        integration_state_parameters,
+        equality_parameters         ,
+        inequality_parameters       ,
     ):
     """
     Main solver that implements the two-stage continuation process
@@ -123,30 +170,35 @@ def optimal_trajectory_solve(
     # Generate initial guess for the costates
     decision_state_initguess = \
         generate_guess(
-            files_folders_params,
+            system_parameters           ,
+            optimization_parameters     ,
+            integration_state_parameters,
+            equality_parameters         ,
+            inequality_parameters       ,
         )
 
     # Unpack files and folders parameters
-    time_span                    = files_folders_params['time_span'                   ]
-    boundary_condition_pos_vec_o = files_folders_params['boundary_condition_pos_vec_o']
-    boundary_condition_vel_vec_o = files_folders_params['boundary_condition_vel_vec_o']
-    boundary_condition_pos_vec_f = files_folders_params['boundary_condition_pos_vec_f']
-    boundary_condition_vel_vec_f = files_folders_params['boundary_condition_vel_vec_f']
-    input_filepath               = files_folders_params['input_filepath'       ]
-    output_folderpath            = files_folders_params['output_folderpath'    ]
-    min_type                     = files_folders_params.get('min_type'             , 'energy')
-    mass_o                       = files_folders_params.get('mass_o'               , 1.0e+3  )
-    use_thrust_acc_limits        = files_folders_params.get('use_thrust_acc_limits', True    )
-    thrust_acc_min               = files_folders_params.get('thrust_acc_min'       , 0.0e+0  )
-    thrust_acc_max               = files_folders_params.get('thrust_acc_max'       , 1.0e+1  )
-    use_thrust_limits            = files_folders_params.get('use_thrust_limits'    , False   )
-    thrust_min                   = files_folders_params.get('thrust_min'           , 0.0e+0  )
-    thrust_max                   = files_folders_params.get('thrust_max'           , 1.0e+1  )
-    k_idxinitguess               = files_folders_params.get('k_idxinitguess'       , 1.0e-1  )
-    k_idxfinsoln                 = files_folders_params.get('k_idxfinsoln'         , 1.0e+1  )
-    k_idxdivs                    = files_folders_params.get('k_idxdivs'            , 100     )
-    init_guess_steps             = files_folders_params.get('init_guess_steps'     , 3000    )
-    
+    input_filepath               =            system_parameters['input_filepath'       ]
+    output_folderpath            =            system_parameters['output_folderpath'    ]
+    min_type                     =      optimization_parameters['min_type'             ]
+    init_guess_steps             =      optimization_parameters['init_guess_steps'     ]
+    time_span                    = integration_state_parameters['time_span'            ]
+    mass_o                       = integration_state_parameters['mass_o'               ] 
+    pos_vec_o_mns                =          equality_parameters['pos_vec_o_mns'        ]
+    vel_vec_o_mns                =          equality_parameters['vel_vec_o_mns'        ]
+    pos_vec_f_pls                =          equality_parameters['pos_vec_f_pls'        ]
+    vel_vec_f_pls                =          equality_parameters['vel_vec_f_pls'        ]
+    use_thrust_acc_limits        =        inequality_parameters['use_thrust_acc_limits']
+    thrust_acc_min               =        inequality_parameters['thrust_acc_min'       ]
+    thrust_acc_max               =        inequality_parameters['thrust_acc_max'       ]
+    use_thrust_limits            =        inequality_parameters['use_thrust_limits'    ]
+    thrust_min                   =        inequality_parameters['thrust_min'           ]
+    thrust_max                   =        inequality_parameters['thrust_max'           ]
+    k_idxinitguess               =        inequality_parameters['k_idxinitguess'       ]
+    k_idxfinsoln                 =        inequality_parameters['k_idxfinsoln'         ]
+    k_idxdivs                    =        inequality_parameters['k_idxdivs'            ]
+
+
     # Optimize and enforce thrust or thrust-acc constraints
     print("\n\nOPTIMIZATION PROCESS")
 
@@ -169,29 +221,16 @@ def optimal_trajectory_solve(
 
     # Loop
     for idx, k_idx in tqdm(enumerate(k_idxinitguess_to_idxfinsoln), desc="Processing", leave=False, total=len(k_idxinitguess_to_idxfinsoln)):
-        
+
         # Define root function
         root_func = \
             lambda decision_state: \
                 tpbvp_objective_and_jacobian(
-                    decision_state                                      , 
-                    time_span                                           ,
-                    boundary_condition_pos_vec_o                        ,
-                    boundary_condition_vel_vec_o                        ,
-                    boundary_condition_pos_vec_f                        ,
-                    boundary_condition_vel_vec_f                        ,
-                    min_type                     = min_type             ,
-                    mass_o                       = mass_o               ,
-                    use_thrust_acc_limits        = use_thrust_acc_limits,
-                    use_thrust_acc_smoothing     = True                 ,
-                    thrust_acc_min               = thrust_acc_min       ,
-                    thrust_acc_max               = thrust_acc_max       ,
-                    use_thrust_limits            = use_thrust_limits    ,
-                    use_thrust_smoothing         = True                 ,
-                    thrust_min                   = thrust_min           ,
-                    thrust_max                   = thrust_max           ,
-                    k_steepness                  = k_idx                ,
-                    include_jacobian             = include_jacobian     ,
+                    decision_state              ,
+                    optimization_parameters     ,
+                    integration_state_parameters,
+                    equality_parameters         ,
+                    inequality_parameters       ,
                 )
 
         # Root solve
@@ -215,7 +254,7 @@ def optimal_trajectory_solve(
         time_eval_points = np.linspace(time_span[0], time_span[1], 201)
         solve_ivp_func = \
             lambda time, state_costate_scstm: \
-                free_body_dynamics__indirect(
+                one_body_dynamics__indirect(
                     time                                            ,
                     state_costate_scstm                             ,
                     include_scstm            = False                ,
@@ -256,24 +295,11 @@ def optimal_trajectory_solve(
     root_func = \
         lambda decision_state: \
             tpbvp_objective_and_jacobian(
-                decision_state                                      , 
-                time_span                                           ,
-                boundary_condition_pos_vec_o                        ,
-                boundary_condition_vel_vec_o                        ,
-                boundary_condition_pos_vec_f                        ,
-                boundary_condition_vel_vec_f                        ,
-                min_type                     = min_type             ,
-                mass_o                       = mass_o               ,
-                use_thrust_acc_limits        = use_thrust_acc_limits,
-                use_thrust_acc_smoothing     = False                ,
-                thrust_acc_min               = thrust_acc_min       ,
-                thrust_acc_max               = thrust_acc_max       ,
-                use_thrust_limits            = use_thrust_limits    ,
-                use_thrust_smoothing         = False                ,
-                thrust_min                   = thrust_min           ,
-                thrust_max                   = thrust_max           ,
-                k_steepness                  = k_idx                ,
-                include_jacobian             = include_jacobian     ,
+                decision_state              , 
+                optimization_parameters     ,
+                integration_state_parameters,
+                equality_parameters         ,
+                inequality_parameters       ,
             )
     soln_root = \
         root(
@@ -304,7 +330,7 @@ def optimal_trajectory_solve(
     time_eval_points               = np.linspace(time_span[0], time_span[1], 401)
     solve_ivp_func = \
         lambda time, state_costate_scstm_mass_obj: \
-            free_body_dynamics__indirect(
+            one_body_dynamics__indirect(
                 time                                                ,
                 state_costate_scstm_mass_obj                        ,
                 include_scstm                = False                ,
@@ -386,74 +412,5 @@ def optimal_trajectory_solve(
     )
 
 
-def generate_guess(
-        files_folders_params,
-    ):
-    """
-    Generates a robust initial guess for the co-states: copos_vec, covel_vec
-    """
-    print("\n\nINITIAL GUESS PROCESS")
 
-    # Unpack
-    time_span                    = files_folders_params['time_span'                   ]
-    boundary_condition_pos_vec_o = files_folders_params['boundary_condition_pos_vec_o']
-    boundary_condition_vel_vec_o = files_folders_params['boundary_condition_vel_vec_o']
-    boundary_condition_pos_vec_f = files_folders_params['boundary_condition_pos_vec_f']
-    boundary_condition_vel_vec_f = files_folders_params['boundary_condition_vel_vec_f']
-    min_type                     = files_folders_params.get('min_type'             , 'energy')
-    mass_o                       = files_folders_params.get('mass_o'               , 1.0e+3  )
-    use_thrust_acc_limits        = files_folders_params.get('use_thrust_acc_limits', True    )
-    thrust_acc_min               = files_folders_params.get('thrust_acc_min'       , 0.0e+0  )
-    thrust_acc_max               = files_folders_params.get('thrust_acc_max'       , 1.0e+1  )
-    use_thrust_limits            = files_folders_params.get('use_thrust_limits'    , False   )
-    thrust_min                   = files_folders_params.get('thrust_min'           , 0.0e+0  )
-    thrust_max                   = files_folders_params.get('thrust_max'           , 1.0e+1  )
-    k_steepness                  = files_folders_params.get('k_steepness'          , 1.0e+0  )
-    init_guess_steps             = files_folders_params.get('init_guess_steps'     , 3000    )
-
-    # Loop through random guesses for the costates
-    print("  Random Initial Guess Generation")
-    error_mag_min = np.Inf
-    for idx in tqdm(range(init_guess_steps), desc="Processing", leave=False, total=init_guess_steps):
-        copos_vec_o        = np.random.uniform(low=-1, high=1, size=2)
-        covel_vec_o        = np.random.uniform(low=-1, high=1, size=2)
-        decision_state_idx = np.hstack([copos_vec_o, covel_vec_o])
-        
-        error_idx = \
-            tpbvp_objective_and_jacobian(
-                decision_state_idx                                  ,
-                time_span                                           ,
-                boundary_condition_pos_vec_o                        ,
-                boundary_condition_vel_vec_o                        ,
-                boundary_condition_pos_vec_f                        ,
-                boundary_condition_vel_vec_f                        ,
-                min_type                     = min_type             ,
-                mass_o                       = mass_o               ,
-                use_thrust_acc_limits        = use_thrust_acc_limits,
-                use_thrust_acc_smoothing     = True                 ,
-                thrust_acc_min               = thrust_acc_min       ,
-                thrust_acc_max               = thrust_acc_max       ,
-                use_thrust_limits            = use_thrust_limits    ,
-                use_thrust_smoothing         = True                 ,
-                thrust_min                   = thrust_min           ,
-                thrust_max                   = thrust_max           ,
-                k_steepness                  = k_steepness          ,
-                include_jacobian             = False                ,
-            )
-
-        error_mag_idx = np.linalg.norm(error_idx)
-        if error_mag_idx < error_mag_min:
-            idx_min            = idx
-            error_mag_min      = error_mag_idx
-            decision_state_min = decision_state_idx
-            integ_state_min    = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decision_state_min])
-            if idx==0:
-                tqdm.write(f"                               {'Fixed':>14s} {'Fixed':>14s} {'Fixed':>14s} {'Fixed':>14s} {'Free':>14s} {'Free':>14s} {'Free':>14s} {'Free':>14s}")
-                tqdm.write(f"          {'Step':>5s} {'Error-Mag':>14s} {'Pos-Xo':>14s} {'Pos-Yo':>14s} {'Vel-Xo':>14s} {'Vel-Yo':>14s} {'Co-Pos-Xo':>14s} {'Co-Pos-Yo':>14s} {'Co-Vel-Xo':>14s} {'Co-Vel-Yo':>14s}")
-            integ_state_min_str = ' '.join(f"{x:>14.6e}" for x in integ_state_min)
-            tqdm.write(f"     {idx_min:>5d}/{init_guess_steps:>4d} {error_mag_min:>14.6e} {integ_state_min_str}")
-
-    # Pack up and print solution
-    costate_o_guess = decision_state_min
-    return costate_o_guess
 

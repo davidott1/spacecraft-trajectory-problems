@@ -7,9 +7,26 @@ def optimal_trajectory_input():
 
     print("\nINPUT PROCESS")
     files_folders_params_input = parse_read_configure()
-    files_folders_params       = configure_validate_input(files_folders_params_input)
+    (
+        files_folders_parameters    ,
+        system_parameters           ,
+        optimization_parameters     ,
+        integration_state_parameters,
+        equality_parameters         ,
+        inequality_parameters       ,
+    ) = \
+        configure_validate_input(
+            files_folders_params_input,
+        )
 
-    return files_folders_params
+    return (
+        files_folders_parameters    ,
+        system_parameters           ,
+        optimization_parameters     ,
+        integration_state_parameters,
+        equality_parameters         ,
+        inequality_parameters       ,
+    )
 
 
 def parse_read_configure():

@@ -2,7 +2,7 @@ import numpy as np
 from src.utility.bounding_functions import bounded_smooth_func, bounded_nonsmooth_func, derivative__bounded_smooth_func, derivative__bounded_nonsmooth_func
 
 
-def free_body_dynamics__indirect(
+def one_body_dynamics__indirect(
         time                     : np.float64                     ,
         state_costate_scstm      : np.ndarray                     ,
         include_scstm            : bool       = False             ,
