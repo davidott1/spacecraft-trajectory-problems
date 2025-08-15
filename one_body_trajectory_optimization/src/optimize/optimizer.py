@@ -9,7 +9,6 @@ from src.plot.final_results    import plot_final_results
 
 
 def generate_guess(
-        system_parameters           ,
         optimization_parameters     ,
         integration_state_parameters,
         equality_parameters         ,
@@ -24,11 +23,14 @@ def generate_guess(
     init_guess_steps = optimization_parameters['init_guess_steps']
     pos_vec_o_mns    =     equality_parameters['pos_vec_o_mns'   ]
     vel_vec_o_mns    =     equality_parameters['vel_vec_o_mns'   ]
-    pos_vec_f_pls    =     equality_parameters['pos_vec_f_pls'   ]
-    vel_vec_f_pls    =     equality_parameters['vel_vec_f_pls'   ]
 
     # Initialize loop for random guesses
     optimization_parameters['include_jacobian'] = False
+
+    if inequality_parameters['use_thrust_acc_limits']:
+        inequality_parameters['use_thrust_acc_smoothing'] = True
+    if inequality_parameters['use_thrust_limits']:
+        inequality_parameters['use_thrust_smoothing'] = True
 
     # Loop through random guesses for the costates
     print("  Random Initial Guess Generation")
@@ -80,10 +82,10 @@ def tpbvp_objective_and_jacobian(
     include_jacobian         =      optimization_parameters['include_jacobian'        ]
     time_span                = integration_state_parameters['time_span'               ]
     mass_o                   = integration_state_parameters['mass_o'                  ]
-    pos_vel_o_mns            =          equality_parameters['pos_vec_o_mns'           ]
-    vel_vel_o_mns            =          equality_parameters['vel_vec_o_mns'           ]
-    pos_vel_f_pls            =          equality_parameters['pos_vec_f_pls'           ]
-    vel_vel_f_pls            =          equality_parameters['vel_vec_f_pls'           ]
+    pos_vec_o_mns            =          equality_parameters['pos_vec_o_mns'           ]
+    vel_vec_o_mns            =          equality_parameters['vel_vec_o_mns'           ]
+    pos_vec_f_pls            =          equality_parameters['pos_vec_f_pls'           ]
+    vel_vec_f_pls            =          equality_parameters['vel_vec_f_pls'           ]
     use_thrust_acc_limits    =        inequality_parameters['use_thrust_acc_limits'   ]
     use_thrust_acc_smoothing =        inequality_parameters['use_thrust_acc_smoothing']
     thrust_acc_min           =        inequality_parameters['thrust_acc_min'          ]
@@ -95,7 +97,7 @@ def tpbvp_objective_and_jacobian(
     k_steepness              =        inequality_parameters['k_steepness'             ]
 
     # Initial state and stm
-    state_costate_o = np.hstack([pos_vel_o_mns, vel_vel_o_mns, decision_state])
+    state_costate_o = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state])
     if include_jacobian:
         include_scstm         = True
         stm_oo                = np.identity(8).flatten()
@@ -105,7 +107,7 @@ def tpbvp_objective_and_jacobian(
         state_costate_scstm_o = state_costate_o
     if use_thrust_limits:
         state_costate_scstm_o = np.hstack([state_costate_scstm_o, mass_o])
-
+    breakpoint()
     # Integrate
     solve_ivp_func = \
         lambda time, state_costate_scstm: \
@@ -143,7 +145,7 @@ def tpbvp_objective_and_jacobian(
     
     # Calculate the error vector and error vector Jacobian
     #   jacobian = d(state_final) / d(costate_initial)
-    error = state_costate_f[:4] - np.hstack([pos_vel_f_pls, vel_vel_f_pls])
+    error = state_costate_f[:4] - np.hstack([pos_vec_f_pls, vel_vec_f_pls])
     if include_jacobian:
         error_jacobian = stm_of[0:4, 4:8]
 
@@ -170,7 +172,6 @@ def optimal_trajectory_solve(
     # Generate initial guess for the costates
     decision_state_initguess = \
         generate_guess(
-            system_parameters           ,
             optimization_parameters     ,
             integration_state_parameters,
             equality_parameters         ,
@@ -178,8 +179,8 @@ def optimal_trajectory_solve(
         )
 
     # Unpack files and folders parameters
-    input_filepath               =            system_parameters['input_filepath'       ]
-    output_folderpath            =            system_parameters['output_folderpath'    ]
+    input_filepath               =     files_folders_parameters['input_filepath'       ]
+    output_folderpath            =     files_folders_parameters['output_folderpath'    ]
     min_type                     =      optimization_parameters['min_type'             ]
     init_guess_steps             =      optimization_parameters['init_guess_steps'     ]
     time_span                    = integration_state_parameters['time_span'            ]
@@ -211,6 +212,7 @@ def optimal_trajectory_solve(
     # Loop initialization
     results_k_idx    = {}
     include_jacobian = True # temp
+    optimization_parameters['include_jacobian'] = include_jacobian
     options_root     = {
         'maxiter' : 100 * len(decision_state_initguess), # 100 * n
         'ftol'    : 1e-8, # 1e-8
@@ -219,8 +221,16 @@ def optimal_trajectory_solve(
     }
     k_idxinitguess_to_idxfinsoln = np.logspace(np.log(k_idxinitguess), np.log(k_idxfinsoln), k_idxdivs)
 
+    if use_thrust_acc_limits:
+        inequality_parameters['use_thrust_acc_smoothing'] = True
+    if use_thrust_limits:
+        inequality_parameters['use_thrust_smoothing'] = True
+
     # Loop
     for idx, k_idx in tqdm(enumerate(k_idxinitguess_to_idxfinsoln), desc="Processing", leave=False, total=len(k_idxinitguess_to_idxfinsoln)):
+
+        # Set the k-idx
+        inequality_parameters['k_steepness'] = k_idx
 
         # Define root function
         root_func = \
@@ -236,17 +246,17 @@ def optimal_trajectory_solve(
         # Root solve
         soln_root = \
             root(
-                root_func                                 ,
-                decision_state_initguess                  ,
-                method                  = 'lm'            ,
-                tol                     = 1e-11           ,
-                jac                     = include_jacobian,
-                options                 = options_root    ,
+                root_func                                  ,
+                decision_state_initguess                   ,
+                method                   = 'lm'            ,
+                tol                      = 1e-11           ,
+                jac                      = include_jacobian,
+                options                  = options_root    ,
             )
         
         # Compute progress
         decision_state_initguess = soln_root.x
-        state_costate_o          = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decision_state_initguess])
+        state_costate_o          = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state_initguess])
         if use_thrust_limits:
             state_costate_mass_o = np.hstack([state_costate_o, mass_o])
         else:
@@ -312,7 +322,6 @@ def optimal_trajectory_solve(
         )
     print("\n\nFINAL SOLUTION PROCESS")
     print("  Root-Solve Results")
-    # print(soln_root)
     for key, value in soln_root.items():
         if isinstance(value, np.ndarray):
             if len(value.shape) == 1:
@@ -324,7 +333,7 @@ def optimal_trajectory_solve(
             value_construct = value
         print(f"    {key:>7s} : {value_construct}")
     decision_state_initguess       = soln_root.x
-    state_costate_o                = np.hstack([boundary_condition_pos_vec_o, boundary_condition_vel_vec_o, decision_state_initguess])
+    state_costate_o                = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state_initguess])
     optimal_control_objective_o    = np.float64(0.0)
     state_costate_scstm_mass_obj_o = np.hstack([state_costate_o, mass_o, optimal_control_objective_o])
     time_eval_points               = np.linspace(time_span[0], time_span[1], 401)
@@ -365,17 +374,17 @@ def optimal_trajectory_solve(
     state_f_approx_finalsoln = results_approx_finalsoln.y[0:4, -1]
 
     # Check final state error
-    error_approx_finalsoln_vec = state_f_approx_finalsoln - np.hstack([boundary_condition_pos_vec_f, boundary_condition_vel_vec_f])
-    error_finalsoln_vec        = state_f_finalsoln        - np.hstack([boundary_condition_pos_vec_f, boundary_condition_vel_vec_f])
+    error_approx_finalsoln_vec = state_f_approx_finalsoln - np.hstack([pos_vec_f_pls, vel_vec_f_pls])
+    error_finalsoln_vec        = state_f_finalsoln        - np.hstack([pos_vec_f_pls, vel_vec_f_pls])
 
     print("\n  State Error Check")
     print(f"             {'Pos-Xf':>14s} {'Pos-Yf':>14s} {'Vel-Xf':>14s} {'Vel-Yf':>14s}")
-    print(f"             {    'm':>14s} {    'm':>14s} {  'm/s':>14s} {  'm/s':>14s}")
-    print(f"    Target : {boundary_condition_pos_vec_f[0]:>14.6e} {boundary_condition_pos_vec_f[1]:>14.6e} {boundary_condition_vel_vec_f[0]:>14.6e} {boundary_condition_vel_vec_f[1]:>14.6e}")
-    print(f"    Approx : {    state_f_approx_finalsoln[0]:>14.6e} {    state_f_approx_finalsoln[1]:>14.6e} {    state_f_approx_finalsoln[2]:>14.6e} {    state_f_approx_finalsoln[3]:>14.6e}")
-    print(f"    Error  : {  error_approx_finalsoln_vec[0]:>14.6e} {  error_approx_finalsoln_vec[1]:>14.3e} {  error_approx_finalsoln_vec[2]:>14.6e} {  error_approx_finalsoln_vec[3]:>14.6e}")
-    print(f"    Actual : {           state_f_finalsoln[0]:>14.6e} {           state_f_finalsoln[1]:>14.6e} {           state_f_finalsoln[2]:>14.6e} {           state_f_finalsoln[3]:>14.6e}")
-    print(f"    Error  : {         error_finalsoln_vec[0]:>14.6e} {         error_finalsoln_vec[1]:>14.3e} {         error_finalsoln_vec[2]:>14.6e} {         error_finalsoln_vec[3]:>14.6e}")
+    print(f"             {     'm':>14s} {     'm':>14s} {   'm/s':>14s} {   'm/s':>14s}")
+    print(f"    Target : {             pos_vec_f_pls[0]:>14.6e} {             pos_vec_f_pls[1]:>14.6e} {             vel_vec_f_pls[0]:>14.6e} {             vel_vec_f_pls[1]:>14.6e}")
+    print(f"    Approx : {  state_f_approx_finalsoln[0]:>14.6e} {  state_f_approx_finalsoln[1]:>14.6e} {  state_f_approx_finalsoln[2]:>14.6e} {  state_f_approx_finalsoln[3]:>14.6e}")
+    print(f"    Error  : {error_approx_finalsoln_vec[0]:>14.6e} {error_approx_finalsoln_vec[1]:>14.3e} {error_approx_finalsoln_vec[2]:>14.6e} {error_approx_finalsoln_vec[3]:>14.6e}")
+    print(f"    Actual : {         state_f_finalsoln[0]:>14.6e} {         state_f_finalsoln[1]:>14.6e} {         state_f_finalsoln[2]:>14.6e} {         state_f_finalsoln[3]:>14.6e}")
+    print(f"    Error  : {       error_finalsoln_vec[0]:>14.6e} {       error_finalsoln_vec[1]:>14.3e} {       error_finalsoln_vec[2]:>14.6e} {       error_finalsoln_vec[3]:>14.6e}")
 
     # Enforce initial and final co-state boundary conditions (trivial right now)
     boundary_condition_copos_vec_o = decision_state_initguess[0:2]
@@ -387,10 +396,10 @@ def optimal_trajectory_solve(
     print("\n  Plot Final Solution Trajectory")
     plot_final_results(
         results_finalsoln                                     ,
-        boundary_condition_pos_vec_o                          ,
-        boundary_condition_vel_vec_o                          ,
-        boundary_condition_pos_vec_f                          ,
-        boundary_condition_vel_vec_f                          ,
+        pos_vec_o_mns                                         ,
+        vel_vec_o_mns                                         ,
+        pos_vec_f_pls                                         ,
+        vel_vec_f_pls                                         ,
         boundary_condition_copos_vec_o                        ,
         boundary_condition_covel_vec_o                        ,
         boundary_condition_copos_vec_f                        ,

@@ -5,12 +5,15 @@ from pathlib import Path
 
 # Create parameters dictionary and print to screen
 def _configure_parameters(
-        input_params     : dict     ,
-        max_value_length : int  = 14,
+        input_params      : dict     ,
+        system_parameters : dict     ,
     ) -> dict:
     """
     Parses parameters from the input dict, handles units, and logs them to the console.
     """
+
+    # Unpack
+    max_value_length = system_parameters['max_value_length']
 
     # Loop initialization
     print("\n  Input Parameters")
@@ -149,7 +152,7 @@ def _validate_input(
     
     # Check if min-type fuel is set but no thrust or thrust-acc constraint
     if (
-            optimization_parameters['min_type']=='fuel'
+            optimization_parameters['min_type'] == 'fuel'
             and inequality_parameters['use_thrust_acc_limits'] is False and inequality_parameters['use_thrust_limits'] is False
         ):
         inequality_parameters['use_thrust_acc_limits'] = True
@@ -163,7 +166,7 @@ def _validate_input(
     print("    Compute k-continuation parameters for thrust smoothing")
 
     # Check if k_idxdivs is valid
-    if inequality_parameters['min_type'] == 'energy' and not inequality_parameters['use_thrust_acc_limits'] and not inequality_parameters['use_thrust_limits']:
+    if optimization_parameters['min_type'] == 'energy' and not inequality_parameters['use_thrust_acc_limits'] and not inequality_parameters['use_thrust_limits']:
         if inequality_parameters['k_idxdivs'] != 1:
             print(
                 f"      Warning: Thrust smoothing is not needed using a k-continuation method:"
@@ -176,7 +179,7 @@ def _validate_input(
 
     # Determine the first k value based on thrust or thrust-acc constraints if not an input
     if inequality_parameters['k_idxinitguess'] is None:
-        if inequality_parameters['min_type'] == 'fuel':
+        if optimization_parameters['min_type'] == 'fuel':
             inequality_parameters['k_idxinitguess'] = np.float64(4.0e+0)
         else: # assume min_type energy
             if inequality_parameters['use_thrust_limits']:
@@ -198,7 +201,7 @@ def _validate_input(
 
 
 def configure_validate_input(
-        input_files_params,
+        input_files_params : dict,
     ):
 
     # Unpack filepaths and folderpaths
@@ -217,8 +220,8 @@ def configure_validate_input(
     # Create parameters dictionary and print to screen
     all_parameters_with_units = \
         _configure_parameters(
-            input_files_params['input_parameters']                   ,
-            max_value_length                       = max_value_length,
+            input_files_params,
+            system_parameters ,
         )
 
     # Convert to standard units: seconds, meters, kilograms, one
@@ -263,6 +266,7 @@ def configure_validate_input(
         'k_idxinitguess'           : all_parameters_without_units['k_idxinitguess'       ],
         'k_idxfinsoln'             : all_parameters_without_units['k_idxfinsoln'         ],
         'k_idxdivs'                : all_parameters_without_units['k_idxdivs'            ],
+        'k_steepness'              : None                                                 ,  
     }
 
     # Validate input
