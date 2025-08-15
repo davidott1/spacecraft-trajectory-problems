@@ -1,4 +1,4 @@
-# Free, One-body Trajectory Optimization
+# One-body Trajectory Optimization
 
 This project simulates the optimal trajectory of a free-body. The spacecraft dynamics is free or uses no external acceleration. The optimal control law uses an indirect method, leveraging the Hamiltonian. The flight time is fixed and boundary conditions are fixed. The spacecraft travels from a fixed position and velocity to a fixed position and velocity. 
 
@@ -9,7 +9,7 @@ xxx
 ## Project Structure
 
 ```
-freebody_trajectory_optimization/
+one_body_trajectory_optimization/
 ├── input/
 │   └── examples/
 │       ├── example_01.json
