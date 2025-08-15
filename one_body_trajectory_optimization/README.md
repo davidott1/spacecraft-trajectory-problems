@@ -12,16 +12,16 @@ xxx
 one_body_trajectory_optimization/
 ├── input/
 │   └── examples/
-│       ├── example_01.json
-│       ├── example_02.json
-│       ├── example_03.json
-│       ├── example_04.json
-│       ├── example_05.json
-│       ├── example_06.json
-│       ├── example_07.json
-│       ├── example_08.json
-│       ├── example_09.json
-│       └── example_10.json
+│       ├── 01.json
+│       ├── 02.json
+│       ├── 03.json
+│       ├── 04.json
+│       ├── 05.json
+│       ├── 06.json
+│       ├── 07.json
+│       ├── 08.json
+│       ├── 09.json
+│       └── 10.json
 ├── output/
 │   └── examples/
 ├── src/
@@ -58,9 +58,9 @@ pip install -r requirements.txt
 
 ## Usage
 
-To run the program, change directory to `freebody_trajectory_optimization`:
+To run the program, change directory to `one_body_trajectory_optimization`:
 ```
-cd ~/github/spacecraft-trajectory-problems/freebody_trajectory_optimization/
+cd ~/github/spacecraft-trajectory-problems/one_body_trajectory_optimization/
 ```
 Execute the following general command
 ```
@@ -68,7 +68,7 @@ python main.py <input_filepath> [<output_folderpath>]
 ```
 or more specifically
 ```
-python main.py input/examples/example_01.json output/examples
+python main.py input/examples/01.json output/examples
 ```
 
 ## Dependencies
@@ -84,52 +84,52 @@ scipy== 1.13.1
 
 ## Examples
 
-### Example 01: `input/examples/example_01.json`
+### Example 01: `input/examples/01.json`
 ```
-python main.py input/examples/example_01.json output/examples
-```
-
-### Example 02: `input/examples/example_02.json`
-```
-python main.py input/examples/example_02.json output/examples
+python main.py input/examples/01.json output/examples
 ```
 
-### Example 03: `input/examples/example_03.json`
+### Example 02: `input/examples/02.json`
 ```
-python main.py input/examples/example_03.json output/examples
-```
-
-### Example 04: `input/examples/example_04.json`
-```
-python main.py input/examples/example_04.json output/examples
+python main.py input/examples/02.json output/examples
 ```
 
-### Example 05: `input/examples/example_05.json`
+### Example 03: `input/examples/03.json`
 ```
-python main.py input/examples/example_05.json output/examples
-```
-
-### Example 06: `input/examples/example_06.json`
-```
-python main.py input/examples/example_06.json output/examples
+python main.py input/examples/03.json output/examples
 ```
 
-### Example 07: `input/examples/example_07.json`
+### Example 04: `input/examples/04.json`
 ```
-python main.py input/examples/example_07.json output/examples
-```
-
-### Example 08: `input/examples/example_08.json`
-```
-python main.py input/examples/example_08.json output/examples
+python main.py input/examples/04.json output/examples
 ```
 
-### Example 09: `input/examples/example_09.json`
+### Example 05: `input/examples/05.json`
 ```
-python main.py input/examples/example_09.json output/examples
+python main.py input/examples/05.json output/examples
 ```
 
-### Example 10: `input/examples/example_10.json`
+### Example 06: `input/examples/06.json`
 ```
-python main.py input/examples/example_10.json output/examples
+python main.py input/examples/06.json output/examples
+```
+
+### Example 07: `input/examples/07.json`
+```
+python main.py input/examples/07.json output/examples
+```
+
+### Example 08: `input/examples/08.json`
+```
+python main.py input/examples/08.json output/examples
+```
+
+### Example 09: `input/examples/09.json`
+```
+python main.py input/examples/09.json output/examples
+```
+
+### Example 10: `input/examples/10.json`
+```
+python main.py input/examples/10.json output/examples
 ```
