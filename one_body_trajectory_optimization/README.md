@@ -11,7 +11,7 @@ xxx
 ```
 one_body_trajectory_optimization/
 ├── input/
-│   └── examples/
+│   └── example/
 │       ├── 01.json
 │       ├── 02.json
 │       ├── 03.json
@@ -23,7 +23,7 @@ one_body_trajectory_optimization/
 │       ├── 09.json
 │       └── 10.json
 ├── output/
-│   └── examples/
+│   └── example/
 ├── src/
 │   ├── data/
 │   ├── initial_guess/
@@ -68,7 +68,7 @@ python main.py <input_filepath> [<output_folderpath>]
 ```
 or more specifically
 ```
-python main.py input/examples/01.json output/examples
+python main.py input/example/01.json output/example
 ```
 
 ## Dependencies
@@ -84,52 +84,52 @@ scipy== 1.13.1
 
 ## Examples
 
-### Example 01: `input/examples/01.json`
+### Example 01: `input/example/01.json`
 ```
-python main.py input/examples/01.json output/examples
-```
-
-### Example 02: `input/examples/02.json`
-```
-python main.py input/examples/02.json output/examples
+python main.py input/example/01.json output/example
 ```
 
-### Example 03: `input/examples/03.json`
+### Example 02: `input/example/02.json`
 ```
-python main.py input/examples/03.json output/examples
-```
-
-### Example 04: `input/examples/04.json`
-```
-python main.py input/examples/04.json output/examples
+python main.py input/example/02.json output/example
 ```
 
-### Example 05: `input/examples/05.json`
+### Example 03: `input/example/03.json`
 ```
-python main.py input/examples/05.json output/examples
-```
-
-### Example 06: `input/examples/06.json`
-```
-python main.py input/examples/06.json output/examples
+python main.py input/example/03.json output/example
 ```
 
-### Example 07: `input/examples/07.json`
+### Example 04: `input/example/04.json`
 ```
-python main.py input/examples/07.json output/examples
-```
-
-### Example 08: `input/examples/08.json`
-```
-python main.py input/examples/08.json output/examples
+python main.py input/example/04.json output/example
 ```
 
-### Example 09: `input/examples/09.json`
+### Example 05: `input/example/05.json`
 ```
-python main.py input/examples/09.json output/examples
+python main.py input/example/05.json output/example
 ```
 
-### Example 10: `input/examples/10.json`
+### Example 06: `input/example/06.json`
 ```
-python main.py input/examples/10.json output/examples
+python main.py input/example/06.json output/example
+```
+
+### Example 07: `input/example/07.json`
+```
+python main.py input/example/07.json output/example
+```
+
+### Example 08: `input/example/08.json`
+```
+python main.py input/example/08.json output/example
+```
+
+### Example 09: `input/example/09.json`
+```
+python main.py input/example/09.json output/example
+```
+
+### Example 10: `input/example/10.json`
+```
+python main.py input/example/10.json output/example
 ```

@@ -170,7 +170,7 @@ def _validate_input(
         if inequality_parameters['k_idxdivs'] != 1:
             print(
                 f"      Warning: Thrust smoothing is not needed using a k-continuation method:"
-                + f" min_type is {inequality_parameters['min_type']},"
+                + f" min_type is {optimization_parameters['min_type']},"
                 + f" use_thrust_acc_limits is {inequality_parameters['use_thrust_acc_limits']},"
                 + f" and use_thrust_limits is {inequality_parameters['use_thrust_limits']}."
                 + f" \n               k_idxdivs = {inequality_parameters['k_idxdivs']} is not valid. Setting k_idxdivs = 1."

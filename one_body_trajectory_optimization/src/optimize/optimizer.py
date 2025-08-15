@@ -250,7 +250,7 @@ def optimal_trajectory_solve(
                 root_func                                  ,
                 decision_state_initguess                   ,
                 method                   = 'lm'            ,
-                tol                      = 1e-11           ,
+                tol                      = 1.0e-11         ,
                 jac                      = include_jacobian,
                 options                  = options_root    ,
             )
@@ -288,8 +288,8 @@ def optimal_trajectory_solve(
                 t_eval       = time_eval_points,
                 dense_output = True            , 
                 method       = 'RK45'          ,
-                rtol         = 1e-12           ,
-                atol         = 1e-12           ,
+                rtol         = 1.0e-12         ,
+                atol         = 1.0e-12         ,
             )
         results_k_idx[k_idx] = soln_ivp
         error_mag = np.linalg.norm(soln_root.fun)
@@ -317,7 +317,7 @@ def optimal_trajectory_solve(
             root_func                                  ,
             decision_state_initguess                   ,
             method                   = 'lm'            ,
-            tol                      = 1e-11           ,
+            tol                      = 1.0e-11         ,
             jac                      = include_jacobian,
             options                  = options_root    ,
         )
@@ -364,8 +364,8 @@ def optimal_trajectory_solve(
             t_eval                         = time_eval_points,
             dense_output                   = True            , 
             method                         = 'RK45'          ,
-            rtol                           = 1e-12           ,
-            atol                           = 1e-12           ,
+            rtol                           = 1.0e-12         ,
+            atol                           = 1.0e-12         ,
         ) 
     results_finalsoln = soln_ivp
     state_f_finalsoln = results_finalsoln.y[0:4, -1]

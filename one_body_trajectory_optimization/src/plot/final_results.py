@@ -581,7 +581,12 @@ def plot_final_results(
     fig.align_ylabels()
 
     if plot_save:
-        fig.savefig(output_folderpath / f"{input_filepath.stem}_optimal_trajectory.png")
+        fig_filename = f"{input_filepath.stem}_optimal_trajectory.png".lower()
+        if "example" in fig_filename:
+            filepath = output_folderpath / f"{input_filepath.stem}_optimal_trajectory.png"
+        else:
+            filepath = output_folderpath / f"example_{input_filepath.stem}_optimal_trajectory.png"
+        fig.savefig(filepath)
 
     if plot_show:
         mplt.show()
