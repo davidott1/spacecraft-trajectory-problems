@@ -256,17 +256,17 @@ def configure_validate_input(
     }
     inequality_parameters = {
         'use_thrust_acc_limits'    : all_parameters_without_units['use_thrust_acc_limits'],
-        'use_thrust_acc_smoothing' : None                                                 ,
+        'use_thrust_acc_smoothing' : False                                                ,
         'thrust_acc_min'           : all_parameters_without_units['thrust_acc_min'       ], # type: ignore
         'thrust_acc_max'           : all_parameters_without_units['thrust_acc_max'       ], # type: ignore
         'use_thrust_limits'        : all_parameters_without_units['use_thrust_limits'    ],
-        'use_thrust_smoothing'     : None                                                 ,
+        'use_thrust_smoothing'     : False                                                ,
         'thrust_min'               : all_parameters_without_units['thrust_min'           ], # type: ignore
         'thrust_max'               : all_parameters_without_units['thrust_max'           ], # type: ignore
         'k_idxinitguess'           : all_parameters_without_units['k_idxinitguess'       ],
         'k_idxfinsoln'             : all_parameters_without_units['k_idxfinsoln'         ],
         'k_idxdivs'                : all_parameters_without_units['k_idxdivs'            ],
-        'k_steepness'              : None                                                 ,  
+        'k_steepness'              : all_parameters_without_units['k_idxinitguess'       ],  
     }
 
     # Validate input

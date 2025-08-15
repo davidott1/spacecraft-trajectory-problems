@@ -107,7 +107,7 @@ def tpbvp_objective_and_jacobian(
         state_costate_scstm_o = state_costate_o
     if use_thrust_limits:
         state_costate_scstm_o = np.hstack([state_costate_scstm_o, mass_o])
-    breakpoint()
+
     # Integrate
     solve_ivp_func = \
         lambda time, state_costate_scstm: \
@@ -170,6 +170,7 @@ def optimal_trajectory_solve(
     """
 
     # Generate initial guess for the costates
+    inequality_parameters['k_steepness'] = inequality_parameters['k_idxinitguess']
     decision_state_initguess = \
         generate_guess(
             optimization_parameters     ,
@@ -198,7 +199,7 @@ def optimal_trajectory_solve(
     k_idxinitguess               =        inequality_parameters['k_idxinitguess'       ]
     k_idxfinsoln                 =        inequality_parameters['k_idxfinsoln'         ]
     k_idxdivs                    =        inequality_parameters['k_idxdivs'            ]
-
+    k_steepness                  =        inequality_parameters['k_steepness'          ]
 
     # Optimize and enforce thrust or thrust-acc constraints
     print("\n\nOPTIMIZATION PROCESS")
