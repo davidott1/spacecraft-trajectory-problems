@@ -37,7 +37,6 @@ def plot_final_results(
         files_folders_parameters    ,
         system_parameters           ,
         optimization_parameters     ,
-        integration_state_parameters,
         equality_parameters         ,
         inequality_parameters       ,
     ):

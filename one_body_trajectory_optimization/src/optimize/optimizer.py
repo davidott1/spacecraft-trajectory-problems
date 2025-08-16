@@ -78,25 +78,16 @@ def tpbvp_objective_and_jacobian(
     """
 
     # Unpack
-    min_type                 =      optimization_parameters['min_type'                ]
-    include_jacobian         =      optimization_parameters['include_jacobian'        ]
-    time_span                = integration_state_parameters['time_span'               ]
-    mass_o                   = integration_state_parameters['mass_o'                  ]
-    post_process             = integration_state_parameters['post_process'            ]
-    pos_vec_o_mns            =          equality_parameters['pos_vec_o_mns'           ]
-    vel_vec_o_mns            =          equality_parameters['vel_vec_o_mns'           ]
-    pos_vec_f_pls            =          equality_parameters['pos_vec_f_pls'           ]
-    vel_vec_f_pls            =          equality_parameters['vel_vec_f_pls'           ]
-    # use_thrust_acc_limits    =        inequality_parameters['use_thrust_acc_limits'   ]
-    # use_thrust_acc_smoothing =        inequality_parameters['use_thrust_acc_smoothing']
-    # thrust_acc_min           =        inequality_parameters['thrust_acc_min'          ]
-    # thrust_acc_max           =        inequality_parameters['thrust_acc_max'          ]
-    use_thrust_limits        =        inequality_parameters['use_thrust_limits'       ]
-    # use_thrust_smoothing     =        inequality_parameters['use_thrust_smoothing'    ]
-    # thrust_min               =        inequality_parameters['thrust_min'              ]
-    # thrust_max               =        inequality_parameters['thrust_max'              ]
-    # k_steepness              =        inequality_parameters['k_steepness'             ]
-    
+    min_type          =      optimization_parameters['min_type'                ]
+    include_jacobian  =      optimization_parameters['include_jacobian'        ]
+    time_span         = integration_state_parameters['time_span'               ]
+    mass_o            = integration_state_parameters['mass_o'                  ]
+    post_process      = integration_state_parameters['post_process'            ]
+    pos_vec_o_mns     =          equality_parameters['pos_vec_o_mns'           ]
+    vel_vec_o_mns     =          equality_parameters['vel_vec_o_mns'           ]
+    pos_vec_f_pls     =          equality_parameters['pos_vec_f_pls'           ]
+    vel_vec_f_pls     =          equality_parameters['vel_vec_f_pls'           ]
+    use_thrust_limits =        inequality_parameters['use_thrust_limits'       ]
 
     # Initial state and stm
     state_costate_o = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state])
@@ -111,34 +102,6 @@ def tpbvp_objective_and_jacobian(
         state_costate_scstm_o = np.hstack([state_costate_scstm_o, mass_o])
 
     # Integrate
-    # solve_ivp_func = \
-    #     lambda time, state_costate_scstm: \
-    #         one_body_dynamics__indirect(
-    #             time                                               ,
-    #             state_costate_scstm                                ,
-    #             include_scstm            = include_scstm           ,
-    #             min_type                 = min_type                ,
-    #             use_thrust_acc_limits    = use_thrust_acc_limits   ,
-    #             use_thrust_acc_smoothing = use_thrust_acc_smoothing,
-    #             thrust_acc_min           = thrust_acc_min          ,
-    #             thrust_acc_max           = thrust_acc_max          ,
-    #             use_thrust_limits        = use_thrust_limits       ,
-    #             use_thrust_smoothing     = use_thrust_smoothing    ,
-    #             thrust_min               = thrust_min              ,
-    #             thrust_max               = thrust_max              ,
-    #             k_steepness              = k_steepness             ,
-    #         )
-    # soln_ivp = \
-    #     solve_ivp(
-    #         solve_ivp_func                 ,
-    #         time_span                      ,
-    #         state_costate_scstm_o          ,
-    #         dense_output          = True   , 
-    #         method                = 'RK45' ,
-    #         rtol                  = 1.0e-12,
-    #         atol                  = 1.0e-12,
-    #     )
-    
     soln_ivp = \
         _solve_ivp_func(
             time_span                    ,
@@ -147,7 +110,7 @@ def tpbvp_objective_and_jacobian(
             integration_state_parameters ,
             inequality_parameters        ,
             include_scstm = include_scstm,
-            post_process  = post_process,
+            post_process  = post_process ,
         )
 
     # Extract final state and final STM
@@ -256,6 +219,45 @@ def _solve_ivp_func(
     return soln_ivp
 
 
+def _solve_for_root_and_compute_progress(
+        decision_state_initguess    ,
+        optimization_parameters     ,
+        integration_state_parameters,
+        equality_parameters         ,
+        inequality_parameters       ,
+        options_root                ,
+    ):
+
+    # Root solve
+    soln_root = _solve_for_root(
+        decision_state_initguess    ,
+        optimization_parameters     ,
+        integration_state_parameters,
+        equality_parameters         ,
+        inequality_parameters       ,
+        options_root                ,
+    )
+
+    # Compute progress of current root solve
+    decision_state_initguess = soln_root.x
+    state_costate_o          = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state_initguess])
+    if use_thrust_limits:
+        state_costate_mass_o = np.hstack([state_costate_o, mass_o])
+    else:
+        state_costate_mass_o = state_costate_o
+    soln_ivp = _solve_ivp_func(
+        time_span                   ,
+        state_costate_mass_o        ,
+        optimization_parameters     ,
+        integration_state_parameters,
+        inequality_parameters       ,
+        include_scstm = False,
+        post_process  = False,
+    )
+
+    return soln_root, soln_ivp
+
+
 def optimal_trajectory_solve(
         files_folders_parameters    ,
         system_parameters           ,
@@ -288,11 +290,7 @@ def optimal_trajectory_solve(
     pos_vec_f_pls         =          equality_parameters['pos_vec_f_pls'        ]
     vel_vec_f_pls         =          equality_parameters['vel_vec_f_pls'        ]
     use_thrust_acc_limits =        inequality_parameters['use_thrust_acc_limits']
-    thrust_acc_min        =        inequality_parameters['thrust_acc_min'       ]
-    thrust_acc_max        =        inequality_parameters['thrust_acc_max'       ]
     use_thrust_limits     =        inequality_parameters['use_thrust_limits'    ]
-    thrust_min            =        inequality_parameters['thrust_min'           ]
-    thrust_max            =        inequality_parameters['thrust_max'           ]
     k_idxinitguess        =        inequality_parameters['k_idxinitguess'       ]
     k_idxfinsoln          =        inequality_parameters['k_idxfinsoln'         ]
     k_idxdivs             =        inequality_parameters['k_idxdivs'            ]
@@ -328,33 +326,18 @@ def optimal_trajectory_solve(
         # Set the k-idx
         inequality_parameters['k_steepness'] = k_idx
 
-        # Root solve
-        soln_root = _solve_for_root(
-            decision_state_initguess    ,
-            optimization_parameters     ,
-            integration_state_parameters,
-            equality_parameters         ,
-            inequality_parameters       ,
-            options_root                ,
-        )
+        # Root solve and compute progress of current root solve
+        soln_root, soln_ivp = \
+            _solve_for_root_and_compute_progress(
+                decision_state_initguess,
+                optimization_parameters     ,
+                integration_state_parameters,
+                equality_parameters         ,
+                inequality_parameters       ,
+                options_root                ,
+            )
 
-        # Compute progress of current root solve
-        decision_state_initguess = soln_root.x
-        state_costate_o          = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state_initguess])
-        if use_thrust_limits:
-            state_costate_mass_o = np.hstack([state_costate_o, mass_o])
-        else:
-            state_costate_mass_o = state_costate_o
-        soln_ivp = _solve_ivp_func(
-            time_span                   ,
-            state_costate_mass_o        ,
-            optimization_parameters     ,
-            integration_state_parameters,
-            inequality_parameters       ,
-            include_scstm = False,
-            post_process  = False,
-        )
-        
+
         results_k_idx[k_idx] = soln_ivp
         error_mag = np.linalg.norm(soln_root.fun)
         if min_type == 'energy' and not use_thrust_acc_limits and not use_thrust_limits:
@@ -432,34 +415,11 @@ def optimal_trajectory_solve(
 
     # Plot the results
     print("\n  Plot Final Solution Trajectory")
-    # plot_final_results(
-    #     results_finalsoln                                     ,
-    #     equality_parameters,
-    #     min_type                       = min_type             ,
-    #     use_thrust_acc_limits          = use_thrust_acc_limits,
-    #     use_thrust_acc_smoothing       = False                ,
-    #     thrust_acc_min                 = thrust_acc_min       ,
-    #     thrust_acc_max                 = thrust_acc_max       ,
-    #     use_thrust_limits              = use_thrust_limits    ,
-    #     use_thrust_smoothing           = False                ,
-    #     thrust_min                     = thrust_min           ,
-    #     thrust_max                     = thrust_max           ,
-    #     k_steepness                    = k_idx                ,
-    #     plot_show                      = True                 ,
-    #     plot_save                      = True                 ,
-    #     input_filepath                 = input_filepath       ,
-    #     output_folderpath              = output_folderpath    ,
-    # )
     plot_final_results(
-        results_finalsoln           ,
-        files_folders_parameters    ,
-        system_parameters           ,
-        optimization_parameters     ,
-        integration_state_parameters,
-        equality_parameters         ,
-        inequality_parameters       ,
+        results_finalsoln       ,
+        files_folders_parameters,
+        system_parameters       ,
+        optimization_parameters ,
+        equality_parameters     ,
+        inequality_parameters   ,
     )
-
-
-
-
