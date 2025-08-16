@@ -26,7 +26,7 @@ def generate_guess(
 
     # Initialize loop for random guesses
     optimization_parameters['include_jacobian'] = False
-
+    inequality_parameters['k_steepness'] = inequality_parameters['k_idxinitguess']
     if inequality_parameters['use_thrust_acc_limits']:
         inequality_parameters['use_thrust_acc_smoothing'] = True
     if inequality_parameters['use_thrust_limits']:
@@ -231,10 +231,9 @@ def _solve_for_root_and_compute_progress(
     vel_vec_o_mns     =          equality_parameters['vel_vec_o_mns'    ]
     time_span         = integration_state_parameters['time_span'        ]
     mass_o            = integration_state_parameters['mass_o'           ]
-    post_process      = integration_state_parameters['post_process'     ]
     use_thrust_limits =        inequality_parameters['use_thrust_limits']
 
-    # Root solve
+    # Solve root problem
     soln_root = _solve_for_root(
         decision_state_initguess    ,
         optimization_parameters     ,
@@ -243,23 +242,6 @@ def _solve_for_root_and_compute_progress(
         inequality_parameters       ,
         options_root                ,
     )
-
-    # # Compute progress of current root solve
-    # decision_state_initguess = soln_root.x
-    # state_costate_o          = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state_initguess])
-    # if use_thrust_limits:
-    #     state_costate_mass_o = np.hstack([state_costate_o, mass_o])
-    # else:
-    #     state_costate_mass_o = state_costate_o
-    
-    # if post_process:
-    #     optimal_control_objective_o = np.float64(0.0)
-    #     state_costate_mass_o        = np.hstack([state_costate_o, mass_o, optimal_control_objective_o])
-
-    # decision_state_initguess       = soln_root.x
-    # state_costate_o                = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state_initguess])
-    # optimal_control_objective_o    = np.float64(0.0)
-    # state_costate_scstm_mass_obj_o = np.hstack([state_costate_o, mass_o, optimal_control_objective_o])
 
     # Initial state and stm
     decision_state_initguess = soln_root.x
@@ -274,12 +256,7 @@ def _solve_for_root_and_compute_progress(
     if use_thrust_limits:
         state_costate_scstm_o = np.hstack([state_costate_scstm_o, mass_o])
 
-    print(f"post_process {post_process}")
-    if post_process:
-        breakpoint()
-        optimal_control_objective_o = np.float64(0.0)
-        state_costate_scstm_o       = np.hstack([state_costate_o, mass_o, optimal_control_objective_o])
-
+    # Solve initial value problem
     soln_ivp = \
         _solve_ivp_func(
             time_span                   ,
@@ -306,7 +283,6 @@ def optimal_trajectory_solve(
     """
 
     # Generate initial guess for the costates
-    inequality_parameters['k_steepness'] = inequality_parameters['k_idxinitguess']
     decision_state_initguess = \
         generate_guess(
             optimization_parameters     ,
@@ -347,15 +323,11 @@ def optimal_trajectory_solve(
         'xtol'    : 1e-8, # 1e-8
         'gtol'    : 1e-8, # 1e-8
     }
-
     if use_thrust_acc_limits:
         inequality_parameters['use_thrust_acc_smoothing'] = True
     if use_thrust_limits:
         inequality_parameters['use_thrust_smoothing'] = True
-
-    integration_state_parameters['post_process']  = False
-    integration_state_parameters['include_scstm'] = False
-    optimization_parameters['include_jacobian']   = False
+    optimization_parameters['include_jacobian'] = True
 
     # Intermediate solution: loop though k values
     for idx, k_idx in tqdm(enumerate(k_idxinitguess_to_idxfinsoln), desc="Processing", leave=False, total=len(k_idxinitguess_to_idxfinsoln)):
@@ -393,7 +365,7 @@ def optimal_trajectory_solve(
     inequality_parameters['use_thrust_smoothing']     = False
     soln_root, soln_ivp = \
         _solve_for_root_and_compute_progress(
-            decision_state_initguess,
+            decision_state_initguess    ,
             optimization_parameters     ,
             integration_state_parameters,
             equality_parameters         ,
@@ -412,7 +384,9 @@ def optimal_trajectory_solve(
         print(f"    {key:>7s} : {value_construct}")
     
     # Final solution: post-process step
-    integration_state_parameters['post_process'] = True
+    integration_state_parameters['post_process']  = True
+    integration_state_parameters['include_scstm'] = False
+    optimization_parameters['include_jacobian']   = False
     decision_state_initguess       = soln_root.x
     state_costate_o                = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state_initguess])
     optimal_control_objective_o    = np.float64(0.0)
