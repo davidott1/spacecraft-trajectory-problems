@@ -280,8 +280,6 @@ def optimal_trajectory_solve(
         )
 
     # Unpack files and folders parameters
-    input_filepath        =     files_folders_parameters['input_filepath'       ]
-    output_folderpath     =     files_folders_parameters['output_folderpath'    ]
     min_type              =      optimization_parameters['min_type'             ]
     time_span             = integration_state_parameters['time_span'            ]
     mass_o                = integration_state_parameters['mass_o'               ] 
@@ -423,37 +421,43 @@ def optimal_trajectory_solve(
     print(f"    Error  : {       error_finalsoln_vec[0]:>14.6e} {       error_finalsoln_vec[1]:>14.3e} {       error_finalsoln_vec[2]:>14.6e} {       error_finalsoln_vec[3]:>14.6e}")
 
     # Enforce initial and final co-state boundary conditions (trivial right now)
-    boundary_condition_copos_vec_o = decision_state_initguess[0:2]
-    boundary_condition_covel_vec_o = decision_state_initguess[2:4]
-    boundary_condition_copos_vec_f = results_finalsoln.y[4:6, -1]
-    boundary_condition_covel_vec_f = results_finalsoln.y[6:8, -1]
+    equality_parameters['copos_vec_o_mns'] = decision_state_initguess[0:2]
+    equality_parameters['covel_vec_o_mns'] = decision_state_initguess[2:4]
+    equality_parameters['copos_vec_o_pls'] = decision_state_initguess[0:2]
+    equality_parameters['covel_vec_o_pls'] = decision_state_initguess[2:4]
+    equality_parameters['copos_vec_f_mns'] = results_finalsoln.y[4:6, -1]
+    equality_parameters['covel_vec_f_mns'] = results_finalsoln.y[6:8, -1]
+    equality_parameters['copos_vec_f_pls'] = results_finalsoln.y[4:6, -1]
+    equality_parameters['covel_vec_f_pls'] = results_finalsoln.y[6:8, -1]
 
     # Plot the results
     print("\n  Plot Final Solution Trajectory")
+    # plot_final_results(
+    #     results_finalsoln                                     ,
+    #     equality_parameters,
+    #     min_type                       = min_type             ,
+    #     use_thrust_acc_limits          = use_thrust_acc_limits,
+    #     use_thrust_acc_smoothing       = False                ,
+    #     thrust_acc_min                 = thrust_acc_min       ,
+    #     thrust_acc_max                 = thrust_acc_max       ,
+    #     use_thrust_limits              = use_thrust_limits    ,
+    #     use_thrust_smoothing           = False                ,
+    #     thrust_min                     = thrust_min           ,
+    #     thrust_max                     = thrust_max           ,
+    #     k_steepness                    = k_idx                ,
+    #     plot_show                      = True                 ,
+    #     plot_save                      = True                 ,
+    #     input_filepath                 = input_filepath       ,
+    #     output_folderpath              = output_folderpath    ,
+    # )
     plot_final_results(
-        results_finalsoln                                     ,
-        pos_vec_o_mns                                         ,
-        vel_vec_o_mns                                         ,
-        pos_vec_f_pls                                         ,
-        vel_vec_f_pls                                         ,
-        boundary_condition_copos_vec_o                        ,
-        boundary_condition_covel_vec_o                        ,
-        boundary_condition_copos_vec_f                        ,
-        boundary_condition_covel_vec_f                        ,
-        min_type                       = min_type             ,
-        use_thrust_acc_limits          = use_thrust_acc_limits,
-        use_thrust_acc_smoothing       = False                ,
-        thrust_acc_min                 = thrust_acc_min       ,
-        thrust_acc_max                 = thrust_acc_max       ,
-        use_thrust_limits              = use_thrust_limits    ,
-        use_thrust_smoothing           = False                ,
-        thrust_min                     = thrust_min           ,
-        thrust_max                     = thrust_max           ,
-        k_steepness                    = k_idx                ,
-        plot_show                      = True                 ,
-        plot_save                      = True                 ,
-        input_filepath                 = input_filepath       ,
-        output_folderpath              = output_folderpath    ,
+        results_finalsoln           ,
+        files_folders_parameters    ,
+        system_parameters           ,
+        optimization_parameters     ,
+        integration_state_parameters,
+        equality_parameters         ,
+        inequality_parameters       ,
     )
 
 

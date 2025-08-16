@@ -214,6 +214,8 @@ def configure_validate_input(
 
     # Set print parameters
     system_parameters = {
+        'plot_show'        : True,
+        'plot_save'        : True,
         'max_value_length' : 14,
     }
 
@@ -246,14 +248,22 @@ def configure_validate_input(
         'post_process'          : False, # type: ignore
     }
     equality_parameters = {
-        'pos_vec_o_mns' : all_parameters_without_units['pos_vec_o'],
-        'vel_vec_o_mns' : all_parameters_without_units['vel_vec_o'],
-        'pos_vec_o_pls' : all_parameters_without_units['pos_vec_o'], # by design
-        'vel_vec_o_pls' : all_parameters_without_units['vel_vec_o'], # by design
-        'pos_vec_f_mns' :                  np.array([0.0, 0.0]),
-        'vel_vec_f_mns' :                  np.array([0.0, 0.0]),
-        'pos_vec_f_pls' : all_parameters_without_units['pos_vec_f'],
-        'vel_vec_f_pls' : all_parameters_without_units['vel_vec_f'],
+          'pos_vec_o_mns' : all_parameters_without_units['pos_vec_o'],
+          'vel_vec_o_mns' : all_parameters_without_units['vel_vec_o'],
+          'pos_vec_o_pls' : all_parameters_without_units['pos_vec_o'], # by design
+          'vel_vec_o_pls' : all_parameters_without_units['vel_vec_o'], # by design
+        'copos_vec_o_mns' :                      np.array([0.0, 0.0]),
+        'covel_vec_o_mns' :                      np.array([0.0, 0.0]),
+        'copos_vec_o_pls' :                      np.array([0.0, 0.0]),
+        'covel_vec_o_pls' :                      np.array([0.0, 0.0]),
+          'pos_vec_f_mns' :                      np.array([0.0, 0.0]),
+          'vel_vec_f_mns' :                      np.array([0.0, 0.0]),
+          'pos_vec_f_pls' : all_parameters_without_units['pos_vec_f'],
+          'vel_vec_f_pls' : all_parameters_without_units['vel_vec_f'],
+        'copos_vec_f_mns' :                      np.array([0.0, 0.0]),
+        'covel_vec_f_mns' :                      np.array([0.0, 0.0]),
+        'copos_vec_f_pls' :                      np.array([0.0, 0.0]),
+        'covel_vec_f_pls' :                      np.array([0.0, 0.0]),
     }
     inequality_parameters = {
         'use_thrust_acc_limits'    : all_parameters_without_units['use_thrust_acc_limits'],

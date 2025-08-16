@@ -7,35 +7,69 @@ from src.utility.bounding_functions import bounded_smooth_func
 from pathlib import Path
 
 
+# def plot_final_results(
+#         results_finsoln                                                                     ,
+#         boundary_condition_pos_vec_o   : np.ndarray                                         ,
+#         boundary_condition_vel_vec_o   : np.ndarray                                         ,
+#         boundary_condition_pos_vec_f   : np.ndarray                                         ,
+#         boundary_condition_vel_vec_f   : np.ndarray                                         ,
+#         boundary_condition_copos_vec_o : np.ndarray                                         ,
+#         boundary_condition_covel_vec_o : np.ndarray                                         ,
+#         boundary_condition_copos_vec_f : np.ndarray                                         ,
+#         boundary_condition_covel_vec_f : np.ndarray                                         ,
+#         min_type                       : str        = 'energy'                              ,
+#         use_thrust_acc_limits          : bool       = False                                 ,
+#         use_thrust_acc_smoothing       : bool       = False                                 ,
+#         thrust_acc_min                 : np.float64 = np.float64(0.0e+0)                    ,
+#         thrust_acc_max                 : np.float64 = np.float64(1.0e+1)                    ,
+#         use_thrust_limits              : bool       = False                                 ,
+#         use_thrust_smoothing           : bool       = False                                 ,
+#         thrust_min                     : np.float64 = np.float64(0.0e+0)                    ,
+#         thrust_max                     : np.float64 = np.float64(1.0e+1)                    ,
+#         k_steepness                    : np.float64 = np.float64(0.0e+0)                    ,
+#         plot_show                      : bool       = True                                  ,
+#         plot_save                      : bool       = False                                 ,
+#         input_filepath                 : Path       = Path('input/examples/example_01.json'),
+#         output_folderpath              : Path       = Path('output/')                       ,
+#     ):
 def plot_final_results(
-        results_finsoln                                                                     ,
-        boundary_condition_pos_vec_o   : np.ndarray                                         ,
-        boundary_condition_vel_vec_o   : np.ndarray                                         ,
-        boundary_condition_pos_vec_f   : np.ndarray                                         ,
-        boundary_condition_vel_vec_f   : np.ndarray                                         ,
-        boundary_condition_copos_vec_o : np.ndarray                                         ,
-        boundary_condition_covel_vec_o : np.ndarray                                         ,
-        boundary_condition_copos_vec_f : np.ndarray                                         ,
-        boundary_condition_covel_vec_f : np.ndarray                                         ,
-        min_type                       : str        = 'energy'                              ,
-        use_thrust_acc_limits          : bool       = False                                 ,
-        use_thrust_acc_smoothing       : bool       = False                                 ,
-        thrust_acc_min                 : np.float64 = np.float64(0.0e+0)                    ,
-        thrust_acc_max                 : np.float64 = np.float64(1.0e+1)                    ,
-        use_thrust_limits              : bool       = False                                 ,
-        use_thrust_smoothing           : bool       = False                                 ,
-        thrust_min                     : np.float64 = np.float64(0.0e+0)                    ,
-        thrust_max                     : np.float64 = np.float64(1.0e+1)                    ,
-        k_steepness                    : np.float64 = np.float64(0.0e+0)                    ,
-        plot_show                      : bool       = True                                  ,
-        plot_save                      : bool       = False                                 ,
-        input_filepath                 : Path       = Path('input/examples/example_01.json'),
-        output_folderpath              : Path       = Path('output/')                       ,
+        results_finsoln             ,
+        files_folders_parameters    ,
+        system_parameters           ,
+        optimization_parameters     ,
+        integration_state_parameters,
+        equality_parameters         ,
+        inequality_parameters       ,
     ):
     """
     Calculates and plots all relevant results for the final trajectory solution.
     """
-    
+
+    # Unpack parameters
+    min_type                       = optimization_parameters['min_type']
+    use_thrust_acc_limits          = inequality_parameters['use_thrust_acc_limits']
+    use_thrust_acc_smoothing       = inequality_parameters['use_thrust_acc_smoothing']
+    thrust_acc_min                 = inequality_parameters['thrust_acc_min']
+    thrust_acc_max                 = inequality_parameters['thrust_acc_max']
+    use_thrust_limits              = inequality_parameters['use_thrust_limits']
+    use_thrust_smoothing           = inequality_parameters['use_thrust_smoothing']
+    thrust_min                     = inequality_parameters['thrust_min']
+    thrust_max                     = inequality_parameters['thrust_max']
+    k_steepness                    = inequality_parameters['k_steepness']
+    input_filepath                 =     files_folders_parameters['input_filepath'       ]
+    output_folderpath              =     files_folders_parameters['output_folderpath'    ]
+    plot_show                      = system_parameters['plot_show']
+    plot_save                      = system_parameters['plot_save']
+
+    pos_vec_o_mns   = equality_parameters['pos_vec_o_mns']
+    vel_vec_o_mns   = equality_parameters['vel_vec_o_mns']
+    copos_vec_o_mns = equality_parameters['copos_vec_o_mns']
+    covel_vec_o_mns = equality_parameters['covel_vec_o_mns']
+    pos_vec_f_pls   = equality_parameters['pos_vec_f_pls']
+    vel_vec_f_pls   = equality_parameters['vel_vec_f_pls']
+    copos_vec_f_pls = equality_parameters['copos_vec_f_pls']
+    covel_vec_f_pls = equality_parameters['covel_vec_f_pls']
+
     # Unpack state and costate histories
     time_t                                     = results_finsoln.t
     state_t                                    = results_finsoln.y
@@ -223,11 +257,11 @@ def plot_final_results(
         thrust_max            = thrust_max           ,
         color_thrust          = color_thrust         ,
     )
-    ax1_pos.plot(boundary_condition_pos_vec_o[ 0], boundary_condition_pos_vec_o[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=20, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
-    ax1_pos.plot(boundary_condition_pos_vec_f[ 0], boundary_condition_pos_vec_f[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=16, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
-    ax1_pos.plot(                     pos_x_t[ 0],                      pos_y_t[ 0], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='Start'      )
-    ax1_pos.plot(                     pos_x_t[-1],                      pos_y_t[-1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='End'        )
-    ax1_pos.plot(                     pos_x_t    ,                      pos_y_t    , color=mcolors.CSS4_COLORS['black'], linewidth=2.0,                                                                                                                                          label='Trajectory' )
+    ax1_pos.plot(pos_vec_o_mns[ 0], pos_vec_o_mns[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=20, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
+    ax1_pos.plot(pos_vec_f_pls[ 0], pos_vec_f_pls[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=16, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
+    ax1_pos.plot(      pos_x_t[ 0],       pos_y_t[ 0], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='Start'      )
+    ax1_pos.plot(      pos_x_t[-1],       pos_y_t[-1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='End'        )
+    ax1_pos.plot(      pos_x_t    ,       pos_y_t    , color=mcolors.CSS4_COLORS['black'], linewidth=2.0,                                                                                                                                          label='Trajectory' )
     ax1_pos.set_xlabel('Position X [m]')
     ax1_pos.set_ylabel('Position Y [m]')
     ax1_pos.grid(True)
@@ -318,11 +352,11 @@ def plot_final_results(
         thrust_max            = thrust_max           ,
         color_thrust          = color_thrust         ,
     )
-    ax1_vel.plot(boundary_condition_vel_vec_o[ 0], boundary_condition_vel_vec_o[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=20, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
-    ax1_vel.plot(boundary_condition_vel_vec_f[ 0], boundary_condition_vel_vec_f[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=16, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
-    ax1_vel.plot(                     vel_x_t[ 0],                      vel_y_t[ 0], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='Start'      )
-    ax1_vel.plot(                     vel_x_t[-1],                      vel_y_t[-1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='End'        )
-    ax1_vel.plot(                     vel_x_t    ,                      vel_y_t    , color=mcolors.CSS4_COLORS['black'], linewidth=2.0,                                                                                                                                          label='Trajectory' )
+    ax1_vel.plot(vel_vec_o_mns[ 0], vel_vec_o_mns[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=20, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
+    ax1_vel.plot(vel_vec_f_pls[ 0], vel_vec_f_pls[ 1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=16, markerfacecolor=mcolors.CSS4_COLORS['white'], markeredgecolor=mcolors.CSS4_COLORS['black']                                       )
+    ax1_vel.plot(      vel_x_t[ 0],       vel_y_t[ 0], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='>', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='Start'      )
+    ax1_vel.plot(      vel_x_t[-1],       vel_y_t[-1], color=mcolors.CSS4_COLORS['black'], linewidth=1.0, marker='s', markersize=10, markerfacecolor=mcolors.CSS4_COLORS['black'], markeredgecolor=mcolors.CSS4_COLORS['black'], linestyle='None', label='End'        )
+    ax1_vel.plot(      vel_x_t    ,       vel_y_t    , color=mcolors.CSS4_COLORS['black'], linewidth=2.0,                                                                                                                                          label='Trajectory' )
     ax1_vel.set_xlabel("Velocity X [m/s]", labelpad=2)
     ax1_vel.set_ylabel("Velocity Y [m/s]", labelpad=10)
     ax1_vel.grid(True)
@@ -438,16 +472,16 @@ def plot_final_results(
 
     # Position vs. Time
     ax5_timepos = fig.add_subplot(gs[3,1])
-    ax5_timepos.plot(time_t[ 0], boundary_condition_pos_vec_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax5_timepos.plot(time_t[-1], boundary_condition_pos_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax5_timepos.plot(time_t    ,                      pos_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
-    ax5_timepos.plot(time_t[ 0],                      pos_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax5_timepos.plot(time_t[-1],                      pos_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax5_timepos.plot(time_t[ 0], boundary_condition_pos_vec_o[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax5_timepos.plot(time_t[-1], boundary_condition_pos_vec_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax5_timepos.plot(time_t    ,                      pos_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
-    ax5_timepos.plot(time_t[ 0],                      pos_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax5_timepos.plot(time_t[-1],                      pos_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5_timepos.plot(time_t[ 0], pos_vec_o_mns[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5_timepos.plot(time_t[-1], pos_vec_f_pls[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5_timepos.plot(time_t    ,       pos_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
+    ax5_timepos.plot(time_t[ 0],       pos_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5_timepos.plot(time_t[-1],       pos_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5_timepos.plot(time_t[ 0], pos_vec_o_mns[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5_timepos.plot(time_t[-1], pos_vec_f_pls[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5_timepos.plot(time_t    ,       pos_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
+    ax5_timepos.plot(time_t[ 0],       pos_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5_timepos.plot(time_t[-1],       pos_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
     ax5_timepos.set_xticklabels([])
     ax5_timepos.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
     ax5_timepos.set_ylabel('Position\n[m]')
@@ -463,16 +497,16 @@ def plot_final_results(
     # Co-Position vs. Time
     ax5_timecopos = fig.add_subplot(gs[3,1])
     ax5_timecopos.set_visible(False)
-    ax5_timecopos.plot(time_t[ 0], boundary_condition_copos_vec_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax5_timecopos.plot(time_t[-1], boundary_condition_copos_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax5_timecopos.plot(time_t    ,                      copos_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
-    ax5_timecopos.plot(time_t[ 0],                      copos_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax5_timecopos.plot(time_t[-1],                      copos_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax5_timecopos.plot(time_t[ 0], boundary_condition_copos_vec_o[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax5_timecopos.plot(time_t[-1], boundary_condition_copos_vec_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax5_timecopos.plot(time_t    ,                      copos_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
-    ax5_timecopos.plot(time_t[ 0],                      copos_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax5_timecopos.plot(time_t[-1],                      copos_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5_timecopos.plot(time_t[ 0], copos_vec_o_mns[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5_timecopos.plot(time_t[-1], copos_vec_f_pls[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5_timecopos.plot(time_t    ,       copos_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
+    ax5_timecopos.plot(time_t[ 0],       copos_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5_timecopos.plot(time_t[-1],       copos_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax5_timecopos.plot(time_t[ 0], copos_vec_o_mns[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5_timecopos.plot(time_t[-1], copos_vec_f_pls[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5_timecopos.plot(time_t    ,       copos_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
+    ax5_timecopos.plot(time_t[ 0],       copos_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax5_timecopos.plot(time_t[-1],       copos_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
     ax5_timecopos.set_xticklabels([])
     ax5_timecopos.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
     units_label = '[1/s]' if min_type=='fuel' else '[m/s$^3$]'
@@ -505,16 +539,16 @@ def plot_final_results(
 
     # Velocity vs. Time
     ax6_timevel = fig.add_subplot(gs[4,1])
-    ax6_timevel.plot(time_t[ 0], boundary_condition_vel_vec_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax6_timevel.plot(time_t[-1], boundary_condition_vel_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax6_timevel.plot(time_t    ,                      vel_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
-    ax6_timevel.plot(time_t[ 0],                      vel_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax6_timevel.plot(time_t[-1],                      vel_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax6_timevel.plot(time_t[ 0], boundary_condition_vel_vec_o[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax6_timevel.plot(time_t[-1], boundary_condition_vel_vec_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax6_timevel.plot(time_t    ,                      vel_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
-    ax6_timevel.plot(time_t[ 0],                      vel_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax6_timevel.plot(time_t[-1],                      vel_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6_timevel.plot(time_t[ 0], vel_vec_o_mns[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6_timevel.plot(time_t[-1], vel_vec_f_pls[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6_timevel.plot(time_t    ,       vel_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
+    ax6_timevel.plot(time_t[ 0],       vel_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6_timevel.plot(time_t[-1],       vel_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6_timevel.plot(time_t[ 0], vel_vec_o_mns[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6_timevel.plot(time_t[-1], vel_vec_f_pls[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6_timevel.plot(time_t    ,       vel_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
+    ax6_timevel.plot(time_t[ 0],       vel_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6_timevel.plot(time_t[-1],       vel_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
     ax6_timevel.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
     ax6_timevel.set_xlabel('Time [s]')
     ax6_timevel.set_ylabel('Velocity\n[m/s]')
@@ -530,16 +564,16 @@ def plot_final_results(
     # Co-Velocity vs. Time
     ax6_timecovel = fig.add_subplot(gs[4,1])
     ax6_timecovel.set_visible(False)
-    ax6_timecovel.plot(time_t[ 0], boundary_condition_covel_vec_o[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax6_timecovel.plot(time_t[-1], boundary_condition_covel_vec_f[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax6_timecovel.plot(time_t    ,                      covel_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
-    ax6_timecovel.plot(time_t[ 0],                      covel_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax6_timecovel.plot(time_t[-1],                      covel_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
-    ax6_timecovel.plot(time_t[ 0], boundary_condition_covel_vec_o[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax6_timecovel.plot(time_t[-1], boundary_condition_covel_vec_f[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax6_timecovel.plot(time_t    ,                      covel_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
-    ax6_timecovel.plot(time_t[ 0],                      covel_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
-    ax6_timecovel.plot(time_t[-1],                      covel_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6_timecovel.plot(time_t[ 0], covel_vec_o_mns[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6_timecovel.plot(time_t[-1], covel_vec_f_pls[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6_timecovel.plot(time_t    ,       covel_x_t    , color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, label='X' )
+    ax6_timecovel.plot(time_t[ 0],       covel_x_t[ 0], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6_timecovel.plot(time_t[-1],       covel_x_t[-1], color=mcolors.CSS4_COLORS[  'indianred'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS[  'indianred'], markeredgecolor=mcolors.CSS4_COLORS[  'indianred'], linestyle='None' )
+    ax6_timecovel.plot(time_t[ 0], covel_vec_o_mns[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 20, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6_timecovel.plot(time_t[-1], covel_vec_f_pls[ 1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 16, markerfacecolor=mcolors.CSS4_COLORS[      'white'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6_timecovel.plot(time_t    ,       covel_y_t    , color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, label='Y' )
+    ax6_timecovel.plot(time_t[ 0],       covel_y_t[ 0], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='>', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
+    ax6_timecovel.plot(time_t[-1],       covel_y_t[-1], color=mcolors.CSS4_COLORS['forestgreen'], linewidth=2.0, marker='s', markersize= 10, markerfacecolor=mcolors.CSS4_COLORS['forestgreen'], markeredgecolor=mcolors.CSS4_COLORS['forestgreen'], linestyle='None' )
     ax6_timecovel.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
     ax6_timecovel.set_xlabel('Time [s]')
     units_label = '[1]' if min_type=='fuel' else '[m/s$^2$]'
