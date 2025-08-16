@@ -82,19 +82,21 @@ def tpbvp_objective_and_jacobian(
     include_jacobian         =      optimization_parameters['include_jacobian'        ]
     time_span                = integration_state_parameters['time_span'               ]
     mass_o                   = integration_state_parameters['mass_o'                  ]
+    post_process             = integration_state_parameters['post_process'            ]
     pos_vec_o_mns            =          equality_parameters['pos_vec_o_mns'           ]
     vel_vec_o_mns            =          equality_parameters['vel_vec_o_mns'           ]
     pos_vec_f_pls            =          equality_parameters['pos_vec_f_pls'           ]
     vel_vec_f_pls            =          equality_parameters['vel_vec_f_pls'           ]
-    use_thrust_acc_limits    =        inequality_parameters['use_thrust_acc_limits'   ]
-    use_thrust_acc_smoothing =        inequality_parameters['use_thrust_acc_smoothing']
-    thrust_acc_min           =        inequality_parameters['thrust_acc_min'          ]
-    thrust_acc_max           =        inequality_parameters['thrust_acc_max'          ]
+    # use_thrust_acc_limits    =        inequality_parameters['use_thrust_acc_limits'   ]
+    # use_thrust_acc_smoothing =        inequality_parameters['use_thrust_acc_smoothing']
+    # thrust_acc_min           =        inequality_parameters['thrust_acc_min'          ]
+    # thrust_acc_max           =        inequality_parameters['thrust_acc_max'          ]
     use_thrust_limits        =        inequality_parameters['use_thrust_limits'       ]
-    use_thrust_smoothing     =        inequality_parameters['use_thrust_smoothing'    ]
-    thrust_min               =        inequality_parameters['thrust_min'              ]
-    thrust_max               =        inequality_parameters['thrust_max'              ]
-    k_steepness              =        inequality_parameters['k_steepness'             ]
+    # use_thrust_smoothing     =        inequality_parameters['use_thrust_smoothing'    ]
+    # thrust_min               =        inequality_parameters['thrust_min'              ]
+    # thrust_max               =        inequality_parameters['thrust_max'              ]
+    # k_steepness              =        inequality_parameters['k_steepness'             ]
+    
 
     # Initial state and stm
     state_costate_o = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state])
@@ -109,36 +111,47 @@ def tpbvp_objective_and_jacobian(
         state_costate_scstm_o = np.hstack([state_costate_scstm_o, mass_o])
 
     # Integrate
-    solve_ivp_func = \
-        lambda time, state_costate_scstm: \
-            one_body_dynamics__indirect(
-                time                                               ,
-                state_costate_scstm                                ,
-                include_scstm            = include_scstm           ,
-                min_type                 = min_type                ,
-                use_thrust_acc_limits    = use_thrust_acc_limits   ,
-                use_thrust_acc_smoothing = use_thrust_acc_smoothing,
-                thrust_acc_min           = thrust_acc_min          ,
-                thrust_acc_max           = thrust_acc_max          ,
-                use_thrust_limits        = use_thrust_limits       ,
-                use_thrust_smoothing     = use_thrust_smoothing    ,
-                thrust_min               = thrust_min              ,
-                thrust_max               = thrust_max              ,
-                k_steepness              = k_steepness             ,
-            )
-    soln = \
-        solve_ivp(
-            solve_ivp_func                 ,
-            time_span                      ,
-            state_costate_scstm_o          ,
-            dense_output          = True   , 
-            method                = 'RK45' ,
-            rtol                  = 1.0e-12,
-            atol                  = 1.0e-12,
+    # solve_ivp_func = \
+    #     lambda time, state_costate_scstm: \
+    #         one_body_dynamics__indirect(
+    #             time                                               ,
+    #             state_costate_scstm                                ,
+    #             include_scstm            = include_scstm           ,
+    #             min_type                 = min_type                ,
+    #             use_thrust_acc_limits    = use_thrust_acc_limits   ,
+    #             use_thrust_acc_smoothing = use_thrust_acc_smoothing,
+    #             thrust_acc_min           = thrust_acc_min          ,
+    #             thrust_acc_max           = thrust_acc_max          ,
+    #             use_thrust_limits        = use_thrust_limits       ,
+    #             use_thrust_smoothing     = use_thrust_smoothing    ,
+    #             thrust_min               = thrust_min              ,
+    #             thrust_max               = thrust_max              ,
+    #             k_steepness              = k_steepness             ,
+    #         )
+    # soln_ivp = \
+    #     solve_ivp(
+    #         solve_ivp_func                 ,
+    #         time_span                      ,
+    #         state_costate_scstm_o          ,
+    #         dense_output          = True   , 
+    #         method                = 'RK45' ,
+    #         rtol                  = 1.0e-12,
+    #         atol                  = 1.0e-12,
+    #     )
+    
+    soln_ivp = \
+        _solve_ivp_func(
+            time_span                    ,
+            state_costate_scstm_o        ,
+            optimization_parameters      ,
+            integration_state_parameters ,
+            inequality_parameters        ,
+            include_scstm = include_scstm,
+            post_process  = post_process,
         )
 
     # Extract final state and final STM
-    state_costate_scstm_f = soln.sol(time_span[1])
+    state_costate_scstm_f = soln_ivp.sol(time_span[1])
     state_costate_f       = state_costate_scstm_f[:8]
     if include_jacobian:
         stm_of = state_costate_scstm_f[8:8+8**2].reshape((8,8))
@@ -155,6 +168,93 @@ def tpbvp_objective_and_jacobian(
     else:
         return error
     
+
+def _solve_for_root(
+        decision_state_initguess,
+        optimization_parameters,
+        integration_state_parameters,
+        equality_parameters,
+        inequality_parameters,
+        options_root
+    ):
+    """
+    Helper function to call the root solver.
+    """
+    root_func = lambda decision_state: tpbvp_objective_and_jacobian(
+        decision_state,
+        optimization_parameters,
+        integration_state_parameters,
+        equality_parameters,
+        inequality_parameters,
+    )
+    return root(
+        root_func,
+        decision_state_initguess,
+        method  = 'lm',
+        tol     = 1.0e-11,
+        jac     = optimization_parameters['include_jacobian'],
+        options = options_root,
+    )
+
+
+def _solve_ivp_func(
+        time_span,
+        state_costate_scstm_mass_obj_o, # at most
+        optimization_parameters       ,
+        integration_state_parameters  ,
+        inequality_parameters         ,
+        include_scstm = False,
+        post_process  = False,
+    ):
+    """
+    Solve IVP function for the final solution.
+    """
+
+    min_type              =      optimization_parameters['min_type'             ]
+    time_span             = integration_state_parameters['time_span'            ]
+    use_thrust_acc_limits =        inequality_parameters['use_thrust_acc_limits']
+    thrust_acc_min        =        inequality_parameters['thrust_acc_min'       ]
+    thrust_acc_max        =        inequality_parameters['thrust_acc_max'       ]
+    use_thrust_limits     =        inequality_parameters['use_thrust_limits'    ]
+    thrust_min            =        inequality_parameters['thrust_min'           ]
+    thrust_max            =        inequality_parameters['thrust_max'           ]
+    k_idx                 =        inequality_parameters['k_steepness'          ]
+
+    time_eval_points = np.linspace(time_span[0], time_span[1], 401)
+    
+    solve_ivp_func = \
+        lambda time, state_costate_scstm_mass_obj: \
+            one_body_dynamics__indirect(
+                time                                                ,
+                state_costate_scstm_mass_obj                        ,
+                include_scstm                = include_scstm        ,
+                min_type                     = min_type             ,
+                use_thrust_acc_limits        = use_thrust_acc_limits,
+                use_thrust_acc_smoothing     = False                ,
+                thrust_acc_min               = thrust_acc_min       ,
+                thrust_acc_max               = thrust_acc_max       ,
+                use_thrust_limits            = use_thrust_limits    ,
+                use_thrust_smoothing         = False                ,
+                thrust_min                   = thrust_min           ,
+                thrust_max                   = thrust_max           ,
+                post_process                 = post_process        ,
+                k_steepness                  = k_idx                ,
+            )
+
+    soln_ivp = \
+        solve_ivp(
+            solve_ivp_func                                   ,
+            time_span                                        ,
+            state_costate_scstm_mass_obj_o                   ,
+            t_eval                         = time_eval_points,
+            dense_output                   = True            , 
+            method                         = 'RK45'          ,
+            rtol                           = 1.0e-12         ,
+            atol                           = 1.0e-12         ,
+        )
+
+    return soln_ivp
+
 
 def optimal_trajectory_solve(
         files_folders_parameters    ,
@@ -180,26 +280,24 @@ def optimal_trajectory_solve(
         )
 
     # Unpack files and folders parameters
-    input_filepath               =     files_folders_parameters['input_filepath'       ]
-    output_folderpath            =     files_folders_parameters['output_folderpath'    ]
-    min_type                     =      optimization_parameters['min_type'             ]
-    init_guess_steps             =      optimization_parameters['init_guess_steps'     ]
-    time_span                    = integration_state_parameters['time_span'            ]
-    mass_o                       = integration_state_parameters['mass_o'               ] 
-    pos_vec_o_mns                =          equality_parameters['pos_vec_o_mns'        ]
-    vel_vec_o_mns                =          equality_parameters['vel_vec_o_mns'        ]
-    pos_vec_f_pls                =          equality_parameters['pos_vec_f_pls'        ]
-    vel_vec_f_pls                =          equality_parameters['vel_vec_f_pls'        ]
-    use_thrust_acc_limits        =        inequality_parameters['use_thrust_acc_limits']
-    thrust_acc_min               =        inequality_parameters['thrust_acc_min'       ]
-    thrust_acc_max               =        inequality_parameters['thrust_acc_max'       ]
-    use_thrust_limits            =        inequality_parameters['use_thrust_limits'    ]
-    thrust_min                   =        inequality_parameters['thrust_min'           ]
-    thrust_max                   =        inequality_parameters['thrust_max'           ]
-    k_idxinitguess               =        inequality_parameters['k_idxinitguess'       ]
-    k_idxfinsoln                 =        inequality_parameters['k_idxfinsoln'         ]
-    k_idxdivs                    =        inequality_parameters['k_idxdivs'            ]
-    k_steepness                  =        inequality_parameters['k_steepness'          ]
+    input_filepath        =     files_folders_parameters['input_filepath'       ]
+    output_folderpath     =     files_folders_parameters['output_folderpath'    ]
+    min_type              =      optimization_parameters['min_type'             ]
+    time_span             = integration_state_parameters['time_span'            ]
+    mass_o                = integration_state_parameters['mass_o'               ] 
+    pos_vec_o_mns         =          equality_parameters['pos_vec_o_mns'        ]
+    vel_vec_o_mns         =          equality_parameters['vel_vec_o_mns'        ]
+    pos_vec_f_pls         =          equality_parameters['pos_vec_f_pls'        ]
+    vel_vec_f_pls         =          equality_parameters['vel_vec_f_pls'        ]
+    use_thrust_acc_limits =        inequality_parameters['use_thrust_acc_limits']
+    thrust_acc_min        =        inequality_parameters['thrust_acc_min'       ]
+    thrust_acc_max        =        inequality_parameters['thrust_acc_max'       ]
+    use_thrust_limits     =        inequality_parameters['use_thrust_limits'    ]
+    thrust_min            =        inequality_parameters['thrust_min'           ]
+    thrust_max            =        inequality_parameters['thrust_max'           ]
+    k_idxinitguess        =        inequality_parameters['k_idxinitguess'       ]
+    k_idxfinsoln          =        inequality_parameters['k_idxfinsoln'         ]
+    k_idxdivs             =        inequality_parameters['k_idxdivs'            ]
 
     # Optimize and enforce thrust or thrust-acc constraints
     print("\n\nOPTIMIZATION PROCESS")
@@ -211,86 +309,54 @@ def optimal_trajectory_solve(
         print("  Thrust- or Thrust-Acc-Steepness Continuation Process")
 
     # Loop initialization
-    results_k_idx    = {}
-    include_jacobian = True # temp
-    optimization_parameters['include_jacobian'] = include_jacobian
-    options_root     = {
+    optimization_parameters['include_jacobian'] = True
+    results_k_idx                               = {}
+    k_idxinitguess_to_idxfinsoln                = np.logspace(np.log(k_idxinitguess), np.log(k_idxfinsoln), k_idxdivs)
+    options_root                                = {
         'maxiter' : 100 * len(decision_state_initguess), # 100 * n
         'ftol'    : 1e-8, # 1e-8
         'xtol'    : 1e-8, # 1e-8
         'gtol'    : 1e-8, # 1e-8
     }
-    k_idxinitguess_to_idxfinsoln = np.logspace(np.log(k_idxinitguess), np.log(k_idxfinsoln), k_idxdivs)
 
     if use_thrust_acc_limits:
         inequality_parameters['use_thrust_acc_smoothing'] = True
     if use_thrust_limits:
         inequality_parameters['use_thrust_smoothing'] = True
-
+    
     # Loop
     for idx, k_idx in tqdm(enumerate(k_idxinitguess_to_idxfinsoln), desc="Processing", leave=False, total=len(k_idxinitguess_to_idxfinsoln)):
 
         # Set the k-idx
         inequality_parameters['k_steepness'] = k_idx
 
-        # Define root function
-        root_func = \
-            lambda decision_state: \
-                tpbvp_objective_and_jacobian(
-                    decision_state              ,
-                    optimization_parameters     ,
-                    integration_state_parameters,
-                    equality_parameters         ,
-                    inequality_parameters       ,
-                )
-
         # Root solve
-        soln_root = \
-            root(
-                root_func                                  ,
-                decision_state_initguess                   ,
-                method                   = 'lm'            ,
-                tol                      = 1.0e-11         ,
-                jac                      = include_jacobian,
-                options                  = options_root    ,
-            )
-        
-        # Compute progress
+        soln_root = _solve_for_root(
+            decision_state_initguess    ,
+            optimization_parameters     ,
+            integration_state_parameters,
+            equality_parameters         ,
+            inequality_parameters       ,
+            options_root                ,
+        )
+
+        # Compute progress of current root solve
         decision_state_initguess = soln_root.x
         state_costate_o          = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state_initguess])
         if use_thrust_limits:
             state_costate_mass_o = np.hstack([state_costate_o, mass_o])
         else:
             state_costate_mass_o = state_costate_o
-        time_eval_points = np.linspace(time_span[0], time_span[1], 201)
-        solve_ivp_func = \
-            lambda time, state_costate_scstm: \
-                one_body_dynamics__indirect(
-                    time                                            ,
-                    state_costate_scstm                             ,
-                    include_scstm            = False                ,
-                    min_type                 = min_type             ,
-                    use_thrust_acc_limits    = use_thrust_acc_limits,
-                    use_thrust_acc_smoothing = True                 ,
-                    thrust_acc_min           = thrust_acc_min       ,
-                    thrust_acc_max           = thrust_acc_max       ,
-                    use_thrust_limits        = use_thrust_limits    ,
-                    use_thrust_smoothing     = True                 ,
-                    thrust_min               = thrust_min           ,
-                    thrust_max               = thrust_max           ,
-                    k_steepness              = k_idx                ,
-                )
-        soln_ivp = \
-            solve_ivp(
-                solve_ivp_func                 ,
-                time_span                      ,
-                state_costate_mass_o           ,
-                t_eval       = time_eval_points,
-                dense_output = True            , 
-                method       = 'RK45'          ,
-                rtol         = 1.0e-12         ,
-                atol         = 1.0e-12         ,
-            )
+        soln_ivp = _solve_ivp_func(
+            time_span                   ,
+            state_costate_mass_o        ,
+            optimization_parameters     ,
+            integration_state_parameters,
+            inequality_parameters       ,
+            include_scstm = False,
+            post_process  = False,
+        )
+        
         results_k_idx[k_idx] = soln_ivp
         error_mag = np.linalg.norm(soln_root.fun)
         if min_type == 'energy' and not use_thrust_acc_limits and not use_thrust_limits:
@@ -303,26 +369,16 @@ def optimal_trajectory_solve(
             tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
 
     # Final solution: no thrust or thrust-acc smoothing
-    root_func = \
-        lambda decision_state: \
-            tpbvp_objective_and_jacobian(
-                decision_state              , 
-                optimization_parameters     ,
-                integration_state_parameters,
-                equality_parameters         ,
-                inequality_parameters       ,
-            )
-    soln_root = \
-        root(
-            root_func                                  ,
-            decision_state_initguess                   ,
-            method                   = 'lm'            ,
-            tol                      = 1.0e-11         ,
-            jac                      = include_jacobian,
-            options                  = options_root    ,
-        )
     print("\n\nFINAL SOLUTION PROCESS")
     print("  Root-Solve Results")
+    soln_root = _solve_for_root(
+        decision_state_initguess    ,
+        optimization_parameters     ,
+        integration_state_parameters,
+        equality_parameters         ,
+        inequality_parameters       ,
+        options_root                ,
+    )
     for key, value in soln_root.items():
         if isinstance(value, np.ndarray):
             if len(value.shape) == 1:
@@ -337,36 +393,15 @@ def optimal_trajectory_solve(
     state_costate_o                = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state_initguess])
     optimal_control_objective_o    = np.float64(0.0)
     state_costate_scstm_mass_obj_o = np.hstack([state_costate_o, mass_o, optimal_control_objective_o])
-    time_eval_points               = np.linspace(time_span[0], time_span[1], 401)
-    solve_ivp_func = \
-        lambda time, state_costate_scstm_mass_obj: \
-            one_body_dynamics__indirect(
-                time                                                ,
-                state_costate_scstm_mass_obj                        ,
-                include_scstm                = False                ,
-                min_type                     = min_type             ,
-                use_thrust_acc_limits        = use_thrust_acc_limits,
-                use_thrust_acc_smoothing     = False                ,
-                thrust_acc_min               = thrust_acc_min       ,
-                thrust_acc_max               = thrust_acc_max       ,
-                use_thrust_limits            = use_thrust_limits    ,
-                use_thrust_smoothing         = False                ,
-                thrust_min                   = thrust_min           ,
-                thrust_max                   = thrust_max           ,
-                post_process                 = True                 ,
-                k_steepness                  = k_idx                ,
-            )
-    soln_ivp = \
-        solve_ivp(
-            solve_ivp_func                                   ,
-            time_span                                        ,
-            state_costate_scstm_mass_obj_o                   ,
-            t_eval                         = time_eval_points,
-            dense_output                   = True            , 
-            method                         = 'RK45'          ,
-            rtol                           = 1.0e-12         ,
-            atol                           = 1.0e-12         ,
-        ) 
+    soln_ivp = _solve_ivp_func(
+            time_span                     ,
+            state_costate_scstm_mass_obj_o,
+            optimization_parameters       ,
+            integration_state_parameters  ,
+            inequality_parameters         ,
+            include_scstm = False,
+            post_process  = True,
+        )
     results_finalsoln = soln_ivp
     state_f_finalsoln = results_finalsoln.y[0:4, -1]
 

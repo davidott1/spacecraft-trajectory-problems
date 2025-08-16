@@ -243,6 +243,7 @@ def configure_validate_input(
         'pos_vec_f'             : all_parameters_without_units['pos_vec_f'], # type: ignore
         'vel_vec_f'             : all_parameters_without_units['vel_vec_f'], # type: ignore
         'mass_o'                : all_parameters_without_units['mass_o'   ], # type: ignore
+        'post_process'          : False, # type: ignore
     }
     equality_parameters = {
         'pos_vec_o_mns' : all_parameters_without_units['pos_vec_o'],

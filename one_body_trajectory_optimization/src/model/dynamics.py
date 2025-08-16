@@ -55,7 +55,7 @@ def one_body_dynamics__indirect(
         [   dpos_x__dtime,   dpos_y__dtime,   dvel_x__dtime,   dvel_y__dtime,
           dcopos_x__dtime, dcopos_y__dtime, dcovel_x__dtime, dcovel_y__dtime  ]
     """
-
+    
     # Validate input
     if use_thrust_acc_limits and use_thrust_limits:
         use_thrust_limits = False
