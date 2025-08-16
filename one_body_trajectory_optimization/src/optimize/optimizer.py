@@ -315,19 +315,20 @@ def optimal_trajectory_solve(
         print("  Thrust- or Thrust-Acc-Steepness Continuation Process")
 
     # Intermediate solution: initialize loop
-    results_k_idx                               = {}
-    k_idxinitguess_to_idxfinsoln                = np.logspace(np.log(k_idxinitguess), np.log(k_idxfinsoln), k_idxdivs)
-    options_root                                = {
+    results_k_idx                = {}
+    k_idxinitguess_to_idxfinsoln = np.logspace(np.log(k_idxinitguess), np.log(k_idxfinsoln), k_idxdivs)
+    options_root                 = {
         'maxiter' : 100 * len(decision_state_initguess), # 100 * n
         'ftol'    : 1e-8, # 1e-8
         'xtol'    : 1e-8, # 1e-8
         'gtol'    : 1e-8, # 1e-8
     }
+    optimization_parameters['include_jacobian']   = True
+    integration_state_parameters['include_scstm'] = True
     if use_thrust_acc_limits:
         inequality_parameters['use_thrust_acc_smoothing'] = True
     if use_thrust_limits:
         inequality_parameters['use_thrust_smoothing'] = True
-    optimization_parameters['include_jacobian'] = True
 
     # Intermediate solution: loop though k values
     for idx, k_idx in tqdm(enumerate(k_idxinitguess_to_idxfinsoln), desc="Processing", leave=False, total=len(k_idxinitguess_to_idxfinsoln)):
@@ -361,6 +362,9 @@ def optimal_trajectory_solve(
     print("  Root-Solve Results")
     
     # Final solution: root solve and compute progress of current root solve
+    optimization_parameters['include_jacobian']       = True
+    integration_state_parameters['post_process']      = False
+    integration_state_parameters['include_scstm']     = True
     inequality_parameters['use_thrust_acc_smoothing'] = False
     inequality_parameters['use_thrust_smoothing']     = False
     soln_root, soln_ivp = \
