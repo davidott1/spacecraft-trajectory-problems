@@ -90,7 +90,7 @@ def tpbvp_objective_and_jacobian(
     
     # Solve initial value problem
     soln_ivp = \
-        _solve_ivp_func2(
+        _solve_ivp_func(
             time_span                   ,
             state_costate_o             ,
             optimization_parameters     ,
@@ -145,7 +145,7 @@ def _solve_for_root(
     )
 
 
-def _solve_ivp_func2(
+def _solve_ivp_func(
         time_span                     ,
         state_costate_o               ,
         optimization_parameters       ,
@@ -250,7 +250,7 @@ def _solve_for_root_and_compute_progress(
 
     # Solve initial value problem
     soln_ivp = \
-        _solve_ivp_func2(
+        _solve_ivp_func(
             time_span                   ,
             state_costate_o             ,
             optimization_parameters     ,
@@ -395,7 +395,7 @@ def optimal_trajectory_solve(
     optimal_control_objective_o    = np.float64(0.0)
     state_costate_scstm_mass_obj_o = np.hstack([state_costate_o, mass_o, optimal_control_objective_o])
     soln_ivp = \
-        _solve_ivp_func2(
+        _solve_ivp_func(
             time_span                     ,
             state_costate_scstm_mass_obj_o,
             optimization_parameters       ,
