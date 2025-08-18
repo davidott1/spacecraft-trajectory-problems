@@ -21,10 +21,11 @@ def test_run_example(monkeypatch, example_num):
     monkeypatch.setattr(plt, "show", lambda: None)
 
     # Define file and folder paths
-    test_data_folderpath = Path(__file__).parent / "data"
-    input_file = test_data_folderpath / f"example/{example_num}.json"
-    output_folder = Path("output")
-    expected_output_file = output_folder / f"example_{example_num}_optimal_trajectory.png"
+    project_folderpath   = Path(__file__).parent.parent
+    test_data_folderpath = project_folderpath / "tests" / "data"
+    input_filepath       = test_data_folderpath / f"example/{example_num}.json"
+    output_folderpath    = project_folderpath / "output"
+    expected_output_file = output_folderpath / f"example_{example_num}_optimal_trajectory.png"
 
     # Ensure the output file doesn't exist before running the test
     if expected_output_file.exists():
@@ -32,7 +33,7 @@ def test_run_example(monkeypatch, example_num):
 
     # Use monkeypatch to set command-line arguments for main.py
     # This simulates running: python main.py <input_file> <output_folder>
-    monkeypatch.setattr(sys, 'argv', ['main.py', str(input_file), str(output_folder)])
+    monkeypatch.setattr(sys, 'argv', ['main.py', str(input_filepath), str(output_folderpath)])
 
     # Run the main program and assert that it returns True
     assert main() is True
