@@ -75,11 +75,12 @@ python main.py input/example/01.json output/example
 
 This project requires the following Python packages:
 ```
-argparse==1.40
+argparse==1.4.0
 astropy==6.0.1
 matplotlib==3.9.4
 numpy==1.26.4
-scipy== 1.13.1
+pytest==8.3.2
+scipy==1.13.1
 ```
 
 ## Examples
