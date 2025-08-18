@@ -24,7 +24,7 @@ def test_run_example(monkeypatch, example_num):
     project_folderpath   = Path(__file__).parent.parent
     test_data_folderpath = project_folderpath / "tests" / "data"
     input_filepath       = test_data_folderpath / f"example/{example_num}.json"
-    output_folderpath    = project_folderpath / "output"
+    output_folderpath    = project_folderpath / "output" / "test_example"
     expected_output_file = output_folderpath / f"example_{example_num}_optimal_trajectory.png"
 
     # Ensure the output file doesn't exist before running the test
@@ -41,6 +41,6 @@ def test_run_example(monkeypatch, example_num):
     # Assert that the output file was created
     assert expected_output_file.exists(), f"Output file {expected_output_file} was not created."
 
-    # Optional: Clean up the created file after the test
-    if expected_output_file.exists():
-        expected_output_file.unlink()
+    # # Optional: Clean up the created file after the test
+    # if expected_output_file.exists():
+    #     expected_output_file.unlink()
