@@ -11,6 +11,9 @@ def generate_guess(
     ):
     """
     Generates a robust initial guess for the co-states: copos_vec, covel_vec
+
+    [delta_time_of, pos_vec_o, vel_vec_o, copos_vec_o, covel_vec_o, mass_o, opt_ctrl_obj_o] : 1, 2, 2, 2, 2, 1, 1
+
     """
     print("\n\nINITIAL GUESS PROCESS")
 
@@ -27,13 +30,24 @@ def generate_guess(
     if inequality_parameters['use_thrust_limits']:
         inequality_parameters['use_thrust_smoothing'] = True
 
+    time_mode      = 'fixed'
+    copos_vec_mode = 'free'
+    covel_vec_mode = 'free'
+
     # Loop through random guesses for the costates
     print("  Random Initial Guess Generation")
     error_mag_min = np.Inf
     for idx in tqdm(range(init_guess_steps), desc="Processing", leave=False, total=init_guess_steps):
-        copos_vec_o        = np.random.uniform(low=-1, high=1, size=2)
-        covel_vec_o        = np.random.uniform(low=-1, high=1, size=2)
-        decision_state_idx = np.hstack([copos_vec_o, covel_vec_o])
+        decision_state_idx = np.array([])
+        if time_mode == 'free':
+            copos_vec_o        = np.random.uniform(low=-1, high=1, size=2)
+            decision_state_idx = np.hstack([decision_state_idx, copos_vec_o])
+        if copos_vec_mode == 'free':
+            copos_vec_o        = np.random.uniform(low=-1, high=1, size=2)
+            decision_state_idx = np.hstack([decision_state_idx, copos_vec_o])
+        if covel_vec_mode == 'free':
+            covel_vec_o = np.random.uniform(low=-1, high=1, size=2)
+            decision_state_idx = np.hstack([decision_state_idx, covel_vec_o])
         
         error_idx = \
             tpbvp_objective_and_jacobian(
@@ -58,4 +72,5 @@ def generate_guess(
 
     # Pack up and print solution
     costate_o_guess = decision_state_min
+
     return costate_o_guess

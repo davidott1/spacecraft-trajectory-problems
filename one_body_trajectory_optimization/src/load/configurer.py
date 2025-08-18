@@ -18,25 +18,26 @@ def _configure_parameters(
     # Loop initialization
     print("\n  Input Parameters")
     max_parameter_length = max([len(parameter) for parameter in input_params['input_parameters'].keys()])
-    print(f"    {'Variable':<{max_parameter_length}s} : {'Value':>{2*max_value_length+2}s} {'Unit':<{max_value_length}s}")
+    print(f"    {'Variable':<{max_parameter_length}s} : {'Value':>{2*max_value_length+2}s} {'Unit':<8s}  {'Mode':>5s}")
     parameters_with_units = {}
     
     # Loop
-    for parameter, value_unit in input_params['input_parameters'].items():
-        if isinstance(value_unit, dict):
+    for parameter, value_unit_mode in input_params['input_parameters'].items():
+        if isinstance(value_unit_mode, dict):
             # Handle value_unit as dictionary
             
             # Unpack
-            value    = value_unit['value']
-            unit_str = value_unit['unit']
+            value    = value_unit_mode['value']
+            unit_str = value_unit_mode['unit']
+            mode_str = value_unit_mode.get('mode', '')
 
             # Handle parameters with unit
             if unit_str not in ("None", None):
                 parameters_with_units[parameter] = value * u.Unit(unit_str)
-                if np.asarray(value_unit['value']).ndim == 0: # type: ignore
-                    value_str = str(f"{value_unit['value']:>{max_value_length}.6e}") # type: ignore
+                if np.asarray(value_unit_mode['value']).ndim == 0: # type: ignore
+                    value_str = str(f"{value_unit_mode['value']:>{max_value_length}.6e}") # type: ignore
                 else:
-                    value_str = ', '.join([str(f"{val:>{max_value_length}.6e}") for val in value_unit['value']])
+                    value_str = ', '.join([str(f"{val:>{max_value_length}.6e}") for val in value_unit_mode['value']])
 
             # Handle parameters with None unit
             else:
@@ -50,17 +51,17 @@ def _configure_parameters(
                     unit_str  = ""
             
             # Print row: variable, value, and unit
-            print(f"    {parameter:<{max_parameter_length}s} : {value_str:>{2*max_value_length+2}s} {unit_str:<{max_value_length}s}") # type: ignore
+            print(f"    {parameter:<{max_parameter_length}s} : {value_str:>{2*max_value_length+2}s} {unit_str:<8s}  {mode_str:>5s}") # type: ignore
 
-        elif isinstance(value_unit, str):
+        elif isinstance(value_unit_mode, str):
             # Handle value_unit as string
 
             # Assign parameter value
-            parameters_with_units[parameter] = value_unit
+            parameters_with_units[parameter] = value_unit_mode
 
             # Print row: variable, value
-            print(f"  {parameter:<14s} : {value_unit:>{2*max_value_length+2}s}")
-            
+            print(f"  {parameter:<14s} : {value_unit_mode:>{2*max_value_length+2}s}")
+
     return parameters_with_units
 
 
@@ -236,35 +237,42 @@ def configure_validate_input(
     optimization_parameters = {
         'min_type'         : all_parameters_without_units['min_type'        ],
         'init_guess_steps' : all_parameters_without_units['init_guess_steps'],
-        'include_jacobian' : False,
+        'include_jacobian' : False                                           ,
     }
     integration_state_parameters = {
-        'time_span'             : all_parameters_without_units['time_span'],
-        'pos_vec_o'             : all_parameters_without_units['pos_vec_o'], # type: ignore
-        'vel_vec_o'             : all_parameters_without_units['vel_vec_o'], # type: ignore
-        'pos_vec_f'             : all_parameters_without_units['pos_vec_f'], # type: ignore
-        'vel_vec_f'             : all_parameters_without_units['vel_vec_f'], # type: ignore
-        'mass_o'                : all_parameters_without_units['mass_o'   ], # type: ignore
-        'post_process'          : False                                    ,
-        'include_scstm'         : False                                    ,
+        'time_o'         : all_parameters_without_units['time_span'][0]                                               ,
+        'time_f'         : all_parameters_without_units['time_span'][1]                                               ,
+        'delta_time_of'  : all_parameters_without_units['time_span'][1] - all_parameters_without_units['time_span'][0],
+        'pos_vec_o'      : all_parameters_without_units['pos_vec_o']                                                  , # type: ignore
+        'vel_vec_o'      : all_parameters_without_units['vel_vec_o']                                                  , # type: ignore
+        'pos_vec_f'      : all_parameters_without_units['pos_vec_f']                                                  , # type: ignore
+        'vel_vec_f'      : all_parameters_without_units['vel_vec_f']                                                  , # type: ignore
+        'mass_o'         : all_parameters_without_units['mass_o']                                                     , # type: ignore
+        'opt_ctrl_obj_o' : np.float64(0.0)                                                                            , # type: ignore
+        'post_process'   : False                                                                                      ,
+        'include_scstm'  : False                                                                                      ,
     }
+
+    breakpoint()
+
     equality_parameters = {
-          'pos_vec_o_mns' : all_parameters_without_units['pos_vec_o'],
-          'vel_vec_o_mns' : all_parameters_without_units['vel_vec_o'],
-          'pos_vec_o_pls' : all_parameters_without_units['pos_vec_o'], # by design
-          'vel_vec_o_pls' : all_parameters_without_units['vel_vec_o'], # by design
-        'copos_vec_o_mns' :                      np.array([0.0, 0.0]),
-        'covel_vec_o_mns' :                      np.array([0.0, 0.0]),
-        'copos_vec_o_pls' :                      np.array([0.0, 0.0]),
-        'covel_vec_o_pls' :                      np.array([0.0, 0.0]),
-          'pos_vec_f_mns' :                      np.array([0.0, 0.0]),
-          'vel_vec_f_mns' :                      np.array([0.0, 0.0]),
-          'pos_vec_f_pls' : all_parameters_without_units['pos_vec_f'],
-          'vel_vec_f_pls' : all_parameters_without_units['vel_vec_f'],
-        'copos_vec_f_mns' :                      np.array([0.0, 0.0]),
-        'covel_vec_f_mns' :                      np.array([0.0, 0.0]),
-        'copos_vec_f_pls' :                      np.array([0.0, 0.0]),
-        'covel_vec_f_pls' :                      np.array([0.0, 0.0]),
+          'delta_time_of' : { 'value': all_parameters_without_units['time_span'][1] - all_parameters_without_units['time_span'][0], 'unit': 's', 'mode': 'fixed' },
+          'pos_vec_o_mns' : { 'value': all_parameters_without_units['pos_vec_o'], 'unit': 'm'  , 'mode': 'fixed' },
+          'vel_vec_o_mns' : { 'value': all_parameters_without_units['vel_vec_o'], 'unit': 'm/s', 'mode': 'fixed' },
+          'pos_vec_o_pls' : { 'value': all_parameters_without_units['pos_vec_o'], 'unit': 'm'  , 'mode': 'fixed' },
+          'vel_vec_o_pls' : { 'value': all_parameters_without_units['vel_vec_o'], 'unit': 'm/s', 'mode': 'fixed' },
+        'copos_vec_o_mns' : { 'value':                      np.array([0.0, 0.0]), 'unit': 'xxx', 'mode': 'free'  },
+        'covel_vec_o_mns' : { 'value':                      np.array([0.0, 0.0]), 'unit': 'xxx', 'mode': 'free'  },
+        'copos_vec_o_pls' : { 'value':                      np.array([0.0, 0.0]), 'unit': 'xxx', 'mode': 'free'  },
+        'covel_vec_o_pls' : { 'value':                      np.array([0.0, 0.0]), 'unit': 'xxx', 'mode': 'free'  },
+          'pos_vec_f_mns' : { 'value':                      np.array([0.0, 0.0]), 'unit': 'm'  , 'mode': 'fixed' },
+          'vel_vec_f_mns' : { 'value':                      np.array([0.0, 0.0]), 'unit': 'm/s', 'mode': 'fixed' },
+          'pos_vec_f_pls' : { 'value': all_parameters_without_units['pos_vec_f'], 'unit': 'm'  , 'mode': 'fixed' },
+          'vel_vec_f_pls' : { 'value': all_parameters_without_units['vel_vec_f'], 'unit': 'm/s', 'mode': 'fixed' },
+        'copos_vec_f_mns' : { 'value':                      np.array([0.0, 0.0]), 'unit': 'xxx', 'mode': 'free'  },
+        'covel_vec_f_mns' : { 'value':                      np.array([0.0, 0.0]), 'unit': 'xxx', 'mode': 'free'  },
+        'copos_vec_f_pls' : { 'value':                      np.array([0.0, 0.0]), 'unit': 'xxx', 'mode': 'free'  },
+        'covel_vec_f_pls' : { 'value':                      np.array([0.0, 0.0]), 'unit': 'xxx', 'mode': 'free'  },
     }
     inequality_parameters = {
         'use_thrust_acc_limits'    : all_parameters_without_units['use_thrust_acc_limits'],

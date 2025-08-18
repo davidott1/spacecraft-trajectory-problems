@@ -30,7 +30,6 @@ def optimal_trajectory_solve(
     # Unpack files and folders parameters
     min_type              =      optimization_parameters['min_type'             ]
     time_span             = integration_state_parameters['time_span'            ]
-    mass_o                = integration_state_parameters['mass_o'               ] 
     pos_vec_o_mns         =          equality_parameters['pos_vec_o_mns'        ]
     vel_vec_o_mns         =          equality_parameters['vel_vec_o_mns'        ]
     pos_vec_f_pls         =          equality_parameters['pos_vec_f_pls'        ]
@@ -136,8 +135,6 @@ def optimal_trajectory_solve(
     inequality_parameters['use_thrust_smoothing']     = False # should be False
     decision_state_initguess = soln_root.x
     state_costate_o          = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state_initguess])
-    # optimal_control_objective_o    = np.float64(0.0)
-    # state_costate_scstm_mass_obj_o = np.hstack([state_costate_o, mass_o, optimal_control_objective_o])
     soln_ivp = \
         solve_ivp_func(
             time_span                   ,
