@@ -40,7 +40,3 @@ def test_run_example(monkeypatch, example_num):
 
     # Assert that the output file was created
     assert expected_output_file.exists(), f"Output file {expected_output_file} was not created."
-
-    # # Optional: Clean up the created file after the test
-    # if expected_output_file.exists():
-    #     expected_output_file.unlink()
