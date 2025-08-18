@@ -34,11 +34,11 @@ def solve_ivp_func(
     # Form integration state
     if include_jacobian:
         integration_state_parameters['include_scstm'] = True
-        stm_oo                         = np.identity(8).flatten()
+        stm_oo                                        = np.identity(8).flatten()
         integration_state_o = np.hstack([state_costate_o, stm_oo])
     else:
         integration_state_parameters['include_scstm'] = False
-        integration_state_o = state_costate_o
+        integration_state_o                           = state_costate_o
     if use_thrust_limits:
         integration_state_o = np.hstack([integration_state_o, mass_o])
     include_scstm = integration_state_parameters['include_scstm']
