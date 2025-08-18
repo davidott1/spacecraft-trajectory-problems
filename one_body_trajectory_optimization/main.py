@@ -11,9 +11,9 @@ np.random.seed(42)
 def main():
 
     # Start optimization trajectory program
-    print("\n==========================")
-    print(  "OPTIMAL TRAJECTORY PROGRAM")
-    print(  "==========================")
+    print(2*"\n"+"==========================")
+    print(       "OPTIMAL TRAJECTORY PROGRAM")
+    print(       "==========================")
 
     # Optimal trajectory input
     (
@@ -37,6 +37,7 @@ def main():
 
     # End optimization trajectory program
     print()
+    return True
 
 
 if __name__ == '__main__':
