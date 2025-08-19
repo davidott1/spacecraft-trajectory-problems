@@ -164,16 +164,32 @@ def tpbvp_objective_and_jacobian(
     """
     Objective function that also returns the analytical Jacobian.
     """
-    breakpoint()
+    
     # Unpack
     include_jacobian  =      optimization_parameters['include_jacobian']
 
+    # Segment variables
     time_o_pls        =          equality_parameters[     'time']['o']['pls']['value']
     pos_vec_o_pls     =          equality_parameters[  'pos_vec']['o']['pls']['value']
     vel_vec_o_pls     =          equality_parameters[  'vel_vec']['o']['pls']['value']
     copos_vec_o_pls   =          equality_parameters['copos_vec']['o']['pls']['value']
     covel_vec_o_pls   =          equality_parameters['covel_vec']['o']['pls']['value']
     ham_o_pls         =          equality_parameters[      'ham']['o']['pls']['value']
+    
+    time_f_mns       =          equality_parameters[     'time']['f']['mns']['value']
+    pos_vec_f_mns    =          equality_parameters[  'pos_vec']['f']['mns']['value']
+    vel_vec_f_mns    =          equality_parameters[  'vel_vec']['f']['mns']['value']
+    copos_vec_f_mns  =          equality_parameters['copos_vec']['f']['mns']['value']
+    covel_vec_f_mns  =          equality_parameters['covel_vec']['f']['mns']['value']
+    ham_f_mns        =          equality_parameters[      'ham']['f']['mns']['value']
+
+    # Boundary variables
+    time_o_mns        =          equality_parameters[     'time']['o']['mns']['value']
+    pos_vec_o_mns     =          equality_parameters[  'pos_vec']['o']['mns']['value']
+    vel_vec_o_mns     =          equality_parameters[  'vel_vec']['o']['mns']['value']
+    copos_vec_o_mns   =          equality_parameters['copos_vec']['o']['mns']['value']
+    covel_vec_o_mns   =          equality_parameters['covel_vec']['o']['mns']['value']
+    ham_o_mns         =          equality_parameters[      'ham']['o']['mns']['value']
 
     time_f_pls        =          equality_parameters[     'time']['f']['pls']['value']
     pos_vec_f_pls     =          equality_parameters[  'pos_vec']['f']['pls']['value']
@@ -182,14 +198,60 @@ def tpbvp_objective_and_jacobian(
     covel_vec_f_pls   =          equality_parameters['covel_vec']['f']['pls']['value']
     ham_f_pls         =          equality_parameters[      'ham']['f']['pls']['value']
 
+    # Override the initial state with the decision state
+    #   The decision state is a vector of the form:
+    #   [time_o, pos_vec_o, vel_vec_o, copos_vec_o, covel_vec_o, ham_o]
+    ordered_variables = ['time', 'pos_vec', 'vel_vec', 'copos_vec', 'covel_vec', 'ham']
+    idx = 0
+    for boundary in ['o', 'f']:
+        for variable in ordered_variables:
+            var_bnd = equality_parameters[variable][boundary]
+            is_known = var_bnd['mode'] == 'fixed'
+            if not is_known:
+                if variable == 'time' and boundary == 'o':
+                    time_o_pls = decision_state[idx]
+                    idx += 1
+                elif variable == 'pos_vec' and boundary == 'o':
+                    pos_vec_o_pls = decision_state[idx:idx+2]
+                    idx += 2
+                elif variable == 'vel_vec' and boundary == 'o':
+                    vel_vec_o_pls = decision_state[idx:idx+2]
+                    idx += 2
+                elif variable == 'copos_vec' and boundary == 'o':
+                    copos_vec_o_pls = decision_state[idx:idx+2]
+                    idx += 2
+                elif variable == 'covel_vec' and boundary == 'o':
+                    covel_vec_o_pls = decision_state[idx:idx+2]
+                    idx += 2
+                elif variable == 'ham' and boundary == 'o':
+                    ham_o_pls = decision_state[idx]
+                    idx += 1
+                elif variable == 'time' and boundary == 'f':
+                    time_f_mns = decision_state[idx]
+                    idx += 1
+                elif variable == 'pos_vec' and boundary == 'f':
+                    pos_vec_f_mns = decision_state[idx:idx+2]
+                    idx += 2
+                elif variable == 'vel_vec' and boundary == 'f':
+                    vel_vec_f_mns = decision_state[idx:idx+2]
+                    idx += 2
+                elif variable == 'copos_vec' and boundary == 'f':
+                    copos_vec_f_mns = decision_state[idx:idx+2]
+                    idx += 2
+                elif variable == 'covel_vec' and boundary == 'f':
+                    covel_vec_f_mns = decision_state[idx:idx+2]
+                    idx += 2
+                elif variable == 'ham' and boundary == 'f':
+                    ham_f_mns = decision_state[idx]
+                    idx += 1
+
     # Time span
-    time_span = np.array([time_o_pls, time_f_pls])
+    time_span = np.array([time_o_pls, time_f_mns])
 
     # Initial state
-    # pos, vel
     # state_costate_o = np.hstack([pos_vec_o_pls, vel_vec_o_pls, decision_state])
-    state_o   = np.hstack([  pos_vec_o_pls,   vel_vec_o_pls])
-    costate_o = np.hstack([copos_vec_o_pls, covel_vec_o_pls])
+    state_o         = np.hstack([  pos_vec_o_pls,   vel_vec_o_pls])
+    costate_o       = np.hstack([copos_vec_o_pls, covel_vec_o_pls])
     state_costate_o = np.hstack([state_o, costate_o])
 
     # Solve initial value problem
@@ -205,14 +267,68 @@ def tpbvp_objective_and_jacobian(
     # Extract final state and final STM
     state_costate_scstm_f = soln_ivp.sol(time_span[1])
     state_costate_f       = state_costate_scstm_f[:8]
+    pos_vec_f_mns         = state_costate_f[0:2]
+    vel_vec_f_mns         = state_costate_f[2:4]
+    copos_vec_f_mns       = state_costate_f[4:6]
+    covel_vec_f_mns       = state_costate_f[6:8]
     if include_jacobian:
         stm_of = state_costate_scstm_f[8:8+8**2].reshape((8,8))
+
+    # Compute the hamiltonian at the initial and final time
+    ham_o_pls = 0.0
+    ham_f_mns = 0.0
     
     # Calculate the error vector and error vector Jacobian
+    #   error = [ delta [time_o, pos_vec_o, vel_vec_o, copos_vec_o, covel_vel_o, ham_o] ]
+    #           [ delta [time_f, pos_vec_f, vel_vec_f, copos_vec_f, covel_vel_f, ham_f] ]
     #   jacobian = d(state_final) / d(costate_initial)
-    error = state_costate_f[:4] - np.hstack([pos_vec_f_pls, vel_vec_f_pls])
-    if include_jacobian:
-        error_jacobian = stm_of[0:4, 4:8]
+
+    # Enforce trivial overrides
+    time_o_pls      = time_o_mns # trivial
+    time_f_mns      = time_f_pls # trivial
+    copos_vec_f_pls = copos_vec_f_mns # trivial
+    covel_vec_f_pls = covel_vec_f_mns # trivial
+    ham_o_mns       = ham_o_pls # trivial, might not be correct
+
+    # Time error
+    error_time_o = time_o_pls - time_o_mns # trivial
+    error_time_f = time_f_mns - time_f_pls # trivial
+
+    # Position, velocity, co-position, co-velocity error
+    error_pos_vec_o = pos_vec_o_pls - pos_vec_o_mns # trivial
+    error_pos_vec_f = pos_vec_f_mns - pos_vec_f_pls 
+    error_vel_vec_o = vel_vec_o_pls - vel_vec_o_mns # trivial
+    error_vel_vec_f = vel_vec_f_mns - vel_vec_f_pls
+
+    # Co-position and co-velocity error
+    error_copos_vec_o = copos_vec_o_pls - copos_vec_o_mns # trivial
+    error_copos_vec_f = copos_vec_f_mns - copos_vec_f_pls # trivial
+    error_covel_vec_o = covel_vec_o_pls - covel_vec_o_mns # trivial
+    error_covel_vec_f = covel_vec_f_mns - covel_vec_f_pls # trivial
+
+    # Hamiltonian error
+    error_ham_o = ham_o_pls - ham_o_mns # trivial
+    error_ham_f = ham_f_mns - ham_f_pls
+
+    # Pack up the error vector
+    error = np.hstack([
+        error_time_o     , # trivial
+        error_pos_vec_o  , # trivial
+        error_vel_vec_o  , # trivial
+        error_copos_vec_o, # trivial
+        error_covel_vec_o, # trivial
+        error_ham_o      , # trivial
+        error_time_f     , # trivial
+        error_pos_vec_f  ,
+        error_vel_vec_f  ,
+        error_copos_vec_f,
+        error_covel_vec_f,
+        error_ham_f      ,
+    ])
+
+    # error = state_costate_f[:4] - np.hstack([pos_vec_f_pls, vel_vec_f_pls])
+    # if include_jacobian:
+    #     error_jacobian = stm_of[0:4, 4:8]
 
     # Pack up: error and error-jacobian
     if include_jacobian:
