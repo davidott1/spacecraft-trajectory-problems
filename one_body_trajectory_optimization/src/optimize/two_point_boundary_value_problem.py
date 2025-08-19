@@ -331,8 +331,12 @@ def tpbvp_objective_and_jacobian(
                     # 2 :  free fin-time; fixed init-pos; fixed init-vel; fixed fin-pos; fixed fin-vel
     if case_choice == 1:
         error = error_full[11:15] # 4 constraints: error_pos_vec_f, error_vel_vec_f
+        if include_jacobian:
+            error_jacobian = -stm_of[0:4, 4:8] # 4x4 : -d(pos_vec_f_mns, vel_vec_f_mns) / d(copos_vec_o_pls, covel_vec_o_pls)
     elif case_choice == 2:
         error = error_full[11:15 and 19] # 5 constraints: error_pos_vec_f, error_vel_vec_f, error_ham_f
+        if include_jacobian:
+            # xxx # 5x5: -d(pos_vec_f_mns, vel_vec_f_mns, ham_f_mns) / d(time_f_mns, copos_vec_o_pls, covel_vec_o_pls)
 
     # error = state_costate_f[:4] - np.hstack([pos_vec_f_pls, vel_vec_f_pls])
     # if include_jacobian:
