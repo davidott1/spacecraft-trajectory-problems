@@ -292,26 +292,26 @@ def tpbvp_objective_and_jacobian(
 
     # Time error
     error_time_o = time_o_pls - time_o_mns # trivial
-    error_time_f = time_f_mns - time_f_pls # trivial
+    error_time_f = time_f_pls - time_f_mns # trivial
 
     # Position, velocity, co-position, co-velocity error
     error_pos_vec_o = pos_vec_o_pls - pos_vec_o_mns # trivial
-    error_pos_vec_f = pos_vec_f_mns - pos_vec_f_pls 
+    error_pos_vec_f = pos_vec_f_pls - pos_vec_f_mns 
     error_vel_vec_o = vel_vec_o_pls - vel_vec_o_mns # trivial
-    error_vel_vec_f = vel_vec_f_mns - vel_vec_f_pls
+    error_vel_vec_f = vel_vec_f_pls - vel_vec_f_mns
 
     # Co-position and co-velocity error
     error_copos_vec_o = copos_vec_o_pls - copos_vec_o_mns # trivial
-    error_copos_vec_f = copos_vec_f_mns - copos_vec_f_pls # trivial
+    error_copos_vec_f = copos_vec_f_pls - copos_vec_f_mns # trivial
     error_covel_vec_o = covel_vec_o_pls - covel_vec_o_mns # trivial
-    error_covel_vec_f = covel_vec_f_mns - covel_vec_f_pls # trivial
+    error_covel_vec_f = covel_vec_f_pls - covel_vec_f_mns # trivial
 
     # Hamiltonian error
     error_ham_o = ham_o_pls - ham_o_mns # trivial
-    error_ham_f = ham_f_mns - ham_f_pls
+    error_ham_f = ham_f_pls - ham_f_mns
 
     # Pack up the error vector
-    error = np.hstack([
+    error_full = np.hstack([
         error_time_o     , # trivial
         error_pos_vec_o  , # trivial
         error_vel_vec_o  , # trivial
@@ -325,6 +325,14 @@ def tpbvp_objective_and_jacobian(
         error_covel_vec_f,
         error_ham_f      ,
     ])
+
+    # Consolidate errors
+    case_choice = 1 # 1 : fixed fin-time; fixed init-pos; fixed init-vel; fixed fin-pos; fixed fin-vel
+                    # 2 :  free fin-time; fixed init-pos; fixed init-vel; fixed fin-pos; fixed fin-vel
+    if case_choice == 1:
+        error = error_full[11:15] # 4 constraints: error_pos_vec_f, error_vel_vec_f
+    elif case_choice == 2:
+        error = error_full[11:15 and 19] # 5 constraints: error_pos_vec_f, error_vel_vec_f, error_ham_f
 
     # error = state_costate_f[:4] - np.hstack([pos_vec_f_pls, vel_vec_f_pls])
     # if include_jacobian:
