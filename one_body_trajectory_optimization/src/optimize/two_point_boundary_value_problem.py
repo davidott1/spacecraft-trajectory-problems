@@ -324,13 +324,16 @@ def tpbvp_objective_and_jacobian(
             'f': error_ham_f  
         }
     }
-    breakpoint()
+
     # Consolidated error vector
-    error = []
+    error_components = []
     for bnd in ordered_boundaries:
         for var in ordered_variables:
             if equality_parameters[var][bnd]['mode'] == 'fixed':
-                error.extend([error_full[var][bnd]])
+                error_components.append(error_full[var][bnd])
+    error = np.hstack(error_components)
+    breakpoint()
+    # start here: error is correct. need to get rid of trivial zero errors
     if include_jacobian:
         # 4x4 : -d(pos_vec_f_mns, vel_vec_f_mns) / d(copos_vec_o_pls, covel_vec_o_pls)
         # 5x5: -d(pos_vec_f_mns, vel_vec_f_mns, ham_f_mns) / d(time_f_mns, copos_vec_o_pls, covel_vec_o_pls)
