@@ -341,14 +341,14 @@ def configure_validate_input(
             'o': {
                 'mode': 'free',
                 'unit': 'xxx',
-                'mns': { 'value': 0.0 },
-                'pls': { 'value': 0.0 }
+                'mns': { 'value': np.array([0.0]) },
+                'pls': { 'value': np.array([0.0]) }
             },
             'f': {
                 'mode': 'free',
                 'unit': 'xxx',
-                'mns': { 'value': 0.0 },
-                'pls': { 'value': 0.0 }
+                'mns': { 'value': np.array([0.0]) },
+                'pls': { 'value': np.array([0.0]) }
             }
         }
     }
