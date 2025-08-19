@@ -164,18 +164,34 @@ def tpbvp_objective_and_jacobian(
     """
     Objective function that also returns the analytical Jacobian.
     """
-
+    breakpoint()
     # Unpack
-    include_jacobian  =      optimization_parameters['include_jacobian'        ]
-    time_span         = integration_state_parameters['time_span'               ]
-    pos_vec_o_mns     =          equality_parameters['pos_vec_o_mns'           ]
-    vel_vec_o_mns     =          equality_parameters['vel_vec_o_mns'           ]
-    pos_vec_f_pls     =          equality_parameters['pos_vec_f_pls'           ]
-    vel_vec_f_pls     =          equality_parameters['vel_vec_f_pls'           ]
+    include_jacobian  =      optimization_parameters['include_jacobian']
+
+    time_o_pls        =          equality_parameters[     'time']['o']['pls']['value']
+    pos_vec_o_pls     =          equality_parameters[  'pos_vec']['o']['pls']['value']
+    vel_vec_o_pls     =          equality_parameters[  'vel_vec']['o']['pls']['value']
+    copos_vec_o_pls   =          equality_parameters['copos_vec']['o']['pls']['value']
+    covel_vec_o_pls   =          equality_parameters['covel_vec']['o']['pls']['value']
+    ham_o_pls         =          equality_parameters[      'ham']['o']['pls']['value']
+
+    time_f_pls        =          equality_parameters[     'time']['f']['pls']['value']
+    pos_vec_f_pls     =          equality_parameters[  'pos_vec']['f']['pls']['value']
+    vel_vec_f_pls     =          equality_parameters[  'vel_vec']['f']['pls']['value']
+    copos_vec_f_pls   =          equality_parameters['copos_vec']['f']['pls']['value']
+    covel_vec_f_pls   =          equality_parameters['covel_vec']['f']['pls']['value']
+    ham_f_pls         =          equality_parameters[      'ham']['f']['pls']['value']
+
+    # Time span
+    time_span = np.array([time_o_pls, time_f_pls])
 
     # Initial state
-    state_costate_o = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state])
-    
+    # pos, vel
+    # state_costate_o = np.hstack([pos_vec_o_pls, vel_vec_o_pls, decision_state])
+    state_o   = np.hstack([  pos_vec_o_pls,   vel_vec_o_pls])
+    costate_o = np.hstack([copos_vec_o_pls, covel_vec_o_pls])
+    state_costate_o = np.hstack([state_o, costate_o])
+
     # Solve initial value problem
     soln_ivp = \
         solve_ivp_func(
