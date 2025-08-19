@@ -277,11 +277,22 @@ def tpbvp_objective_and_jacobian(
     # Compute the hamiltonian at the initial and final time
     ham_o_pls = 0.0
     ham_f_mns = 0.0
-    
+    if include_jacobian:
+        # Partials of the Hamiltonian at the initial time
+        # xxx
+
+        # Partials of the Hamiltonian at the final time
+        d_ham_f_mns__d_time_o_pls      = 0.0
+        d_ham_f_mns__d_pos_vec_o_pls   = 0.0
+        d_ham_f_mns__d_vel_vec_o_pls   = 0.0
+        d_ham_f_mns__d_copos_vec_o_pls = 0.0
+        d_ham_f_mns__d_covel_vec_o_pls = 0.0
+        d_ham_f_mns__d_ham_o_pls       = 0.0
+
     # Calculate the error vector and error vector Jacobian
     #   error = [ delta [time_o, pos_vec_o, vel_vec_o, copos_vec_o, covel_vel_o, ham_o] ]
     #           [ delta [time_f, pos_vec_f, vel_vec_f, copos_vec_f, covel_vel_f, ham_f] ]
-    #   jacobian = d(state_final) / d(costate_initial)
+    #   jacobian = d(state_costate_f) / d(state_costate_o)
 
     # Enforce trivial overrides
     time_o_pls      = time_o_mns # trivial
