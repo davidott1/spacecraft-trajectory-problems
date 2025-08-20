@@ -137,39 +137,27 @@ The optimal control problem is solved using an indirect method. The objective `J
 
 The problem is summarized:
 ```
-Objective              : min J = min 1/2 * Gamma^2
-Dynamics               : x_vec_dot = f_vec : r_x_dot =     v_x
-                                             r_y_dot =     v_y
-                                             v_x_dot = Gamma_x
-                                             v_y_dot = Gamma_y
-Control                : Gamma_vec = [ Gamma_x, Gamma_y ]
-Equality Constraints   :     t_f =     t_f_s
-                         r_vec_o = r_vec_o_s
-                         v_vec_o = r_vec_o_s
-                         r_vec_f = r_vec_f_s
-                         v_vec_f = r_vec_f_s
+Objective              : min fuel   : min J = min integral L dt = min integral Gamma dt
+                       : min energy : min J = min integral L dt = min integral 1/2 * Gamma^2 dt
+Timespan               : t = [t_o, t_f]
+State                  : x_vec     = [ r_vec^T, v_vec^T ]^T = [ r_x, r_y, v_x, v_y ]^T
+Control                : Gamma_vec = [ Gamma_x, Gamma_y ]^T
+Dynamics               : f_vec     = [ v_x, v_y, Gamma_x, Gamma_y ]^T
+Equality Constraints   : t_f = t_f_s
+                       : Initial : r_vec_o = r_vec_o_s, v_vec_o = r_vec_o_s
+                       : Final   : r_vec_f = r_vec_f_s, v_vec_f = r_vec_f_s
 Inequality Constraints : min fuel   : Gamma <= Gamma_max or T <= T_max
                        : min energy : Gamma <= Gamma_max or T <= T_max or unconstrainted
 ```
 
 The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy. 
 
-For min problem, the optimal control `Gamma_vec_*(t)` is a function of co-velocity:
-> `Gamma_x_*(t) = lambda_v_x(t)`
-> `Gamma_y_*(t) = lambda_v_y(t)`
-
-The full solution requires solving a system of eight ordinary differential equations (the state and co-state equations) subject to boundary conditions, which constitutes a two-point boundary value problem (TPBVP).
-
----
 ## Hamiltonian Formulation
-The first step in the indirect method is to define the **Hamiltonian** `H`, which combines the cost function and the system dynamics.
+The indirect method means to derive the optimal control law a Hamiltonian must be formed to minimize. The derivatives of the Hamiltonian will provide the necessary, but not sufficient, conditions for a minimum solution. The Hamiltonian is a function of the integrand `L` of the objective `J`, state `x_vec`, co-state `lambda_vec`, dynamics `x_vec_dot`, and control `Gamma_vec`. In particular, the co-state in component form is `lambda_vec = [ lambda_r_x, lambda_r_y, lambda_v_x, lambda_v_y ]^T`.
 
-* **State Vector** `x`: `[r_x, r_y, v_x, v_y]^T`
-* **Control Vector** `u`: `[Gamma_x, Gamma_y]^T`
-* **Cost Integrand** `L`: `(1/2) * (Gamma_x^2 + Gamma_y^2)`
-* **Co-state Vector** `lambda`: `[lambda_rx, lambda_ry, lambda_vx, lambda_vy]^T`
+The Hamiltonian `H` is in general
 
-The Hamiltonian is defined as `H = L + lambda^T * f(x, u)`, where `f` represents the system dynamics.
+`H = L + lambda^T * f(x, u)`
 
 > `H = (1/2)*(Gamma_x^2 + Gamma_y^2) + lambda_rx*r_x_dot + lambda_ry*r_y_dot + lambda_vx*v_x_dot + lambda_vy*v_y_dot`
 
