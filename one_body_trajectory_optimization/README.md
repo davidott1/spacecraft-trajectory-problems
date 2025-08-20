@@ -139,7 +139,7 @@ The optimal control problem is solved using an indirect method. The objective `J
 The problem is summarized:
 ```
 Objective, J                 : min fuel   : J = integral L dt = integral Gamma dt
-                             : min energy : J = integral L dt = integral 1/2 * Gamma^2 dt
+                             : min energy : J = integral L dt = integral 1/2 Gamma^2 dt
 Timespan, t                  : t = [ t_o, t_f ]
 Stat, x_vec                  : x_vec = [ r_vec^T, v_vec^T ]^T = [ r_x, r_y, v_x, v_y ]^T
 Control, u_vec               : u_vec = [ Gamma_x, Gamma_y ]^T
@@ -163,11 +163,11 @@ H = L + lambda_vec^T f(x, u)
 ```
 and more specifically in component form, 
 ```
-H = (1/2) (Gamma_x^2 + Gamma_y^2) + lambda_r_x r_x_dot + lambda_r_y r_y_dot + lambda_v_x v_x_dot + lambda_v_y v_y_dot
+H = 1/2 (Gamma_x^2 + Gamma_y^2) + lambda_r_x r_x_dot + lambda_r_y r_y_dot + lambda_v_x v_x_dot + lambda_v_y v_y_dot
 ```
 The time-derivative of the state `x_vec_dot` must conform to the dynamics, so `x_vec_dot = f(x_vec,u_vec)`. Substituting the dynamics into the Hamilitonian yields
 ```
-H = (1/2) (Gamma_x^2 + Gamma_y^2) + lambda_r_x v_x + lambda_r_y v_y + lambda_v_x Gamma_x + lambda_v_y Gamma_y
+H = 1/2 (Gamma_x^2 + Gamma_y^2) + lambda_r_x v_x + lambda_r_y v_y + lambda_v_x Gamma_x + lambda_v_y Gamma_y
 ```
 
 ---
