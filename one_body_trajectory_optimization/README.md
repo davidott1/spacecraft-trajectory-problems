@@ -131,6 +131,7 @@ python main.py input/example/09.json output/example
 python main.py input/example/10.json output/example
 ```
 
+<<<<<<< HEAD
 ## Derivation
 
 Of course. Here is the derivation of the optimal control problem using the indirect method.
@@ -195,3 +196,80 @@ By substituting the optimal control law back into the state and co-state equatio
 8.  `lambda_vy_dot = -lambda_ry`
 
 Solving this system of 8 ODEs requires 8 boundary conditions (e.g., initial and final positions and velocities), forming a TPBVP. The solution yields the optimal trajectories for the states, co-states, and the control history `Gamma(t)`.
+=======
+---
+## Optimal Control Problem Derivation
+
+The optimal control problem is solved using an indirect method. The objective `J` minimizes fuel and energy, representative as the integral of magnitude `Gamma` or square `Gamma^2` of thrust acceleration, respectively. The one-body dynamics `x_vec_dot` are free from natural acceleration with control is thrust acceleration `Gamma_vec`. The equality conditions or boundary conditions are variable: flight time is fixed or free, as well as final position and velocity. Flight timee is `delta_t = t_f - t_o = t_f`. The initial time is assumed to be `t_o = 0`. Free initial position and velocity is not implemented, but the problem structure is reversible in time. The inequality conditions are variables as well. For minimum energy problems, thrust or thrust acceleration is either unconstrained or less than a maximum. For minimum fuel problems, thrust or thrust acceleration is necessarily less than a maximum. The coordinate system is Cartesian in two dimensions and with respect to an inertial frame.
+
+The problem is summarized:
+```
+Objective, J                 : min fuel   : J = integral L dt = integral Gamma dt
+                             : min energy : J = integral L dt = integral 1/2 Gamma^2 dt
+Timespan, t                  : t = [ t_o, t_f ]
+Stat, x_vec                  : x_vec = [ r_vec^T, v_vec^T ]^T = [ r_x, r_y, v_x, v_y ]^T
+Control, u_vec               : u_vec = [ Gamma_x, Gamma_y ]^T
+Dynamics, f_vec(x_vec,u_vec) : f_vec = [ v_x, v_y, Gamma_x, Gamma_y ]^T
+Equality Constraints         : t_f = t_f_s
+                             : Initial : r_vec_o = r_vec_o_s, v_vec_o = r_vec_o_s
+                             : Final   : r_vec_f = r_vec_f_s, v_vec_f = r_vec_f_s
+Inequality Constraints       : min fuel   : Gamma <= Gamma_max or T <= T_max
+                             : min energy : Gamma <= Gamma_max or T <= T_max or unconstrainted
+```
+
+The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy. 
+
+---
+### Hamiltonian Formulation
+The indirect method means to derive the optimal control law a Hamiltonian `H` must be formed to minimize. The derivatives of the Hamiltonian will provide the necessary, but not sufficient, conditions for a minimum solution. The Hamiltonian is a function of the integrand `L` of the objective `J`, state `x_vec`, co-state `lambda_vec`, dynamics `x_vec_dot`, and control `Gamma_vec`. In particular, the co-state in component form is `lambda_vec = [ lambda_r_x, lambda_r_y, lambda_v_x, lambda_v_y ]^T`.
+
+The Hamiltonian `H` is in general
+```
+H = L + lambda_vec^T f(x, u)
+```
+and more specifically in component form, 
+```
+H = 1/2 (Gamma_x^2 + Gamma_y^2) + lambda_r_x r_x_dot + lambda_r_y r_y_dot + lambda_v_x v_x_dot + lambda_v_y v_y_dot
+```
+The time-derivative of the state `x_vec_dot` must conform to the dynamics, so `x_vec_dot = f(x_vec,u_vec)`. Substituting the dynamics into the Hamilitonian yields
+```
+H = 1/2 (Gamma_x^2 + Gamma_y^2) + lambda_r_x v_x + lambda_r_y v_y + lambda_v_x Gamma_x + lambda_v_y Gamma_y
+```
+
+---
+### Necessary Conditions for Optimality
+From the Hamiltonian, we derive the necessary conditions for optimality using Pontryagin's Minimum Principle, deriving the co-state dynamical equations and the optimal control.
+
+#### Co-state Equations
+The co-state dynamics are given by `lambda_vec_dot = -dH/dx`.
+* `lambda_r_x_dot = -dH/dr_x` => `lambda_r_x_dot = 0`
+* `lambda_r_y_dot = -dH/dr_y` => `lambda_r_y_dot = 0`
+* `lambda_v_x_dot = -dH/dv_x` => `lambda_v_x_dot = -lambda_r_x`
+* `lambda_v_y_dot = -dH/dv_y` => `lambda_v_y_dot = -lambda_r_y`
+
+#### Optimal Control
+The optimal control `u*` must minimize the Hamiltonian. This condition is found by setting the partial derivative of the Hamiltonian with respect to the control to zero, `dH/du = 0`.
+* `dH/dGamma_x = 0` => `Gamma_x + lambda_v_x = 0` => `Gamma_x_* = -lambda_v_x`
+* `dH/dGamma_y = 0` => `Gamma_y + lambda_v_y = 0` => `Gamma_y_* = -lambda_v_y`
+This result explicitly defines the optimal control inputs in terms of the co-states associated with the velocity components.
+
+---
+### Two-Point Boundary Value Problem (TPBVP)
+By substituting the optimal control law back into the state and co-state equations, we get a complete system of first-order ordinary differential equations (ODEs).
+
+#### State Equations (4)
+* `r_x_dot = v_x`
+* `r_y_dot = v_y`
+* `v_x_dot = -lambda_v_x`
+* `v_y_dot = -lambda_v_y`
+
+#### Co-state Equations (4)
+* `lambda_r_x_dot = 0`
+* `lambda_r_y_dot = 0`
+* `lambda_v_x_dot = -lambda_rx`
+* `lambda_v_y_dot = -lambda_ry`
+
+Solving this system of eight ODEs requires eight boundary conditions (e.g., initial and final positions and velocities), forming a TPBVP. The solution yields the optimal trajectories for the states, co-states, and the control.
+
+---
+>>>>>>> main
