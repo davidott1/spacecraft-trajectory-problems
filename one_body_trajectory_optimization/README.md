@@ -141,14 +141,19 @@ The problem is summarized:
 Objective              : min fuel   : J        = integral L dt = integral Gamma dt
                        : min energy : J        = integral L dt = integral 1/2 Gamma^2 dt
 Timespan               :            : t        = [ t_o, t_f ]
-State                  :            : x_vec    = [ r_vec^T, v_vec^T ]^T = [ r_x, r_y, v_x, v_y ]^T
+State                  :            : x_vec    = [ r_x, r_y, v_x, v_y ]^T
 Control                :            : u_vec    = [ Gamma_x, Gamma_y ]^T
 Dynamics               :            : f_vec    = [ v_x, v_y, Gamma_x, Gamma_y ]^T
 Equality Constraints   :            : t_f      = t_f_s
-                       : initial    : r_vec_o  = r_vec_o_s, v_vec_o = r_vec_o_s
-                       : final      : r_vec_f  = r_vec_f_s, v_vec_f = r_vec_f_s
-Inequality Constraints : min fuel   : Gamma   <= Gamma_max or T <= T_max
-                       : min energy : Gamma   <= Gamma_max or T <= T_max or unconstrainted
+                       : initial    : r_vec_o  = r_vec_o_s
+                       :            : v_vec_o  = r_vec_o_s
+                       : final      : r_vec_f  = r_vec_f_s
+                       :            : v_vec_f  = r_vec_f_s
+Inequality Constraints : min fuel   : Gamma   <= Gamma_max or
+                       :            : T       <= T_max
+                       : min energy : Gamma   <= Gamma_max or 
+                       :            : T       <= T_max or 
+                       :            : unconstrainted
 ```
 
 The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy. 
@@ -175,7 +180,7 @@ H = 1/2 (Gamma_x^2 + Gamma_y^2) + lambda_r_x v_x + lambda_r_y v_y + lambda_v_x G
 From the Hamiltonian, we derive the necessary conditions for optimality using Pontryagin's Minimum Principle, deriving the co-state dynamical equations and the optimal control.
 
 #### Co-state Equations
-The co-state dynamics are given by `lambda_vec_dot = -dH/dx`.
+The co-state dynamics are given by `lambda_vec_dot = -dH/dx_vec`.
 ```
 lambda_r_x_dot = -dH/dr_x  ==>  lambda_r_x_dot = 0
 lambda_r_y_dot = -dH/dr_y  ==>  lambda_r_y_dot = 0
@@ -183,9 +188,11 @@ lambda_v_x_dot = -dH/dv_x  ==>  lambda_v_x_dot = -lambda_r_x
 lambda_v_y_dot = -dH/dv_y  ==>  lambda_v_y_dot = -lambda_r_y
 ```
 #### Optimal Control
-The optimal control `u*` must minimize the Hamiltonian. This condition is found by setting the partial derivative of the Hamiltonian with respect to the control to zero, `dH/du = 0`.
-* `dH/dGamma_x = 0` => `Gamma_x + lambda_v_x = 0` => `Gamma_x_* = -lambda_v_x`
-* `dH/dGamma_y = 0` => `Gamma_y + lambda_v_y = 0` => `Gamma_y_* = -lambda_v_y`
+The optimal control `u_*` must minimize the Hamiltonian. This condition is found by setting the partial derivative of the Hamiltonian with respect to the control to zero, `dH/du = 0`.
+```
+dH/dGamma_x = 0  ==>  Gamma_x + lambda_v_x = 0  ==>  Gamma_x_* = -lambda_v_x
+dH/dGamma_y = 0  ==>  Gamma_y + lambda_v_y = 0  ==>  Gamma_y_* = -lambda_v_y
+```
 This result explicitly defines the optimal control inputs in terms of the co-states associated with the velocity components.
 
 ---
@@ -193,16 +200,20 @@ This result explicitly defines the optimal control inputs in terms of the co-sta
 By substituting the optimal control law back into the state and co-state equations, we get a complete system of first-order ordinary differential equations (ODEs).
 
 #### State Equations (4)
-* `r_x_dot = v_x`
-* `r_y_dot = v_y`
-* `v_x_dot = -lambda_v_x`
-* `v_y_dot = -lambda_v_y`
+```
+r_x_dot = v_x
+r_y_dot = v_y
+v_x_dot = -lambda_v_x
+v_y_dot = -lambda_v_y
+```
 
 #### Co-state Equations (4)
-* `lambda_r_x_dot = 0`
-* `lambda_r_y_dot = 0`
-* `lambda_v_x_dot = -lambda_rx`
-* `lambda_v_y_dot = -lambda_ry`
+```
+lambda_r_x_dot = 0
+lambda_r_y_dot = 0
+lambda_v_x_dot = -lambda_r_x
+lambda_v_y_dot = -lambda_r_y
+```
 
 Solving this system of eight ODEs requires eight boundary conditions (e.g., initial and final positions and velocities), forming a TPBVP. The solution yields the optimal trajectories for the states, co-states, and the control.
 
