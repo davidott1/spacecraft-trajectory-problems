@@ -191,16 +191,18 @@ This result explicitly defines the optimal control inputs in terms of the co-sta
 ### Two-Point Boundary Value Problem (TPBVP)
 By substituting the optimal control law back into the state and co-state equations, we get a complete system of first-order ordinary differential equations (ODEs).
 
-#### State Equations
-- `r_x_dot = v_x`
-- `r_y_dot = v_y`
+#### State Equations (4)
+* `r_x_dot = v_x`
+* `r_y_dot = v_y`
 * `v_x_dot = -lambda_v_x`
 * `v_y_dot = -lambda_v_y`
 
-#### Co-state Equations
-5.  `lambda_r_x_dot = 0`
-6.  `lambda_r_y_dot = 0`
-7.  `lambda_v_x_dot = -lambda_rx`
-8.  `lambda_v_y_dot = -lambda_ry`
+#### Co-state Equations (4)
+* `lambda_r_x_dot = 0`
+* `lambda_r_y_dot = 0`
+* `lambda_v_x_dot = -lambda_rx`
+* `lambda_v_y_dot = -lambda_ry`
 
-Solving this system of 8 ODEs requires 8 boundary conditions (e.g., initial and final positions and velocities), forming a TPBVP. The solution yields the optimal trajectories for the states, co-states, and the control.
+Solving this system of eight ODEs requires eight boundary conditions (e.g., initial and final positions and velocities), forming a TPBVP. The solution yields the optimal trajectories for the states, co-states, and the control.
+
+---
