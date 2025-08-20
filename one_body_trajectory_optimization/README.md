@@ -133,17 +133,36 @@ python main.py input/example/10.json output/example
 
 ## Derivation
 
-Of course. Here is the derivation of the optimal control problem using the indirect method.
+The optimal control problem is solved using an indirect method. The objective `J` minimizes fuel and energy, representative as the integral of magnitude `Gamma` or square `Gamma^2` of thrust acceleration, respectively. The one-body dynamics `x_vec_dot` are free from natural acceleration with control is thrust acceleration `Gamma_vec`. The equality conditions or boundary conditions are variable: flight time is fixed or free, as well as final position and velocity. Flight timee is `delta_t = t_f - t_o = t_f`. The initial time is assumed to be `t_o = 0`. Free initial position and velocity is not implemented, but the problem structure is reversible in time. The inequality conditions are variables as well. For minimum energy problems, thrust or thrust acceleration is either unconstrained or less than a maximum. For minimum fuel problems, thrust or thrust acceleration is necessarily less than a maximum. The coordinate system is Cartesian in two dimensions and with respect to an inertial frame.
 
-The optimal control law is found by minimizing the Hamiltonian. For this problem, the optimal control inputs, `Gamma_x*(t)` and `Gamma_y*(t)`, are equal to the negative of their corresponding velocity co-states:
-> `Gamma_x*(t) = -lambda_vx(t)`
-> `Gamma_y*(t) = -lambda_vy(t)`
+The problem is summarized:
+```
+Objective              : min J = min 1/2 * Gamma^2
+Dynamics               : x_vec_dot = f_vec : r_x_dot =     v_x
+                                             r_y_dot =     v_y
+                                             v_x_dot = Gamma_x
+                                             v_y_dot = Gamma_y
+Control                : Gamma_vec = [ Gamma_x, Gamma_y ]
+Equality Constraints   :     t_f =     t_f_s
+                         r_vec_o = r_vec_o_s
+                         v_vec_o = r_vec_o_s
+                         r_vec_f = r_vec_f_s
+                         v_vec_f = r_vec_f_s
+Inequality Constraints : min fuel   : Gamma <= Gamma_max or T <= T_max
+                       : min energy : Gamma <= Gamma_max or T <= T_max or unconstrainted
+```
+
+The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy. 
+
+For min problem, the optimal control `Gamma_vec_*(t)` is a function of co-velocity:
+> `Gamma_x_*(t) = lambda_v_x(t)`
+> `Gamma_y_*(t) = lambda_v_y(t)`
 
 The full solution requires solving a system of eight ordinary differential equations (the state and co-state equations) subject to boundary conditions, which constitutes a two-point boundary value problem (TPBVP).
 
 ---
 ## Hamiltonian Formulation
-The first step in the indirect method is to define the **Hamiltonian**, `H`, which combines the cost function and the system dynamics.
+The first step in the indirect method is to define the **Hamiltonian** `H`, which combines the cost function and the system dynamics.
 
 * **State Vector** `x`: `[r_x, r_y, v_x, v_y]^T`
 * **Control Vector** `u`: `[Gamma_x, Gamma_y]^T`
