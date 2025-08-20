@@ -251,8 +251,24 @@ def tpbvp_objective_and_jacobian(
         stm_of = state_costate_scstm_f[8:8+8**2].reshape((8,8))
     
     # Compute the hamiltonian at the initial and final time
-    ham_o_pls = 0.0
-    ham_f_mns = 0.0
+    # H = 1/2 (Gamma_x^2 + Gamma_y^2) + lambda_r_x v_x + lambda_r_y v_y + lambda_v_x Gamma_x + lambda_v_y Gamma_y
+    if True: # energy
+        copos_x_o_pls = copos_vec_o_pls[0]
+        copos_y_o_pls = copos_vec_o_pls[1]
+        vel_x_o_pls   = vel_vec_o_pls[0]
+        vel_y_o_pls   = vel_vec_o_pls[1]
+
+        acc_x_o_pls = thrust_acc_x_o
+        acc_y_o_pls = thrust_acc_y_o
+        ham_o_pls   = 1/2 * (thrust_acc_x_o**2 + thrust_acc_y_o**2) \
+            + copos_x_o_pls * vel_x_o_pls + copos_y_o_pls * vel_y_o_pls \
+            + covel_x_o_pls * acc_x_o_pls + covel_y_o_pls * acc_y_o_pls
+        
+        acc_x_f_mns = thrust_acc_x_f
+        acc_y_f_mns = thrust_acc_y_f
+        ham_f_mns   = 1/2 * (thrust_acc_x_f**2 + thrust_acc_y_f**2) \
+            + copos_x_f_mns * vel_x_f_mns + copos_y_f_mns * vel_y_f_mns \
+            + covel_x_f_mns * acc_x_f_mns + covel_y_f_mns * acc_y_f_mns
     if include_jacobian:
         # Partials of the Hamiltonian at the initial time
         # xxx
