@@ -176,16 +176,15 @@ From the Hamiltonian, we derive the necessary conditions for optimality using Po
 
 #### Co-state Equations
 The co-state dynamics are given by `lambda_vec_dot = -dH/dx`.
-* `lambda_r_x_dot = -dH/dr_x = 0`           => `lambda_r_x_dot = 0`
-* `lambda_r_y_dot = -dH/dr_y = 0`           => `lambda_r_y_dot = 0`
-* `lambda_v_x_dot = -dH/dv_x = -lambda_r_x` => `lambda_v_x_dot = -lambda_r_x`
-* `lambda_v_y_dot = -dH/dv_y = -lambda_r_y` => `lambda_v_y_dot = -lambda_r_y`
+* `lambda_r_x_dot = -dH/dr_x` => `lambda_r_x_dot = 0`
+* `lambda_r_y_dot = -dH/dr_y` => `lambda_r_y_dot = 0`
+* `lambda_v_x_dot = -dH/dv_x` => `lambda_v_x_dot = -lambda_r_x`
+* `lambda_v_y_dot = -dH/dv_y` => `lambda_v_y_dot = -lambda_r_y`
 
 #### Optimal Control
 The optimal control `u*` must minimize the Hamiltonian. This condition is found by setting the partial derivative of the Hamiltonian with respect to the control to zero, `dH/du = 0`.
-* `dH/dGamma_x = Gamma_x + lambda_v_x = 0` => `Gamma_x_* = -lambda_v_x`
-* `dH/dGamma_y = Gamma_y + lambda_v_y = 0` => `Gamma_y_* = -lambda_v_y`
-
+* `dH/dGamma_x = 0` => `Gamma_x + lambda_v_x = 0` => `Gamma_x_* = -lambda_v_x`
+* `dH/dGamma_y = 0` => `Gamma_y + lambda_v_y = 0` => `Gamma_y_* = -lambda_v_y`
 This result explicitly defines the optimal control inputs in terms of the co-states associated with the velocity components.
 
 ---
@@ -193,10 +192,10 @@ This result explicitly defines the optimal control inputs in terms of the co-sta
 By substituting the optimal control law back into the state and co-state equations, we get a complete system of first-order ordinary differential equations (ODEs).
 
 #### State Equations
-1.  `r_x_dot = v_x`
-2.  `r_y_dot = v_y`
-3.  `v_x_dot = Gamma_x* = -lambda_vx`
-4.  `v_y_dot = Gamma_y* = -lambda_vy`
+- `r_x_dot = v_x`
+- `r_y_dot = v_y`
+* `v_x_dot = -lambda_v_x`
+* `v_y_dot = -lambda_v_y`
 
 #### Co-state Equations
 5.  `lambda_r_x_dot = 0`
