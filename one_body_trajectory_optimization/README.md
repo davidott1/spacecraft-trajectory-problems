@@ -138,17 +138,17 @@ The optimal control problem is solved using an indirect method. The objective `J
 
 The problem is summarized:
 ```
-Objective              : J     : min fuel   : J        = integral L dt = integral Gamma dt
-                       :       : min energy : J        = integral L dt = integral 1/2 Gamma^2 dt
-Timespan               : t     :            : t        = [ t_o, t_f ]
-State                  : x_vec :            : x_vec    = [ r_vec^T, v_vec^T ]^T = [ r_x, r_y, v_x, v_y ]^T
-Control                : u_vec :            : u_vec    = [ Gamma_x, Gamma_y ]^T
-Dynamics               : f_vec :            : f_vec    = [ v_x, v_y, Gamma_x, Gamma_y ]^T
-Equality Constraints   : phi   :            : t_f      = t_f_s
-                       :       : initial    : r_vec_o  = r_vec_o_s, v_vec_o = r_vec_o_s
-                       :       : final      : r_vec_f  = r_vec_f_s, v_vec_f = r_vec_f_s
-Inequality Constraints : phi   : min fuel   : Gamma   <= Gamma_max or T <= T_max
-                       :       : min energy : Gamma   <= Gamma_max or T <= T_max or unconstrainted
+Objective              : min fuel   : J        = integral L dt = integral Gamma dt
+                       : min energy : J        = integral L dt = integral 1/2 Gamma^2 dt
+Timespan               :            : t        = [ t_o, t_f ]
+State                  :            : x_vec    = [ r_vec^T, v_vec^T ]^T = [ r_x, r_y, v_x, v_y ]^T
+Control                :            : u_vec    = [ Gamma_x, Gamma_y ]^T
+Dynamics               :            : f_vec    = [ v_x, v_y, Gamma_x, Gamma_y ]^T
+Equality Constraints   :            : t_f      = t_f_s
+                       : initial    : r_vec_o  = r_vec_o_s, v_vec_o = r_vec_o_s
+                       : final      : r_vec_f  = r_vec_f_s, v_vec_f = r_vec_f_s
+Inequality Constraints : min fuel   : Gamma   <= Gamma_max or T <= T_max
+                       : min energy : Gamma   <= Gamma_max or T <= T_max or unconstrainted
 ```
 
 The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy. 
