@@ -164,29 +164,38 @@ Constraints
 ```
 ```
 Objective
-  min fuel   : $J = \int L \, dt = \int \Gamma \, dt$
-  min energy : $J = \int L \, dt = \int \frac{1}{2} \Gamma^2 \, dt$
+  min fuel   : J = ∫ L dt = ∫ Γ dt
+  min energy : J = ∫ L dt = ∫ ½ Γ² dt
 
-Timespan     : $t \in [t_0, t_f]$
+Timespan     : t ∈ [t₀, tƒ]
 
-State ($\vec{x}$)    : $[r_x, r_y, v_x, v_y]^T$
+State (**x**)    : [rₓ, rᵧ, vₓ, vᵧ]ᵀ
 
-Control ($\vec{u}$)  : $[\Gamma_x, \Gamma_y]^T$
+Control (**u**)  : [Γₓ, Γᵧ]ᵀ
 
-Dynamics ($\vec{f}$) : $[v_x, v_y, \Gamma_x, \Gamma_y]^T$
+Dynamics (**f**) : [vₓ, vᵧ, Γₓ, Γᵧ]ᵀ
 
 Constraints
   Equality
-    Initial  : $t_0 = t_{0,s}$
-               $\vec{r}(t_0) = \vec{r}_{0,s}$
-               $\vec{v}(t_0) = \vec{v}_{0,s}$
-    Final    : $t_f = t_{f,s}$
-               $\vec{r}(t_f) = \vec{r}_{f,s}$
-               $\vec{v}(t_f) = \vec{v}_{f,s}$
+    Initial  : t₀    = t₀_s
+               **r**(t₀) = **r**₀_s
+               **v**(t₀) = **v**₀_s
+    Final    : tƒ    = tƒ_s
+               **r**(tƒ) = **r**ƒ_s
+               **v**(tƒ) = **v**ƒ_s
   Inequality
-    min fuel   : $|\Gamma(t)| \le \Gamma_{\max} \text{ or } T \le T_{\max}$
-    min energy : $|\Gamma(t)| \le \Gamma_{\max} \text{ or } T \le T_{\max} \text{ or unconstrained}$
+    min fuel   : |Γ(t)| ≤ Γₘₐₓ or T ≤ Tₘₐₓ
+    min energy : |Γ(t)| ≤ Γₘₐₓ or T ≤ Tₘₐₓ or unconstrained
 ```
+
+| Category | Description |
+| :--- | :--- |
+| **Objective** $J$ | min fuel: &nbsp; &nbsp; $J = \int L \, dt = \int \Gamma \, dt$ <br> min energy: $J = \int L \, dt = \int \frac{1}{2} \Gamma^2 \, dt$ |
+| **Timespan** | $t \in [t_0, t_f]$ |
+| **State** $\mathbf{x}(t)$ | $\mathbf{x} = [r_x, r_y, v_x, v_y]^T$ |
+| **Control** $\mathbf{u}(t)$ | $\mathbf{u} = [\Gamma_x, \Gamma_y]^T$ |
+| **Dynamics** $\mathbf{f}(t,\mathbf{x},\mathbf{u})$ | $\mathbf{f} = [v_x, v_y, \Gamma_x, \Gamma_y]^T$ |
+| **Constraints** | **Equality** <br> _Initial_ &nbsp;: $\begin{aligned} t_0 &= t_{0,s} \\ \mathbf{r}(t_0) &= \mathbf{r}_{0,s} \\ \mathbf{v}(t_0) &= \mathbf{v}_{0,s} \end{aligned}$ &nbsp;&nbsp;&nbsp;&nbsp; _Final_ &nbsp;: $\begin{aligned} t_f &= t_{f,s} \\ \mathbf{r}(t_f) &= \mathbf{r}_{f,s} \\ \mathbf{v}(t_f) &= \mathbf{v}_{f,s} \end{aligned}$ <br> **Inequality** <br> _min fuel_ &nbsp; : $\lvert\Gamma(t)\rvert \le \Gamma_{\max} \text{ or } T \le T_{\max}$ <br> _min energy_ : $\lvert\Gamma(t)\rvert \le \Gamma_{\max} \text{ or } T \le T_{\max} \text{ or unconstrained}$ |
 
 
 The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy. 
