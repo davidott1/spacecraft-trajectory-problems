@@ -138,23 +138,29 @@ The optimal control problem is solved using an indirect method. The objective `J
 
 The problem is summarized:
 ```
-Objective   :            : min fuel   : J        = integ L dt = integ Gamma dt
-            :            : min energy : J        = integ L dt = integ 1/2 Gamma^2 dt
-Timespan    :            :            : t        = [ t_o, t_f ]
-State       :            :            : x_vec    = [ r_x, r_y, v_x, v_y ]^T
-Control     :            :            : u_vec    = [ Gamma_x, Gamma_y ]^T
-Dynamics    :            :            : f_vec    = [ v_x, v_y, Gamma_x, Gamma_y ]^T
-Constraints : equality   : initial    : t_o      = t_o_s
-            :            :            : r_vec_o  = r_vec_o_s
-            :            :            : v_vec_o  = r_vec_o_s
-            :            : final      : t_f      = t_f_s
-            :            :            : r_vec_f  = r_vec_f_s
-            :            :            : v_vec_f  = r_vec_f_s
-            : inequality : min fuel   : Gamma   <= Gamma_max or
-            :            :            : T       <= T_max
-            :            : min energy : Gamma   <= Gamma_max or 
-            :            :            : T       <= T_max or 
-            :            :            : unconstrainted
+Objective
+  min fuel   : J = integ(L)dt = integ(Gamma)dt
+  min energy : J = integ(L)dt = integ(1/2 * Gamma^2)dt
+
+Timespan     : t = [t_o, t_f]
+
+State        : x_vec = [r_x, r_y, v_x, v_y]^T
+
+Control      : u_vec = [Gamma_x, Gamma_y]^T
+
+Dynamics     : f_vec = [v_x, v_y, Gamma_x, Gamma_y]^T
+
+Constraints
+  Equality
+    Initial  : t_o     = t_o_s
+               r_vec_o = r_vec_o_s
+               v_vec_o = v_vec_o_s
+    Final    : t_f     = t_f_s
+               r_vec_f = r_vec_f_s
+               v_vec_f = v_vec_f_s
+  Inequality
+    min fuel   : Gamma <= Gamma_max or T <= T_max
+    min energy : Gamma <= Gamma_max or T <= T_max or unconstrained
 ```
 
 The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy. 
