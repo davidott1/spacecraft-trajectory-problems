@@ -352,7 +352,7 @@ def tpbvp_objective_and_jacobian(
 
     # # Enforce trivial overrides
     # time_o_mns      = time_o_pls      # trivial
-    # time_f_pls      = time_f_mns      # trivial
+    # time_f_pls      = time_f_mns      # trivial, fix later
     copos_vec_f_pls = copos_vec_f_mns # trivial, fix later
     covel_vec_f_pls = covel_vec_f_mns # trivial, fix later
     ham_o_mns       = ham_o_pls       # trivial, might not be correct

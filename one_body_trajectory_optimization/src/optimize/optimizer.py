@@ -52,7 +52,7 @@ def optimal_trajectory_solve(
     results_k_idx                = {}
     k_idxinitguess_to_idxfinsoln = np.logspace(np.log10(k_idxinitguess), np.log10(k_idxfinsoln), k_idxdivs)
     options_root                 = {
-        'maxiter' : 1, # 100 * len(decision_state_initguess), # 100 * n
+        'maxiter' : 100 * len(decision_state_initguess), # 100 * n
         'ftol'    : 1.0e-8, # 1e-8
         'xtol'    : 1.0e-8, # 1e-8
         'gtol'    : 1.0e-8, # 1e-8
