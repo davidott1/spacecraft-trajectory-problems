@@ -162,6 +162,35 @@ Constraints
     min fuel   : Gamma <= Gamma_max or T <= T_max
     min energy : Gamma <= Gamma_max or T <= T_max or unconstrained
 ```
+```
+Objective
+  ├── min fuel   : J = ∫ L dt = ∫ Γ dt
+  └── min energy : J = ∫ L dt = ∫ ½ Γ² dt
+
+  Timespan       : t ∈ [t₀, tƒ]
+
+  State (x⃗)      : [rₓ, rᵧ, vₓ, vᵧ]ᵀ
+
+  Control (u⃗)    : [Γₓ, Γᵧ]ᵀ
+
+  Dynamics (f⃗)   : [vₓ, vᵧ, Γₓ, Γᵧ]ᵀ
+
+  Constraints
+  ├── Equality
+  │   ├── Initial
+  │   │   ├── t₀    = t₀_s
+  │   │   ├── r⃗(t₀) = r⃗₀_s
+  │   │   └── v⃗(t₀) = v⃗₀_s
+  │   └── Final
+  │       ├── tƒ    = tƒ_s
+  │       ├── r⃗(tƒ) = r⃗ƒ_s
+  │       └── v⃗(tƒ) = v⃗ƒ_s
+  │
+  └── Inequality
+      ├── min fuel   : |Γ(t)| ≤ Γₘₐₓ  or  T ≤ Tₘₐₓ
+      └── min energy : |Γ(t)| ≤ Γₘₐₓ  or  T ≤ Tₘₐₓ  or  unconstrained
+```
+
 
 The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy. 
 
