@@ -201,11 +201,11 @@ Constraints
 
 | Category | Description |
 | :--- | :--- |
-| **Objective** | min fuel: &nbsp; &nbsp; $J = \int L \, dt = \int \Gamma \, dt$ <br> min energy: $J = \int L \, dt = \int \frac{1}{2} \Gamma^2 \, dt$ |
-| **Timespan** | $t \in [t_0, t_f]$ |
-| **State** ($\mathbf{x}$) | $x = [r_x, r_y, v_x, v_y]^T$ |
-| **Control** ($\mathbf{u}$) | $u = [\Gamma_x, \Gamma_y]^T$ |
-| **Dynamics** ($\mathbf{f}$) | $f = [v_x, v_y, \Gamma_x, \Gamma_y]^T$ |
+| **Objective** $J$ | min fuel: &nbsp; &nbsp; $J = \int L \, dt = \int \Gamma \, dt$ <br> min energy: $J = \int L \, dt = \int \frac{1}{2} \Gamma^2 \, dt$ |
+| **Timespan** $t$ | $t \in [t_0, t_f]$ |
+| **State** $\mathbf{x}(t)$ | $\mathbf{x} = [r_x, r_y, v_x, v_y]^T$ |
+| **Control** $\mathbf{u}(t)$ | $\mathbf{u} = [\Gamma_x, \Gamma_y]^T$ |
+| **Dynamics** $\mathbf{f}(t, \mathbf{x}, \mathbf{u})$ | $\mathbf{f} = [v_x, v_y, \Gamma_x, \Gamma_y]^T$ |
 
 ### Constraints
 
@@ -227,6 +227,7 @@ $$
 **Inequality Conditions**
 * **min fuel**: $\lvert\Gamma(t)\rvert \le \Gamma_{\max} \text{ or } T \le T_{\max}$
 * **min energy**: $\lvert\Gamma(t)\rvert \le \Gamma_{\max} \text{ or } T \le T_{\max} \text{ or unconstrained}$
+
 ---
 
 The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy. 
