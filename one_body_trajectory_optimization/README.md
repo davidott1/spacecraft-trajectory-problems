@@ -197,6 +197,37 @@ Constraints
 | **Dynamics** $\mathbf{f}(t, \mathbf{x}, \mathbf{u})$ | $\mathbf{f} = [v_x, v_y, \Gamma_x, \Gamma_y]^T$ |
 | **Constraints** | **Equality** <br> _Initial_ &nbsp;: $\begin{array}{r l} t_0 &= t_{0,s} \\ \mathbf{r}(t_0) &= \mathbf{r}_{0,s} \\ \mathbf{v}(t_0) &= \mathbf{v}_{0,s} \end{array}$ &nbsp;&nbsp;&nbsp;&nbsp; _Final_ &nbsp;: $\begin{array}{r l} t_f &= t_{f,s} \\ \mathbf{r}(t_f) &= \mathbf{r}_{f,s} \\ \mathbf{v}(t_f) &= \mathbf{v}_{f,s} \end{array}$ <br> **Inequality** <br> _min fuel_ &nbsp; : $\lvert\Gamma(t)\rvert \le \Gamma_{\max} \text{ or } T \le T_{\max}$ <br> _min energy_ : $\lvert\Gamma(t)\rvert \le \Gamma_{\max} \text{ or } T \le T_{\max} \text{ or unconstrained}$ |
 
+---
+
+| Category | Description |
+| :--- | :--- |
+| **Objective** | min fuel: &nbsp; &nbsp; $J = \int L \, dt = \int \Gamma \, dt$ <br> min energy: $J = \int L \, dt = \int \frac{1}{2} \Gamma^2 \, dt$ |
+| **Timespan** | $t \in [t_0, t_f]$ |
+| **State** ($\mathbf{x}$) | $x = [r_x, r_y, v_x, v_y]^T$ |
+| **Control** ($\mathbf{u}$) | $u = [\Gamma_x, \Gamma_y]^T$ |
+| **Dynamics** ($\mathbf{f}$) | $f = [v_x, v_y, \Gamma_x, \Gamma_y]^T$ |
+
+### Constraints
+
+**Equality Conditions**
+$$
+\begin{aligned}
+\text{Initial:} && t_0 &= t_{0,s} \\
+&& \mathbf{r}(t_0) &= \mathbf{r}_{0,s} \\
+&& \mathbf{v}(t_0) &= \mathbf{v}_{0,s}
+\end{aligned}
+\qquad \qquad
+\begin{aligned}
+\text{Final:} && t_f &= t_{f,s} \\
+&& \mathbf{r}(t_f) &= \mathbf{r}_{f,s} \\
+&& \mathbf{v}(t_f) &= \mathbf{v}_{f,s}
+\end{aligned}
+$$
+
+**Inequality Conditions**
+* **min fuel**: $\lvert\Gamma(t)\rvert \le \Gamma_{\max} \text{ or } T \le T_{\max}$
+* **min energy**: $\lvert\Gamma(t)\rvert \le \Gamma_{\max} \text{ or } T \le T_{\max} \text{ or unconstrained}$
+---
 
 The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy. 
 
