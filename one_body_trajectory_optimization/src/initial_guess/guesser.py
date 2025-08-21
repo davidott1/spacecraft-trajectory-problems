@@ -210,17 +210,23 @@ def generate_guess(
             )
 
         error_mag_idx = np.linalg.norm(error_idx)
-        print(error_mag_idx)
+
         if error_mag_idx < error_mag_min:
             idx_min            = idx
             error_mag_min      = error_mag_idx
             decision_state_min = decision_state_idx
-            integ_state_min    = np.hstack([pos_vec_o_pls, vel_vec_o_pls, decision_state_min])
+
+            pos_vec_o_pls   = decision_state_idx[ 1: 3]
+            vel_vec_o_pls   = decision_state_idx[ 4: 6]
+            copos_vec_o_pls = decision_state_idx[ 7: 9]
+            covel_vec_o_pls = decision_state_idx[10:12]
+            state_costate_o_min = np.hstack([pos_vec_o_pls, vel_vec_o_pls, copos_vec_o_pls, covel_vec_o_pls])
+
             # if idx==0:
             #     tqdm.write(f"                               {'Fixed':>14s} {'Fixed':>14s} {'Fixed':>14s} {'Fixed':>14s} {'Free':>14s} {'Free':>14s} {'Free':>14s} {'Free':>14s}")
             #     tqdm.write(f"          {'Step':>5s} {'Error-Mag':>14s} {'Pos-Xo':>14s} {'Pos-Yo':>14s} {'Vel-Xo':>14s} {'Vel-Yo':>14s} {'Co-Pos-Xo':>14s} {'Co-Pos-Yo':>14s} {'Co-Vel-Xo':>14s} {'Co-Vel-Yo':>14s}")
-            # integ_state_min_str = ' '.join(f"{x:>14.6e}" for x in integ_state_min)
-            # tqdm.write(f"     {idx_min:>5d}/{init_guess_steps:>4d} {error_mag_min:>14.6e} {integ_state_min_str}")
+            # state_costate_o_min_str = ' '.join(f"{x:>14.6e}" for x in state_costate_o_min)
+            # tqdm.write(f"     {idx_min:>5d}/{init_guess_steps:>4d} {error_mag_min:>14.6e} {state_costate_o_min_str}")
 
     # Pack up and print solution
     return decision_state_min

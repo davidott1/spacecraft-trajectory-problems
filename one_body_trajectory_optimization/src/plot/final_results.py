@@ -35,14 +35,14 @@ def plot_final_results(
     plot_show                      = system_parameters['plot_show']
     plot_save                      = system_parameters['plot_save']
 
-    pos_vec_o_mns   = equality_parameters['pos_vec_o_mns']
-    vel_vec_o_mns   = equality_parameters['vel_vec_o_mns']
-    copos_vec_o_mns = equality_parameters['copos_vec_o_mns']
-    covel_vec_o_mns = equality_parameters['covel_vec_o_mns']
-    pos_vec_f_pls   = equality_parameters['pos_vec_f_pls']
-    vel_vec_f_pls   = equality_parameters['vel_vec_f_pls']
-    copos_vec_f_pls = equality_parameters['copos_vec_f_pls']
-    covel_vec_f_pls = equality_parameters['covel_vec_f_pls']
+    pos_vec_o_mns   = equality_parameters[  'pos_vec']['o']['mns']['value']
+    vel_vec_o_mns   = equality_parameters[  'vel_vec']['o']['mns']['value']
+    copos_vec_o_mns = equality_parameters['copos_vec']['o']['mns']['value']
+    covel_vec_o_mns = equality_parameters['covel_vec']['o']['mns']['value']
+    pos_vec_f_pls   = equality_parameters[  'pos_vec']['f']['pls']['value']
+    vel_vec_f_pls   = equality_parameters[  'vel_vec']['f']['pls']['value']
+    copos_vec_f_pls = equality_parameters['copos_vec']['f']['pls']['value']
+    covel_vec_f_pls = equality_parameters['covel_vec']['f']['pls']['value']
 
     # Unpack state and costate histories
     time_t                                     = results_finsoln.t

@@ -29,11 +29,10 @@ def optimal_trajectory_solve(
 
     # Unpack files and folders parameters
     min_type              =      optimization_parameters['min_type'             ]
-    time_span             = integration_state_parameters['time_span'            ]
-    pos_vec_o_mns         =          equality_parameters['pos_vec_o_mns'        ]
-    vel_vec_o_mns         =          equality_parameters['vel_vec_o_mns'        ]
-    pos_vec_f_pls         =          equality_parameters['pos_vec_f_pls'        ]
-    vel_vec_f_pls         =          equality_parameters['vel_vec_f_pls'        ]
+    # pos_vec_o_mns         =          equality_parameters['pos_vec']['o']['mns']['value']
+    # vel_vec_o_mns         =          equality_parameters['vel_vec']['o']['mns']['value']
+    # pos_vec_f_pls         =          equality_parameters['pos_vec']['f']['pls']['value']
+    # vel_vec_f_pls         =          equality_parameters['vel_vec']['f']['pls']['value']
     use_thrust_acc_limits =        inequality_parameters['use_thrust_acc_limits']
     use_thrust_limits     =        inequality_parameters['use_thrust_limits'    ]
     k_idxinitguess        =        inequality_parameters['k_idxinitguess'       ]
@@ -58,7 +57,7 @@ def optimal_trajectory_solve(
         'xtol'    : 1.0e-8, # 1e-8
         'gtol'    : 1.0e-8, # 1e-8
     }
-    optimization_parameters['include_jacobian']   = True
+    optimization_parameters['include_jacobian'] = False # should be True
     # integration_state_parameters['include_scstm'] = True
     if use_thrust_acc_limits:
         inequality_parameters['use_thrust_acc_smoothing'] = True
@@ -70,7 +69,7 @@ def optimal_trajectory_solve(
 
         # Set the k-idx
         inequality_parameters['k_steepness'] = k_idx
-
+        
         # Root solve and compute progress of current root solve
         soln_root, soln_ivp = \
             solve_for_root_and_compute_progress(
@@ -102,7 +101,7 @@ def optimal_trajectory_solve(
     print("  Root-Solve Results")
     
     # Final solution: root solve and compute progress of current root solve
-    optimization_parameters['include_jacobian']       = True  # should be True
+    optimization_parameters['include_jacobian']       = False  # should be True
     integration_state_parameters['include_scstm']     = True  # should be True
     integration_state_parameters['post_process']      = False # should be False
     inequality_parameters['use_thrust_acc_smoothing'] = False # should be False
@@ -133,8 +132,22 @@ def optimal_trajectory_solve(
     integration_state_parameters['post_process']      = True  # should be True
     inequality_parameters['use_thrust_acc_smoothing'] = False # should be False
     inequality_parameters['use_thrust_smoothing']     = False # should be False
+    # decision_state_initguess = soln_root.x
+    # time_span     = np.array([decision_state_initguess[0], decision_state_initguess[10]])
+    pos_vec_o_mns = equality_parameters['pos_vec']['o']['mns']['value']
+    vel_vec_o_mns = equality_parameters['vel_vec']['o']['mns']['value']
+    pos_vec_f_pls = equality_parameters['pos_vec']['f']['pls']['value']
+    vel_vec_f_pls = equality_parameters['vel_vec']['f']['pls']['value']
+    # state_costate_o = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state_initguess])
+
     decision_state_initguess = soln_root.x
-    state_costate_o          = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state_initguess])
+    time_span       = np.array([decision_state_initguess[0], decision_state_initguess[10]])
+    pos_vec_o_pls   = decision_state_initguess[ 1: 3]
+    vel_vec_o_pls   = decision_state_initguess[ 4: 6]
+    copos_vec_o_pls = decision_state_initguess[ 7: 9]
+    covel_vec_o_pls = decision_state_initguess[10:12]
+    state_costate_o = np.hstack([pos_vec_o_pls, vel_vec_o_pls, copos_vec_o_pls, covel_vec_o_pls])
+
     soln_ivp = \
         solve_ivp_func(
             time_span                   ,
@@ -152,8 +165,8 @@ def optimal_trajectory_solve(
     state_f_approx_finalsoln = results_approx_finalsoln.y[0:4, -1]
 
     # Final solution: check final state error
-    error_approx_finalsoln_vec = state_f_approx_finalsoln - np.hstack([pos_vec_f_pls, vel_vec_f_pls])
-    error_finalsoln_vec        = state_f_finalsoln        - np.hstack([pos_vec_f_pls, vel_vec_f_pls])
+    error_approx_finalsoln_vec = np.hstack([pos_vec_f_pls, vel_vec_f_pls]) - state_f_approx_finalsoln
+    error_finalsoln_vec        = np.hstack([pos_vec_f_pls, vel_vec_f_pls]) - state_f_finalsoln
 
     print("\n  State Error Check")
     print(f"             {'Pos-Xf':>14s} {'Pos-Yf':>14s} {'Vel-Xf':>14s} {'Vel-Yf':>14s}")

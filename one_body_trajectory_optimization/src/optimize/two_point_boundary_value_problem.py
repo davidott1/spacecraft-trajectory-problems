@@ -31,6 +31,7 @@ def solve_ivp_func(
     post_process             = integration_state_parameters['post_process'            ]
 
     # Form integration state
+    if include_jacobian: breakpoint()
     if include_jacobian:
         integration_state_parameters['include_scstm'] = True
         stm_oo                                        = np.identity(8).flatten()
@@ -84,22 +85,22 @@ def solve_ivp_func(
 
 
 def _solve_for_root(
-        decision_state_initguess,
-        optimization_parameters,
+        decision_state_initguess    ,
+        optimization_parameters     ,
         integration_state_parameters,
-        equality_parameters,
-        inequality_parameters,
-        options_root
+        equality_parameters         ,
+        inequality_parameters       ,
+        options_root                ,
     ):
     """
     Helper function to call the root solver.
     """
     root_func = lambda decision_state: tpbvp_objective_and_jacobian(
-        decision_state,
-        optimization_parameters,
+        decision_state              ,
+        optimization_parameters     ,
         integration_state_parameters,
-        equality_parameters,
-        inequality_parameters,
+        equality_parameters         ,
+        inequality_parameters       ,
     )
     return root(
         root_func,
@@ -120,11 +121,6 @@ def solve_for_root_and_compute_progress(
         options_root                ,
     ):
 
-    # Unpack
-    pos_vec_o_mns =          equality_parameters['pos_vec_o_mns']
-    vel_vec_o_mns =          equality_parameters['vel_vec_o_mns']
-    time_span     = integration_state_parameters['time_span'    ]
-
     # Solve root problem
     soln_root = \
         _solve_for_root(
@@ -136,9 +132,14 @@ def solve_for_root_and_compute_progress(
             options_root                ,
         )
 
-    # Update decision-state initial guess and the state-costate
+    # Unpack decision-state initial guess and update the state-costate
     decision_state_initguess = soln_root.x
-    state_costate_o = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state_initguess])
+    time_span       = np.array([decision_state_initguess[0], decision_state_initguess[10]])
+    pos_vec_o_pls   = decision_state_initguess[ 1: 3]
+    vel_vec_o_pls   = decision_state_initguess[ 4: 6]
+    copos_vec_o_pls = decision_state_initguess[ 7: 9]
+    covel_vec_o_pls = decision_state_initguess[10:12]
+    state_costate_o = np.hstack([pos_vec_o_pls, vel_vec_o_pls, copos_vec_o_pls, covel_vec_o_pls])
 
     # Solve initial value problem
     soln_ivp = \
