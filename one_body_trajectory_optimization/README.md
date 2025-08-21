@@ -210,6 +210,7 @@ Constraints
 ### Constraints
 
 **Equality Conditions**
+
 $$
 \begin{aligned}
 \text{Initial:} && t_0 &= t_{0,s} \\
@@ -225,6 +226,7 @@ $$
 $$
 
 **Inequality Conditions**
+
 * **min fuel**: $\lvert\Gamma(t)\rvert \le \Gamma_{\max} \text{ or } T \le T_{\max}$
 * **min energy**: $\lvert\Gamma(t)\rvert \le \Gamma_{\max} \text{ or } T \le T_{\max} \text{ or unconstrained}$
 
