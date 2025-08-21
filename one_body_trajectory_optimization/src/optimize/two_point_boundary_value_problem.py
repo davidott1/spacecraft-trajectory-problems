@@ -135,10 +135,10 @@ def solve_for_root_and_compute_progress(
     # Unpack decision-state initial guess and update the state-costate
     decision_state_initguess = soln_root.x
     time_span       = np.array([decision_state_initguess[0], decision_state_initguess[10]])
-    pos_vec_o_pls   = decision_state_initguess[ 1: 3]
-    vel_vec_o_pls   = decision_state_initguess[ 4: 6]
-    copos_vec_o_pls = decision_state_initguess[ 7: 9]
-    covel_vec_o_pls = decision_state_initguess[10:12]
+    pos_vec_o_pls   = decision_state_initguess[1:3]
+    vel_vec_o_pls   = decision_state_initguess[3:5]
+    copos_vec_o_pls = decision_state_initguess[5:7]
+    covel_vec_o_pls = decision_state_initguess[7:9]
     state_costate_o = np.hstack([pos_vec_o_pls, vel_vec_o_pls, copos_vec_o_pls, covel_vec_o_pls])
 
     # Solve initial value problem
@@ -353,9 +353,10 @@ def tpbvp_objective_and_jacobian(
     # # Enforce trivial overrides
     # time_o_mns      = time_o_pls      # trivial
     # time_f_pls      = time_f_mns      # trivial
-    # copos_vec_f_pls = copos_vec_f_mns # trivial
-    # covel_vec_f_pls = covel_vec_f_mns # trivial
-    # ham_o_mns       = ham_o_pls       # trivial, might not be correct
+    copos_vec_f_pls = copos_vec_f_mns # trivial, fix later
+    covel_vec_f_pls = covel_vec_f_mns # trivial, fix later
+    ham_o_mns       = ham_o_pls       # trivial, might not be correct
+    ham_f_pls       = ham_f_mns       # trivial, might not be correct
 
     # Time error
     error_time_o = time_o_pls - time_o_mns

@@ -86,9 +86,10 @@ def _convert_parameters_to_standard_units(
     
     parameters_with_units_defaults = {
         'min_type'              : (           'energy', None      , str   ),
-        'time_span'             : ( [ 0.0e+0, 1.0e+1 ], u.s       , float ),
+        'time_o'                : (           0.0e+0  , u.s       , float ),
         'pos_vec_o'             : ( [ 0.0e+0, 0.0e+0 ], u.m       , float ), # type: ignore
         'vel_vec_o'             : ( [ 0.0e+0, 0.0e+0 ], u.m/u.s   , float ), # type: ignore
+        'time_f'                : (           1.0e+1  , u.s       , float ),
         'pos_vec_f'             : ( [ 1.0e+1, 1.0e+1 ], u.m       , float ), # type: ignore
         'vel_vec_f'             : ( [ 1.0e+0, 1.0e+0 ], u.m/u.s   , float ), # type: ignore
         'mass_o'                : (             1.0e+3, u.kg      , float ), # type: ignore
@@ -102,7 +103,7 @@ def _convert_parameters_to_standard_units(
         'k_idxfinsoln'          : (               None, None      , int   ),
         'k_idxdivs'             : (                 10, u.one     , int   ),
         'init_guess_steps'      : (               3000, u.one     , int   ),
-    }
+    } # fix later: needs more parameters
 
     # Build the parameter-without-units dictionary by applying defaults and converting units
     parameters_without_units = {}
@@ -254,31 +255,31 @@ def configure_validate_input(
         'include_jacobian' : False                                           ,
     }
     integration_state_parameters = {
-        'time_o'         : all_parameters_without_units['time_span'][0]                                               ,
-        'time_f'         : all_parameters_without_units['time_span'][1]                                               ,
-        'delta_time_of'  : all_parameters_without_units['time_span'][1] - all_parameters_without_units['time_span'][0],
-        'pos_vec_o'      : all_parameters_without_units['pos_vec_o']                                                  , # type: ignore
-        'vel_vec_o'      : all_parameters_without_units['vel_vec_o']                                                  , # type: ignore
-        'pos_vec_f'      : all_parameters_without_units['pos_vec_f']                                                  , # type: ignore
-        'vel_vec_f'      : all_parameters_without_units['vel_vec_f']                                                  , # type: ignore
-        'mass_o'         : all_parameters_without_units['mass_o']                                                     , # type: ignore
-        'opt_ctrl_obj_o' : np.float64(0.0)                                                                            , # type: ignore
-        'post_process'   : False                                                                                      ,
-        'include_scstm'  : False                                                                                      ,
+        'time_o'         : all_parameters_without_units['time_o']                                         ,
+        'time_f'         : all_parameters_without_units['time_f']                                         ,
+        'delta_time_of'  : all_parameters_without_units['time_f'] - all_parameters_without_units['time_o'],
+        'pos_vec_o'      : all_parameters_without_units['pos_vec_o']                                      , # type: ignore
+        'vel_vec_o'      : all_parameters_without_units['vel_vec_o']                                      , # type: ignore
+        'pos_vec_f'      : all_parameters_without_units['pos_vec_f']                                      , # type: ignore
+        'vel_vec_f'      : all_parameters_without_units['vel_vec_f']                                      , # type: ignore
+        'mass_o'         : all_parameters_without_units['mass_o']                                         , # type: ignore
+        'opt_ctrl_obj_o' : np.float64(0.0)                                                                , # type: ignore
+        'post_process'   : False                                                                          ,
+        'include_scstm'  : False                                                                          ,
     }
     equality_parameters: Dict[str, Any]  = {
         'time': {
             'o': {
                 'mode': 'fixed',
                 'unit': 's',
-                'mns': { 'value': all_parameters_without_units['time_span'][0] },
-                'pls': { 'value': all_parameters_without_units['time_span'][0] }
+                'mns': { 'value': all_parameters_without_units['time_o'] },
+                'pls': { 'value': all_parameters_without_units['time_o'] }
             },
             'f': {
                 'mode': 'fixed',
                 'unit': 's',
-                'mns': { 'value': all_parameters_without_units['time_span'][1] },
-                'pls': { 'value': all_parameters_without_units['time_span'][1] }
+                'mns': { 'value': all_parameters_without_units['time_f'] },
+                'pls': { 'value': all_parameters_without_units['time_f'] }
             }
         },
         'pos_vec': {

@@ -52,7 +52,7 @@ def optimal_trajectory_solve(
     results_k_idx                = {}
     k_idxinitguess_to_idxfinsoln = np.logspace(np.log10(k_idxinitguess), np.log10(k_idxfinsoln), k_idxdivs)
     options_root                 = {
-        'maxiter' : 100 * len(decision_state_initguess), # 100 * n
+        'maxiter' : 1, # 100 * len(decision_state_initguess), # 100 * n
         'ftol'    : 1.0e-8, # 1e-8
         'xtol'    : 1.0e-8, # 1e-8
         'gtol'    : 1.0e-8, # 1e-8
@@ -102,7 +102,7 @@ def optimal_trajectory_solve(
     
     # Final solution: root solve and compute progress of current root solve
     optimization_parameters['include_jacobian']       = False  # should be True
-    integration_state_parameters['include_scstm']     = True  # should be True
+    integration_state_parameters['include_scstm']     = False  # should be True
     integration_state_parameters['post_process']      = False # should be False
     inequality_parameters['use_thrust_acc_smoothing'] = False # should be False
     inequality_parameters['use_thrust_smoothing']     = False # should be False
@@ -142,10 +142,10 @@ def optimal_trajectory_solve(
 
     decision_state_initguess = soln_root.x
     time_span       = np.array([decision_state_initguess[0], decision_state_initguess[10]])
-    pos_vec_o_pls   = decision_state_initguess[ 1: 3]
-    vel_vec_o_pls   = decision_state_initguess[ 4: 6]
-    copos_vec_o_pls = decision_state_initguess[ 7: 9]
-    covel_vec_o_pls = decision_state_initguess[10:12]
+    pos_vec_o_pls   = decision_state_initguess[1:3]
+    vel_vec_o_pls   = decision_state_initguess[3:5]
+    copos_vec_o_pls = decision_state_initguess[5:7]
+    covel_vec_o_pls = decision_state_initguess[7:9]
     state_costate_o = np.hstack([pos_vec_o_pls, vel_vec_o_pls, copos_vec_o_pls, covel_vec_o_pls])
 
     soln_ivp = \

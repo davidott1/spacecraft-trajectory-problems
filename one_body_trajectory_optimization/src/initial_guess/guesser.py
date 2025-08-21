@@ -128,7 +128,8 @@ def generate_guess(
     # Loop through random guesses for the costates
     print("  Random Initial Guess Generation")
     error_mag_min = np.Inf
-    for idx in tqdm(range(init_guess_steps), desc="Processing", leave=False, total=init_guess_steps):
+    # for idx in tqdm(range(init_guess_steps), desc="Processing", leave=False, total=init_guess_steps):
+    for idx in range(init_guess_steps):
         decision_state_idx = np.array([])
         if time_o_mode == 'free':
             time_o_pls = np.random.uniform(low=-1, high=1, size=1)
@@ -214,13 +215,32 @@ def generate_guess(
         if error_mag_idx < error_mag_min:
             idx_min            = idx
             error_mag_min      = error_mag_idx
+            print(f"  New Minimum Error: {error_mag_min:>14.6e} at step {idx_min:>5d}/{init_guess_steps:>4d}")
             decision_state_min = decision_state_idx
 
-            pos_vec_o_pls   = decision_state_idx[ 1: 3]
-            vel_vec_o_pls   = decision_state_idx[ 4: 6]
-            copos_vec_o_pls = decision_state_idx[ 7: 9]
-            covel_vec_o_pls = decision_state_idx[10:12]
+            pos_vec_o_pls   = decision_state_idx[1:3]
+            vel_vec_o_pls   = decision_state_idx[3:5]
+            copos_vec_o_pls = decision_state_idx[5:7]
+            covel_vec_o_pls = decision_state_idx[7:9]
             state_costate_o_min = np.hstack([pos_vec_o_pls, vel_vec_o_pls, copos_vec_o_pls, covel_vec_o_pls])
+
+            # Print decision state
+            print(f"  Decision State")
+            print(f"    {decision_state_idx}")
+            idx_decision_state = 0
+            idx_parameter      = 0
+            for bnd in ordered_boundaries:
+                for var in ordered_variables:
+                    for side in ordered_sides:
+                        if (
+                            (bnd == 'o' and side == 'pls')
+                            or (bnd == 'f' and side == 'mns')
+                        ):
+                            number_elements = np.size(equality_parameters[var][bnd][side]['value'])
+                            fixed_or_free   = str('Fixed' if equality_parameters['known_states'][idx_decision_state] else 'Free')
+                            print("    " + f"{f'{var}_{bnd}_{side}':<15s}" + " : " + f"{fixed_or_free:<5s}" + " : " + f"{decision_state_idx[idx_decision_state:idx_decision_state+number_elements]}")
+                            idx_decision_state += number_elements
+                            idx_parameter      += 1
 
             # if idx==0:
             #     tqdm.write(f"                               {'Fixed':>14s} {'Fixed':>14s} {'Fixed':>14s} {'Fixed':>14s} {'Free':>14s} {'Free':>14s} {'Free':>14s} {'Free':>14s}")
