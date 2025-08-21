@@ -164,31 +164,28 @@ Constraints
 ```
 ```
 Objective
-  ├── min fuel   : J = ∫ L dt = ∫ Γ dt
-  └── min energy : J = ∫ L dt = ∫ ½ Γ² dt
+  min fuel   : $J = \int L \, dt = \int \Gamma \, dt$
+  min energy : $J = \int L \, dt = \int \frac{1}{2} \Gamma^2 \, dt$
 
-  Timespan       : t ∈ [t₀, tƒ]
+Timespan     : $t \in [t_0, t_f]$
 
-  State (x⃗)      : [rₓ, rᵧ, vₓ, vᵧ]ᵀ
+State ($\vec{x}$)    : $[r_x, r_y, v_x, v_y]^T$
 
-  Control (u⃗)    : [Γₓ, Γᵧ]ᵀ
+Control ($\vec{u}$)  : $[\Gamma_x, \Gamma_y]^T$
 
-  Dynamics (f⃗)   : [vₓ, vᵧ, Γₓ, Γᵧ]ᵀ
+Dynamics ($\vec{f}$) : $[v_x, v_y, \Gamma_x, \Gamma_y]^T$
 
-  Constraints
-  ├── Equality
-  │   ├── Initial
-  │   │   ├── t₀    = t₀_s
-  │   │   ├── r⃗(t₀) = r⃗₀_s
-  │   │   └── v⃗(t₀) = v⃗₀_s
-  │   └── Final
-  │       ├── tƒ    = tƒ_s
-  │       ├── r⃗(tƒ) = r⃗ƒ_s
-  │       └── v⃗(tƒ) = v⃗ƒ_s
-  │
-  └── Inequality
-      ├── min fuel   : |Γ(t)| ≤ Γₘₐₓ  or  T ≤ Tₘₐₓ
-      └── min energy : |Γ(t)| ≤ Γₘₐₓ  or  T ≤ Tₘₐₓ  or  unconstrained
+Constraints
+  Equality
+    Initial  : $t_0 = t_{0,s}$
+               $\vec{r}(t_0) = \vec{r}_{0,s}$
+               $\vec{v}(t_0) = \vec{v}_{0,s}$
+    Final    : $t_f = t_{f,s}$
+               $\vec{r}(t_f) = \vec{r}_{f,s}$
+               $\vec{v}(t_f) = \vec{v}_{f,s}$
+  Inequality
+    min fuel   : $|\Gamma(t)| \le \Gamma_{\max} \text{ or } T \le T_{\max}$
+    min energy : $|\Gamma(t)| \le \Gamma_{\max} \text{ or } T \le T_{\max} \text{ or unconstrained}$
 ```
 
 
