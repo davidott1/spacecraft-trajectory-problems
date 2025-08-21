@@ -164,34 +164,34 @@ def tpbvp_objective_and_jacobian(
     Objective function that also returns the analytical Jacobian.
     """
     
-    # Override the initial state with the decision state
+    # Define list for dictionary structure
     ordered_variables  = ['time', 'pos_vec', 'vel_vec', 'copos_vec', 'covel_vec', 'ham']
     ordered_boundaries = ['o', 'f']
     ordered_sides      = ['pls', 'mns']
 
+    # Override the initial state with the relevant decision state variables
     idx = 0
     for bnd in ordered_boundaries:
         for var in ordered_variables:
             for side in ordered_sides:
-                print(f"(var, bnd, side): {var}, {bnd}, {side}")
                 var_bnd = equality_parameters[var][bnd]
                 if (
-                    var_bnd['mode'] == 'fixed'
-                    or (bnd == 'o' and side == 'mns')
+                    (bnd == 'o' and side == 'mns')
                     or (bnd == 'f' and side == 'pls')
+                    # or var_bnd['mode'] == 'fixed' # include later, doing len_dec_state = 20 first
                 ):
                     continue
-                elif var_bnd['mode'] == 'free':
-                    var_bnd_side    = var_bnd[side]
+                # elif var_bnd['mode'] == 'free':
+                # print(f"(mode, var, bnd, side): {var_bnd['mode']}, {var}, {bnd}, {side}")
 
-                    number_elements = np.size(var_bnd_side['value'])
-                    value_slice     = decision_state[idx:idx+number_elements]
+                number_elements = np.size(var_bnd[side]['value'])
+                value_slice     = decision_state[idx:idx+number_elements]
 
-                    if number_elements == 1:
-                        value_slice = value_slice[0]
-                    
-                    equality_parameters[var][bnd][side]['value'] = value_slice
-                    idx += number_elements
+                if number_elements == 1:
+                    value_slice = value_slice[0]
+                
+                equality_parameters[var][bnd][side]['value'] = value_slice
+                idx += number_elements
 
     # Unpack
     include_jacobian = optimization_parameters['include_jacobian']
@@ -305,31 +305,31 @@ def tpbvp_objective_and_jacobian(
         thrust_acc_y_f_mns = thrust_acc_mag_f_mns * thrust_acc_y_dir_f_mns
     else: # optimization_parameters['min_type'] == 'energy':
         # H = 1/2 (Gamma_x^2 + Gamma_y^2) + lambda_r_x v_x + lambda_r_y v_y + lambda_v_x Gamma_x + lambda_v_y Gamma_y
-        vel_x_o_pls   =   vel_vec_o_pls[0]
-        vel_y_o_pls   =   vel_vec_o_pls[1]
-        copos_x_o_pls = copos_vec_o_pls[0]
-        copos_y_o_pls = copos_vec_o_pls[1]
-        covel_x_o_pls = covel_vec_o_pls[0]
-        covel_y_o_pls = covel_vec_o_pls[1]
-        thrust_acc_x_o_pls = covel_x_o_pls # should be negative
-        thrust_acc_y_o_pls = covel_y_o_pls # should be negative
-        acc_x_o_pls = thrust_acc_x_o_pls
-        acc_y_o_pls = thrust_acc_y_o_pls
-        ham_o_pls   = 1/2 * (thrust_acc_x_o_pls**2 + thrust_acc_y_o_pls**2) \
+        vel_x_o_pls        =      vel_vec_o_pls[0]
+        vel_y_o_pls        =      vel_vec_o_pls[1]
+        copos_x_o_pls      =    copos_vec_o_pls[0]
+        copos_y_o_pls      =    copos_vec_o_pls[1]
+        covel_x_o_pls      =    covel_vec_o_pls[0]
+        covel_y_o_pls      =    covel_vec_o_pls[1]
+        thrust_acc_x_o_pls =      covel_x_o_pls # should be negative
+        thrust_acc_y_o_pls =      covel_y_o_pls # should be negative
+        acc_x_o_pls        = thrust_acc_x_o_pls
+        acc_y_o_pls        = thrust_acc_y_o_pls
+        ham_o_pls          = 1/2 * (thrust_acc_x_o_pls**2 + thrust_acc_y_o_pls**2) \
             + copos_x_o_pls * vel_x_o_pls + copos_y_o_pls * vel_y_o_pls \
             + covel_x_o_pls * acc_x_o_pls + covel_y_o_pls * acc_y_o_pls
 
-        vel_x_f_mns   =   vel_vec_f_mns[0]
-        vel_y_f_mns   =   vel_vec_f_mns[1]
-        copos_x_f_mns = copos_vec_f_mns[0]
-        copos_y_f_mns = copos_vec_f_mns[1]
-        covel_x_f_mns = covel_vec_f_mns[0]
-        covel_y_f_mns = covel_vec_f_mns[1]
+        vel_x_f_mns        =   vel_vec_f_mns[0]
+        vel_y_f_mns        =   vel_vec_f_mns[1]
+        copos_x_f_mns      = copos_vec_f_mns[0]
+        copos_y_f_mns      = copos_vec_f_mns[1]
+        covel_x_f_mns      = covel_vec_f_mns[0]
+        covel_y_f_mns      = covel_vec_f_mns[1]
         thrust_acc_x_f_mns = covel_x_f_mns # should be negative
         thrust_acc_y_f_mns = covel_y_f_mns # should be negative
-        acc_x_f_mns = thrust_acc_x_f_mns
-        acc_y_f_mns = thrust_acc_y_f_mns
-        ham_f_mns   = 1/2 * (thrust_acc_x_f_mns**2 + thrust_acc_y_f_mns**2) \
+        acc_x_f_mns        = thrust_acc_x_f_mns
+        acc_y_f_mns        = thrust_acc_y_f_mns
+        ham_f_mns          = 1/2 * (thrust_acc_x_f_mns**2 + thrust_acc_y_f_mns**2) \
             + copos_x_f_mns * vel_x_f_mns + copos_y_f_mns * vel_y_f_mns \
             + covel_x_f_mns * acc_x_f_mns + covel_y_f_mns * acc_y_f_mns
     if include_jacobian:
@@ -349,28 +349,28 @@ def tpbvp_objective_and_jacobian(
     #           [ delta [time_f, pos_vec_f, vel_vec_f, copos_vec_f, covel_vel_f, ham_f] ]
     #   jacobian = d(state_costate_f) / d(state_costate_o)
 
-    # Enforce trivial overrides
-    time_o_mns      = time_o_pls      # trivial
-    time_f_pls      = time_f_mns      # trivial
-    copos_vec_f_pls = copos_vec_f_mns # trivial
-    covel_vec_f_pls = covel_vec_f_mns # trivial
-    ham_o_mns       = ham_o_pls       # trivial, might not be correct
+    # # Enforce trivial overrides
+    # time_o_mns      = time_o_pls      # trivial
+    # time_f_pls      = time_f_mns      # trivial
+    # copos_vec_f_pls = copos_vec_f_mns # trivial
+    # covel_vec_f_pls = covel_vec_f_mns # trivial
+    # ham_o_mns       = ham_o_pls       # trivial, might not be correct
 
     # Time error
-    error_time_o = time_o_pls - time_o_mns # trivial
-    error_time_f = time_f_pls - time_f_mns # trivial
+    error_time_o = time_o_pls - time_o_mns
+    error_time_f = time_f_pls - time_f_mns
 
     # Position, velocity, co-position, co-velocity error
-    error_pos_vec_o = pos_vec_o_pls - pos_vec_o_mns # trivial
+    error_pos_vec_o = pos_vec_o_pls - pos_vec_o_mns
     error_pos_vec_f = pos_vec_f_pls - pos_vec_f_mns 
-    error_vel_vec_o = vel_vec_o_pls - vel_vec_o_mns # trivial
+    error_vel_vec_o = vel_vec_o_pls - vel_vec_o_mns
     error_vel_vec_f = vel_vec_f_pls - vel_vec_f_mns
 
     # Co-position and co-velocity error
-    error_copos_vec_o = copos_vec_o_pls - copos_vec_o_mns # trivial
-    error_copos_vec_f = copos_vec_f_pls - copos_vec_f_mns # trivial
-    error_covel_vec_o = covel_vec_o_pls - covel_vec_o_mns # trivial
-    error_covel_vec_f = covel_vec_f_pls - covel_vec_f_mns # trivial
+    error_copos_vec_o = copos_vec_o_pls - copos_vec_o_mns
+    error_copos_vec_f = copos_vec_f_pls - copos_vec_f_mns
+    error_covel_vec_o = covel_vec_o_pls - covel_vec_o_mns
+    error_covel_vec_f = covel_vec_f_pls - covel_vec_f_mns
 
     # Hamiltonian error
     error_ham_o = ham_o_pls - ham_o_mns # trivial
@@ -404,14 +404,14 @@ def tpbvp_objective_and_jacobian(
         }
     }
 
-    # Consolidated error vector
+    # Error vector (currently not consolidated)
     error_components = []
     for bnd in ordered_boundaries:
         for var in ordered_variables:
-            if equality_parameters[var][bnd]['mode'] == 'fixed':
-                error_components.append(error_full[var][bnd])
+            # print(f"error {var}_{bnd}: {error_full[var][bnd]}")
+            error_components.append(error_full[var][bnd])
     error = np.hstack(error_components)
-    breakpoint()
+
     # start here: error is correct. need to get rid of trivial zero errors
     if include_jacobian:
         # 4x4 : -d(pos_vec_f_mns, vel_vec_f_mns) / d(copos_vec_o_pls, covel_vec_o_pls)
@@ -433,7 +433,7 @@ def tpbvp_objective_and_jacobian(
     # error = state_costate_f[:4] - np.hstack([pos_vec_f_pls, vel_vec_f_pls])
     # if include_jacobian:
     #     error_jacobian = stm_of[0:4, 4:8]
-    breakpoint()
+
     # Return
     if include_jacobian:
         return error, error_jacobian
