@@ -150,8 +150,8 @@ The problem is summarized:
 | **State** | $\vec{x}(t)$ | | $\vec{x}=[r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y]^T$ |
 | **Control** | $\vec{u}(t)$ | | $\vec{u}=[\Gamma_x \ \ \ \Gamma_y]^T$ |
 | **Dynamics** | $\vec{f}(t,\vec{x},\vec{u})$ | | $\vec{f}=[v_x \ \ \ v_y \ \ \ \Gamma_x \ \ \ \Gamma_y]^T$  |
-| **Equality Constraints** | $\Theta(t)$ | initial | $t_o=t_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ |
-| | $\Psi(t)$ | final | $t_f=t_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ |
+| **Equality Constraints** | $\Theta(t)$ | | $t_o=t_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ |
+| | $\Psi(t)$ | | $t_f=t_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ |
 | **Inequality Constraints** | | min fuel | $\Gamma(t) \leq \Gamma_{\max}$ | or $T \leq T_{\max}$ | |
 | | | min energy | $\Gamma(t) \leq \Gamma_{\max}$ | or $T \leq T_{\max}$ | or unconstrained |
 
