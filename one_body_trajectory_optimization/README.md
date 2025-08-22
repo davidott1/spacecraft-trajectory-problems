@@ -156,7 +156,7 @@ The indirect method means to derive the optimal control law a Hamiltonian `H` mu
 
 The Hamiltonian `H` is in general
 ```math
-H = L + lambda_vec^T f(x, u)
+H = L + \vec{\lambda}^T \vec{f}(x, u)
 ```
 and more specifically in component form, 
 ```
