@@ -157,9 +157,6 @@ python main.py input/example/10.json output/example
 \text{indeterminate} & \text{if } \$ = 0 \\
 \Gamma_{\min} & \text{if } \$ < 0
 \end{cases}
-```
-where
-```math
 \$ = \lambda_v - 1
 ```
 
