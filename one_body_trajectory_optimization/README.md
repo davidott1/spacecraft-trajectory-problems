@@ -139,6 +139,8 @@ The optimal control problem is solved using an indirect method. The objective `J
 The problem is summarized:
 // ...existing code...
 The problem is summarized:
+| Category | Description |
+| :--- | :--- |
 | **Objective** $\boldsymbol{J}$ | min fuel: $J=\int_{t_0}^{t_f}\Gamma\,dt$ <br> min energy: $J=\int_{t_0}^{t_f}\tfrac{1}{2}\Gamma^2\,dt$ |
 | **Timespan** $\boldsymbol{t}$ | $t \in [t_0, t_f]$ |
 | **State** $\boldsymbol{x}(t)$ | $\boldsymbol{x}=[r_x,r_y,v_x,v_y]^T$ |
