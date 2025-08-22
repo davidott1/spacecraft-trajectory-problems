@@ -134,15 +134,9 @@ python main.py input/example/10.json output/example
 ---
 ## Optimal Control Problem Derivation
 
-The optimal control problem is solved using an indirect method. The objective `J` minimizes fuel and energy, representative as the integral of magnitude `Gamma` or square `Gamma^2` of thrust acceleration, respectively. The one-body dynamics `x_vec_dot` are free from natural acceleration with control is thrust acceleration `Gamma_vec`. The equality conditions or boundary conditions are variable: flight time is fixed or free, as well as final position and velocity. Flight timee is `delta_t = t_f - t_o = t_f`. The initial time is assumed to be `t_o = 0`. Free initial position and velocity is not implemented, but the problem structure is reversible in time. The inequality conditions are variables as well. For minimum energy problems, thrust or thrust acceleration is either unconstrained or less than a maximum. For minimum fuel problems, thrust or thrust acceleration is necessarily less than a maximum. The coordinate system is Cartesian in two dimensions and with respect to an inertial frame.
+The optimal control problem is solved using an indirect method. The objective `J` minimizes fuel and energy, representative as the integral of magnitude `Gamma` or square `Gamma^2` of thrust acceleration, respectively. The one-body dynamics `x_vec_dot` are free from natural acceleration with control is thrust acceleration `Gamma_vec`. The equality conditions or boundary conditions are variable: flight time is fixed or free, as well as final position and velocity. Flight timee is `delta_t = t_f - t_o = t_f`. The initial time is assumed to be `t_o = 0`. Free initial position and velocity is not implemented, but the problem structure is reversible in time. The inequality conditions are variables as well. For minimum energy problems, thrust or thrust acceleration is either unconstrained or less than a maximum. For minimum fuel problems, thrust or thrust acceleration is necessarily less than a maximum. The coordinate system is Cartesian in two dimensions and with respect to an inertial frame. The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy.
 
 The problem is summarized:
-// ...existing code...
-The problem is summarized:
-
-// ...existing code...
-The problem is summarized:
-
 | System <br> Component | <br> Symbol | Minimization <br> Type | <br> Expressions | | |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Objective** | $J$ | fuel | $J = \int_{t_o}^{t_f} \Gamma \ dt$ |
@@ -155,33 +149,6 @@ The problem is summarized:
 | | $\vec{\Theta}_f$ | | $t_f=t_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ |
 | **Inequality Constraints** | $\Psi(t)$ | fuel | $\Gamma(t) \leq \Gamma_{\max}$ | or $T \leq T_{\max}$ | |
 | | | energy | $\Gamma(t) \leq \Gamma_{\max}$ | or $T \leq T_{\max}$ | or unconstrained |
-
-### Constraints
-
-**Equality Conditions**
-
-$$
-\begin{aligned}
-\text{Initial:} && t_0 &= t_{0,s} \\
-&& \mathbf{r}(t_0) &= \mathbf{r}_{0,s} \\
-&& \mathbf{v}(t_0) &= \mathbf{v}_{0,s}
-\end{aligned}
-\qquad \qquad
-\begin{aligned}
-\text{Final:} && t_f &= t_{f,s} \\
-&& \mathbf{r}(t_f) &= \mathbf{r}_{f,s} \\
-&& \mathbf{v}(t_f) &= \mathbf{v}_{f,s}
-\end{aligned}
-$$
-
-**Inequality Conditions**
-
-* **min fuel**: $\lvert\Gamma(t)\rvert \le \Gamma_{\max} \text{ or } T \le T_{\max}$
-* **min energy**: $\lvert\Gamma(t)\rvert \le \Gamma_{\max} \text{ or } T \le T_{\max} \text{ or unconstrained}$
-
----
-
-The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy. 
 
 ---
 ### Hamiltonian Formulation
