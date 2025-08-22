@@ -180,7 +180,7 @@ The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \r
 \end{array}
 ```
 
-```
+```math
 \begin{align}
 \dot{\lambda}_{r_x} \!\!\!\!&= -\frac{dH}{dr_x} = 0 \\
 \dot{\lambda}_{r_y} \!\!\!\!&= -\frac{dH}{dr_y} = 0 \\
