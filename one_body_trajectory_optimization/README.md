@@ -151,6 +151,8 @@ The problem is summarized:
 | **Control** | $\underline{u}(t)$ | $\underline{u}=[\Gamma_x \ \ \ \Gamma_y]^T$ |
 | **Dynamics** | $\underline{f}(t,\underline{x},\underline{u})$ | $\underline{f}=[v_x \ \ \ v_y \ \ \ \Gamma_x \ \ \ \Gamma_y]^T$  |
 | **Constraints** <br> **Equality** <br> <br> **Inequality** <br> <br> | $\Theta(t)$ <br> $\Psi(t)$ | <br> Initial : $t_o=t_{os}$ $\quad$ $\underline{r}(t_0)={\underline r}_{os}$ $\quad$ $\underline{r}(t_0)={\underline r}_{a}$ |
+| **Constraints** <br> **Equality** <br><br> **Inequality** <br><br> | $\Theta(t)$ <br> $\Psi(t)$ | $ \text{Initial: } t_o=t_{o,s}\quad \underline{r}(t_0)={\underline r}_{o,s}\quad \underline{v}(t_0)={\underline v}_{o,s} \; \text{;}\; \text{Final: } t_f=t_{f,s}\quad \underline{r}(t_f)={\underline r}_{f,s}\quad \underline{v}(t_f)={\underline v}_{f,s} $ |
+
 
 
 ### Constraints
