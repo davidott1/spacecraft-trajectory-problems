@@ -143,18 +143,18 @@ The problem is summarized:
 // ...existing code...
 The problem is summarized:
 
-| a | b | c | d | e | f |
+| System Component | Symbol | Minimization Type | Expressions | | |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Objective** | $J$ | min fuel | $J = \int_{t_o}^{t_f} \Gamma \ dt$ |
-| | | min energy | $J = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$ |
+| **Objective** | $J$ | fuel | $J = \int_{t_o}^{t_f} \Gamma \ dt$ |
+| | | energy | $J = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$ |
 | **Timespan** | $t$ | | $t \in [t_o, t_f]$ |
 | **State** | $\vec{x}(t)$ | | $\vec{x}=[r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y]^T$ |
 | **Control** | $\vec{u}(t)$ | | $\vec{u}=[\Gamma_x \ \ \ \Gamma_y]^T$ |
 | **Dynamics** | $\vec{f}(t,\vec{x},\vec{u})$ | | $\vec{f}=[v_x \ \ \ v_y \ \ \ \Gamma_x \ \ \ \Gamma_y]^T$  |
 | **Equality Constraints** | $\vec{\Theta}_o$ | | $t_o=t_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ |
 | | $\vec{\Theta}_f$ | | $t_f=t_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ |
-| **Inequality Constraints** | $\Psi(t)$ | min fuel | $\Gamma(t) \leq \Gamma_{\max}$ | or $T \leq T_{\max}$ | |
-| | | min energy | $\Gamma(t) \leq \Gamma_{\max}$ | or $T \leq T_{\max}$ | or unconstrained |
+| **Inequality Constraints** | $\Psi(t)$ | fuel | $\Gamma(t) \leq \Gamma_{\max}$ | or $T \leq T_{\max}$ | |
+| | | energy | $\Gamma(t) \leq \Gamma_{\max}$ | or $T \leq T_{\max}$ | or unconstrained |
 
 ### Constraints
 
