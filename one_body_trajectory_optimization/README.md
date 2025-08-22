@@ -153,9 +153,9 @@ python main.py input/example/10.json output/example
 ```math
 \Gamma_{\text{fuel}} = 
 \begin{cases}
-\Gamma_{\max} & \text{if } S > 0 \\
-\text{indeterminate} & \text{if } S = 0 \\
-\Gamma_{\min} & \text{if } S < 0
+\Gamma_{\max} & \text{if } \$ > 0 \\
+\text{indeterminate} & \text{if } \$ = 0 \\
+\Gamma_{\min} & \text{if } \$ < 0
 \end{cases}
 ```
 where
