@@ -162,7 +162,7 @@ H = L + \vec{\lambda}^\top \vec{f}(x, u)
 The time-derivative of the state $\dot{\vec{x}}$ must conform to the dynamics, so $\dot{\vec{x}} = \vec{f}(t, \vec{x},\vec{u})$. Substituting the dynamics into the Hamilitonian yields
 ```math
 H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma}
-  = \frac{1}{2} (\Gamma_x^2 + \Gamma_y^2) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
+  = \frac{1}{2} \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
 ```
 
 ---
@@ -170,12 +170,12 @@ H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r \vec{v} + \vec{
 From the Hamiltonian, we derive the necessary conditions for optimality using Pontryagin's Minimum Principle, deriving the co-state dynamical equations and the optimal control.
 
 #### Co-state Equations
-The co-state dynamics are given by $\dot{\vec{\lambda}} = -dH/d\vec{x}^\top$.
-```
-lambda_r_x_dot = -dH/dr_x  ==>  lambda_r_x_dot = 0
-lambda_r_y_dot = -dH/dr_y  ==>  lambda_r_y_dot = 0
-lambda_v_x_dot = -dH/dv_x  ==>  lambda_v_x_dot = -lambda_r_x
-lambda_v_y_dot = -dH/dv_y  ==>  lambda_v_y_dot = -lambda_r_y
+The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \right)^\top$.
+```math
+\dot{\lambda}_{r_x} = -\frac{dH}{dr_x}  ==>  lambda_r_x_dot = 0
+\dot{\lambda}_{r_y} = -\frac{dH}{dr_y}  ==>  lambda_r_y_dot = 0
+\dot{\lambda}_{v_x} = -\frac{dH}{dv_x}  ==>  lambda_v_x_dot = -lambda_r_x
+\dot{\lambda}_{v_y} = -\frac{dH}{dv_y}  ==>  lambda_v_y_dot = -lambda_r_y
 ```
 #### Optimal Control
 The optimal control `u_*` must minimize the Hamiltonian. This condition is found by setting the partial derivative of the Hamiltonian with respect to the control to zero, `dH/du = 0`.
