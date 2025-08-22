@@ -153,6 +153,16 @@ The problem is summarized:
 | **Constraints** <br> **Equality** <br> <br> **Inequality** <br> <br> | $\Theta(t)$ <br> $\Psi(t)$ | <br> Initial : $t_o=t_{os}$ $\quad$ $\underline{r}(t_0)={\underline r}_{os}$ $\quad$ $\underline{r}(t_0)={\underline r}_{a}$ |
 | **Constraints** <br> **Equality** <br> <br> **Inequality** <br> <br> | $\Theta(t)$ <br> $\Psi(t)$ | <br> Initial: $t_o=t_{os} \quad \underline{r}(t_0)={\underline r}_{os} \quad \underline{v}(t_0)={\underline v}_{os}$ |
 
+| Category | Symbol | Description |
+| :--- | :--- | :--- |
+| Objective | $J$ | min fuel: $J = \int_{t_o}^{t_f} \Gamma\,dt$ <br> min energy: $J = \int_{t_o}^{t_f} \frac{1}{2}\Gamma^2\,dt$ |
+| Timespan | $t$ | $t \in [t_o, t_f]$ |
+| State | $x(t)$ | $x = [r_x, r_y, v_x, v_y]^T$ |
+| Control | $u(t)$ | $u = [\Gamma_x, \Gamma_y]^T$ |
+| Dynamics | $f(t,x,u)$ | $f = [v_x, v_y, \Gamma_x, \Gamma_y]^T$ |
+| Constraints | | **Equality** <br> Initial: $t_o=t_{os}$, $r(t_0)=r_{os}$, $v(t_0)=v_{os}$ <br> Final: $t_f=t_{fs}$, $r(t_f)=r_{fs}$, $v(t_f)=v_{fs}$ <br><br> **Inequality** <br> min fuel: $|\Gamma(t)| \leq \Gamma_{max}$ or $T \leq T_{max}$ <br> min energy: $|\Gamma(t)| \leq \Gamma_{max}$ or $T \leq T_{max}$ or unconstrained |
+
+
 ### Constraints
 
 **Equality Conditions**
