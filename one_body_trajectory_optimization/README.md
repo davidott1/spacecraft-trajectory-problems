@@ -184,8 +184,8 @@ The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \r
 The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is found by setting the partial derivative of the Hamiltonian with respect to the control to zero, $dH/d\vec{u} = \vec{0}^\top$.
 ```math
 \begin{align}
-&\frac{dH}{d\Gamma_x} = 0 &\to &\Gamma_x + \lambda_{v_x} = 0 &\to \Gamma_{x*} = -\lambda_{v_x} \\
-&\frac{dH}{d\Gamma_y} = 0 &\to &\Gamma_y + \lambda_{v_y} = 0 &\to \Gamma_{y*} = -\lambda_{v_y}
+&\frac{dH}{d\Gamma_x} = 0 &\to &\Gamma_x + \lambda_{v_x} = 0 &\to &\Gamma_{x*} = -\lambda_{v_x} \\
+&\frac{dH}{d\Gamma_y} = 0 &\to &\Gamma_y + \lambda_{v_y} = 0 &\to &\Gamma_{y*} = -\lambda_{v_y}
 \end{align}
 ```
 This result explicitly defines the optimal control inputs in terms of the co-states associated with the velocity components.
