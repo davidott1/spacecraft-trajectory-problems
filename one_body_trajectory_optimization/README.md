@@ -156,11 +156,7 @@ The indirect method means to derive the optimal control law a Hamiltonian `H` mu
 
 The Hamiltonian `H` is in general
 ```math
-H = L + \vec{\lambda}^\top \vec{f}(x, u)
-```
-and more specifically in component form, 
-```math
-H = \frac{1}{2} (\Gamma_x^2 + \Gamma_y^2) + \lambda_{r_x} \dot{r}_x + \lambda_{r_y} \dot{r}_y + \lambda_{v_x} \dot{v}_x + \lambda_{v_y} \dot{v}_y
+H = L + \vec{\lambda}^\top \vec{f}(x, u) = \frac{1}{2} (\Gamma_x^2 + \Gamma_y^2) + \lambda_{r_x} \dot{r}_x + \lambda_{r_y} \dot{r}_y + \lambda_{v_x} \dot{v}_x + \lambda_{v_y} \dot{v}_y
 ```
 The time-derivative of the state `x_vec_dot` must conform to the dynamics, so `x_vec_dot = f(x_vec,u_vec)`. Substituting the dynamics into the Hamilitonian yields
 ```math
