@@ -144,7 +144,7 @@ The problem is summarized:
 The problem is summarized:
 | Category | Description |
 | :--- | :--- |
-| **Objective** $J$ | min fuel: $J=\int_{t_o}^{t_f}\Gamma dt$ <br> min energy: $J=\int_{t_o}^{t_f}\tfrac{1}{2}\Gamma^2\ dt$ |
+| **Objective** $J$ | min fuel: $J = \int_{t_o}^{t_f} \Gamma \ dt$ <br> min energy: $J = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$ |
 | **Timespan** $t$ | $t \in [t_o, t_f]$ |
 | **State** $\underline{x}(t)$ | $\underline{x}=[r_x,r_y,v_x,v_y]^T$ |
 | **Control** $\underline{u}(t)$ | $\underline{u}=[\Gamma_x,\Gamma_y]^T$ |
