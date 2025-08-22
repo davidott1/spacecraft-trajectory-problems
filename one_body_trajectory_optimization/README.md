@@ -159,7 +159,7 @@ python main.py input/example/10.json output/example
 \end{cases}
 ```
 where
-```
+```math
 \$ = \lambda_v - 1
 ```
 
