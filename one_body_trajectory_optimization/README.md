@@ -134,19 +134,19 @@ python main.py input/example/10.json output/example
 ---
 ## Optimal Control Problem Derivation
 
-| System <br> Component | <br> Symbol | Minimization <br> Type | <br> Expressions | | |
-| :---                       | :---                         | :---   | :--- | :--- | :--- |
-| **Objective**              | $J$                          | fuel   | $J = \int_{t_o}^{t_f} \Gamma \ dt$ |
-|                            |                              | energy | $J = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$ |
-| **Timespan**               | $t$                          |        | $t \in [t_o, t_f]$ |
-| **State**                  | $\vec{x}(t)$                 |        | $\vec{x}=[r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y]^\top$ |
-| **Control**                | $\vec{u}(t)$                 |        | $\vec{u}=[\Gamma_x \ \ \ \Gamma_y]^\top$ |
-| **Dynamics**               | $\vec{f}(t,\vec{x},\vec{u})$ |        | $\vec{f}=[v_x \ \ \ v_y \ \ \ \Gamma_x \ \ \ \Gamma_y]^\top$  |
-| **Co-Dynamics**            | $\vec{f}(t,\vec{x},\vec{u})$ |        | $\vec{f}=[v_x \ \ \ v_y \ \ \ \Gamma_x \ \ \ \Gamma_y]^\top$  |
-| **Equality Constraints**   | $\vec{\Theta}_o$             |        | $t_o=t_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ |
-| | $\vec{\Theta}_f$ | | $t_f=t_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ |
-| **Inequality Constraints** | $\Psi(t)$                    | fuel | $\Gamma(t) \leq \Gamma_{\max}$ | or $T \leq T_{\max}$ | |
-|                            | | energy | $\Gamma(t) \leq \Gamma_{\max}$ | or $T \leq T_{\max}$ | or unconstrained |
+| System <br> Component      | <br> Symbol                  | Minimization <br> Type | <br> Expressions                                             |                              |                              |
+| :---                       | :---                         | :---                   | :---                                                         | :--- | :--- |
+| **Objective**              | $J$                          | fuel                   | $J = \int_{t_o}^{t_f} \Gamma \ dt$                           |                              |                              |
+|                            |                              | energy                 | $J = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$            |                              |                              |
+| **Timespan**               | $t$                          |                        | $t \in [t_o, t_f]$                                           |                              |                              |
+| **State**                  | $\vec{x}(t)$                 |                        | $\vec{x}=[r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y]^\top$           |                              |                              |
+| **Control**                | $\vec{u}(t)$                 |                        | $\vec{u}=[\Gamma_x \ \ \ \Gamma_y]^\top$                     |                              |                              |
+| **Dynamics**               | $\vec{f}(t,\vec{x},\vec{u})$ |                        | $\vec{f}=[v_x \ \ \ v_y \ \ \ \Gamma_x \ \ \ \Gamma_y]^\top$ |                              |                              |
+| **Co-Dynamics**            | $\vec{f}(t,\vec{x},\vec{u})$ |                        | $\vec{f}=[v_x \ \ \ v_y \ \ \ \Gamma_x \ \ \ \Gamma_y]^\top$ |                              |                              |
+| **Equality Constraints**   | $\vec{\Theta}_o$             |                        | $t_o=t_{os}$                                                 | $\vec{r}(t_o)={\vec r}_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ |
+|                            | $\vec{\Theta}_f$             |                        | $t_f=t_{fs}$                                                 | $\vec{r}(t_f)={\vec r}_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ |
+| **Inequality Constraints** | $\Psi(t)$                    | fuel                   | $\Gamma(t) \leq \Gamma_{\max}$                               | or $T \leq T_{\max}$         |                              |
+|                            |                              | energy                 | $\Gamma(t) \leq \Gamma_{\max}$                               | or $T \leq T_{\max}$         | or unconstrained             |
 
 The optimal control problem is solved using an indirect method. The objective `J` minimizes fuel and energy, representative as the integral of magnitude `Gamma` or square `Gamma^2` of thrust acceleration, respectively. The one-body dynamics `x_vec_dot` are free from natural acceleration with control is thrust acceleration `Gamma_vec`. The equality conditions or boundary conditions are variable: flight time is fixed or free, as well as final position and velocity. Flight timee is `delta_t = t_f - t_o = t_f`. The initial time is assumed to be `t_o = 0`. Free initial position and velocity is not implemented, but the problem structure is reversible in time. The inequality conditions are variables as well. For minimum energy problems, thrust or thrust acceleration is either unconstrained or less than a maximum. For minimum fuel problems, thrust or thrust acceleration is necessarily less than a maximum. The coordinate system is Cartesian in two dimensions and with respect to an inertial frame. The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy.
 
