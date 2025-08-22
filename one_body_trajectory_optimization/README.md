@@ -143,7 +143,7 @@ The problem is summarized:
 // ...existing code...
 The problem is summarized:
 
-| System Component | Symbol | Minimization Type | Expressions | | |
+| System <br> Component | <br> Symbol | Minimization <br> Type | <br> Expressions | | |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Objective** | $J$ | fuel | $J = \int_{t_o}^{t_f} \Gamma \ dt$ |
 | | | energy | $J = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$ |
