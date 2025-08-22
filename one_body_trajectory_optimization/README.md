@@ -150,7 +150,9 @@ The problem is summarized:
 | **State** | $\underline{x}(t)$ | | $\underline{x}=[r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y]^T$ |
 | **Control** | $\underline{u}(t)$ | | $\underline{u}=[\Gamma_x \ \ \ \Gamma_y]^T$ |
 | **Dynamics** | $\underline{f}(t,\underline{x},\underline{u})$ | | $\underline{f}=[v_x \ \ \ v_y \ \ \ \Gamma_x \ \ \ \Gamma_y]^T$  |
-| **Constraints** | $\Theta(t)$ <br> $\Psi(t)$ | **Equality** <br> Initial <br> Final | $t_o=t_{os}$ <br> $t_o=t_{os}$ | $\vec{r}(t_0)={\vec r}_{os}$ <br> $\vec{r}(t_0)={\vec r}_{os}$ | $\vec{r}(t_0)={\vec r}_{a}$ |
+| **Constraints** | $\Theta(t)$ <br> $\Psi(t)$ | **Equality** Initial | $t_o=t_{os}$ | $\vec{r}(t_0)={\vec r}_{os}$ | $\vec{r}(t_0)={\vec r}_{a}$ |
+| | $\Theta(t)$ <br> $\Psi(t)$ | **Equality** Initial | $t_o=t_{os}$ | $\vec{r}(t_0)={\vec r}_{os}$ | $\vec{r}(t_0)={\vec r}_{a}$ |
+
 
 | Category | Symbol | Description |
 | :--- | :--- | :--- |
