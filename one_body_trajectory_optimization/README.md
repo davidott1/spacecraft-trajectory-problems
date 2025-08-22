@@ -142,9 +142,9 @@ The problem is summarized:
 | **Objective** | $J$ | fuel | $J = \int_{t_o}^{t_f} \Gamma \ dt$ |
 | | | energy | $J = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$ |
 | **Timespan** | $t$ | | $t \in [t_o, t_f]$ |
-| **State** | $\vec{x}(t)$ | | $\vec{x}=[r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y]^T$ |
-| **Control** | $\vec{u}(t)$ | | $\vec{u}=[\Gamma_x \ \ \ \Gamma_y]^T$ |
-| **Dynamics** | $\vec{f}(t,\vec{x},\vec{u})$ | | $\vec{f}=[v_x \ \ \ v_y \ \ \ \Gamma_x \ \ \ \Gamma_y]^T$  |
+| **State** | $\vec{x}(t)$ | | $\vec{x}=[r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y]^\top$ |
+| **Control** | $\vec{u}(t)$ | | $\vec{u}=[\Gamma_x \ \ \ \Gamma_y]^\top$ |
+| **Dynamics** | $\vec{f}(t,\vec{x},\vec{u})$ | | $\vec{f}=[v_x \ \ \ v_y \ \ \ \Gamma_x \ \ \ \Gamma_y]^\top$  |
 | **Equality Constraints** | $\vec{\Theta}_o$ | | $t_o=t_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ |
 | | $\vec{\Theta}_f$ | | $t_f=t_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ |
 | **Inequality Constraints** | $\Psi(t)$ | fuel | $\Gamma(t) \leq \Gamma_{\max}$ | or $T \leq T_{\max}$ | |
@@ -156,7 +156,7 @@ The indirect method means to derive the optimal control law a Hamiltonian `H` mu
 
 The Hamiltonian `H` is in general
 ```math
-H = L + \vec{\lambda}^T \vec{f}(x, u)
+H = L + \vec{\lambda}^\top \vec{f}(x, u)
 ```
 and more specifically in component form, 
 ```
