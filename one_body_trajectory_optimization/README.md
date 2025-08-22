@@ -180,12 +180,14 @@ The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \r
 \end{array}
 ```
 
+```
 \begin{align}
 \dot{\lambda}_{r_x} \!\!\!\!&= -\frac{dH}{dr_x} = 0 \\
 \dot{\lambda}_{r_y} \!\!\!\!&= -\frac{dH}{dr_y} = 0 \\
 \dot{\lambda}_{v_x} \!\!\!\!&= -\frac{dH}{dv_x} = -\lambda_{r_x} \\
 \dot{\lambda}_{v_y} \!\!\!\!&= -\frac{dH}{dv_y} = -\lambda_{r_y}
 \end{align}
+```
 
 #### Optimal Control
 The optimal control `u_*` must minimize the Hamiltonian. This condition is found by setting the partial derivative of the Hamiltonian with respect to the control to zero, `dH/du = 0`.
