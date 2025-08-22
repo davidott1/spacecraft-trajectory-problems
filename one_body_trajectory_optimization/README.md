@@ -144,13 +144,19 @@ The problem is summarized:
 The problem is summarized:
 | Category | Description |
 | :--- | :--- |
-| **Objective** $J$ | min fuel: $J=\int_{t_0}^{t_f}\Gamma\,dt$ <br> min energy: $J=\int_{t_0}^{t_f}\tfrac{1}{2}\Gamma^2\,dt$ |
-| **Timespan** $t$ | $t \in [t_0, t_f]$ |
+| **Objective** $J$ | min fuel: $J=\int_{t_o}^{t_f}\Gamma\,dt$ <br> min energy: $J=\int_{t_o}^{t_f}\tfrac{1}{2}\Gamma^2\,dt$ |
+| **Timespan** $t$ | $t \in [t_o, t_f]$ |
 | **State** $\underline{x}(t)$ | $\underline{x}=[r_x,r_y,v_x,v_y]^T$ |
 | **Control** $\underline{u}(t)$ | $\underline{u}=[\Gamma_x,\Gamma_y]^T$ |
 | **Dynamics** $\underline{f}(t,\underline{x},\underline{u})$ | $\underline{f}=[v_x,v_y,\Gamma_x,\Gamma_y]^T$ |
-| **Constraints** | **Equality** <br> _Initial_: $t_0=t_{0,s},\ \underline{r}(t_0)=\underline{r}_{0,s},\ \underline{v}(t_0)=\underline{v}_{0,s}$ <br> _Final_: $t_f=t_{f,s},\ \underline{r}(t_f)=\underline{r}_{f,s},\ \underline{v}(t_f)=\underline{v}_{f,s}$ <br> **Inequality** <br> _min fuel_: $|\underline{\Gamma}(t)|\le \Gamma_{\max}$ or $T\le T_{\max}$ <br> _min energy_: $|\underline{\Gamma}(t)|\le \Gamma_{\max}$ or $T\le T_{\max}$ or unconstrained |
-// ...existing code...
+| **Constraints** | 
+**Equality** <br> 
+Initial : $t_o=t_{o,s},\ r(t_0)=r_{o,s},\ v(t_0)=v_{0,s}$ <br> 
+Final   : $t_f=t_{f,s},\ r(t_f)=r_{f,s},\ v(t_f)=v_{f,s}$ <br> 
+**Inequality** <br> 
+min fuel   : $|\Gamma(t)|\le \Gamma_{\max}$ or $T\le T_{\max}$ <br> 
+min energy : $|\underline{\Gamma}(t)|\le \Gamma_{\max}$ or $T\le T_{\max}$ or unconstrained |
+
 
 ### Constraints
 
