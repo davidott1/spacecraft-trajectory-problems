@@ -161,8 +161,8 @@ H = L + \vec{\lambda}^\top \vec{f}(x, u)
 ```
 The time-derivative of the state $\dot{\vec{x}}$ must conform to the dynamics, so $\dot{\vec{x}} = \vec{f}(t, \vec{x},\vec{u})$. Substituting the dynamics into the Hamilitonian yields
 ```math
-H = \frac{1}{2} (\Gamma_x^2 + \Gamma_y^2) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
-  = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma}
+H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma}
+  = \frac{1}{2} (\Gamma_x^2 + \Gamma_y^2) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
 ```
 
 ---
