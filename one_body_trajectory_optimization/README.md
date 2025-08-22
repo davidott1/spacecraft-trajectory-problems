@@ -173,20 +173,11 @@ From the Hamiltonian, we derive the necessary conditions for optimality using Po
 The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \right)^\top$.
 ```math
 \begin{array}{rcl}
-\dot{\lambda}_{r_x} &=& -\frac{dH}{dr_x} = \dot{\lambda}_{r_x} = 0              \\
-\dot{\lambda}_{r_y} &=& -\frac{dH}{dr_y} = \dot{\lambda}_{r_y} = 0              \\
-\dot{\lambda}_{v_x} &=& -\frac{dH}{dv_x} = \dot{\lambda}_{r_x} = -\lambda_{r_x} \\
-\dot{\lambda}_{v_y} &=& -\frac{dH}{dv_y} = \dot{\lambda}_{v_y} = -\lambda_{r_y}
+\dot{\lambda}_{r_x} &=& -\frac{dH}{dr_x} \to \dot{\lambda}_{r_x} = 0              \\
+\dot{\lambda}_{r_y} &=& -\frac{dH}{dr_y} \to \dot{\lambda}_{r_y} = 0              \\
+\dot{\lambda}_{v_x} &=& -\frac{dH}{dv_x} \to \dot{\lambda}_{r_x} = -\lambda_{r_x} \\
+\dot{\lambda}_{v_y} &=& -\frac{dH}{dv_y} \to \dot{\lambda}_{v_y} = -\lambda_{r_y}
 \end{array}
-```
-
-```math
-\begin{align}
-\dot{\lambda}_{r_x} \!\!\!\!&= -\frac{dH}{dr_x} = 0 \\
-\dot{\lambda}_{r_y} \!\!\!\!&= -\frac{dH}{dr_y} = 0 \\
-\dot{\lambda}_{v_x} \!\!\!\!&= -\frac{dH}{dv_x} = -\lambda_{r_x} \\
-\dot{\lambda}_{v_y} \!\!\!\!&= -\frac{dH}{dv_y} = -\lambda_{r_y}
-\end{align}
 ```
 
 #### Optimal Control
