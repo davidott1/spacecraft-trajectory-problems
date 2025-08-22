@@ -163,6 +163,32 @@ Constraints
     min energy : Gamma <= Gamma_max or T <= T_max or unconstrained
 ```
 
+```math
+\begin{aligned}
+\textbf{Objective} \\
+&\text{min fuel: } J = \int L\,dt = \int \Gamma \, dt \\
+&\text{min energy: } J = \int L\,dt = \int \tfrac{1}{2}\Gamma^{2}\, dt \\
+\\
+\textbf{Timespan} \\
+& t \in [t_0, t_f] \\
+\\
+\textbf{State} \\
+& \mathbf{x} = [r_x, r_y, v_x, v_y]^T \\
+\\
+\textbf{Control} \\
+& \mathbf{u} = [\Gamma_x, \Gamma_y]^T \\
+\\
+\textbf{Dynamics} \\
+& \mathbf{f} = [v_x, v_y, \Gamma_x, \Gamma_y]^T \\
+\\
+\textbf{Constraints} \\
+\text{Equality:} \\
+& t_0 = t_{0,s},\ \mathbf{r}(t_0)=\mathbf{r}_{0,s},\ \mathbf{v}(t_0)=\mathbf{v}_{0,s} \\
+& t_f = t_{f,s},\ \mathbf{r}(t_f)=\mathbf{r}_{f,s},\ \mathbf{v}(t_f)=\mathbf{v}_{f,s} \\
+\text{Inequality:} \\
+& \text{min fuel: } |\Gamma(t)| \le \Gamma_{\max} \text{ or } T \le T_{\max} \\
+& \text{min energy: } |\Gamma(t)| \le \Gamma_{\max} \text{ or } T \le T_{\max} \text{ or unconstrained}
+
 | Category | Description |
 | :--- | :--- |
 | **Objective** $J$ | min fuel: &nbsp; &nbsp; $J = \int_{t_0}^{t_f} \Gamma \, dt$ <br> min energy: $J = \int_{t_0}^{t_f} \frac{1}{2} \Gamma^2 \, dt$ |
@@ -171,6 +197,7 @@ Constraints
 | **Control** $\mathbf{u}(t)$ | $\mathbf{u} = [\Gamma_x, \Gamma_y]^T$ |
 | **Dynamics** $\mathbf{f}(t, \mathbf{x}, \mathbf{u})$ | $\mathbf{f} = [v_x, v_y, \Gamma_x, \Gamma_y]^T$ |
 | **Constraints** | **Equality** <br> _Initial_: $t_0 = t_{0,s}, \mathbf{r}(t_0) = \mathbf{r}_{0,s}, \mathbf{v}(t_0) = \mathbf{v}_{0,s}$ <br> _Final_: &nbsp; &nbsp; $t_f = t_{f,s}, \mathbf{r}(t_f) = \mathbf{r}_{f,s}, \mathbf{v}(t_f) = \mathbf{v}_{f,s}$ <br> **Inequality** <br> _min fuel_: &nbsp; &nbsp; $\lvert\Gamma(t)\rvert \le \Gamma_{\max} \text{ or } T \le T_{\max}$ <br> _min energy_: $\lvert\Gamma(t)\rvert \le \Gamma_{\max} \text{ or } T \le T_{\max} \text{ or unconstrained}$ |
+
 
 ```
 Objective
