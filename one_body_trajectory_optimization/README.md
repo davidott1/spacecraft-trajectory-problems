@@ -181,7 +181,7 @@ The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \r
 ```
 
 #### Optimal Control
-The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is found by setting the partial derivative of the Hamiltonian with respect to the control to zero, $dH/d\vec{u} = \vec{0}^\top$: $a \mathbin{/} b$
+The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is found by setting the partial derivative of the Hamiltonian with respect to the control to zero, $dH/d\vec{u} = \vec{0}^\top$:
 ```math
 \begin{align}
 &\frac{dH}{d\Gamma_x} = 0 &\to &\Gamma_x + \lambda_{v_x} = 0 &\to &\Gamma_{x*} = -\lambda_{v_x} \\
@@ -195,11 +195,13 @@ This result explicitly defines the optimal control inputs in terms of the co-sta
 By substituting the optimal control law back into the state and co-state equations, we get a complete system of first-order ordinary differential equations (ODEs).
 
 #### State Equations (4)
-```
-r_x_dot = v_x
-r_y_dot = v_y
-v_x_dot = -lambda_v_x
-v_y_dot = -lambda_v_y
+```math
+\begin{align}
+&\dot{r}_x = v_x
+&\dot{r}_y = v_y
+&\dot{v}_x = -lambda_v_x
+&\dot{v}_y = -lambda_v_y
+\end{align}
 ```
 
 #### Co-state Equations (4)
