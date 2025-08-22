@@ -174,9 +174,9 @@ The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \r
 ```math
 \begin{align}
 \dot{\lambda}_{r_x} \hspace{-40pt}=& -\frac{dH}{dr_x} = \dot{\lambda}_{r_x} = 0              \\
-\dot{\lambda}_{r_y} \hspace{-40pt}&= -\frac{dH}{dr_y} = \dot{\lambda}_{r_y} = 0              \\
-\dot{\lambda}_{v_x} \hspace{-40pt}&= -\frac{dH}{dv_x} = \dot{\lambda}_{r_x} = -\lambda_{r_x} \\
-\dot{\lambda}_{v_y} \hspace{-40pt}&= -\frac{dH}{dv_y} = \dot{\lambda}_{v_y} = -\lambda_{r_y}
+\dot{\lambda}_{r_y} \hspace{-40pt}=& -\frac{dH}{dr_y} = \dot{\lambda}_{r_y} = 0              \\
+\dot{\lambda}_{v_x} \hspace{-40pt}=& -\frac{dH}{dv_x} = \dot{\lambda}_{r_x} = -\lambda_{r_x} \\
+\dot{\lambda}_{v_y} \hspace{-40pt}=& -\frac{dH}{dv_y} = \dot{\lambda}_{v_y} = -\lambda_{r_y}
 \end{align}
 ```
 #### Optimal Control
