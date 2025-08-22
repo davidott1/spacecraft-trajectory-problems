@@ -137,14 +137,15 @@ python main.py input/example/10.json output/example
 The optimal control problem is solved using an indirect method. The objective `J` minimizes fuel and energy, representative as the integral of magnitude `Gamma` or square `Gamma^2` of thrust acceleration, respectively. The one-body dynamics `x_vec_dot` are free from natural acceleration with control is thrust acceleration `Gamma_vec`. The equality conditions or boundary conditions are variable: flight time is fixed or free, as well as final position and velocity. Flight timee is `delta_t = t_f - t_o = t_f`. The initial time is assumed to be `t_o = 0`. Free initial position and velocity is not implemented, but the problem structure is reversible in time. The inequality conditions are variables as well. For minimum energy problems, thrust or thrust acceleration is either unconstrained or less than a maximum. For minimum fuel problems, thrust or thrust acceleration is necessarily less than a maximum. The coordinate system is Cartesian in two dimensions and with respect to an inertial frame.
 
 The problem is summarized:
-| Category | Description |
-| :--- | :--- |
-| **Objective** $J$ | min fuel: &nbsp; &nbsp; $J = \int_{t_0}^{t_f} \Gamma \, dt$ <br> min energy: $J = \int_{t_0}^{t_f} \frac{1}{2} \Gamma^2 \, dt$ |
-| **Timespan** $t$ | $t \in [t_0, t_f]$ |
-| **State** $\mathbf{x}(t)$ | $\mathbf{x} = [r_x, r_y, v_x, v_y]^T$ |
-| **Control** $\mathbf{u}(t)$ | $\mathbf{u} = [\Gamma_x, \Gamma_y]^T$ |
-| **Dynamics** $\mathbf{f}(t, \mathbf{x}, \mathbf{u})$ | $\mathbf{f} = [v_x, v_y, \Gamma_x, \Gamma_y]^T$ |
-| **Constraints** | **Equality** <br> _Initial_: $t_0 = t_{0,s}, \mathbf{r}(t_0) = \mathbf{r}_{0,s}, \mathbf{v}(t_0) = \mathbf{v}_{0,s}$ <br> _Final_: &nbsp; &nbsp; $t_f = t_{f,s}, \mathbf{r}(t_f) = \mathbf{r}_{f,s}, \mathbf{v}(t_f) = \mathbf{v}_{f,s}$ <br> **Inequality** <br> _min fuel_: &nbsp; &nbsp; $\lvert\Gamma(t)\rvert \le \Gamma_{\max} \text{ or } T \le T_{\max}$ <br> _min energy_: $\lvert\Gamma(t)\rvert \le \Gamma_{\max} \text{ or } T \le T_{\max} \text{ or unconstrained}$ |
+// ...existing code...
+The problem is summarized:
+| **Objective** $\boldsymbol{J}$ | min fuel: $J=\int_{t_0}^{t_f}\Gamma\,dt$ <br> min energy: $J=\int_{t_0}^{t_f}\tfrac{1}{2}\Gamma^2\,dt$ |
+| **Timespan** $\boldsymbol{t}$ | $t \in [t_0, t_f]$ |
+| **State** $\boldsymbol{x}(t)$ | $\boldsymbol{x}=[r_x,r_y,v_x,v_y]^T$ |
+| **Control** $\boldsymbol{u}(t)$ | $\boldsymbol{u}=[\Gamma_x,\Gamma_y]^T$ |
+| **Dynamics** $\boldsymbol{f}(t,\boldsymbol{x},\boldsymbol{u})$ | $\boldsymbol{f}=[v_x,v_y,\Gamma_x,\Gamma_y]^T$ |
+| **Constraints** | **Equality** <br> _Initial_: $t_0=t_{0,s},\ \boldsymbol{r}(t_0)=\boldsymbol{r}_{0,s},\ \boldsymbol{v}(t_0)=\boldsymbol{v}_{0,s}$ <br> _Final_: $t_f=t_{f,s},\ \boldsymbol{r}(t_f)=\boldsymbol{r}_{f,s},\ \boldsymbol{v}(t_f)=\boldsymbol{v}_{f,s}$ <br> **Inequality** <br> _min fuel_: $|\Gamma(t)|\le \Gamma_{\max}$ or $T\le T_{\max}$ <br> _min energy_: $|\Gamma(t)|\le \Gamma_{\max}$ or $T\le T_{\max}$ or unconstrained |
+// ...existing code...
 
 ### Constraints
 
