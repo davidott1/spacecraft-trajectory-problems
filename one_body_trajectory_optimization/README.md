@@ -152,11 +152,11 @@ python main.py input/example/10.json output/example
 
 ```math
 \Gamma_{\text{fuel}} = 
-\begin{cases}
+\begin{bmatrix}
 \Gamma_{\max} & \text{if } \$ > 0 \\
 \text{indeterminate} & \text{if } \$ = 0 \\
 \Gamma_{\min} & \text{if } \$ < 0
-\end{cases}
+\end{bmatrix}
 \text{and} \ \ \ \ \ \$ = \lambda_v - 1
 ```
 
