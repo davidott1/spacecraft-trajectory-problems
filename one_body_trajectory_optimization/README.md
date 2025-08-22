@@ -207,10 +207,10 @@ By substituting the optimal control law back into the state and co-state equatio
 #### Co-state Equations (4)
 ```math
 \begin{align}
-&\dot{\lambda}_{r_x} = 0
-&\dot{\lambda}_{r_y} = 0
-&\dot{\lambda}_{v_x} = -\lambda_{r_x}
-&\dot{\lambda}_{v_y} = -\lambda_{r_y}
+&\dot{\lambda}_{r_x} = 0 \\
+&\dot{\lambda}_{r_y} = 0 \\
+&\dot{\lambda}_{v_x} = -\lambda_{r_x} \\
+&\dot{\lambda}_{v_y} = -\lambda_{r_y} \\
 \end{align}
 ```
 
