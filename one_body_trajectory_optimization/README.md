@@ -143,13 +143,13 @@ The problem is summarized:
 // ...existing code...
 The problem is summarized:
 
-| a | b | c | | | |
+| a | b | c | d | e | f |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Objective** | $J$ | min fuel <br> min energy | $J = \int_{t_o}^{t_f} \Gamma \ dt$ <br> $J = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$ |
-| **Timespan** | $t$ | $t \in [t_o, t_f]$ |
-| **State** | $\underline{x}(t)$ | $\underline{x}=[r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y]^T$ |
-| **Control** | $\underline{u}(t)$ | $\underline{u}=[\Gamma_x \ \ \ \Gamma_y]^T$ |
-| **Dynamics** | $\underline{f}(t,\underline{x},\underline{u})$ | $\underline{f}=[v_x \ \ \ v_y \ \ \ \Gamma_x \ \ \ \Gamma_y]^T$  |
+| **Timespan** | $t$ | | $t \in [t_o, t_f]$ |
+| **State** | $\underline{x}(t)$ | | $\underline{x}=[r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y]^T$ |
+| **Control** | $\underline{u}(t)$ | | $\underline{u}=[\Gamma_x \ \ \ \Gamma_y]^T$ |
+| **Dynamics** | $\underline{f}(t,\underline{x},\underline{u})$ | | $\underline{f}=[v_x \ \ \ v_y \ \ \ \Gamma_x \ \ \ \Gamma_y]^T$  |
 | **Constraints** <br> **Equality** <br> <br> **Inequality** <br> <br> | $\Theta(t)$ <br> $\Psi(t)$ | <br> Initial : $t_o=t_{os} <br> \vec{r}(t_0)={\vec r}_{os} <br> \vec{r}(t_0)={\vec r}_{a}$ |
 
 | Category | Symbol | Description |
