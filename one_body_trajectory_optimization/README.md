@@ -159,7 +159,7 @@ The problem is summarized:
 | State | $\vec{x}(t)$ | $\vec{x} = [r_x, r_y, v_x, v_y]^T$ |
 | Control | $\vec{u}(t)$ | $\vec{u} = [\Gamma_x, \Gamma_y]^T$ |
 | Dynamics | $\vec{f}(t,\vec{x},\vec{u})$ | $\vec{f} = [v_x, v_y, \Gamma_x, \Gamma_y]^T$ |
-| Constraints | | **Equality** <br> Initial: $t_o=t_{o,s}$, $\vec{r}(t_0)=\vec{r}_{o,s}$, $\vec{v}(t_0)=\vec{v}_{o,s}$ <br> Final: $t_f=t_{f,s}$, $\vec{r}(t_f)=\vec{r}_{f,s}$, $\vec{v}(t_f)=\vec{v}_{f,s}$ <br><br> **Inequality** <br> min fuel: $|\Gamma(t)| \leq \Gamma_{\max}$ or $T \leq T_{\max}$ <br> min energy: $|\Gamma(t)| \leq \Gamma_{\max}$ or $T \leq T_{\max}$ or unconstrained |
+| Constraints | | **Equality** <br> Initial: $t_o = t_{o,s}$, $\vec{r}(t_0)=\vec{r}_{o,s}$, $\vec{v}(t_0)=\vec{v}_{o,s}$ <br> Final: $t_f = t_{f,s}$, $\vec{r}(t_f)=\vec{r}_{f,s}$, $\vec{v}(t_f)=\vec{v}_{f,s}$ <br><br> **Inequality** <br> min fuel: $|\Gamma(t)| \leq \Gamma_{\max}$ or $T \leq T_{\max}$ <br> min energy: $|\Gamma(t)| \leq \Gamma_{\max}$ or $T \leq T_{\max}$ or unconstrained |
 
 ### Constraints
 
