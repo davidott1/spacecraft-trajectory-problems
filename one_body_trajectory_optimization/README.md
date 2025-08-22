@@ -150,9 +150,12 @@ The problem is summarized:
 | **State** | $\vec{x}(t)$ | | $\vec{x}=[r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y]^T$ |
 | **Control** | $\vec{u}(t)$ | | $\vec{u}=[\Gamma_x \ \ \ \Gamma_y]^T$ |
 | **Dynamics** | $\vec{f}(t,\vec{x},\vec{u})$ | | $\vec{f}=[v_x \ \ \ v_y \ \ \ \Gamma_x \ \ \ \Gamma_y]^T$  |
-| **Constraints** | $\Theta(t)$ | **Equality** Initial | $t_o=t_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ |
-| | $\Psi(t)$ | **Equality** Final | $t_f=t_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ |
-| | | **Inequality** min fuel: $|\Gamma(t)| \leq \Gamma_{\max}$ or $T \leq T_{\max}$ <br> min energy: $|\Gamma(t)| \leq \Gamma_{\max}$ or $T \leq T_{\max}$ or unconstrained |
+| **Constraints** | $\Theta(t)$ | equality initial | $t_o=t_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ |
+| | $\Psi(t)$ | equality final | $t_f=t_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ |
+| | | inequality min fuel | $\Gamma(t) \leq \Gamma_{\max}$ or $T \leq T_{\max}$ |
+
+
+min energy: $|\Gamma(t)| \leq \Gamma_{\max}$ or $T \leq T_{\max}$ or unconstrained
 
 | Category | Symbol | Description |
 | :--- | :--- | :--- |
