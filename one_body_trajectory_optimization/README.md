@@ -163,6 +163,8 @@ Constraints
     min energy : Gamma <= Gamma_max or T <= T_max or unconstrained
 ```
 
+
+---
 ```math
 \begin{aligned}
 \textbf{Objective} \\
@@ -188,6 +190,11 @@ Constraints
 \text{Inequality:} \\
 & \text{min fuel: } |\Gamma(t)| \le \Gamma_{\max} \text{ or } T \le T_{\max} \\
 & \text{min energy: } |\Gamma(t)| \le \Gamma_{\max} \text{ or } T \le T_{\max} \text{ or unconstrained}
+\end{aligned}
+```
+---
+
+
 
 | Category | Description |
 | :--- | :--- |
