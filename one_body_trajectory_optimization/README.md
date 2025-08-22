@@ -138,7 +138,7 @@ python main.py input/example/10.json output/example
 | :-                         | :-                           | :-                     | :-                                                           | :-                           | :-                           |
 | **Objective**              | $J$                          | fuel                   | $J = \int_{t_o}^{t_f} \Gamma \ dt$                           |                              |                              |
 |                            |                              | energy                 | $J = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$            |                              |                              |
-| **Timespan**               | $t$                          |                        | $t \in [t_o, t_f]$                                           |                              |                              |
+| **Timespan**               | $t$                          |                        | $t \in [t_o \ \ \ t_f]$                                      |                              |                              |
 | **State**                  | $\vec{x}(t)$                 |                        | $\vec{x}=[r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y]^\top$           |                              |                              |
 | **Control**                | $\vec{u}(t)$                 |                        | $\vec{u}=\vec{\Gamma}=[\Gamma_x \ \ \ \Gamma_y]^\top$        |                              |                              |
 | **Dynamics**               | $\vec{f}(t,\vec{x},\vec{u})$ |                        | $\vec{f}=[v_x \ \ \ v_y \ \ \ \Gamma_x \ \ \ \Gamma_y]^\top$ |                              |                              |
