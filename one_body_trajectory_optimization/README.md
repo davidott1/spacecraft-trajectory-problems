@@ -142,6 +142,7 @@ The problem is summarized:
 
 // ...existing code...
 The problem is summarized:
+
 | :--- | :--- | :--- |
 | **Objective** | $J$ | min fuel: $J = \int_{t_o}^{t_f} \Gamma \ dt$ <br> min energy: $J = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$ |
 | **Timespan** | $t$ | $t \in [t_o, t_f]$ |
