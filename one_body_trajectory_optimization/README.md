@@ -135,7 +135,7 @@ python main.py input/example/10.json output/example
 ## Optimal Control Problem Derivation
 
 | System <br> Component      | <br> Symbol                  | Minimization <br> Type | <br> Expressions                                             |                              |                              |
-| :                          | :-                           | :--                    | :---                                                         | :---                         | :---                         |
+| :-                         | :-                           | :--                    | :---                                                         | :---                         | :---                         |
 | **Objective**              | $J$                          | fuel                   | $J = \int_{t_o}^{t_f} \Gamma \ dt$                           |                              |                              |
 |                            |                              | energy                 | $J = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$            |                              |                              |
 | **Timespan**               | $t$                          |                        | $t \in [t_o, t_f]$                                           |                              |                              |
