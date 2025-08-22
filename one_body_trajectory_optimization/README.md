@@ -145,8 +145,8 @@ The problem is summarized:
 
 | a | b | c | d | e | f |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Objective** | $J$ | min fuel | $J = \int_{t_o}^{t_f} \Gamma \ dt$ <br> $J = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$ |
-| | | min energy | $J = \int_{t_o}^{t_f} \Gamma \ dt$ <br> $J = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$ |
+| **Objective** | $J$ | min fuel | $J = \int_{t_o}^{t_f} \Gamma \ dt$ |
+| | | min energy | $J = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$ |
 | **Timespan** | $t$ | | $t \in [t_o, t_f]$ |
 | **State** | $\vec{x}(t)$ | | $\vec{x}=[r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y]^T$ |
 | **Control** | $\vec{u}(t)$ | | $\vec{u}=[\Gamma_x \ \ \ \Gamma_y]^T$ |
