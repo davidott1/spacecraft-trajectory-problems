@@ -170,7 +170,7 @@ H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r \vec{v} + \vec{
 From the Hamiltonian, we derive the necessary conditions for optimality using Pontryagin's Minimum Principle, deriving the co-state dynamical equations and the optimal control.
 
 #### Co-state Equations
-The co-state dynamics are given by `lambda_vec_dot = -dH/dx_vec`.
+The co-state dynamics are given by $\dot{\vec{\lambda}} = -dH/d\vec{x}^\top$.
 ```
 lambda_r_x_dot = -dH/dr_x  ==>  lambda_r_x_dot = 0
 lambda_r_y_dot = -dH/dr_y  ==>  lambda_r_y_dot = 0
