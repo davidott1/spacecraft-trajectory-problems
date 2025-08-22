@@ -134,6 +134,16 @@ python main.py input/example/10.json output/example
 ---
 ## Optimal Control Problem Derivation
 
+```math
+\Gamma = 
+\begin{cases}
+\Gamma_{\max} & \text{if } S > 0 \\
+\text{indeterminate} & \text{if } S = 0 \\
+\Gamma_{\min} & \text{if } S < 0
+\end{cases}
+```
+
+
 | System <br> Component  | <br> Symbol                  | Minimization <br> Type | <br> Expressions                                                                                                               |                              |                              |
 | :-                     | :-                           | :-                     | :-                                                                                                                             | :-                           | :-                           |
 | Objective              | $J$                          | fuel                   | $J = \int_{t_o}^{t_f} \Gamma \ dt$                                                                                             |                              |                              |
@@ -142,12 +152,7 @@ python main.py input/example/10.json output/example
 | State                  | $\vec{x}(t)$                 |                        | $\vec{x} = \left[ r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y \right]^\top$                                                              |                              |                              |
 | Co-State               | $\vec{\lambda}(t)$           |                        | $\vec{\lambda} = \left[ \lambda_{r_x} \ \ \ \lambda_{r_y} \ \ \ \lambda_{v_x} \ \ \ \ \lambda_{v_y} \right]^\top$                |                              |                              |
 | Control                | $\vec{u}(t)$                 | fuel                   | $\vec{u} = \vec{\Gamma}$ | $\vec{\Gamma} = -\vec{\lambda}_v$ | |
-|                        |                              | energy                 | $\vec{u} = \vec{\Gamma} = \Gamma \hat{\Gamma} = \left[ \Gamma_x \ \ \ \Gamma_y \right]^\top = \left[ \Gamma \Gamma_{\hat{x}} \ \ \ \Gamma \Gamma_{\hat{y}} \right]^\top$ | $\Gamma = 
-\begin{cases}
-\Gamma_{\max} & \text{if } S > 0 \\
-\text{indeterminate} & \text{if } S = 0 \\
-\Gamma_{\min} & \text{if } S < 0
-\end{cases}$ | $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$ |
+|                        |                              | energy                 | $\vec{u} = \vec{\Gamma} = \Gamma \hat{\Gamma} = \left[ \Gamma_x \ \ \ \Gamma_y \right]^\top = \left[ \Gamma \Gamma_{\hat{x}} \ \ \ \Gamma \Gamma_{\hat{y}} \right]^\top$ | $\Gamma = \Gamma_max$ | $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$ |
 | Dynamics               | $\vec{f}(t,\vec{x},\vec{u})$ |                        | $\vec{f}=[v_x \ \ \ v_y \ \ \ \Gamma_x \ \ \ \Gamma_y]^\top$                                                                   |                              |                              |
 | Co-Dynamics            | $\vec{g}(t,\vec{x},\vec{u})$ |                        | $\vec{g}=[0 \ \ \ 0 \ \ \ -\lambda_{r_x} \ \ \ -\lambda_{r_y}]^\top$                                                           |                              |                              |
 | Equality Constraints   | $\vec{\Theta}_o$             |                        | $t_o=t_{os}$                                                                                                                   | $\vec{r}(t_o)={\vec r}_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ |
