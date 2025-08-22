@@ -172,10 +172,10 @@ From the Hamiltonian, we derive the necessary conditions for optimality using Po
 #### Co-state Equations
 The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \right)^\top$.
 ```math
-\dot{\lambda}_{r_x} = -\frac{dH}{dr_x}  ==>  lambda_r_x_dot = 0
-\dot{\lambda}_{r_y} = -\frac{dH}{dr_y}  ==>  lambda_r_y_dot = 0
-\dot{\lambda}_{v_x} = -\frac{dH}{dv_x}  ==>  lambda_v_x_dot = -lambda_r_x
-\dot{\lambda}_{v_y} = -\frac{dH}{dv_y}  ==>  lambda_v_y_dot = -lambda_r_y
+\dot{\lambda}_{r_x} = -\frac{dH}{dr_x}  = lambda_r_x_dot = 0
+\dot{\lambda}_{r_y} = -\frac{dH}{dr_y}  =  lambda_r_y_dot = 0
+\dot{\lambda}_{v_x} = -\frac{dH}{dv_x}  =  lambda_v_x_dot = -lambda_r_x
+\dot{\lambda}_{v_y} = -\frac{dH}{dv_y}  =  lambda_v_y_dot = -lambda_r_y
 ```
 #### Optimal Control
 The optimal control `u_*` must minimize the Hamiltonian. This condition is found by setting the partial derivative of the Hamiltonian with respect to the control to zero, `dH/du = 0`.
