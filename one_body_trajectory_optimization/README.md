@@ -150,7 +150,9 @@ The problem is summarized:
 | **State** | $\underline{x}(t)$ | $\underline{x}=[r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y]^T$ |
 | **Control** | $\underline{u}(t)$ | $\underline{u}=[\Gamma_x \ \ \ \Gamma_y]^T$ |
 | **Dynamics** | $\underline{f}(t,\underline{x},\underline{u})$ | $\underline{f}=[v_x \ \ \ v_y \ \ \ \Gamma_x \ \ \ \Gamma_y]^T$  |
-| **Constraints** <br> **Equality** <br> <br> **Inequality** <br> <br> | $\Theta(t)$ <br> $\Psi(t)$ | <br> Initial : $t_o=t_{os}$ $\quad$ $\underline{r}(t_0)={\underline r}_{os}$ $\quad$ $\underline{r}(t_0)={\underline r}_{os}$ |
+| **Constraints** <br> **Equality** <br> <br> **Inequality** <br> <br> | $\Theta(t)$ <br> $\Psi(t)$ | <br> Initial : $t_o=t_{o,s}\quad \underline{r}(t_0)={\underline r}_{o,s}\quad \underline{v}(t_0)={\underline v}_{o,s}$ <br>
+Final   : $t_f=t_{f,s}\quad \underline{r}(t_f)={\underline r}_{f,s}\quad \underline{v}(t_f)={\underline v}_{f,s}$ <br>
+ |
 
 
 ### Constraints
