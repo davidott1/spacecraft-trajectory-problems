@@ -205,11 +205,13 @@ By substituting the optimal control law back into the state and co-state equatio
 ```
 
 #### Co-state Equations (4)
-```
-lambda_r_x_dot = 0
-lambda_r_y_dot = 0
-lambda_v_x_dot = -lambda_r_x
-lambda_v_y_dot = -lambda_r_y
+```math
+\begin{align}
+&\dot{\lambda}_{r_x} = 0
+&\dot{\lambda}_{r_y} = 0
+&\dot{\lambda}_{v_x} = -\lambda_{r_x}
+&\dot{\lambda}_{v_y} = -\lambda_{r_y}
+\end{align}
 ```
 
 Solving this system of eight ODEs requires eight boundary conditions (e.g., initial and final positions and velocities), forming a TPBVP. The solution yields the optimal trajectories for the states, co-states, and the control.
