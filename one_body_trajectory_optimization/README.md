@@ -150,7 +150,7 @@ The problem is summarized:
 | **State** | $\underline{x}(t)$ | $\underline{x}=[r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y]^T$ |
 | **Control** | $\underline{u}(t)$ | $\underline{u}=[\Gamma_x \ \ \ \Gamma_y]^T$ |
 | **Dynamics** | $\underline{f}(t,\underline{x},\underline{u})$ | $\underline{f}=[v_x \ \ \ v_y \ \ \ \Gamma_x \ \ \ \Gamma_y]^T$ |
-| **Constraints** <br> **Equality** <br> <br> **Inequality** <br> <br> | <br> Initial : $t_o=t_{os} \ \ \ r(t_0)=r_{os} \ \ \ v(t_0)=v_{os}$ <br> Final : $t_f=t_{fs} \ \ \ r(t_f)=r_{fs} \ \ \ v(t_f)=v_{fs}$ <br> min fuel : $\Gamma(t) \le \Gamma_{\max}$ or $T\le T_{\max}$ <br> min energy : $\underline{\Gamma}(t)\le \Gamma_{\max}$ or $T\le T_{\max}$ or unconstrained |
+| **Constraints** <br> **Equality** <br> <br> **Inequality** <br> <br> | | <br> Initial : $t_o=t_{os} \ \ \ r(t_0)=r_{os} \ \ \ v(t_0)=v_{os}$ <br> Final : $t_f=t_{fs} \ \ \ r(t_f)=r_{fs} \ \ \ v(t_f)=v_{fs}$ <br> min fuel : $\Gamma(t) \le \Gamma_{\max}$ or $T\le T_{\max}$ <br> min energy : $\underline{\Gamma}(t)\le \Gamma_{\max}$ or $T\le T_{\max}$ or unconstrained |
 
 
 
