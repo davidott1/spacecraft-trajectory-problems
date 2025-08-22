@@ -160,11 +160,11 @@ H = L + \vec{\lambda}^\top \vec{f}(x, u)
 ```
 and more specifically in component form, 
 ```
-H = 1/2 (Gamma_x^2 + Gamma_y^2) + lambda_r_x r_x_dot + lambda_r_y r_y_dot + lambda_v_x v_x_dot + lambda_v_y v_y_dot
+H = \tfrac{1}{2} \frac{1}{2} (Gamma_x^2 + Gamma_y^2) + lambda_r_x r_x_dot + lambda_r_y r_y_dot + lambda_v_x v_x_dot + lambda_v_y v_y_dot
 ```
 The time-derivative of the state `x_vec_dot` must conform to the dynamics, so `x_vec_dot = f(x_vec,u_vec)`. Substituting the dynamics into the Hamilitonian yields
 ```math
-H = 1/2 (Gamma_x^2 + Gamma_y^2) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
+H = 1/2 (\Gamma_x^2 + \Gamma_y^2) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
 ```
 
 ---
