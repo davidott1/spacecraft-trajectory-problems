@@ -152,7 +152,8 @@ The problem is summarized:
 | **Dynamics** | $\vec{f}(t,\vec{x},\vec{u})$ | | $\vec{f}=[v_x \ \ \ v_y \ \ \ \Gamma_x \ \ \ \Gamma_y]^T$  |
 | **Constraints** | $\Theta(t)$ | equality initial | $t_o=t_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ |
 | | $\Psi(t)$ | equality final | $t_f=t_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ |
-| | | inequality min fuel | $\Gamma(t) \leq \Gamma_{\max}$ or $T \leq T_{\max}$ |
+| | | inequality min fuel | $\Gamma(t) \leq \Gamma_{\max}$ | or $T \leq T_{\max}$ | |
+| | | inequality min energy | $\Gamma(t) \leq \Gamma_{\max}$ | or $T \leq T_{\max}$ | or unconstrained |
 
 
 min energy: $|\Gamma(t)| \leq \Gamma_{\max}$ or $T \leq T_{\max}$ or unconstrained
