@@ -155,7 +155,7 @@ The problem is summarized:
 The indirect method means to derive the optimal control law a Hamiltonian `H` must be formed to minimize. The derivatives of the Hamiltonian will provide the necessary, but not sufficient, conditions for a minimum solution. The Hamiltonian is a function of the integrand `L` of the objective `J`, state `x_vec`, co-state `lambda_vec`, dynamics `x_vec_dot`, and control `Gamma_vec`. In particular, the co-state in component form is `lambda_vec = [ lambda_r_x, lambda_r_y, lambda_v_x, lambda_v_y ]^T`.
 
 The Hamiltonian `H` is in general
-```
+```math
 H = L + lambda_vec^T f(x, u)
 ```
 and more specifically in component form, 
