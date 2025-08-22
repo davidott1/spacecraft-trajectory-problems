@@ -199,8 +199,8 @@ By substituting the optimal control law back into the state and co-state equatio
 \begin{align}
 &\dot{r}_x = v_x \\
 &\dot{r}_y = v_y \\
-&\dot{v}_x = -lambda_v_x \\
-&\dot{v}_y = -lambda_v_y \\
+&\dot{v}_x = -\lambda_{v_x} \\
+&\dot{v}_y = -\lambda_{v_y} \\
 \end{align}
 ```
 
