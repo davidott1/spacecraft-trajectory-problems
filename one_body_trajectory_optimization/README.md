@@ -163,7 +163,6 @@ python main.py input/example/10.json output/example
 \ \ \text{and} \ \ \ \ \ \ \ \ \ $ = \lambda_v - 1
 & 
 \ \ \text{and} \ \ \ \ \ \ \ \ \ \dot{m} = -\frac{\Gamma m}{c_{\text{ev}}
-& 
 \end{array}
 ```
 
