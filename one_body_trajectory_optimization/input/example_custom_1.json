@@ -8,7 +8,7 @@
     "ham_o"                 : { "value":             0.0e+0  , "unit": "xxx"     , "mode": "free"  },
     "time_f"                : { "value":             2.0e+1  , "unit": "s"       , "mode": "free" },
     "pos_vec_f"             : { "value": [  1.0e+1,  0.0e+1 ], "unit": "m"       , "mode": "fixed" },
-    "vel_vec_f"             : { "value": [  1.0e+0,  1.0e+0 ], "unit": "m/s"     , "mode": "fixed" },
+    "vel_vec_f"             : { "value": [  0.0e+0,  1.0e+0 ], "unit": "m/s"     , "mode": "fixed" },
     "copos_vec_f"           : { "value": [  0.0e+0,  0.0e+0 ], "unit": "m"       , "mode": "free"  },
     "covel_vec_f"           : { "value": [  0.0e+0,  0.0e+0 ], "unit": "m/s"     , "mode": "free"  },
     "ham_f"                 : { "value":             0.0e+0  , "unit": "xxx"     , "mode": "fixed"  },
