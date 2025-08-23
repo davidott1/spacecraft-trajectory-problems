@@ -221,7 +221,7 @@ Solving this system of eight ODEs requires eight boundary conditions (e.g., init
 ```math
 \dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
 ```
-where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. Compute $\dot{m}$ after $\Gamma_{\text{fuel}}$
+where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. Compute $\dot{m}$ _after_ $\Gamma_{\text{fuel}}$ or $\Gamma_{\text{energy}}$ is computed for the thrust constaint case.
 
 ##### Thrust and Thrust-Acceleration Expressions
 
