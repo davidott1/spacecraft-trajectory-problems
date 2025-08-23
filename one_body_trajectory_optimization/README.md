@@ -227,7 +227,7 @@ where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. C
 
 Minimization Type: Fuel
 
-Dicrete Option
+Discrete Option
 ```math
 \begin{array}{llll}
 \Gamma_{\text{fuel}} = 
@@ -274,13 +274,6 @@ $ = \lambda_v - 1
 & \text{smin}\left(\text{smax}(\lambda_v,\Gamma_{\text{min}},k),\Gamma_{\text{max}},k\right) & \text{if constrained} & k = 1 \to \infty
 \end{cases}
 \end{array}
-```
-
-```math
-\Gamma_{\text{fuel}} =
-\begin{cases}
-\text{smin}\left(\text{smax}(\lambda_v,\Gamma_{\text{min}},k),\Gamma_{\text{max}},k\right)
-\end{cases}
 ```
 
 ```math
