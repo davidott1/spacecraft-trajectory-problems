@@ -251,8 +251,8 @@ Solving this system of eight ODEs requires eight boundary conditions (e.g., init
 
 ```math
 \begin{array}{ll}
-& \text{smin}(a_1, a_2, k) = (-1 / k) * (m + \log(np.exp(-k a_1 - m) + \exp(-k a_2 - m))) & \text{where} & m = max(k a_1, k a_2) \\
-& \text{smax}(a_1, a_2, k) = ( 1 / k) * (m + \log(np.exp( k a_1 - m) + \exp( k a_2 - m))) & \text{where} & m = max(k a_1, k a_2)
+& \text{smin}(a_1, a_2, k) = (-1 / k) * (m + \log(\exp(-k a_1 - m) + \exp(-k a_2 - m))) & \text{where} & m = \max(k a_1, k a_2) \\
+& \text{smax}(a_1, a_2, k) = ( 1 / k) * (m + \log(\exp( k a_1 - m) + \exp( k a_2 - m))) & \text{where} & m = \max(k a_1, k a_2)
 \end{array}
 ```
 
