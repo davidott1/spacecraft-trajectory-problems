@@ -227,7 +227,7 @@ where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. C
 
 ```math
 \begin{array}{llll}
-\Gamma_\fuel = 
+\Gamma_{\text{fuel}} = 
 \begin{cases}
 \Gamma_{\max}        & \$ > 0 & \text{and if using thrust-acc constraints} \\
      T_{\max} / m    & \$ > 0 & \text{and if using thrust     constraints} \\
@@ -239,7 +239,7 @@ where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. C
 ```
 
 ```math
-\Gamma_\fuel = \Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k \$) \right)
+\Gamma_{\text{fuel}} = \Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k \$) \right)
 ```
 
 ```math
