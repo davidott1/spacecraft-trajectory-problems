@@ -173,6 +173,7 @@ python main.py input/example/10.json output/example
 \lambda_v &
 smin(smax(\lambda_v,\Gamma_\min,k),\Gamma_\max,k) \text{ or } T_{\min} / m & k = 1 \to \inf
 \end{cases}
+\end{array}
 ```
 
 ### Derivation
