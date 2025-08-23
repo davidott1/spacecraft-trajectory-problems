@@ -236,7 +236,7 @@ Dicrete Option
      T_{\max} / m    & \$ > 0 & \text{and if using thrust     constraints} \\
 \Gamma_{\min}        & \$ < 0 & \text{and if using thrust-acc constraints} \\
      T_{\min} / m    & \$ < 0 & \text{and if using thrust     constraints} \\
-\text{indeterminate} & \$ = 0 \\
+\text{indeterminate} & \$ = 0 &                                            \\
 \end{cases}
 \end{array}
 ```
@@ -244,6 +244,24 @@ Dicrete Option
 Smoothing Option
 ```math
 \Gamma_{\text{fuel}} = \Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k \$) \right)
+```
+
+```math
+\begin{array}{llll}
+\Gamma_{\text{max}} = 
+\begin{cases}
+\Gamma_{\max s}     & \$ > 0 & \text{and if using thrust-acc constraints} \\
+     T_{\maxs} / m & \$ > 0 & \text{and if using thrust     constraints} \\
+\end{cases}
+\end{array}
+
+\begin{array}{llll}
+\Gamma_{\text{min}} = 
+\begin{cases}
+\Gamma_{\min s}     & \$ < 0 & \text{and if using thrust-acc constraints} \\
+     T_{\mins} / m & \$ < 0 & \text{and if using thrust     constraints} \\
+\end{cases}
+\end{array}
 ```
 
 Switching Function
