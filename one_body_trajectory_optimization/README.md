@@ -235,9 +235,10 @@ where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. C
      T_{\min} / m    & \$ < 0 & \text{and if using thrust     constraints} \\
 \text{indeterminate} & \$ = 0 \\
 \end{cases}
-& 
-\ \ \text{and} \ \ \ \ \ \ \ \ \ $ = \lambda_v - 1
 \end{array}
+```
+```math
+$ = \lambda_v - 1
 ```
 
 ```math
