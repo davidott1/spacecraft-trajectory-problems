@@ -165,7 +165,7 @@ The state of the one body is representead in a Cartesian xy-system with respect 
 ```math
 \vec{x} = [ \vec{r}^\top \ \ \ \vec{v}^\top ]^\top = [ r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y ]^\top
 ```
-where $\vec{r} = [ r_x \ \ \ r_y ]^\top$ is position and $\vec{v} = [ v_x \ \ \ v_y ]^\top$ is velocity. The one-body dynamics $\dot{\vec{x}}$ are free from natural acceleration with control is thrust acceleration $\vec{\Gamma}$:
+where $\vec{r} = [ r_x \ \ \ r_y ]^\top$ is position and $\vec{v} = [ v_x \ \ \ v_y ]^\top$ is velocity. The one-body dynamics $\dot{\vec{x}}$ are free from natural acceleration with control as thrust acceleration, $\vec{\Gamma} = [ \Gamma_x \ \ \ \Gamma_y ]$:
 ```math
 \begin{align}
 &\dot{r}_x = v_x \\
@@ -174,7 +174,7 @@ where $\vec{r} = [ r_x \ \ \ r_y ]^\top$ is position and $\vec{v} = [ v_x \ \ \ 
 &\dot{v}_y = \Gamma_y \\
 \end{align}
 ```
-where $\vec{\Gamma} = [ \Gamma_x \ \ \ \Gamma_y ]$ is thrust acceleration. Mass is not needed as an explicit state variable, but it needs to be integrated along with the state and co-state to model thrust, $T = \Gamma m$. The time-derivative of mass is
+Mass is not needed as an explicit state variable, but it needs to be integrated along with the state and co-state to model thrust, $T = \Gamma m$. The time-derivative of mass is
 ```math
 \dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
 ```
