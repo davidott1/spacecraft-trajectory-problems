@@ -217,7 +217,11 @@ By substituting the optimal control law back into the state and co-state equatio
 \end{align}
 ```
 
-Solving this system of eight ODEs requires eight boundary conditions (e.g., initial and final positions and velocities), forming a TPBVP. The solution yields the optimal trajectories for the states, co-states, and the control.
+Solving this system of eight ODEs requires eight boundary conditions (e.g., initial and final positions and velocities), forming a TPBVP. The solution yields the optimal trajectories for the states, co-states, and the control. Special considderation must be made for thrust constraints. Control is a function of co-velocity $\vec{\lambda}_v$, but thrust is a function of thrust acceleration and mass. Mass is not needed as an explicit state variable, but it needs to be integrated along with the state and co-state. The time-derivative for mass is
+```math
+\dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
+```
+where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. Compute $\dot{m}$ after $\Gamma_{\text{fuel}}$
 
 ##### Thrust and Thrust-Acceleration Expressions
 
@@ -231,8 +235,6 @@ Solving this system of eight ODEs requires eight boundary conditions (e.g., init
 \end{cases}
 & 
 \ \ \text{and} \ \ \ \ \ \ \ \ \ $ = \lambda_v - 1
-& 
-\ \ \text{and} \ \ \ \ \ \ \ \ \ \dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
 \end{array}
 ```
 
@@ -241,8 +243,8 @@ Solving this system of eight ODEs requires eight boundary conditions (e.g., init
 \Gamma_{\text{energy}} = 
 \begin{cases}
 & \lambda_v \\
-& \text{smin}\left(\text{smax}(\lambda_v,\Gamma_\min,k),\Gamma_\max,k\right) \text{ if using thrust     constraints} & k = 1 \to \infty \\
-& \text{smin}\left(\text{smax}(\lambda_v,   T_\min/m,k),   T_\max/m,k\right) \text{ if using thrust-acc constraints} & k = 1 \to \infty
+& \text{smin}\left(\text{smax}(\lambda_v,\Gamma_\min  ,k),\Gamma_\max  ,k\right) \text{ if using thrust-acc constraints} & k = 1 \to \infty \\
+& \text{smin}\left(\text{smax}(\lambda_v,     T_\min/m,k),     T_\max/m,k\right) \text{ if using thrust     constraints} & k = 1 \to \infty
 \end{cases}
 \end{array}
 ```
