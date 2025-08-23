@@ -155,11 +155,15 @@ python main.py input/example/10.json output/example
 \begin{array}{ll}
 \Gamma_{\text{fuel}} = 
 \begin{cases}
-\Gamma_{\max}        & \$ > 0 \\
-\text{indeterminate} & \$ = 0 \\
-\Gamma_{\min}        & \$ < 0
+\Gamma_{\max} or T_max / m & \$ > 0 \\
+\text{indeterminate}       & \$ = 0 \\
+\Gamma_{\min} or T_min / m & \$ < 0
 \end{cases}
-& \ \ \text{and} \ \ \ \ \ \ \ \ \ $ = \lambda_v - 1
+& 
+\ \ \text{and} \ \ \ \ \ \ \ \ \ $ = \lambda_v - 1
+& 
+\ \ \text{and} \ \ \ \ \ \ \ \ \ \dot{m} = -\frac{\Gamma m}{c_{\text{ev}}
+& 
 \end{array}
 ```
 
