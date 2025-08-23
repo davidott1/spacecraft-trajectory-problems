@@ -151,33 +151,6 @@ python main.py input/example/10.json output/example
 |                        | $\vec{\Theta}_f$             |                        | $t_f=t_{fs}$                                                                  | $\vec{r}(t_f)={\vec r}_{fs}$                                | $\vec{r}(t_f)={\vec r}_{fs}$               |
 | Inequality Constraints | $\Psi(t)$                    | fuel                   | $\Gamma_{\min} \leq \Gamma_{\text{fuel}} \leq \Gamma_{\max}$                  | or $T_{\min}/m \leq \Gamma_{\text{fuel}} \leq T_{\max}/m$   |                                            |
 |                        |                              | energy                 | $\Gamma_{\min} \leq \Gamma_{\text{energy}} \leq \Gamma_{\max}$                | or $T_{\min}/m \leq \Gamma_{\text{energy}} \leq T_{\max}/m$ | or $0 \leq \Gamma_{\text{energy}} \leq \infty$ |
-```math
-\begin{array}{ll}
-\Gamma_{\text{fuel}} = 
-\begin{cases}
-\Gamma_{\max} \text{ or } T_{\max} / m & \$ > 0 \\
-\text{indeterminate}          & \$ = 0 \\
-\Gamma_{\min} \text{ or } T_{\min} / m & \$ < 0
-\end{cases}
-& 
-\ \ \text{and} \ \ \ \ \ \ \ \ \ $ = \lambda_v - 1
-& 
-\ \ \text{and} \ \ \ \ \ \ \ \ \ \dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
-\end{array}
-```
-
-```math
-\begin{array}{ll}
-\Gamma_{\text{energy}} = 
-\begin{cases}
-\lambda_v \\
-\text{smin}(\text{smax}(\lambda_v,\Gamma_\min,k),\Gamma_\max,k) \text{ if using thrust constraints} & k = 1 \to \infty \\
-\text{smin}(\text{smax}(\lambda_v,   T_\min/m,k),   T_\max/m,k) \text{ if using thrust-acc constraints} & k = 1 \to \infty
-\end{cases}
-&
-\ \ \text{and} \ \ \ \ \ \ \ \ \ \dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
-\end{array}
-```
 
 ### Derivation
 
@@ -245,5 +218,35 @@ By substituting the optimal control law back into the state and co-state equatio
 ```
 
 Solving this system of eight ODEs requires eight boundary conditions (e.g., initial and final positions and velocities), forming a TPBVP. The solution yields the optimal trajectories for the states, co-states, and the control.
+
+##### Thrust and Thrust-Acceleration Expressions
+
+```math
+\begin{array}{ll}
+\Gamma_{\text{fuel}} = 
+\begin{cases}
+\Gamma_{\max} \text{ or } T_{\max} / m & \$ > 0 \\
+\text{indeterminate}          & \$ = 0 \\
+\Gamma_{\min} \text{ or } T_{\min} / m & \$ < 0
+\end{cases}
+& 
+\ \ \text{and} \ \ \ \ \ \ \ \ \ $ = \lambda_v - 1
+& 
+\ \ \text{and} \ \ \ \ \ \ \ \ \ \dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
+\end{array}
+```
+
+```math
+\begin{array}{ll}
+\Gamma_{\text{energy}} = 
+\begin{cases}
+\lambda_v \\
+\text{smin}(\text{smax}(\lambda_v,\Gamma_\min,k),\Gamma_\max,k) \text{ if using thrust constraints} & k = 1 \to \infty \\
+\text{smin}(\text{smax}(\lambda_v,   T_\min/m,k),   T_\max/m,k) \text{ if using thrust-acc constraints} & k = 1 \to \infty
+\end{cases}
+&
+\ \ \text{and} \ \ \ \ \ \ \ \ \ \dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
+\end{array}
+```
 
 ---
