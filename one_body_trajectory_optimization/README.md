@@ -168,7 +168,7 @@ python main.py input/example/10.json output/example
 
 ```math
 \Gamma_{\text{energy}} = 
-\Gamma_{\min} \leq \lambda_v \leq \Gamma_{\max} or T_{\min}/m \leq \lambda_v \leq T_{\max}/m \\
+\Gamma_{\min} \leq \lambda_v \leq \Gamma_{\max} \quad \text{or} \quad T_{\min}/m \leq \lambda_v \leq T_{\max}/m \\
 ```
 
 ### Derivation
