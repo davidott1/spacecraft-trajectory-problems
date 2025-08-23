@@ -170,8 +170,8 @@ python main.py input/example/10.json output/example
 \begin{array}{ll}
 \Gamma_{\text{energy}} = 
 \begin{cases}
-\lambda_v &
-\smin(\smax(\lambda_v,\Gamma_\min,k),\Gamma_\max,k) \text{ or } T_{\min} / m & k = 1 \to \inf
+\lambda_v \\
+\text{smin}(\text{smax}(\lambda_v,\Gamma_\min,k),\Gamma_\max,k) \text{ or } T_{\min} / m & k = 1 \to \inf
 \end{cases}
 \end{array}
 ```
