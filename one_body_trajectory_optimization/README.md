@@ -258,7 +258,7 @@ Smoothing Option
 \begin{array}{ll}
 \Gamma_{\text{energy}} = 
 \begin{cases}
-& \lambda_v \\
+& \lambda_v                                                                      & \text{if unconstrained}                &                  \\
 & \text{smin}\left(\text{smax}(\lambda_v,\Gamma_\min  ,k),\Gamma_\max  ,k\right) & \text{if using thrust-acc constraints} & k = 1 \to \infty \\
 & \text{smin}\left(\text{smax}(\lambda_v,     T_\min/m,k),     T_\max/m,k\right) & \text{if using thrust     constraints} & k = 1 \to \infty
 \end{cases}
