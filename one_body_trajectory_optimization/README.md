@@ -194,6 +194,10 @@ The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is
 ```
 
 ```math
+$ = \lambda_v - 1
+```
+
+```math
 \begin{array}{llll}
 \Gamma_{\text{fuel}} = 
 \begin{cases}
@@ -208,44 +212,7 @@ The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is
 
 These results explicitly defines the optimal control inputs in terms of the co-states associated with the velocity components.
 
-#### Two-Point Boundary Value Problem (TPBVP)
-By substituting the optimal control law back into the state and co-state equations, we get a complete system of first-order ordinary differential equations (ODEs).
-
-##### State Equations (4)
-```math
-\begin{align}
-&\dot{r}_x = v_x \\
-&\dot{r}_y = v_y \\
-&\dot{v}_x = -\lambda_{v_x} \\
-&\dot{v}_y = -\lambda_{v_y} \\
-\end{align}
-```
-
-##### Co-state Equations (4)
-```math
-\begin{align}
-&\dot{\lambda}_{r_x} = 0 \\
-&\dot{\lambda}_{r_y} = 0 \\
-&\dot{\lambda}_{v_x} = -\lambda_{r_x} \\
-&\dot{\lambda}_{v_y} = -\lambda_{r_y} \\
-\end{align}
-```
-
-Solving this system of eight ODEs requires eight boundary conditions (e.g., initial and final positions and velocities), forming a TPBVP. The solution yields the optimal trajectories for the states, co-states, and the control. Special considderation must be made for thrust constraints. Control is a function of co-velocity $\vec{\lambda}_v$, but thrust is a function of thrust acceleration and mass. Mass is not needed as an explicit state variable, but it needs to be integrated along with the state and co-state. The time-derivative for mass is
-```math
-\dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
-```
-where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. Compute $\dot{m}$ after $\Gamma_{\text{fuel}}$ or $\Gamma_{\text{energy}}$ is computed for the thrust constaint case.
-
-##### Inequality Constraints: Thrust and Thrust-Acceleration Expressions
-
-Minimization Type: Fuel
-
-
-Smooth Option
-```math
-$ = \lambda_v - 1
-```
+Inequality Constraints: Thrust and Thrust-Acceleration
 
 ```math
 \begin{array}{llll}
@@ -282,23 +249,7 @@ $ = \lambda_v - 1
 \end{array}
 ```
 
-
-
-Minimization Type: Energy
-
-Smoothing Option
-```math
-\begin{array}{ll}
-\Gamma_{\text{energy}} = 
-\begin{cases}
-& \lambda_v                                                                      & \text{if unconstrained}                &                  \\
-& \text{smin}\left(\text{smax}(\lambda_v,\Gamma_\min  ,k),\Gamma_\max  ,k\right) & \text{if using thrust-acc constraints} & k = 1 \to \infty \\
-& \text{smin}\left(\text{smax}(\lambda_v,     T_\min/m,k),     T_\max/m,k\right) & \text{if using thrust     constraints} & k = 1 \to \infty
-\end{cases}
-\end{array}
-```
-
-Smoother Min and Max Functions
+Smooth Min and Max Functions
 ```math
 \begin{array}{ll}
 & \text{smin}(a_1, a_2, k) & = & \frac{-1}{k} \left( b + \ln(e^{-k a_1 - b} + e^{-k a_2 - b}) \right) \\
@@ -308,5 +259,34 @@ Smoother Min and Max Functions
 ```math
 b = \text{max}(k a_1, k a_2)
 ```
+
+#### Two-Point Boundary Value Problem (TPBVP)
+By substituting the optimal control law back into the state and co-state equations, we get a complete system of first-order ordinary differential equations (ODEs).
+
+##### State Equations (4)
+```math
+\begin{align}
+&\dot{r}_x = v_x \\
+&\dot{r}_y = v_y \\
+&\dot{v}_x = -\lambda_{v_x} \\
+&\dot{v}_y = -\lambda_{v_y} \\
+\end{align}
+```
+
+##### Co-state Equations (4)
+```math
+\begin{align}
+&\dot{\lambda}_{r_x} = 0 \\
+&\dot{\lambda}_{r_y} = 0 \\
+&\dot{\lambda}_{v_x} = -\lambda_{r_x} \\
+&\dot{\lambda}_{v_y} = -\lambda_{r_y} \\
+\end{align}
+```
+
+Solving this system of eight ODEs requires eight boundary conditions (e.g., initial and final positions and velocities), forming a TPBVP. The solution yields the optimal trajectories for the states, co-states, and the control. Special considderation must be made for thrust constraints. Control is a function of co-velocity $\vec{\lambda}_v$, but thrust is a function of thrust acceleration and mass. Mass is not needed as an explicit state variable, but it needs to be integrated along with the state and co-state. The time-derivative for mass is
+```math
+\dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
+```
+where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. Compute $\dot{m}$ after $\Gamma_{\text{fuel}}$ or $\Gamma_{\text{energy}}$ is computed for the thrust constaint case.
 
 ---
