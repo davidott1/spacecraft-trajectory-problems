@@ -181,8 +181,6 @@ Mass is not needed as an explicit state variable, but it needs to be integrated 
 ```
 where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant.
 
-The equality conditions or boundary conditions are variable: flight time is fixed or free, as well as final position and velocity. Flight time is $\Delta t = t_f - t_o = t_f$. The initial time is assumed to be $t_o = 0$. Free initial position and velocity is not implemented, but the problem structure is reversible in time. The inequality conditions are variables as well. For minimum energy problems, thrust or thrust acceleration is either unconstrained or less than a maximum. For minimum fuel problems, thrust or thrust acceleration is necessarily less than a maximum. The coordinate system is Cartesian in two dimensions and with respect to an inertial frame. The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy.
-
 #### Hamiltonian Formulation
 The indirect method means to derive the optimal control law by minimizing a Hamiltonian $H$. The derivatives of the Hamiltonian provide the necessary, but not sufficient, conditions for a minimum solution. The Hamiltonian is a function of the integrand $L$ of the objective $J$, state $\vec{x}$, co-state $\vec{\lambda}$, dynamics $\dot{\vec{x}}$, and control $\vec{\Gamma}$. In particular, the co-state in component form is $\vec{\lambda} = \left[ \lambda_{r_x} \ \ \ \lambda_{r_y} \ \ \ \lambda_{v_x} \ \ \ \lambda_{v_y} \right]^\top$.
 
@@ -212,7 +210,6 @@ The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \r
 &\dot{\lambda}_{v_y} = -\frac{dH}{dv_y} &\to &\dot{\lambda}_{v_y} = -\lambda_{r_y}
 \end{align}
 ```
-
 Solving this system of eight ODEs requires eight boundary conditions (e.g., initial and final positions and velocities), forming a TPBVP. The solution yields the optimal trajectories for the states, co-states, and the control. Special considderation must be made for thrust constraints. Control is a function of co-velocity $\vec{\lambda}_v$, but thrust is a function of thrust acceleration and mass. 
 
 ##### Optimal Control
@@ -290,5 +287,7 @@ Smooth Min and Max Functions
 ```math
 b = \text{max}(k a_1, k a_2)
 ```
+
+The equality conditions or boundary conditions are variable: flight time is fixed or free, as well as final position and velocity. Flight time is $\Delta t = t_f - t_o = t_f$. The initial time is assumed to be $t_o = 0$. Free initial position and velocity is not implemented, but the problem structure is reversible in time. The inequality conditions are variables as well. For minimum energy problems, thrust or thrust acceleration is either unconstrained or less than a maximum. For minimum fuel problems, thrust or thrust acceleration is necessarily less than a maximum. The coordinate system is Cartesian in two dimensions and with respect to an inertial frame. The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy.
 
 ---
