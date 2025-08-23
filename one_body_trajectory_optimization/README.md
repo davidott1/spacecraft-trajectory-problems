@@ -182,16 +182,16 @@ Mass is not needed as an explicit state variable, but it needs to be integrated 
 where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant.
 
 #### Hamiltonian Formulation
-The indirect method means to derive the optimal control law by minimizing a Hamiltonian $H$. The derivatives of the Hamiltonian provide the necessary, but not sufficient, conditions for a minimum solution. The Hamiltonian is a function of the integrand $L$ of the objective $J$, state $\vec{x}$, co-state $\vec{\lambda}$, dynamics $\dot{\vec{x}}$, and control $\vec{\Gamma}$. In particular, the co-state in component form is $\vec{\lambda} = \left[ \lambda_{r_x} \ \ \ \lambda_{r_y} \ \ \ \lambda_{v_x} \ \ \ \lambda_{v_y} \right]^\top$.
-
-The Hamiltonian $H$ is in general
+The indirect method means to derive the optimal control law by minimizing a Hamiltonian $H$. The derivatives of the Hamiltonian provide the necessary, but not sufficient, conditions for a minimum solution. The Hamiltonian is a function of the integrand $L$ of the objective $J$, state $\vec{x}$, co-state $\vec{\lambda}$, dynamics $\vec{f}$, and control $\vec{\Gamma}$. In particular, the co-state in component form is $\vec{\lambda} = \left[ \lambda_{r_x} \ \ \ \lambda_{r_y} \ \ \ \lambda_{v_x} \ \ \ \lambda_{v_y} \right]^\top$. The Hamiltonian $H$ is
 ```math
-H = L + \vec{\lambda}^\top \vec{f}(x, u)
+H = L + \vec{\lambda}^\top \vec{f}(t, \vec{x}, \vec{u})
 ```
-For minimization of of fuel and energy, $L = \Gamma$ and $\frac{1}{2} \Gamma^2$
-
-
-The time-derivative of the state $\dot{\vec{x}}$ must conform to the dynamics, so $\dot{\vec{x}} = \vec{f}(t, \vec{x},\vec{u})$. Substituting the dynamics into the Hamilitonian yields
+For minimization of of fuel and energy, $L = \Gamma$ and $\frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma}$, respectively. Substituting into the Hamilitonian yields for fuel minimization
+```math
+H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma}
+  = \frac{1}{2} \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
+```
+and for energy minimization
 ```math
 H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma}
   = \frac{1}{2} \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
