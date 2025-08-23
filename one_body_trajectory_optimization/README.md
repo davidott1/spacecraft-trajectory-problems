@@ -154,7 +154,33 @@ python main.py input/example/10.json output/example
 
 ### Derivation
 
-The optimal control problem is solved using an indirect method. The objective $J$ minimizes fuel and energy, representative as the integral of magnitude $\Gamma$ or square $\Gamma^2$ of thrust acceleration, respectively. The one-body dynamics $\dot{\vec{x}}$ are free from natural acceleration with control is thrust acceleration $\vec{\Gamma}$. The equality conditions or boundary conditions are variable: flight time is fixed or free, as well as final position and velocity. Flight time is $\Delta t = t_f - t_o = t_f$. The initial time is assumed to be $t_o = 0$. Free initial position and velocity is not implemented, but the problem structure is reversible in time. The inequality conditions are variables as well. For minimum energy problems, thrust or thrust acceleration is either unconstrained or less than a maximum. For minimum fuel problems, thrust or thrust acceleration is necessarily less than a maximum. The coordinate system is Cartesian in two dimensions and with respect to an inertial frame. The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy.
+The optimal control problem is solved using an indirect method. The objective $J$ minimizes fuel and energy as follows, respectively:
+```math
+\text{fuel}: J = \int \ L \ dt = \int_{t_o}^{t_f} \ \Gamma \ dt 
+
+\text{energy}: J = \int \ L \ dt = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt
+```
+The state of the one body is representead in a Cartesian xy-system with respect to an inertial frame
+```math
+\vec{x} = [ \vec{r}^T \ \ \ \vec{v}^\top ]^\top = [ r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y ]^\top
+```
+where $\vec{r} = [ r_x \ \ \ r_y ]^\top$ is position and $\vec{v} = [ v_x \ \ \ v_y ]^\top$ is velocity. The one-body dynamics $\dot{\vec{x}}$ are free from natural acceleration with control is thrust acceleration $\vec{\Gamma}$:
+```math
+\begin{align}
+&\dot{r}_x = v_x \\
+&\dot{r}_y = v_y \\
+&\dot{v}_x = \Gamma_x \\
+&\dot{v}_y = \Gamma_y \\
+\end{align}
+```
+where $\vec{\Gamma} = [ \Gamma_x \ \ \ \Gamma_y ]$ is thrust acceleration. Mass is not needed as an explicit state variable, but it needs to be integrated along with the state and co-state to model thrust, $T = \Gamma m$. The time-derivative of mass is
+```math
+\dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
+```
+where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant.
+
+The equality conditions or boundary conditions are variable: flight time is fixed or free, as well as final position and velocity. Flight time is $\Delta t = t_f - t_o = t_f$. The initial time is assumed to be $t_o = 0$. Free initial position and velocity is not implemented, but the problem structure is reversible in time. The inequality conditions are variables as well. For minimum energy problems, thrust or thrust acceleration is either unconstrained or less than a maximum. For minimum fuel problems, thrust or thrust acceleration is necessarily less than a maximum. The coordinate system is Cartesian in two dimensions and with respect to an inertial frame. The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy.
+
 
 #### Hamiltonian Formulation
 The indirect method means to derive the optimal control law a Hamiltonian $H$ must be formed to minimize. The derivatives of the Hamiltonian will provide the necessary, but not sufficient, conditions for a minimum solution. The Hamiltonian is a function of the integrand $L$ of the objective $J$, state $\vec{x}$, co-state $\vec{\lambda}$, dynamics $\dot{\vec{x}}$, and control $\vec{\Gamma}$. In particular, the co-state in component form is $\vec{\lambda} = \left[ \lambda_{r_x} \ \ \ \lambda_{r_y} \ \ \ \lambda_{v_x} \ \ \ \lambda_{v_y} \right]^\top$.
@@ -184,30 +210,7 @@ The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \r
 \end{align}
 ```
 
-##### State and Co-State Equations (4+4)
-```math
-\begin{align}
-&\dot{r}_x = v_x \\
-&\dot{r}_y = v_y \\
-&\dot{v}_x = \Gamma_x \\
-&\dot{v}_y = \Gamma_y \\
-\end{align}
-```
-
-```math
-\begin{align}
-&\dot{\lambda}_{r_x} = 0 \\
-&\dot{\lambda}_{r_y} = 0 \\
-&\dot{\lambda}_{v_x} = -\lambda_{r_x} \\
-&\dot{\lambda}_{v_y} = -\lambda_{r_y} \\
-\end{align}
-```
-
-Solving this system of eight ODEs requires eight boundary conditions (e.g., initial and final positions and velocities), forming a TPBVP. The solution yields the optimal trajectories for the states, co-states, and the control. Special considderation must be made for thrust constraints. Control is a function of co-velocity $\vec{\lambda}_v$, but thrust is a function of thrust acceleration and mass. Mass is not needed as an explicit state variable, but it needs to be integrated along with the state and co-state. The time-derivative for mass is
-```math
-\dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
-```
-where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. Compute $\dot{m}$ after $\Gamma_{\text{fuel}}$ or $\Gamma_{\text{energy}}$ is computed for the thrust constaint case.
+Solving this system of eight ODEs requires eight boundary conditions (e.g., initial and final positions and velocities), forming a TPBVP. The solution yields the optimal trajectories for the states, co-states, and the control. Special considderation must be made for thrust constraints. Control is a function of co-velocity $\vec{\lambda}_v$, but thrust is a function of thrust acceleration and mass. 
 
 ##### Optimal Control
 The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is found by setting the partial derivative of the Hamiltonian with respect to the control to zero, $dH/d\vec{u} = \vec{0}^\top$:
