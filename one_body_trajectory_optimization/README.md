@@ -248,16 +248,6 @@ $ = \lambda_v - 1
 
 ```math
 \begin{array}{llll}
-\Gamma_{\text{max}} = 
-\begin{cases}
-\Gamma_{\text{max},s}     & \$ > 0 & \text{and if using thrust-acc constraints} \\
-     T_{\text{max},s} / m & \$ > 0 & \text{and if using thrust     constraints}
-\end{cases}
-\end{array}
-```
-
-```math
-\begin{array}{llll}
 \Gamma_{\text{min}} = 
 \begin{cases}
 \Gamma_{\text{min},s}     & \$ < 0 & \text{and if using thrust-acc constraints} \\
@@ -268,18 +258,30 @@ $ = \lambda_v - 1
 
 ```math
 \begin{array}{llll}
-\Gamma_{\text{energy}} = 
+\Gamma_{\text{max}} = 
 \begin{cases}
-& \lambda_v                                                                                  & \text{if unconstrained} &                  \\
-& \text{smin}\left(\text{smax}(\lambda_v,\Gamma_{\text{min}},k),\Gamma_{\text{max}},k\right) & \text{if constrained} & k = 1 \to \infty
+\Gamma_{\text{max},s}     & \$ > 0 & \text{and if using thrust-acc constraints} \\
+     T_{\text{max},s} / m & \$ > 0 & \text{and if using thrust     constraints}
 \end{cases}
 \end{array}
 ```
 
 ```math
 \Gamma_{\text{fuel}} = 
-\Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k \$) \right)
+\Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k \$) \right) \ \ \ k = 1 \to \infty
 ```
+
+```math
+\begin{array}{llll}
+\Gamma_{\text{energy}} = 
+\begin{cases}
+& \lambda_v                                                                                  & \text{if unconstrained} &                  \\
+& \text{smin}\left(\text{smax}(\lambda_v,\Gamma_{\text{min}},k),\Gamma_{\text{max}},k\right) & \text{if constrained}   & k = 1 \to \infty
+\end{cases}
+\end{array}
+```
+
+
 
 Minimization Type: Energy
 
