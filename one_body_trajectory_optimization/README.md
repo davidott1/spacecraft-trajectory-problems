@@ -225,6 +225,9 @@ where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. C
 
 ##### Thrust and Thrust-Acceleration Expressions
 
+###### Minimization Type: Fuel
+
+Dicrete Option
 ```math
 \begin{array}{llll}
 \Gamma_{\text{fuel}} = 
@@ -238,16 +241,19 @@ where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. C
 \end{array}
 ```
 
+Smoothing Option
 ```math
 \Gamma_{\text{fuel}} = \Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k \$) \right)
 ```
 
+Switching Function
 ```math
 $ = \lambda_v - 1
 ```
 
+###### Minimization Type: Energy
 
-
+Smoothing Option
 ```math
 \begin{array}{ll}
 \Gamma_{\text{energy}} = 
@@ -259,6 +265,7 @@ $ = \lambda_v - 1
 \end{array}
 ```
 
+Smoother Min and Max Functions
 ```math
 \begin{array}{ll}
 & \text{smin}(a_1, a_2, k) & = & \frac{-1}{k} \left( b + \ln(e^{-k a_1 - b} + e^{-k a_2 - b}) \right) \\
