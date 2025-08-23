@@ -226,7 +226,7 @@ where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. C
 ##### Thrust and Thrust-Acceleration Expressions
 
 ```math
-\begin{array}{ll}
+\begin{array}{llll}
 \Gamma_{\text{fuel}} = 
 \begin{cases}
 \Gamma_{\max}        & \text{if} & \$ > 0 & \text{and using thrust-acc constraints} \\
