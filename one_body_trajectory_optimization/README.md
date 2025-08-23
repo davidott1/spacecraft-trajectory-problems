@@ -150,7 +150,7 @@ python main.py input/example/10.json output/example
 | Equality Constraints   | $\vec{\Theta}_o$             |                        | $t_o=t_{os}$                                                                  | $\vec{r}(t_o)={\vec r}_{os}$                   | $\vec{r}(t_o)={\vec r}_{os}$                  |
 |                        | $\vec{\Theta}_f$             |                        | $t_f=t_{fs}$                                                                  | $\vec{r}(t_f)={\vec r}_{fs}$                                | $\vec{r}(t_f)={\vec r}_{fs}$               |
 | Inequality Constraints | $\Psi(t)$                    | fuel                   | $\Gamma_{\min} \leq \Gamma_{\text{fuel}} \leq \Gamma_{\max}$                  | or $T_{\min}/m \leq \Gamma_{\text{fuel}} \leq T_{\max}/m$   |                                            |
-|                        |                              | energy                 | $\Gamma_{\min} \leq \Gamma_{\text{energy}} \leq \Gamma_{\max}$                | or $T_{\min}/m \leq \Gamma_{\text{energy}} \leq T_{\max}/m$ | or $\Gamma_{\text{energy}} = \lambda_v$ |
+|                        |                              | energy                 | $\Gamma_{\min} \leq \Gamma_{\text{energy}} \leq \Gamma_{\max}$                | or $T_{\min}/m \leq \Gamma_{\text{energy}} \leq T_{\max}/m$ | or $0 \leq \Gamma_{\text{energy}} \leq \inf$ |
 ```math
 \begin{array}{ll}
 \Gamma_{\text{fuel}} = 
@@ -164,6 +164,15 @@ python main.py input/example/10.json output/example
 & 
 \ \ \text{and} \ \ \ \ \ \ \ \ \ \dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
 \end{array}
+```
+
+```math
+\begin{array}{ll}
+\Gamma_{\text{energy}} = 
+\begin{cases}
+\lambda_v &
+smin(smax(\lambda_v,\Gamma_\min,k),\Gamma_\max,k) \text{ or } T_{\min} / m & k = 1 \to \inf
+\end{cases}
 ```
 
 ### Derivation
