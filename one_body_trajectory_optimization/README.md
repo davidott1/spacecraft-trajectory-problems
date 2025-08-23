@@ -150,14 +150,14 @@ python main.py input/example/10.json output/example
 | Equality Constraints   | $\vec{\Theta}_o$             |                        | $t_o=t_{os}$                                                                  | $\vec{r}(t_o)={\vec r}_{os}$                   | $\vec{r}(t_o)={\vec r}_{os}$                  |
 |                        | $\vec{\Theta}_f$             |                        | $t_f=t_{fs}$                                                                  | $\vec{r}(t_f)={\vec r}_{fs}$                                | $\vec{r}(t_f)={\vec r}_{fs}$               |
 | Inequality Constraints | $\Psi(t)$                    | fuel                   | $\Gamma_{\min} \leq \Gamma_{\text{fuel}} \leq \Gamma_{\max}$                  | or $T_{\min}/m \leq \Gamma_{\text{fuel}} \leq T_{\max}/m$   |                                            |
-|                        |                              | energy                 | $\Gamma_{\min} \leq \Gamma_{\text{energy}} \leq \Gamma_{\max}$                | or $T_{\min}/m \leq \Gamma_{\text{energy}} \leq T_{\max}/m$ | or $\Gamma_{\text{energy}} = \lambda_v(t)$ |
+|                        |                              | energy                 | $\Gamma_{\min} \leq \Gamma_{\text{energy}} \leq \Gamma_{\max}$                | or $T_{\min}/m \leq \Gamma_{\text{energy}} \leq T_{\max}/m$ | or $\Gamma_{\text{energy}} = \lambda_v$ |
 ```math
 \begin{array}{ll}
 \Gamma_{\text{fuel}} = 
 \begin{cases}
-\Gamma_{\max} or T_{\max} / m & \$ > 0 \\
+\Gamma_{\max} \text{ or } T_{\max} / m & \$ > 0 \\
 \text{indeterminate}          & \$ = 0 \\
-\Gamma_{\min} or T_{\min} / m & \$ < 0
+\Gamma_{\min} \text{ or } T_{\min} / m & \$ < 0
 \end{cases}
 & 
 \ \ \text{and} \ \ \ \ \ \ \ \ \ $ = \lambda_v - 1
