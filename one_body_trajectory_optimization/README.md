@@ -132,7 +132,9 @@ python main.py input/example/10.json output/example
 ```
 
 ---
-## Optimal Control Problem Summary
+## Optimal Control Problem 
+
+### Summary
 
 | System <br> Component  | <br> Symbol                  | Minimization <br> Type | <br> Expressions                                                           |                                   |                                               |
 | :-                     | :-                           | :-                     | :-                                                                         | :-                                | :-                                            |
@@ -162,12 +164,12 @@ python main.py input/example/10.json output/example
 ```
 
 ---
-## Optimal Control Problem Derivation
+### Derivation
 
 The optimal control problem is solved using an indirect method. The objective $J$ minimizes fuel and energy, representative as the integral of magnitude $\Gamma$ or square $\Gamma^2$ of thrust acceleration, respectively. The one-body dynamics $\dot{\vec{x}}$ are free from natural acceleration with control is thrust acceleration $\vec{\Gamma}$. The equality conditions or boundary conditions are variable: flight time is fixed or free, as well as final position and velocity. Flight timee is $\Delta_t = t_f - t_o = t_f$. The initial time is assumed to be $t_o = 0$. Free initial position and velocity is not implemented, but the problem structure is reversible in time. The inequality conditions are variables as well. For minimum energy problems, thrust or thrust acceleration is either unconstrained or less than a maximum. For minimum fuel problems, thrust or thrust acceleration is necessarily less than a maximum. The coordinate system is Cartesian in two dimensions and with respect to an inertial frame. The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy.
 
 ---
-### Hamiltonian Formulation
+#### Hamiltonian Formulation
 The indirect method means to derive the optimal control law a Hamiltonian $H$ must be formed to minimize. The derivatives of the Hamiltonian will provide the necessary, but not sufficient, conditions for a minimum solution. The Hamiltonian is a function of the integrand $L$ of the objective $J$, state $\vec{x}$, co-state $\vec{\lambda}$, dynamics $\dot{\vec{x}}$, and control $\vec{\Gamma}$. In particular, the co-state in component form is $\vec{\lambda} = \left[ \lambda_{r_x} \ \ \ \lambda_{r_y} \ \ \ \lambda_{v_x} \ \ \ \lambda_{v_y} \right]^\top$.
 
 The Hamiltonian $H$ is in general
@@ -182,10 +184,10 @@ H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r \vec{v} + \vec{
 ```
 
 ---
-### Necessary Conditions for Optimality
+#### Necessary Conditions for Optimality
 From the Hamiltonian, we derive the necessary conditions for optimality using Pontryagin's Minimum Principle, deriving the co-state dynamical equations and the optimal control.
 
-#### Co-state Equations
+##### Co-state Equations
 The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \right)^\top$.
 ```math
 \begin{align}
@@ -196,7 +198,7 @@ The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \r
 \end{align}
 ```
 
-#### Optimal Control
+##### Optimal Control
 The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is found by setting the partial derivative of the Hamiltonian with respect to the control to zero, $dH/d\vec{u} = \vec{0}^\top$:
 ```math
 \begin{align}
@@ -207,10 +209,10 @@ The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is
 This result explicitly defines the optimal control inputs in terms of the co-states associated with the velocity components.
 
 ---
-### Two-Point Boundary Value Problem (TPBVP)
+#### Two-Point Boundary Value Problem (TPBVP)
 By substituting the optimal control law back into the state and co-state equations, we get a complete system of first-order ordinary differential equations (ODEs).
 
-#### State Equations (4)
+##### State Equations (4)
 ```math
 \begin{align}
 &\dot{r}_x = v_x \\
@@ -220,7 +222,7 @@ By substituting the optimal control law back into the state and co-state equatio
 \end{align}
 ```
 
-#### Co-state Equations (4)
+##### Co-state Equations (4)
 ```math
 \begin{align}
 &\dot{\lambda}_{r_x} = 0 \\
