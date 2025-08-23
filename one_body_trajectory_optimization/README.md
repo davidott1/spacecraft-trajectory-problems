@@ -156,7 +156,7 @@ python main.py input/example/10.json output/example
 
 The optimal control problem is solved using an indirect method. The objective $J$ minimizes fuel and energy as follows, respectively:
 ```math
-\begin{array}[lllll]
+\begin{array}{lllll}
   \text{fuel} & : & J & = & \int \ L \ dt = \int_{t_o}^{t_f} \              \Gamma   \ dt \\
 \text{energy} & : & J & = & \int \ L \ dt = \int_{t_o}^{t_f} \ \tfrac{1}{2} \Gamma^2 \ dt
 \end{array}
