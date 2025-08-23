@@ -184,13 +184,15 @@ where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant.
 The equality conditions or boundary conditions are variable: flight time is fixed or free, as well as final position and velocity. Flight time is $\Delta t = t_f - t_o = t_f$. The initial time is assumed to be $t_o = 0$. Free initial position and velocity is not implemented, but the problem structure is reversible in time. The inequality conditions are variables as well. For minimum energy problems, thrust or thrust acceleration is either unconstrained or less than a maximum. For minimum fuel problems, thrust or thrust acceleration is necessarily less than a maximum. The coordinate system is Cartesian in two dimensions and with respect to an inertial frame. The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy.
 
 #### Hamiltonian Formulation
-The indirect method means to derive the optimal control law a Hamiltonian $H$ must be formed to minimize. The derivatives of the Hamiltonian will provide the necessary, but not sufficient, conditions for a minimum solution. The Hamiltonian is a function of the integrand $L$ of the objective $J$, state $\vec{x}$, co-state $\vec{\lambda}$, dynamics $\dot{\vec{x}}$, and control $\vec{\Gamma}$. In particular, the co-state in component form is $\vec{\lambda} = \left[ \lambda_{r_x} \ \ \ \lambda_{r_y} \ \ \ \lambda_{v_x} \ \ \ \lambda_{v_y} \right]^\top$.
+The indirect method means to derive the optimal control law by minimizing a Hamiltonian $H$. The derivatives of the Hamiltonian provide the necessary, but not sufficient, conditions for a minimum solution. The Hamiltonian is a function of the integrand $L$ of the objective $J$, state $\vec{x}$, co-state $\vec{\lambda}$, dynamics $\dot{\vec{x}}$, and control $\vec{\Gamma}$. In particular, the co-state in component form is $\vec{\lambda} = \left[ \lambda_{r_x} \ \ \ \lambda_{r_y} \ \ \ \lambda_{v_x} \ \ \ \lambda_{v_y} \right]^\top$.
 
 The Hamiltonian $H$ is in general
 ```math
 H = L + \vec{\lambda}^\top \vec{f}(x, u)
-  = \frac{1}{2} \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} \dot{r}_x + \lambda_{r_y} \dot{r}_y + \lambda_{v_x} \dot{v}_x + \lambda_{v_y} \dot{v}_y
 ```
+For minimization of of fuel and energy, $L = \Gamma$ and $\frac{1}{2} \Gamma^2$
+
+
 The time-derivative of the state $\dot{\vec{x}}$ must conform to the dynamics, so $\dot{\vec{x}} = \vec{f}(t, \vec{x},\vec{u})$. Substituting the dynamics into the Hamilitonian yields
 ```math
 H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma}
