@@ -154,6 +154,7 @@ python main.py input/example/10.json output/example
 
 ### Derivation
 
+#### Objective, State, Control, and Dynamics
 The optimal control problem is solved using an indirect method. The objective $J$ minimizes fuel and energy as follows, respectively:
 ```math
 \begin{array}{rllll}
@@ -174,7 +175,7 @@ where $\vec{r} = [ r_x \ \ \ r_y ]^\top$ is position and $\vec{v} = [ v_x \ \ \ 
 &\dot{v}_y = \Gamma_y \\
 \end{align}
 ```
-Mass is not needed as an explicit state variable, but it needs to be integrated along with the state and co-state to model thrust, $T = \Gamma m$. The time-derivative of mass is
+Mass is not needed as an explicit state variable, but it needs to be integrated along with the state to model thrust, $T = \Gamma m$. The time-derivative of mass is
 ```math
 \dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
 ```
@@ -287,33 +288,5 @@ Smooth Min and Max Functions
 ```math
 b = \text{max}(k a_1, k a_2)
 ```
-
-<!-- #### Two-Point Boundary Value Problem (TPBVP)
-By substituting the optimal control law back into the state and co-state equations, we get a complete system of first-order ordinary differential equations (ODEs).
-
-##### State and Co-State Equations (4+4)
-```math
-\begin{align}
-&\dot{r}_x = v_x \\
-&\dot{r}_y = v_y \\
-&\dot{v}_x = -\lambda_{v_x} \\
-&\dot{v}_y = -\lambda_{v_y} \\
-\end{align}
-```
-
-```math
-\begin{align}
-&\dot{\lambda}_{r_x} = 0 \\
-&\dot{\lambda}_{r_y} = 0 \\
-&\dot{\lambda}_{v_x} = -\lambda_{r_x} \\
-&\dot{\lambda}_{v_y} = -\lambda_{r_y} \\
-\end{align}
-```
-
-Solving this system of eight ODEs requires eight boundary conditions (e.g., initial and final positions and velocities), forming a TPBVP. The solution yields the optimal trajectories for the states, co-states, and the control. Special considderation must be made for thrust constraints. Control is a function of co-velocity $\vec{\lambda}_v$, but thrust is a function of thrust acceleration and mass. Mass is not needed as an explicit state variable, but it needs to be integrated along with the state and co-state. The time-derivative for mass is
-```math
-\dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
-```
-where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. Compute $\dot{m}$ after $\Gamma_{\text{fuel}}$ or $\Gamma_{\text{energy}}$ is computed for the thrust constaint case. -->
 
 ---
