@@ -162,7 +162,7 @@ python main.py input/example/10.json output/example
 & 
 \ \ \text{and} \ \ \ \ \ \ \ \ \ $ = \lambda_v - 1
 & 
-\ \ \text{and} \ \ \ \ \ \ \ \ \ m(t) = m_o \exp{\frac{-1}{c_{ev}} \Gamma}
+\ \ \text{and} \ \ \ \ \ \ \ \ \ m(t) = m_o e^{\frac{-1}{c_{ev}} \Gamma}
 \end{array}
 ```
 
