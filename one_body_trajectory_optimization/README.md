@@ -279,7 +279,10 @@ $ = \lambda_v - 1
 ```
 
 ```math
-\Gamma_{\text{fuel}} = \Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k \$) \right)
+\Gamma_{\text{fuel}} = 
+\begin{cases}
+\Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k \$) \right)
+\end{cases}
 ```
 
 Minimization Type: Energy
