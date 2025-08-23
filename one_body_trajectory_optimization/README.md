@@ -254,6 +254,7 @@ Solving this system of eight ODEs requires eight boundary conditions (e.g., init
 & \text{smin}(a_1, a_2, k) & = & \frac{-1}{k} \left( b + \ln(e^{-k a_1 - b} + e^{-k a_2 - b}) \right) \\
 & \text{smax}(a_1, a_2, k) & = & \frac{ 1}{k} \left( b + \ln(e^{ k a_1 - b} + e^{ k a_2 - b}) \right) \\
 \end{array}
+
 b = \text{max}(k a_1, k a_2)
 ```
 
