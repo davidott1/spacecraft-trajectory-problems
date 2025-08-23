@@ -136,21 +136,21 @@ python main.py input/example/10.json output/example
 
 ### Summary
 
-| System <br> Component  | <br> Symbol                  | Minimization <br> Type | <br> Expressions                                                              |                                                |                                               |
-| :-                     | :-                           | :-                     | :-                                                                            | :-                                             | :-                                            |
-| Objective              | $J$                          | fuel                   | $J = \int \ L \ dt = \int_{t_o}^{t_f} \ \Gamma \ dt$                          |                                                |                                               |
-|                        |                              | energy                 | $J = \int \ L \ dt = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$             |                                                |                                               |
-| Timespan               | $t$                          |                        | $t \in [t_o \ \ \ t_f]$                                                       |                                                |                                               |
-| State                  | $\vec{x}(t)$                 |                        | $\vec{x} = [ \vec{r}^\top \ \ \ \vec{v}^\top ]^\top$                          |                                                |                                               |
-| Co-State               | $\vec{\lambda}(t)$           |                        | $\vec{\lambda} = [ \vec{\lambda}_r^\top \ \ \ \vec{\lambda}_v^\top ]^\top$    |                                                |                                               |
-| Control                | $\vec{u}(t)$                 | fuel                   | $\vec{u} = \vec{\Gamma} = \Gamma \hat{\Gamma}$                                | $\Gamma = \Gamma_{\text{fuel}}$                | $\hat{\Gamma} = \vec{\lambda}_v / \lambda_v$  |
-|                        |                              | energy                 | $\vec{u} = \vec{\Gamma} = \Gamma \hat{\Gamma}$                                | $\Gamma = \Gamma_{\text{energy}}$              | $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$ |
-| Dynamics               | $\vec{f}(t,\vec{x},\vec{u})$ |                        | $\vec{f} = [ \vec{v}^\top \ \ \ \vec{\Gamma}^\top ]^\top$                     |                                                |                                               |
-| Co-Dynamics            | $\vec{g}(t,\vec{x},\vec{u})$ |                        | $\vec{g} = [ \vec{0}^\top \ \ \ -\vec{\lambda}_r^\top ]^\top$                 |                                                |                                               |
-| Equality Constraints   | $\vec{\Theta}_o$             |                        | $t_o=t_{os}$                                                                  | $\vec{r}(t_o)={\vec r}_{os}$                   | $\vec{r}(t_o)={\vec r}_{os}$                  |
-|                        | $\vec{\Theta}_f$             |                        | $t_f=t_{fs}$                                                                  | $\vec{r}(t_f)={\vec r}_{fs}$                                | $\vec{r}(t_f)={\vec r}_{fs}$               |
-| Inequality Constraints | $\Psi(t)$                    | fuel                   | $\Gamma_{\min} \leq \Gamma_{\text{fuel}} \leq \Gamma_{\max}$                  | or $T_{\min}/m \leq \Gamma_{\text{fuel}} \leq T_{\max}/m$   |                                            |
-|                        |                              | energy                 | $\Gamma_{\min} \leq \Gamma_{\text{energy}} \leq \Gamma_{\max}$                | or $T_{\min}/m \leq \Gamma_{\text{energy}} \leq T_{\max}/m$ | or $0 \leq \Gamma_{\text{energy}} \leq \infty$ |
+| System <br> Component | <br> Symbol | Minimization <br> Type | <br> Expressions | | |
+| :- | :- | :- | :- | :- | :- |
+| Objective | $J$ | fuel | $J = \int \ L \ dt = \int_{t_o}^{t_f} \ \Gamma \ dt$ | | |
+| | | energy | $J = \int \ L \ dt = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$ | | |
+| Timespan | $t$ | | $t \in [t_o \ \ \ t_f]$ | | |
+| State | $\vec{x}(t)$ | | $\vec{x} = [ \vec{r}^\top \ \ \ \vec{v}^\top ]^\top$ | | |
+| Co-State | $\vec{\lambda}(t)$ | | $\vec{\lambda} = [ \vec{\lambda}_r^\top \ \ \ \vec{\lambda}_v^\top ]^\top$ | | |
+| Control | $\vec{u}(t)$ | fuel | $\vec{u} = \vec{\Gamma} = \Gamma \hat{\Gamma}$ | $\Gamma = \Gamma_{\text{fuel}}$ | $\hat{\Gamma} = \vec{\lambda}_v / \lambda_v$ |
+| | | energy | $\vec{u} = \vec{\Gamma} = \Gamma \hat{\Gamma}$ | $\Gamma = \Gamma_{\text{energy}}$ | $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$ |
+| Dynamics | $\vec{f}(t,\vec{x},\vec{u})$ | | $\vec{f} = [ \vec{v}^\top \ \ \ \vec{\Gamma}^\top ]^\top$ | | |
+| Co-Dynamics | $\vec{g}(t,\vec{x},\vec{u})$ | | $\vec{g} = [ \vec{0}^\top \ \ \ -\vec{\lambda}_r^\top ]^\top$ | | |
+| Equality Constraints | $\vec{\Theta}_o$ | | $t_o=t_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ |
+| | $\vec{\Theta}_f$ | | $t_f=t_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ |
+| Inequality Constraints | $\Psi(t)$ | fuel | $\Gamma_{\min} \leq \Gamma_{\text{fuel}} \leq \Gamma_{\max}$ | or $T_{\min}/m \leq \Gamma_{\text{fuel}} \leq T_{\max}/m$ | |
+| | | energy | $\Gamma_{\min} \leq \Gamma_{\text{energy}} \leq \Gamma_{\max}$ | or $T_{\min}/m \leq \Gamma_{\text{energy}} \leq T_{\max}/m$ | or $0 \leq \Gamma_{\text{energy}} \leq \infty$ |
 
 ### Derivation
 
@@ -227,7 +227,7 @@ where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. C
 
 ```math
 \begin{array}{llll}
-\Gamma_{\text{fuel}} = 
+\Gamma_\fuel = 
 \begin{cases}
 \Gamma_{\max}        & \$ > 0 & \text{and if using thrust-acc constraints} \\
      T_{\max} / m    & \$ > 0 & \text{and if using thrust     constraints} \\
@@ -237,9 +237,16 @@ where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. C
 \end{cases}
 \end{array}
 ```
+
+```math
+\Gamma_\fuel = \Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k \$) \right)
+```
+
 ```math
 $ = \lambda_v - 1
 ```
+
+
 
 ```math
 \begin{array}{ll}
