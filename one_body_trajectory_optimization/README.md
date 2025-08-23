@@ -255,6 +255,7 @@ Smoothing Option
 $ = \lambda_v - 1
 ```
 
+```math
 \begin{array}{llll}
 \Gamma_{\text{min}} = 
 \begin{cases}
@@ -275,14 +276,15 @@ $ = \lambda_v - 1
 ```
 
 ```math
+\Gamma_{\text{fuel}} =
+\begin{cases}
 \text{smin}\left(\text{smax}(\lambda_v,\Gamma_{\text{min}},k),\Gamma_{\text{max}},k\right)
+\end{cases}
 ```
 
 ```math
 \Gamma_{\text{fuel}} = 
-\begin{cases}
 \Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k \$) \right)
-\end{cases}
 ```
 
 Minimization Type: Energy
