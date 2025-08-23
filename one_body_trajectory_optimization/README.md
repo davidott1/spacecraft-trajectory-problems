@@ -251,7 +251,7 @@ Smoothing Option
 \Gamma_{\text{max}} = 
 \begin{cases}
 \Gamma_{\max,s}     & \$ > 0 & \text{and if using thrust-acc constraints} \\
-     T_{\max,s} / m & \$ > 0 & \text{and if using thrust     constraints} \\
+     T_{\max,s} / m & \$ > 0 & \text{and if using thrust     constraints}
 \end{cases}
 \end{array}
 
@@ -259,7 +259,7 @@ Smoothing Option
 \Gamma_{\text{min}} = 
 \begin{cases}
 \Gamma_{\min,s}     & \$ < 0 & \text{and if using thrust-acc constraints} \\
-     T_{\min,s} / m & \$ < 0 & \text{and if using thrust     constraints} \\
+     T_{\min,s} / m & \$ < 0 & \text{and if using thrust     constraints}
 \end{cases}
 \end{array}
 ```
