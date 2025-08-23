@@ -227,7 +227,7 @@ where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. C
 
 Minimization Type: Fuel
 
-Discrete Option
+Non-Smooth Option
 ```math
 \begin{array}{llll}
 \Gamma_{\text{fuel}} = 
@@ -241,7 +241,7 @@ Discrete Option
 \end{array}
 ```
 
-Smoothing Option
+Smooth Option
 ```math
 $ = \lambda_v - 1
 ```
