@@ -243,10 +243,6 @@ Dicrete Option
 
 Smoothing Option
 ```math
-\Gamma_{\text{fuel}} = \Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k \$) \right)
-```
-
-```math
 \begin{array}{llll}
 \Gamma_{\text{max}} = 
 \begin{cases}
@@ -254,6 +250,10 @@ Smoothing Option
      T_{\text{max},s} / m & \$ > 0 & \text{and if using thrust     constraints}
 \end{cases}
 \end{array}
+
+```math
+$ = \lambda_v - 1
+```
 
 \begin{array}{llll}
 \Gamma_{\text{min}} = 
@@ -264,9 +264,18 @@ Smoothing Option
 \end{array}
 ```
 
-Switching Function
 ```math
-$ = \lambda_v - 1
+\begin{array}{llll}
+\Gamma_{\text{energy}} = 
+\begin{cases}
+& \lambda_v                                                                                  & \text{if unconstrained} &                  \\
+& \text{smin}\left(\text{smax}(\lambda_v,\Gamma_{\text{min}},k),\Gamma_{\text{max}},k\right) & \text{if   constrained} & k = 1 \to \infty
+\end{cases}
+\end{array}
+```
+
+```math
+\Gamma_{\text{fuel}} = \Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k \$) \right)
 ```
 
 Minimization Type: Energy
