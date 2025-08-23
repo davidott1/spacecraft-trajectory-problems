@@ -149,7 +149,6 @@ python main.py input/example/10.json output/example
 |                        | $\vec{\Theta}_f$             |                        | $t_f=t_{fs}$                                                               | $\vec{r}(t_f)={\vec r}_{fs}$      | $\vec{r}(t_f)={\vec r}_{fs}$                  |
 | Inequality Constraints | $\Psi(t)$                    | fuel                   | $\Gamma(t) \leq \Gamma_{\max}$                                             | or $T \leq T_{\max}$              |                                               |
 |                        |                              | energy                 | $\Gamma(t) \leq \Gamma_{\max}$                                             | or $T \leq T_{\max}$              | or unconstrained                              |
-
 ```math
 \begin{array}{ll}
 \Gamma_{\text{fuel}} = 
