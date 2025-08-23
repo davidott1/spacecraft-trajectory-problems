@@ -225,7 +225,7 @@ where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. C
 
 ##### Thrust and Thrust-Acceleration Expressions
 
-###### Minimization Type: Fuel
+Minimization Type: Fuel
 
 Dicrete Option
 ```math
@@ -251,7 +251,7 @@ Switching Function
 $ = \lambda_v - 1
 ```
 
-###### Minimization Type: Energy
+Minimization Type: Energy
 
 Smoothing Option
 ```math
