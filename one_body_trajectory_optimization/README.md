@@ -151,6 +151,7 @@ python main.py input/example/10.json output/example
 |                        |                              | energy                 | $\Gamma(t) \leq \Gamma_{\max}$                                                                                                 | or $T \leq T_{\max}$         | or unconstrained             |
 
 ```math
+\begin{array}{lr}
 \Gamma_{\text{fuel}} = 
 \begin{bmatrix}
 \Gamma_{\max}        & \$ > 0 \\
@@ -158,6 +159,7 @@ python main.py input/example/10.json output/example
 \Gamma_{\min}        & \$ < 0
 \end{bmatrix}
 \ \ \ \ \ \text{and} \ \ \ \ \ \$ = \lambda_v - 1
+\end{array}
 ```
 
 The optimal control problem is solved using an indirect method. The objective $J$ minimizes fuel and energy, representative as the integral of magnitude $\Gamma$ or square $\Gamma^2$ of thrust acceleration, respectively. The one-body dynamics $\dot{\vec{x}}$ are free from natural acceleration with control is thrust acceleration $\vec{\Gamma}$. The equality conditions or boundary conditions are variable: flight time is fixed or free, as well as final position and velocity. Flight timee is $\Delta_t = t_f - t_o = t_f$. The initial time is assumed to be $t_o = 0$. Free initial position and velocity is not implemented, but the problem structure is reversible in time. The inequality conditions are variables as well. For minimum energy problems, thrust or thrust acceleration is either unconstrained or less than a maximum. For minimum fuel problems, thrust or thrust acceleration is necessarily less than a maximum. The coordinate system is Cartesian in two dimensions and with respect to an inertial frame. The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy.
