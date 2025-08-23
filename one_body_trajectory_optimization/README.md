@@ -148,9 +148,9 @@ python main.py input/example/10.json output/example
 | Dynamics               | $\vec{f}(t,\vec{x},\vec{u})$ |                        | $\vec{f} = [ \vec{v}^\top \ \ \ \vec{\Gamma}^\top ]^\top$                     |                                                |                                               |
 | Co-Dynamics            | $\vec{g}(t,\vec{x},\vec{u})$ |                        | $\vec{g} = [ \vec{0}^\top \ \ \ -\vec{\lambda}_r^\top ]^\top$                 |                                                |                                               |
 | Equality Constraints   | $\vec{\Theta}_o$             |                        | $t_o=t_{os}$                                                                  | $\vec{r}(t_o)={\vec r}_{os}$                   | $\vec{r}(t_o)={\vec r}_{os}$                  |
-|                        | $\vec{\Theta}_f$             |                        | $t_f=t_{fs}$                                                                  | $\vec{r}(t_f)={\vec r}_{fs}$                   | $\vec{r}(t_f)={\vec r}_{fs}$                  |
-| Inequality Constraints | $\Psi(t)$                    | fuel                   | $\Gamma_{\min} \leq \Gamma(t) \leq \Gamma_{\max}$                             | or $T_{\min}/m \leq \Gamma(t) \leq T_{\max}/m$ |                                               |
-|                        |                              | energy                 | $\Gamma_{\min} \leq \Gamma(t) \leq \Gamma_{\max}$                             | or $T_{\min}/m \leq \Gamma_{\text{energy}}(t) \leq T_{\max}/m$ | or $\Gamma(t) = \lambda_v(t)$                 |
+|                        | $\vec{\Theta}_f$             |                        | $t_f=t_{fs}$                                                                  | $\vec{r}(t_f)={\vec r}_{fs}$                                | $\vec{r}(t_f)={\vec r}_{fs}$               |
+| Inequality Constraints | $\Psi(t)$                    | fuel                   | $\Gamma_{\min} \leq \Gamma_{\text{fuel}} \leq \Gamma_{\max}$                  | or $T_{\min}/m \leq \Gamma_{\text{fuel}} \leq T_{\max}/m$   |                                            |
+|                        |                              | energy                 | $\Gamma_{\min} \leq \Gamma_{\text{energy}} \leq \Gamma_{\max}$                | or $T_{\min}/m \leq \Gamma_{\text{energy}} \leq T_{\max}/m$ | or $\Gamma_{\text{energy}} = \lambda_v(t)$ |
 ```math
 \begin{array}{ll}
 \Gamma_{\text{fuel}} = 
