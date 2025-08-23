@@ -251,9 +251,21 @@ Solving this system of eight ODEs requires eight boundary conditions (e.g., init
 
 ```math
 \begin{array}{ll}
-&\text{smin}(x,y,k) &= &0 \\
-&\text{smax}(x,y,k) &= &0
+& \text{smin}(a_1, a_2, k) = (-1 / k) * (m + \log(np.exp(-k a_1 - m) + \exp(-k a_2 - m))) & \text{where} & m = max(k a_1, k a_2) \\
+& \text{smax}(a_1, a_2, k) = ( 1 / k) * (m + \log(np.exp( k a_1 - m) + \exp( k a_2 - m))) & \text{where} & m = max(k a_1, k a_2)
 \end{array}
 ```
+
+def smax(a_1, a_2, k):
+    m = np.maximum(k * val1, k * val2)
+    return (1.0 / k) * (m + np.log(np.exp(k * val1 - m) + np.exp(k * val2 - m)))
+
+def smin(val1, val2, k):
+    """
+    Smooth minimum using Log-Sum-Exp. This expression is mumerically stable and produces a value 
+    slightly smaller than min(val1,val2), depending on k.
+    """
+    m = np.maximum(-k * val1, -k * val2)
+    return (-1.0 / k) * (m + np.log(np.exp(-k * val1 - m) + np.exp(-k * val2 - m)))
 
 ---
