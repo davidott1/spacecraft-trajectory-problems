@@ -184,6 +184,31 @@ The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \r
 \end{align}
 ```
 
+##### State and Co-State Equations (4+4)
+```math
+\begin{align}
+&\dot{r}_x = v_x \\
+&\dot{r}_y = v_y \\
+&\dot{v}_x = \Gamma_x \\
+&\dot{v}_y = \Gamma_y \\
+\end{align}
+```
+
+```math
+\begin{align}
+&\dot{\lambda}_{r_x} = 0 \\
+&\dot{\lambda}_{r_y} = 0 \\
+&\dot{\lambda}_{v_x} = -\lambda_{r_x} \\
+&\dot{\lambda}_{v_y} = -\lambda_{r_y} \\
+\end{align}
+```
+
+Solving this system of eight ODEs requires eight boundary conditions (e.g., initial and final positions and velocities), forming a TPBVP. The solution yields the optimal trajectories for the states, co-states, and the control. Special considderation must be made for thrust constraints. Control is a function of co-velocity $\vec{\lambda}_v$, but thrust is a function of thrust acceleration and mass. Mass is not needed as an explicit state variable, but it needs to be integrated along with the state and co-state. The time-derivative for mass is
+```math
+\dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
+```
+where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. Compute $\dot{m}$ after $\Gamma_{\text{fuel}}$ or $\Gamma_{\text{energy}}$ is computed for the thrust constaint case.
+
 ##### Optimal Control
 The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is found by setting the partial derivative of the Hamiltonian with respect to the control to zero, $dH/d\vec{u} = \vec{0}^\top$:
 ```math
@@ -260,10 +285,10 @@ Smooth Min and Max Functions
 b = \text{max}(k a_1, k a_2)
 ```
 
-#### Two-Point Boundary Value Problem (TPBVP)
+<!-- #### Two-Point Boundary Value Problem (TPBVP)
 By substituting the optimal control law back into the state and co-state equations, we get a complete system of first-order ordinary differential equations (ODEs).
 
-##### State Equations (4)
+##### State and Co-State Equations (4+4)
 ```math
 \begin{align}
 &\dot{r}_x = v_x \\
@@ -273,7 +298,6 @@ By substituting the optimal control law back into the state and co-state equatio
 \end{align}
 ```
 
-##### Co-state Equations (4)
 ```math
 \begin{align}
 &\dot{\lambda}_{r_x} = 0 \\
@@ -287,6 +311,6 @@ Solving this system of eight ODEs requires eight boundary conditions (e.g., init
 ```math
 \dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
 ```
-where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. Compute $\dot{m}$ after $\Gamma_{\text{fuel}}$ or $\Gamma_{\text{energy}}$ is computed for the thrust constaint case.
+where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. Compute $\dot{m}$ after $\Gamma_{\text{fuel}}$ or $\Gamma_{\text{energy}}$ is computed for the thrust constaint case. -->
 
 ---
