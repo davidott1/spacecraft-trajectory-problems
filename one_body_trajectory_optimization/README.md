@@ -221,7 +221,7 @@ Solving this system of eight ODEs requires eight boundary conditions (e.g., init
 ```math
 \dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
 ```
-where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. Compute $\dot{m}$ _after_ $\Gamma_{\text{fuel}}$ or $\Gamma_{\text{energy}}$ is computed for the thrust constaint case.
+where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. Compute $\dot{m}$ after $\Gamma_{\text{fuel}}$ or $\Gamma_{\text{energy}}$ is computed for the thrust constaint case.
 
 ##### Thrust and Thrust-Acceleration Expressions
 
@@ -229,9 +229,11 @@ where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. C
 \begin{array}{ll}
 \Gamma_{\text{fuel}} = 
 \begin{cases}
-\Gamma_{\max} \text{ or } T_{\max} / m & \$ > 0 \\
-\text{indeterminate}          & \$ = 0 \\
-\Gamma_{\min} \text{ or } T_{\min} / m & \$ < 0
+\Gamma_{\max}        & \text{if } \$ > 0 \text{and using thrust-acc constraints} \\
+     T_{\max} / m    & \text{if } \$ > 0 \text{and using thrust     constraints} \\
+\Gamma_{\min}        & \text{if } \$ < 0 \text{and using thrust-acc constraints} \\
+     T_{\min} / m    & \text{if } \$ < 0 \text{and using thrust     constraints} \\
+\text{indeterminate} & \$ = 0 \\
 \end{cases}
 & 
 \ \ \text{and} \ \ \ \ \ \ \ \ \ $ = \lambda_v - 1
@@ -243,8 +245,8 @@ where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. C
 \Gamma_{\text{energy}} = 
 \begin{cases}
 & \lambda_v \\
-& \text{smin}\left(\text{smax}(\lambda_v,\Gamma_\min  ,k),\Gamma_\max  ,k\right) \text{ if using thrust-acc constraints} & k = 1 \to \infty \\
-& \text{smin}\left(\text{smax}(\lambda_v,     T_\min/m,k),     T_\max/m,k\right) \text{ if using thrust     constraints} & k = 1 \to \infty
+& \text{smin}\left(\text{smax}(\lambda_v,\Gamma_\min  ,k),\Gamma_\max  ,k\right) & \text{if using thrust-acc constraints} & k = 1 \to \infty \\
+& \text{smin}\left(\text{smax}(\lambda_v,     T_\min/m,k),     T_\max/m,k\right) & \text{if using thrust     constraints} & k = 1 \to \infty
 \end{cases}
 \end{array}
 ```
