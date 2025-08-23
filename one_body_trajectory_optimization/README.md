@@ -269,9 +269,13 @@ $ = \lambda_v - 1
 \Gamma_{\text{energy}} = 
 \begin{cases}
 & \lambda_v                                                                                  & \text{if unconstrained} &                  \\
-& \text{smin}\left(\text{smax}(\lambda_v,\Gamma_{\text{min}},k),\Gamma_{\text{max}},k\right) & \text{if   constrained} & k = 1 \to \infty
+& \text{smin}\left(\text{smax}(\lambda_v,\Gamma_{\text{min}},k),\Gamma_{\text{max}},k\right) & \text{if constrained} & k = 1 \to \infty
 \end{cases}
 \end{array}
+```
+
+```math
+\text{smin}\left(\text{smax}(\lambda_v,\Gamma_{\text{min}},k),\Gamma_{\text{max}},k\right)
 ```
 
 ```math
