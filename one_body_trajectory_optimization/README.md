@@ -158,7 +158,7 @@ python main.py input/example/10.json output/example
 \text{indeterminate} & \$ = 0 \\
 \Gamma_{\min}        & \$ < 0
 \end{bmatrix}
-\ \ \ \ \ \text{and} \ \ \ \ \ \$ = \lambda_v - 1
+&\ \ \ \ \ \text{and} \ \ \ \ \ \$ = \lambda_v - 1
 \end{array}
 ```
 
