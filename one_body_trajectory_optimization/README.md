@@ -251,10 +251,10 @@ Solving this system of eight ODEs requires eight boundary conditions (e.g., init
 
 ```math
 \begin{array}{ll}
-& \text{smin}(a_1, a_2, k) & = & \frac{-1}{k} \left( b + \ln(e^{-k a_1 - b} + e^{-k a_2 - b}) \right) & \text{where} \\
-& \text{smax}(a_1, a_2, k) & = & \frac{ 1}{k} \left( b + \ln(e^{ k a_1 - b} + e^{ k a_2 - b}) \right) & \text{where} \\
-&                        b & = & \text{max}(k a_1, k a_2)
+& \text{smin}(a_1, a_2, k) & = & \frac{-1}{k} \left( b + \ln(e^{-k a_1 - b} + e^{-k a_2 - b}) \right) \\
+& \text{smax}(a_1, a_2, k) & = & \frac{ 1}{k} \left( b + \ln(e^{ k a_1 - b} + e^{ k a_2 - b}) \right) \\
 \end{array}
+b = \text{max}(k a_1, k a_2)
 ```
 
 ---
