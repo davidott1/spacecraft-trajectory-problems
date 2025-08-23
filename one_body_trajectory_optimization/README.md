@@ -171,7 +171,7 @@ python main.py input/example/10.json output/example
 \Gamma_{\text{energy}} = 
 \begin{cases}
 \lambda_v \\
-\text{smin}(\text{smax}(\lambda_v,\Gamma_\min,k),\Gamma_\max,k) \text{ or } \text{smin}(\text{smax}(\lambda_v,T_\min/m,k),T_\max/m,k) & k = 1 \to \inf
+\text{smin}(\text{smax}(\lambda_v,\Gamma_\min,k),\Gamma_\max,k) \text{  or  } \text{smin}(\text{smax}(\lambda_v,T_\min/m,k),T_\max/m,k) & k = 1 \to \inf
 & 
 \ \ \text{and} \ \ \ \ \ \ \ \ \ \dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
 \end{cases}
