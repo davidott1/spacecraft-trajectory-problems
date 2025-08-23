@@ -192,7 +192,21 @@ The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is
 &\frac{dH}{d\Gamma_y} = 0 &\to &\Gamma_y + \lambda_{v_y} = 0 &\to &\Gamma_{y*} = -\lambda_{v_y}
 \end{align}
 ```
-This result explicitly defines the optimal control inputs in terms of the co-states associated with the velocity components.
+
+```math
+\begin{array}{llll}
+\Gamma_{\text{fuel}} = 
+\begin{cases}
+\Gamma_{\max}        & \$ > 0 & \text{and if using thrust-acc constraints} \\
+     T_{\max} / m    & \$ > 0 & \text{and if using thrust     constraints} \\
+\Gamma_{\min}        & \$ < 0 & \text{and if using thrust-acc constraints} \\
+     T_{\min} / m    & \$ < 0 & \text{and if using thrust     constraints} \\
+\text{indeterminate} & \$ = 0 &                                            \\
+\end{cases}
+\end{array}
+```
+
+These results explicitly defines the optimal control inputs in terms of the co-states associated with the velocity components.
 
 #### Two-Point Boundary Value Problem (TPBVP)
 By substituting the optimal control law back into the state and co-state equations, we get a complete system of first-order ordinary differential equations (ODEs).
@@ -223,23 +237,10 @@ Solving this system of eight ODEs requires eight boundary conditions (e.g., init
 ```
 where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. Compute $\dot{m}$ after $\Gamma_{\text{fuel}}$ or $\Gamma_{\text{energy}}$ is computed for the thrust constaint case.
 
-##### Thrust and Thrust-Acceleration Expressions
+##### Inequality Constraints: Thrust and Thrust-Acceleration Expressions
 
 Minimization Type: Fuel
 
-Non-Smooth Option
-```math
-\begin{array}{llll}
-\Gamma_{\text{fuel}} = 
-\begin{cases}
-\Gamma_{\max}        & \$ > 0 & \text{and if using thrust-acc constraints} \\
-     T_{\max} / m    & \$ > 0 & \text{and if using thrust     constraints} \\
-\Gamma_{\min}        & \$ < 0 & \text{and if using thrust-acc constraints} \\
-     T_{\min} / m    & \$ < 0 & \text{and if using thrust     constraints} \\
-\text{indeterminate} & \$ = 0 &                                            \\
-\end{cases}
-\end{array}
-```
 
 Smooth Option
 ```math
