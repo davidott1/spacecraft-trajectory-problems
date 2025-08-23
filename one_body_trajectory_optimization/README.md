@@ -250,6 +250,7 @@ Smoothing Option
      T_{\text{max},s} / m & \$ > 0 & \text{and if using thrust     constraints}
 \end{cases}
 \end{array}
+```
 
 ```math
 $ = \lambda_v - 1
