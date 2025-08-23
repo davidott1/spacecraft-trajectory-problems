@@ -241,11 +241,9 @@ Solving this system of eight ODEs requires eight boundary conditions (e.g., init
 \Gamma_{\text{energy}} = 
 \begin{cases}
 & \lambda_v \\
-& \text{smin}\left(\text{smax}(\lambda_v,\Gamma_\min,k),\Gamma_\max,k\right) \text{ if using thrust constraints} & k = 1 \to \infty \\
+& \text{smin}\left(\text{smax}(\lambda_v,\Gamma_\min,k),\Gamma_\max,k\right) \text{ if using thrust     constraints} & k = 1 \to \infty \\
 & \text{smin}\left(\text{smax}(\lambda_v,   T_\min/m,k),   T_\max/m,k\right) \text{ if using thrust-acc constraints} & k = 1 \to \infty
 \end{cases}
-&
-\ \ \text{and} \ \ \ \ \ \ \ \ \ \dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
 \end{array}
 ```
 
