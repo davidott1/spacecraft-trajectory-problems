@@ -134,13 +134,13 @@ python main.py input/example/10.json output/example
 ---
 ## Optimal Control Problem Derivation
 
-| System <br> Component  | <br> Symbol                  | Minimization <br> Type | <br> Expressions                                                                      |                              |                              |
-| :-                     | :-                           | :-                     | :-                                                                                    | :-                           | :-                           |
-| Objective              | $J$                          | fuel                   | $J = \int_{t_o}^{t_f} \Gamma \ dt$                                                    |                              |                              |
-|                        |                              | energy                 | $J = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$                                     |                              |                              |
-| Timespan               | $t$                          |                        | $t \in [t_o \ \ \ t_f]$                                                               |                              |                              |
+| System <br> Component  | <br> Symbol                  | Minimization <br> Type | <br> Expressions                                                           |                              |                              |
+| :-                     | :-                           | :-                     | :-                                                                         | :-                           | :-                           |
+| Objective              | $J$                          | fuel                   | $J = \int_{t_o}^{t_f} \Gamma \ dt$                                         |                              |                              |
+|                        |                              | energy                 | $J = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$                          |                              |                              |
+| Timespan               | $t$                          |                        | $t \in [t_o \ \ \ t_f]$                                                    |                              |                              |
 | State                  | $\vec{x}(t)$                 |                        | $\vec{x} = [ \vec{r}^\top \ \ \ \vec{v}^\top ]^\top$                       |                              |                              |
-| Co-State               | $\vec{\lambda}(t)$           |                        | $\vec{\lambda} = [ \vec{\lambda}_r^\top \ \ \ \vec{\lambda}_v^\top ]^\top$ |                              |                              |
+| Co-State               | $\vec{\lambda}(t)$           |                        | $\vec{\lambda} = [ \vec{\lambda}_{\vec{r}}^\top \ \ \ \vec{\lambda}_{\vec{v}}^\top ]^\top$ |                              |                              |
 | Control                | $\vec{u}(t)$                 | fuel                   | $\vec{u} = \vec{\Gamma} = \Gamma \hat{\Gamma}$                                        | $\Gamma = \Gamma_{\text{fuel}}$ | $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$ |
 |                        |                              | energy                 | $\vec{u} = \vec{\Gamma}$ | $\vec{\Gamma} = -\vec{\lambda}_v$ | |
 | Dynamics               | $\vec{f}(t,\vec{x},\vec{u})$ |                        | $\vec{f} = [ \vec{v}^\top \ \ \ \vec{\Gamma}^\top ]^\top$                                                                   |                              |                              |
