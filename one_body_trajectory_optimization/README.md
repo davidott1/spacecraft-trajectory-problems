@@ -229,10 +229,10 @@ where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant. C
 \begin{array}{llll}
 \Gamma_{\text{fuel}} = 
 \begin{cases}
-\Gamma_{\max}        & \text{if} & \$ > 0 & \text{and using thrust-acc constraints} \\
-     T_{\max} / m    & \text{if} & \$ > 0 & \text{and using thrust     constraints} \\
-\Gamma_{\min}        & \text{if} & \$ < 0 & \text{and using thrust-acc constraints} \\
-     T_{\min} / m    & \text{if} & \$ < 0 & \text{and using thrust     constraints} \\
+\Gamma_{\max}        & \text{if} \$ > 0 & \text{and using thrust-acc constraints} \\
+     T_{\max} / m    & \text{if} \$ > 0 & \text{and using thrust     constraints} \\
+\Gamma_{\min}        & \text{if} \$ < 0 & \text{and using thrust-acc constraints} \\
+     T_{\min} / m    & \text{if} \$ < 0 & \text{and using thrust     constraints} \\
 \text{indeterminate} & \$ = 0 \\
 \end{cases}
 & 
