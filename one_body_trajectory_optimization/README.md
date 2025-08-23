@@ -249,4 +249,11 @@ Solving this system of eight ODEs requires eight boundary conditions (e.g., init
 \end{array}
 ```
 
+```math
+\begin{array}{ll}
+\smin(x,y,k) = 0\\
+\text{smax}(x,y,k) = 0
+\end{array}
+```
+
 ---
