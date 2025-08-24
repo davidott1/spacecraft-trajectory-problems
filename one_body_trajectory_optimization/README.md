@@ -188,7 +188,7 @@ H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r \vec{v} + \vec{
 Using the Hamiltonian, we derive the necessary conditions for optimality using Pontryagin's Minimum Principle. The Hamiltonian-minimizing conditions are 
 the dynamical state equations $\dot{\vec{x}} = ( dH / d\vec{\lambda} )^\top$, 
 the co-state dynamical equations $\dot{\vec{\lambda}} = -( dH / d\vec{x} )^\top$, and 
-the optimal control $dH / du = 0$.
+the optimal control $dH / d\vec{u} = \vec{0}^\top$.
 
 ##### State Dynamical Equations
 The one-body dynamics $\dot{\vec{x}} = \vec{f}$ are free from natural acceleration with control as thrust acceleration, $\vec{\Gamma} = [ \Gamma_x \ \ \ \Gamma_y ]$. These state dynamics are also given by $\dot{\vec{x}} = ( dH / d\vec{\lambda} )^\top$:
