@@ -238,7 +238,7 @@ The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is
 \end{cases}
 \end{array}
 ```
-where $\$ = \lambda_v - 1$
+where $S = \lambda_v - 1$
 
 The energy-minimization control law derivation is as follows:
 ```math
