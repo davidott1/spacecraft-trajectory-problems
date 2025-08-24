@@ -191,13 +191,13 @@ the co-state dynamical equations $\dot{\vec{\lambda}} = -( dH / d\vec{x} )^\top$
 the optimal control $dH / du = 0$.
 
 ##### State Dynamical Equations
-The one-body dynamics $\dot{\vec{x}}$ are free from natural acceleration with control as thrust acceleration, $\vec{\Gamma} = [ \Gamma_x \ \ \ \Gamma_y ]$:
+The one-body dynamics $\dot{\vec{x}} = \vec{f}$ are free from natural acceleration with control as thrust acceleration, $\vec{\Gamma} = [ \Gamma_x \ \ \ \Gamma_y ]$. These state dynamics are also given by $\dot{\vec{x}} = ( dH / d\vec{\lambda} )^\top$:
 ```math
 \begin{align}
-&\dot{r}_x = v_x \\
-&\dot{r}_y = v_y \\
-&\dot{v}_x = \Gamma_x \\
-&\dot{v}_y = \Gamma_y \\
+&\dot{r}_x = \frac{dH}{d\lambda_{r_x}} &\to &\dot{r}_x = v_x \\
+&\dot{r}_y = \frac{dH}{d\lambda_{r_y}} &\to &\dot{r}_y = v_y \\
+&\dot{v}_x = \frac{dH}{d\lambda_{v_x}} &\to &\dot{v}_x = \Gamma_x \\
+&\dot{v}_y = \frac{dH}{d\lambda_{v_y}} &\to &\dot{v}_y = \Gamma_y \\
 \end{align}
 ```
 Mass is not needed as an explicit state variable, but it needs to be integrated along with the state to model thrust, $T = \Gamma m$. The time-derivative of mass is
@@ -206,8 +206,8 @@ Mass is not needed as an explicit state variable, but it needs to be integrated 
 ```
 where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant.
 
-##### Co-stateDynamical Equations
-The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \right)^\top$.
+##### Co-state Dynamical Equations
+The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \right)^\top$:
 ```math
 \begin{align}
 &\dot{\lambda}_{r_x} = -\frac{dH}{dr_x} &\to &\dot{\lambda}_{r_x} = 0              \\
