@@ -154,11 +154,11 @@ python main.py input/example/10.json output/example
 
 ### Derivation
 
-#### Objective, State, Control, and Dynamics
+#### Objective and State
 The optimal control problem is solved using an indirect method. The objective $J$ minimizes fuel and energy as follows, respectively:
 ```math
 \begin{array}{rllll}
-\text{fuel} : & J & = & \int \ L \ dt = \int_{t_o}^{t_f} \              \Gamma   \ dt \\
+\text{fuel}   : & J & = & \int \ L \ dt = \int_{t_o}^{t_f} \              \Gamma   \ dt \\
 \text{energy} : & J & = & \int \ L \ dt = \int_{t_o}^{t_f} \ \tfrac{1}{2} \Gamma^2 \ dt
 \end{array}
 ```
@@ -166,7 +166,32 @@ The state of the one body is representead in a Cartesian xy-system with respect 
 ```math
 \vec{x} = [ \vec{r}^\top \ \ \ \vec{v}^\top ]^\top = [ r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y ]^\top
 ```
-where $\vec{r} = [ r_x \ \ \ r_y ]^\top$ is position and $\vec{v} = [ v_x \ \ \ v_y ]^\top$ is velocity. The one-body dynamics $\dot{\vec{x}}$ are free from natural acceleration with control as thrust acceleration, $\vec{\Gamma} = [ \Gamma_x \ \ \ \Gamma_y ]$:
+where $\vec{r} = [ r_x \ \ \ r_y ]^\top$ is position and $\vec{v} = [ v_x \ \ \ v_y ]^\top$ is velocity.
+
+#### Hamiltonian Formulation
+The indirect method means to derive the optimal control law by minimizing a Hamiltonian $H$. The derivatives of the Hamiltonian provide the necessary, but not sufficient, conditions for a minimum solution. The Hamiltonian is a function of the integrand $L$ of the objective $J$, state $\vec{x}$, co-state $\vec{\lambda}$, dynamics $\vec{f}$, and control $\vec{u}$. In particular, the co-state in component form is $\vec{\lambda} = \left[ \lambda_{r_x} \ \ \ \lambda_{r_y} \ \ \ \lambda_{v_x} \ \ \ \lambda_{v_y} \right]^\top$ and the control. The Hamiltonian $H$ is
+```math
+H = L + \vec{\lambda}^\top \vec{f}(t, \vec{x}, \vec{u})
+```
+For minimization of of fuel and energy, $L = \Gamma$ and $\frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma}$, respectively. Substituting into the Hamilitonian yields for fuel minimization
+```math
+H = \Gamma + \vec{\lambda}_r \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma}
+  = \Gamma + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
+```
+and for energy minimization
+```math
+H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma}
+  = \frac{1}{2} \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
+```
+
+#### Necessary Conditions for Optimality
+Using the Hamiltonian, we derive the necessary conditions for optimality using Pontryagin's Minimum Principle. The Hamiltonian-minimizing conditions are 
+the dynamical state equations $\dot{\vec{x}} = ( dH / d\vec{\lambda} )^\top$, 
+the co-state dynamical equations $\dot{\vec{\lambda}} = -( dH / d\vec{x} )^\top$, and 
+the optimal control $dH / du = 0$.
+
+##### State Dynamical Equations
+The one-body dynamics $\dot{\vec{x}}$ are free from natural acceleration with control as thrust acceleration, $\vec{\Gamma} = [ \Gamma_x \ \ \ \Gamma_y ]$:
 ```math
 \begin{align}
 &\dot{r}_x = v_x \\
@@ -181,26 +206,7 @@ Mass is not needed as an explicit state variable, but it needs to be integrated 
 ```
 where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant.
 
-#### Hamiltonian Formulation
-The indirect method means to derive the optimal control law by minimizing a Hamiltonian $H$. The derivatives of the Hamiltonian provide the necessary, but not sufficient, conditions for a minimum solution. The Hamiltonian is a function of the integrand $L$ of the objective $J$, state $\vec{x}$, co-state $\vec{\lambda}$, dynamics $\vec{f}$, and control $\vec{\Gamma}$. In particular, the co-state in component form is $\vec{\lambda} = \left[ \lambda_{r_x} \ \ \ \lambda_{r_y} \ \ \ \lambda_{v_x} \ \ \ \lambda_{v_y} \right]^\top$. The Hamiltonian $H$ is
-```math
-H = L + \vec{\lambda}^\top \vec{f}(t, \vec{x}, \vec{u})
-```
-For minimization of of fuel and energy, $L = \Gamma$ and $\frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma}$, respectively. Substituting into the Hamilitonian yields for fuel minimization
-```math
-H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma}
-  = \frac{1}{2} \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
-```
-and for energy minimization
-```math
-H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma}
-  = \frac{1}{2} \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
-```
-
-#### Necessary Conditions for Optimality
-From the Hamiltonian, we derive the necessary conditions for optimality using Pontryagin's Minimum Principle, deriving the co-state dynamical equations and the optimal control.
-
-##### Co-state Equations
+##### Co-stateDynamical Equations
 The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \right)^\top$.
 ```math
 \begin{align}
@@ -210,7 +216,6 @@ The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \r
 &\dot{\lambda}_{v_y} = -\frac{dH}{dv_y} &\to &\dot{\lambda}_{v_y} = -\lambda_{r_y}
 \end{align}
 ```
-Solving this system of eight ODEs requires eight boundary conditions (e.g., initial and final positions and velocities), forming a TPBVP. The solution yields the optimal trajectories for the states, co-states, and the control. Special considderation must be made for thrust constraints. Control is a function of co-velocity $\vec{\lambda}_v$, but thrust is a function of thrust acceleration and mass. 
 
 ##### Optimal Control
 The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is found by setting the partial derivative of the Hamiltonian with respect to the control to zero, $dH/d\vec{u} = \vec{0}^\top$:
