@@ -228,11 +228,11 @@ The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is
 
 ---
 ```math
-\vec{\Gamma} / \Gamma + \vec{\lambda}_v & = & \vec{0} \\
+\vec{\Gamma} / \Gamma + \vec{\lambda}_v = \vec{0} \\
 ```
 
 ```math
-\hat{\Gamma} & = & - \vec{\lambda}_v
+\hat{\Gamma} = - \vec{\lambda}_v
 ```
 ---
 
