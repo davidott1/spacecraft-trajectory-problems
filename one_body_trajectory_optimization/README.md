@@ -218,7 +218,14 @@ The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \r
 ```
 
 ##### Optimal Control
-The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is found by setting the derivative of the Hamiltonian with respect to the control to zero, $dH/d\vec{u} = \vec{0}^\top$. The fuel minimization control law is
+The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is found by setting the derivative of the Hamiltonian with respect to the control to zero, $dH/d\vec{u} = \vec{0}^\top$. The fuel-minimization control law derivation is as follows:
+```math
+\begin{align}
+&\frac{dH}{d\Gamma_x} = 0 &\to &\Gamma_x / \Gamma + \lambda_{v_x} = 0 &\to &\Gamma_{x*}/\Gamma_* = -\lambda_{v_x} \\
+&\frac{dH}{d\Gamma_y} = 0 &\to &\Gamma_y / \Gamma + \lambda_{v_y} = 0 &\to &\Gamma_{y*}/\Gamma_* = -\lambda_{v_y}
+\end{align}
+```
+
 ```math
 \begin{array}{llll}
 \Gamma_{\text{fuel}} = 
@@ -233,6 +240,7 @@ The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is
 ```
 where $\$ = \lambda_v - 1$
 
+The energy-minimization control law derivation is as follows:
 ```math
 \begin{align}
 &\frac{dH}{d\Gamma_x} = 0 &\to &\Gamma_x + \lambda_{v_x} = 0 &\to &\Gamma_{x*} = -\lambda_{v_x} \\
