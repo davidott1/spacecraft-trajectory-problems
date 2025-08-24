@@ -234,6 +234,15 @@ The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is
 ```math
 \hat{\Gamma} = - \vec{\lambda}_v
 ```
+
+```math
+1 = \lambda_v
+```
+
+```math
+0 = \lambda_v - 1
+```
+
 ---
 
 ```math
