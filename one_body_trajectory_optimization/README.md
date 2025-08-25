@@ -227,7 +227,15 @@ H & = & \vec{\lambda}_r^\top \vec{v} + \Gamma (1 + \vec{\lambda}_v^\top \hat{\Ga
 ```
 First consider the control-dependent term, $\Gamma (1 + \vec{\lambda}_v^\top \hat{\Gamma})$, to minimize $H$. Consider two cases when determining thrust-acceleration direction $\Gamma$ to minimize $H$:
 - If $\Gamma = 0$, then there is no thrust direction and thus the term $\Gamma (1 + \vec{\lambda}_v^\top \hat{\Gamma}) = 0$.
-- If $\Gamma \geq 0$, then $\vec{\lambda}_v^\top \hat{\Gamma}$ must be minimized. The dot product for this term can be expressed as $\vec{\lambda}_v^\top \hat{\Gamma} = \| \vec{\lambda}_v \| \| \hat{\Gamma} \| \cos(\theta) = \lambda_v \cos(\theta)$, where $\theta$ is the angle between the two vectors. The minimum of $\cos(\theta) = -1$, so the minimum of $\vec{\lambda}_v^\top \hat{\Gamma} = -\lambda_v$ and then thrust-acceleration direction is $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$.    
+- If $\Gamma \geq 0$, then $\vec{\lambda}_v^\top \hat{\Gamma}$ must be minimized. The dot product for this term can be expressed as
+```math
+\vec{\lambda}_v^\top \hat{\Gamma} = \| \vec{\lambda}_v \| \| \hat{\Gamma} \| \cos(\theta) = \lambda_v \cos(\theta)
+```
+where $\theta$ is the angle between the vectors $\vec{\lambda}_v$ and $\hat{\Gamma}$. The minimum is associated with $\cos(\theta) = -1$, so $\vec{\lambda}_v^\top \hat{\Gamma} = -\lambda_v$ and thus thrust-acceleration direction is $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$.
+
+Substitute this thrust-acceleration direction $\hat{\Gamma}$ into the $H$ to yield
+```math
+```
 
 ```math
 \begin{align}
