@@ -223,8 +223,8 @@ The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is
 ```math
 \begin{array}[lll]
 H & = & \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma} \\
-H & = & \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top \Gamma \dir{\Gamma} \\
-H & = & \vec{\lambda}_r^\top \vec{v} + (1 + \vec{\lambda}_v^\top) \Gamma \dir{\Gamma} \\
+H & = & \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top \Gamma \hat{\Gamma} \\
+H & = & \vec{\lambda}_r^\top \vec{v} + (1 + \vec{\lambda}_v^\top) \Gamma \hat{\Gamma} \\
 \end{array}
 ```
 
