@@ -143,7 +143,7 @@ python main.py input/example/10.json output/example
 | Timespan | $t$ | | $t \in [t_o \ \ \ t_f]$ | | |
 | State | $\vec{x}(t)$ | | $\vec{x} = [ \vec{r}^\top \ \ \ \vec{v}^\top ]^\top$ | | |
 | Co-State | $\vec{\lambda}(t)$ | | $\vec{\lambda} = [ \vec{\lambda}_r^\top \ \ \ \vec{\lambda}_v^\top ]^\top$ | | |
-| Control | $\vec{u}(t)$ | fuel | $\vec{u} = \vec{\Gamma} = \Gamma \hat{\Gamma}$ | $\Gamma = \Gamma_{\text{fuel}}$ | $\hat{\Gamma} = \vec{\lambda}_v / \lambda_v$ |
+| Control | $\vec{u}(t)$ | fuel | $\vec{u} = \vec{\Gamma} = \Gamma \hat{\Gamma}$ | $\Gamma = \Gamma_{\text{fuel}}$ | $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$ |
 | | | energy | $\vec{u} = \vec{\Gamma} = \Gamma \hat{\Gamma}$ | $\Gamma = \Gamma_{\text{energy}}$ | $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$ |
 | Dynamics | $\vec{f}(t,\vec{x},\vec{u})$ | | $\vec{f} = [ \vec{v}^\top \ \ \ \vec{\Gamma}^\top ]^\top$ | | |
 | Co-Dynamics | $\vec{g}(t,\vec{x},\vec{u})$ | | $\vec{g} = [ \vec{0}^\top \ \ \ -\vec{\lambda}_r^\top ]^\top$ | | |
@@ -218,77 +218,46 @@ The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \r
 ```
 
 ##### Optimal Control
-The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is found by setting the derivative of the Hamiltonian with respect to the control to zero, $dH/d\vec{u} = \vec{0}^\top$. The minimum-fuel control-law derivation follows. Represent the control as a magnitude and direction, $\vec{\Gamma} = \Gamma \hat{\Gamma}$, and rearrange to get
+The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is found by setting the derivative of the Hamiltonian with respect to the control to zero, $dH/d\vec{u} = \vec{0}^\top$. The minimum-fuel control-law derivation is first and the minimum-energy law is second. 
+
+###### Minimum Fuel
+For mininum fuel, represent the control as a magnitude and direction, $\vec{\Gamma} = \Gamma \hat{\Gamma}$. Both must be determined. Subsitute this representation into $H$ and rearrange:
 ```math
 \begin{array}[lll]
 H & = & \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top \Gamma \hat{\Gamma} \\
 H & = & \vec{\lambda}_r^\top \vec{v} + \Gamma (1 + \vec{\lambda}_v^\top \hat{\Gamma})
 \end{array}
 ```
-First consider the control-dependent term, $\Gamma (1 + \vec{\lambda}_v^\top \hat{\Gamma})$, to minimize $H$. Consider two cases when determining thrust-acceleration direction $\Gamma$ to minimize $H$:
+To minimize this $H$, consider the control-dependent term, $\Gamma (1 + \vec{\lambda}_v^\top \hat{\Gamma})$. The two cases for $\Gamma$ are when it is and is not zero:
 - If $\Gamma = 0$, then there is no thrust direction and thus the term $\Gamma (1 + \vec{\lambda}_v^\top \hat{\Gamma}) = 0$.
 - If $\Gamma \geq 0$, then $\vec{\lambda}_v^\top \hat{\Gamma}$ must be minimized. The dot product for this term can be expressed as
 ```math
 \vec{\lambda}_v^\top \hat{\Gamma} = \| \vec{\lambda}_v \| \| \hat{\Gamma} \| \cos(\theta) = \lambda_v \cos(\theta)
 ```
-where $\theta$ is the angle between the vectors $\vec{\lambda}_v$ and $\hat{\Gamma}$. The minimum is associated with $\cos(\theta) = -1$, so $\vec{\lambda}_v^\top \hat{\Gamma} = -\lambda_v$ and thus thrust-acceleration direction is $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$.
+where $\theta$ is the angle between the vectors $\vec{\lambda}_v$ and $\hat{\Gamma}$. The minimum is associated with $\cos(\theta) = -1$, so $\vec{\lambda}_v^\top \hat{\Gamma} = -\lambda_v$ and thus the optimal thrust-acceleration direction is $\hat{\Gamma}_* = -\vec{\lambda}_v / \lambda_v$.
 
-Substitute this thrust-acceleration direction $\hat{\Gamma}$ into the $H$ to yield
+For thrust-acceleration magnitude $\Gamma$, substitute thrust-acceleration direction $\hat{\Gamma}$ into $H$ to yield
 ```math
-```
-
-```math
-\begin{align}
-&\frac{dH}{d\Gamma_x} = 0 &\to &\Gamma_x / \Gamma + \lambda_{v_x} = 0 &\to &\Gamma_{x*}/\Gamma_* = -\lambda_{v_x} \\
-&\frac{dH}{d\Gamma_y} = 0 &\to &\Gamma_y / \Gamma + \lambda_{v_y} = 0 &\to &\Gamma_{y*}/\Gamma_* = -\lambda_{v_y}
-\end{align}
-```
-
----
-```math
-\vec{\Gamma} / \Gamma + \vec{\lambda}_v = \vec{0} \\
-```
-
-```math
-\hat{\Gamma} = - \vec{\lambda}_v
-```
-
-```math
-1 = \lambda_v
-```
-
-```math
-0 = \lambda_v - 1
-```
-
----
-
-```math
-H = \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma}
-  = \Gamma + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
-  = (\vec{\Gamma}^\top \vec{\Gamma})^{1/2} + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma}
-```
-
-```math
-\begin{array}{llll}
-\Gamma_{\text{fuel}} = 
-\begin{cases}
-\Gamma_{\max}        & \$ > 0 & \text{and if using thrust-acc constraints} \\
-     T_{\max} / m    & \$ > 0 & \text{and if using thrust     constraints} \\
-\Gamma_{\min}        & \$ < 0 & \text{and if using thrust-acc constraints} \\
-     T_{\min} / m    & \$ < 0 & \text{and if using thrust     constraints} \\
-\text{indeterminate} & \$ = 0 &                                            \\
-\end{cases}
+\begin{array}[lll]
+H & = & \vec{\lambda}_r^\top \vec{v} + \Gamma (1 + \vec{\lambda}_v^\top ( -\vec{\frac{\lambda}_v}{\lambda_v}))
+  & = & \vec{\lambda}_r^\top \vec{v} - \Gamma (\lambda_v - 1)
+  & = & \vec{\lambda}_r^\top \vec{v} - \Gamma \$
 \end{array}
 ```
-where $S = \lambda_v - 1$
-
-The energy-minimization control law derivation is as follows:
+This switching function $\$ = \lambda_v - 1$ governs. If $\$$ is positive or negative, $\Gamma$ ought to be maximized or minimized, respectively:
 ```math
-\begin{align}
-&\frac{dH}{d\Gamma_x} = 0 &\to &\Gamma_x + \lambda_{v_x} = 0 &\to &\Gamma_{x*} = -\lambda_{v_x} \\
-&\frac{dH}{d\Gamma_y} = 0 &\to &\Gamma_y + \lambda_{v_y} = 0 &\to &\Gamma_{y*} = -\lambda_{v_y}
-\end{align}
+\Gamma_{\text{fuel}}_* = 
+\begin{array}{ll}
+\Gamma_{\max}        & \$ > 0 \\
+\Gamma_{\min}        & \$ < 0 \\
+\text{indeterminate} & \$ = 0
+\end{array}
+In practice, for the instant $\$ = 0$, $\Gamma = \Gamma_min$ as a choice. All together, $\vec{\Gamma}_* = \Gamma_* \hat{\Gamma}_*$ is known for the minimization of fuel.
+
+###### Minimum Energy
+For minimum energy, the control law derivation is much simpler. Take the derivative of $H$ with respect to $\vec{\Gamma}$ to yield the optimal control law
+```math
+\frac{dH}{d\vec{\Gamma}} = \vec{0}^\top \to \vec{Gamma} + \vec{\lambda}_v = \vec{0} \to \vec{\Gamma}_* = -\vec{\lambda}_v
 ```
 
 
