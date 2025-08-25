@@ -219,6 +219,16 @@ The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \r
 
 ##### Optimal Control
 The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is found by setting the derivative of the Hamiltonian with respect to the control to zero, $dH/d\vec{u} = \vec{0}^\top$. The fuel-minimization control law derivation is as follows:
+
+```math
+\begin{array}[lll]
+H & = & \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma} \\
+H & = & \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top \Gamma \dir{\Gamma} \\
+H & = & \vec{\lambda}_r^\top \vec{v} + (1 + \vec{\lambda}_v^\top) \Gamma \dir{\Gamma} \\
+\end{array}
+```
+
+
 ```math
 \begin{align}
 &\frac{dH}{d\Gamma_x} = 0 &\to &\Gamma_x / \Gamma + \lambda_{v_x} = 0 &\to &\Gamma_{x*}/\Gamma_* = -\lambda_{v_x} \\
