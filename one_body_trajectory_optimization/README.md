@@ -218,16 +218,16 @@ The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \r
 ```
 
 ##### Optimal Control
-The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is found by setting the derivative of the Hamiltonian with respect to the control to zero, $dH/d\vec{u} = \vec{0}^\top$. The fuel-minimization control law derivation is as follows:
-
+The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is found by setting the derivative of the Hamiltonian with respect to the control to zero, $dH/d\vec{u} = \vec{0}^\top$. The minimum-fuel control-law derivation follows. Represent the control as a magnitude and direction, $\vec{\Gamma} = \Gamma \hat{\Gamma}$, and rearrange to get
 ```math
 \begin{array}[lll]
-H & = & \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma} \\
 H & = & \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top \Gamma \hat{\Gamma} \\
-H & = & \vec{\lambda}_r^\top \vec{v} + \Gamma (1 + \vec{\lambda}_v^\top \hat{\Gamma}) \\
+H & = & \vec{\lambda}_r^\top \vec{v} + \Gamma (1 + \vec{\lambda}_v^\top \hat{\Gamma})
 \end{array}
 ```
-
+First consider the control-dependent term, $\Gamma (1 + \vec{\lambda}_v^\top \hat{\Gamma})$, to minimize $H$. Consider two cases when determining thrust-acceleration direction $\Gamma$ to minimize $H$:
+- If $\Gamma = 0$, then there is no thrust direction and thus the term $\Gamma (1 + \vec{\lambda}_v^\top \hat{\Gamma}) = 0$.
+- If $\Gamma \geq 0$, then $\vec{\lambda}_v^\top \hat{\Gamma}$ must be minimized. The dot product for this term can be expressed as $\vec{\lambda}_v^\top \hat{\Gamma} = \| \vec{\lambda}_v \| \| \hat{\Gamma} \| \cos(\theta) = \lambda_v \cos(\theta)$, where $\theta$ is the angle between the two vectors. The minimum of $\cos(\theta) = -1$, so the minimum of $\vec{\lambda}_v^\top \hat{\Gamma} = -\lambda_v$ and then thrust-acceleration direction is $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$.    
 
 ```math
 \begin{align}
