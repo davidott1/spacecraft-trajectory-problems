@@ -234,10 +234,11 @@ To minimize this $H$, consider the control-dependent term, $\Gamma (1 + \vec{\la
 ```math
 \vec{\lambda}_v^\top \hat{\Gamma} = \| \vec{\lambda}_v \| \| \hat{\Gamma} \| \cos(\theta) = \lambda_v \cos(\theta)
 ```
-where $\theta$ is the angle between the vectors $\vec{\lambda}_v$ and $\hat{\Gamma}$. The minimum is associated with $\cos(\theta) = -1$, so $\vec{\lambda}_v^\top \hat{\Gamma} = -\lambda_v$ and thus the optimal thrust-acceleration direction is $\hat{\Gamma}_* = -\vec{\lambda}_v / \lambda_v$.
+where $\theta$ is the angle between the vectors $\vec{\lambda}_v$ and $\hat{\Gamma}$. The minimum is associated with $\cos(\theta) = -1$, so $\vec{\lambda}_v^\top \hat{\Gamma} = -\lambda_v$ and thus the optimal thrust-acceleration direction is 
 
-For thrust-acceleration magnitude $\Gamma$, substitute thrust-acceleration direction $\hat{\Gamma}$ into $H$ to yield
+<!-- $\hat{\Gamma}_* = -\vec{\lambda}_v / \lambda_v$. -->
 
+<!-- For thrust-acceleration magnitude $\Gamma$, substitute thrust-acceleration direction $\hat{\Gamma}$ into $H$ to yield
 ```math
 \begin{array}[lll]
 H & = & \vec{\lambda}_r^\top \vec{v} + \Gamma (1 + \vec{\lambda}_v^\top ( -\vec{\frac{\lambda}_v}{\lambda_v}))
@@ -245,6 +246,7 @@ H & = & \vec{\lambda}_r^\top \vec{v} + \Gamma (1 + \vec{\lambda}_v^\top ( -\vec{
   & = & \vec{\lambda}_r^\top \vec{v} - \Gamma \$
 \end{array}
 ```
+
 This switching function $S = \lambda_v - 1$ governs. If $\$$ is positive or negative, $\Gamma$ ought to be maximized or minimized, respectively:
 ```math
 \Gamma_{\text{fuel}}_* = 
@@ -259,7 +261,7 @@ In practice, for the instant $\$ = 0$, $\Gamma = \Gamma_min$ as a choice. All to
 For minimum energy, the control law derivation is much simpler. Take the derivative of $H$ with respect to $\vec{\Gamma}$ to yield the optimal control law
 ```math
 \frac{dH}{d\vec{\Gamma}} = \vec{0}^\top \to \vec{Gamma} + \vec{\lambda}_v = \vec{0} \to \vec{\Gamma}_* = -\vec{\lambda}_v
-```
+``` -->
 
 ###### Inequality Constraints: Thrust and Thrust-Acceleration
 
