@@ -234,11 +234,11 @@ To minimize this $H$, consider the control-dependent term, $\Gamma (1 + \vec{\la
 ```math
 \vec{\lambda}_v^\top \hat{\Gamma} = \| \vec{\lambda}_v \| \| \hat{\Gamma} \| \cos(\theta) = \lambda_v \cos(\theta)
 ```
-where $\theta$ is the angle between the vectors $\vec{\lambda}_v$ and $\hat{\Gamma}$. The minimum is associated with $\cos(\theta) = -1$, so $\vec{\lambda}_v^\top \hat{\Gamma} = -\lambda_v$ and thus the optimal thrust-acceleration direction is 
+where $\theta$ is the angle between the vectors $\vec{\lambda}_v$ and $\hat{\Gamma}$. The minimum is associated with $\cos(\theta) = -1$, so $\vec{\lambda}_v^\top \hat{\Gamma} = -\lambda_v$ and thus the optimal thrust-acceleration direction is $\hat{\Gamma}_* = -\vec{\lambda}_v / \lambda_v$.
 
 <!--    -->
 
-<!-- $\hat{\Gamma}_* = -\vec{\lambda}_v / \lambda_v$. -->
+<!--  -->
 
 <!-- For thrust-acceleration magnitude $\Gamma$, substitute thrust-acceleration direction $\hat{\Gamma}$ into $H$ to yield
 ```math
