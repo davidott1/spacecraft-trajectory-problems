@@ -252,7 +252,7 @@ This switching function $\$ = \lambda_v - 1$ governs. If $\$$ is positive or neg
 \Gamma_{\min}        & \$ < 0 \\
 \text{indeterminate} & \$ = 0
 \end{array}
-In practice, for the instant $\$ = 0$, $\Gamma = \Gamma_min$ as a choice. All together, $\vec{\Gamma}_* = \Gamma_* \hat{\Gamma}_*$ is known for the minimization of fuel.
+In practice, for the instant $\$ = 0$, $\Gamma = \Gamma_min$ as a choice. All together, $\vec{\Gamma}_* = \Gamma_{\text{fuel}}_* \hat{\Gamma}_{\text{fuel}}_*$ is known for the minimization of fuel.
 
 ###### Minimum Energy
 For minimum energy, the control law derivation is much simpler. Take the derivative of $H$ with respect to $\vec{\Gamma}$ to yield the optimal control law
@@ -260,11 +260,7 @@ For minimum energy, the control law derivation is much simpler. Take the derivat
 \frac{dH}{d\vec{\Gamma}} = \vec{0}^\top \to \vec{Gamma} + \vec{\lambda}_v = \vec{0} \to \vec{\Gamma}_* = -\vec{\lambda}_v
 ```
 
-
-
-These results explicitly defines the optimal control inputs in terms of the co-states associated with the velocity components.
-
-Inequality Constraints: Thrust and Thrust-Acceleration
+###### Inequality Constraints: Thrust and Thrust-Acceleration
 
 ```math
 \begin{array}{llll}
