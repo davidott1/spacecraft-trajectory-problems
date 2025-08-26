@@ -319,7 +319,7 @@ In practice, for fuel-minimization problems, thrust-acceleration is smoothly app
 \Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k S) \right) \ \ \ k = 1 \to \infty
 ```
 
-Similarly, for energy-minization problems, thrust-acceleration, or thrust-force mapped to thrust acceleration, is smoothly constrained with a smoothing min and max function, $\smin$ or $\smax$:
+Similarly, for energy-minization problems, thrust-acceleration, or thrust-force mapped to thrust acceleration, is smoothly constrained with a smoothing min and max function, $\text{smin}$ or $\text{smax}$:
 ```math
 \begin{array}{llll}
 \Gamma_{\text{energy}} = 
