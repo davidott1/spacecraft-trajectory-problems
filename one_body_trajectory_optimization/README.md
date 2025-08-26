@@ -224,8 +224,10 @@ The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is
 For mininum fuel, represent the control as a magnitude and direction, $\vec{\Gamma} = \Gamma \hat{\Gamma}$. Both must be determined. Subsitute this representation into $H$ and rearrange:
 
 ```math
-\begin{array}
-a
+\begin{array}{lll}
+H & = & \vec{\lambda}_r^{\top} \vec{v} + \Gamma ( 1 + \vec{\lambda}_v^{\top} \left( -\frac{\vec{\lambda}_v}{\lambda_v} \right) ) \\
+  & = & \vec{\lambda}_r^{\top} \vec{v} - \Gamma (\lambda_v - 1) \\
+  & = & \vec{\lambda}_r^{\top} \vec{v} - \Gamma S
 \end{array}
 ```
 
