@@ -259,7 +259,7 @@ This switching function $S = \lambda_v - 1$ governs. If $S$ is positive or negat
 \end{cases}
 ```
 
-In practice, for the instant $S = 0$, $\Gamma = \Gamma_min$ as a choice. All together, 
+In practice, for the instant $S = 0$, $\Gamma = \Gamma_\min$ as a choice. All together, 
 ```math
 \vec{\Gamma}_* = \Gamma_{\text{fuel}*} \hat{\Gamma}_{\text{fuel}*}
 ```
