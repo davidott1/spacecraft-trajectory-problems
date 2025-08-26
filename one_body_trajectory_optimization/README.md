@@ -270,11 +270,12 @@ is known for the minimization of fuel.
 ###### Minimum Energy
 For minimum energy, the control law derivation is much simpler. Take the derivative of $H$ with respect to $\vec{\Gamma}$ to yield the optimal control law
 ```math
-\frac{dH}{d\vec{\Gamma}} = \vec{0}^\top \to \vec{\Gamma} + \vec{\lambda}_v = \vec{0} \to \vec{\Gamma}_* = -\vec{\lambda}_v
+\frac{dH}{d\vec{\Gamma}} = \vec{0}^\top \to \vec{\Gamma} + \vec{\lambda}_v = \vec{0} \to \vec{\Gamma}_{\text{energy}*} = -\vec{\lambda}_v
 ```
 Convenient for inequality constraint application, the optimal control law for energy in magnitude and direction form is
 ```math
 \begin{array}{ll}
+& \vec{\Gamma}_{\text{energy}*} & = & \Gamma_{\text{energy}*} \hat{\Gamma}_{\text{energy}*} \\
 & \Gamma_{\text{energy}*} & = & xxx \\
 & \hat{\Gamma}_{\text{energy}*} & = & xxx \\
 \end{array}
