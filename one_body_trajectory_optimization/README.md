@@ -146,7 +146,7 @@ python main.py input/example/10.json output/example
 | Control | $\vec{u}(t)$ | fuel | $\vec{u} = \vec{\Gamma} = \Gamma \hat{\Gamma}$ | $\Gamma = \Gamma_{\text{fuel}}$ | $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$ |
 | | | energy | $\vec{u} = \vec{\Gamma} = \Gamma \hat{\Gamma}$ | $\Gamma = \Gamma_{\text{energy}}$ | $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$ |
 | Dynamics | $\vec{f}(t,\vec{x},\vec{u})$ | | $\vec{f} = [ \vec{v}^\top \ \ \ \vec{\Gamma}^\top ]^\top$ | | |
-| Co-Dynamics | $\vec{g}(t,\vec{x},\vec{u})$ | | $\vec{g} = [ \vec{0}^\top \ \ \ -\vec{\lambda}_r^\top ]^\top$ | | |
+| Co-Dynamics | | | $\vec{g} = [ \vec{0}^\top \ \ \ -\vec{\lambda}_r^\top ]^\top$ | | |
 | Equality Constraints | | | $t_o=t_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ | $\vec{v}(t_o)={\vec v}_{os}$ |
 | | | | $t_f=t_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ | $\vec{v}(t_f)={\vec v}_{fs}$ |
 | Inequality Constraints | | fuel | $\Gamma_{\min} \leq \Gamma_{\text{fuel}} \leq \Gamma_{\max}$ | or $T_{\min}/m \leq \Gamma_{\text{fuel}} \leq T_{\max}/m$ | |
