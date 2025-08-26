@@ -274,8 +274,11 @@ For minimum energy, the control law derivation is much simpler. Take the derivat
 ```
 Convenient for inequality constraint application, the optimal control law for energy in magnitude and direction form is
 ```math
+\vec{\Gamma}_{\text{energy}*} \ \ \ = \ \ \ \Gamma_{\text{energy}*} \hat{\Gamma}_{\text{energy}*}
+```
+where
+```math
 \begin{array}{ll}
-& \vec{\Gamma}_{\text{energy}*} & = & \Gamma_{\text{energy}*} \hat{\Gamma}_{\text{energy}*} \\
 & \Gamma_{\text{energy}*} & = & \vec{\lambda}_v \\
 & \hat{\Gamma}_{\text{energy}*} & = & -\frac{\vec{\lambda}_v}{\lambda_v} \\
 \end{array}
