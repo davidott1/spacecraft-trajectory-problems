@@ -238,7 +238,7 @@ To minimize this $H$, consider the control-dependent term, $\Gamma (1 + \vec{\la
 ```
 where $\theta$ is the angle between the vectors $\vec{\lambda}_v$ and $\hat{\Gamma}$. The minimum is associated with $\cos(\theta) = -1$, so $\vec{\lambda}_v^\top \hat{\Gamma} = -\lambda_v$ and thus the optimal thrust-acceleration direction is 
 ```math
-\hat{\Gamma}_{\text{fuel}*} = -\vec{\lambda}_v / \lambda_v
+\hat{\Gamma}_{\text{fuel}*} = -\frac{\vec{\lambda}_v}{\lambda_v}
 ```
 
 For thrust-acceleration magnitude $\Gamma$, substitute thrust-acceleration direction $\hat{\Gamma}$ into $H$ to yield
@@ -276,8 +276,8 @@ Convenient for inequality constraint application, the optimal control law for en
 ```math
 \begin{array}{ll}
 & \vec{\Gamma}_{\text{energy}*} & = & \Gamma_{\text{energy}*} \hat{\Gamma}_{\text{energy}*} \\
-& \Gamma_{\text{energy}*} & = & xxx \\
-& \hat{\Gamma}_{\text{energy}*} & = & xxx \\
+& \Gamma_{\text{energy}*} & = & \vec{\lambda}_v \\
+& \hat{\Gamma}_{\text{energy}*} & = & -\frac{\vec{\lambda}_v}{\lambda_v} \\
 \end{array}
 ```
 
