@@ -232,11 +232,11 @@ To minimize this $H$, consider the control-dependent term, $\Gamma (1 + \vec{\la
 - If $\Gamma = 0$, then there is no thrust direction and thus the term $\Gamma (1 + \vec{\lambda}_v^\top \hat{\Gamma}) = 0$.
 - If $\Gamma \geq 0$, then $\vec{\lambda}_v^\top \hat{\Gamma}$ must be minimized. The dot product for this term can be expressed as
 ```math
-\vec{\lambda}_v^\top \hat{\Gamma} = \| \vec{\lambda}_v \| \| \hat{\Gamma} \| \cos(\theta) = \lambda_v \cos(\theta)
+\vec{\lambda}_v^\top \hat{\Gamma} = \|\vec{\lambda}_v\| \|| \hat{\Gamma} \|| \cos(\theta) = \lambda_v \cos(\theta)
 ```
 where $\theta$ is the angle between the vectors $\vec{\lambda}_v$ and $\hat{\Gamma}$. The minimum is associated with $\cos(\theta) = -1$, so $\vec{\lambda}_v^\top \hat{\Gamma} = -\lambda_v$ and thus the optimal thrust-acceleration direction is 
 ```math
-\hat{\Gamma}_{*} = -\vec{\lambda}_v / \lambda_v
+\hat{\Gamma}_{\text{fuel}*} = -\vec{\lambda}_v / \lambda_v
 ```
 
 For thrust-acceleration magnitude $\Gamma$, substitute thrust-acceleration direction $\hat{\Gamma}$ into $H$ to yield
@@ -259,7 +259,7 @@ This switching function $S = \lambda_v - 1$ governs. If $S$ is positive or negat
 \end{cases}
 ```
 
-In practice, for the instant $S = 0$, $\Gamma = \Gamma_\min$ as a choice. All together, 
+In practice, for the instant $S = 0$, $\Gamma_{\text{fuel}} = \Gamma_\min$ as a choice. All together, 
 ```math
 \vec{\Gamma}_* = \Gamma_{\text{fuel}*} \hat{\Gamma}_{\text{fuel}*}
 ```
@@ -302,7 +302,7 @@ For minimum energy, the control law derivation is much simpler. Take the derivat
 \begin{array}{llll}
 \Gamma_{\text{energy}} = 
 \begin{cases}
-& \lambda_v                                                                                  & \text{if unconstrained} &                  \\
+& -\lambda_v                                                                                 & \text{if unconstrained} &                  \\
 & \text{smin}\left(\text{smax}(\lambda_v,\Gamma_{\text{min}},k),\Gamma_{\text{max}},k\right) & \text{if constrained}   & k = 1 \to \infty
 \end{cases}
 \end{array}
