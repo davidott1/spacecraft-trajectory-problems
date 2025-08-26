@@ -249,6 +249,7 @@ H & = & \vec{\lambda}_r^{\top} \vec{v} + \Gamma ( 1 + \vec{\lambda}_v^{\top} \le
 ```
 
 This switching function $S = \lambda_v - 1$ governs. If $S$ is positive or negative, $\Gamma$ ought to be maximized or minimized, respectively:
+
 ```math
 \Gamma_{\text{fuel}}_* = 
 \begin{array}{ll}
@@ -257,6 +258,7 @@ This switching function $S = \lambda_v - 1$ governs. If $S$ is positive or negat
 \text{indeterminate} & S = 0
 \end{array}
 ```
+
 In practice, for the instant $S = 0$, $\Gamma = \Gamma_min$ as a choice. All together, $\vec{\Gamma}_* = \Gamma_{\text{fuel}}_* \hat{\Gamma}_{\text{fuel}}_*$ is known for the minimization of fuel.
 
 ###### Minimum Energy
