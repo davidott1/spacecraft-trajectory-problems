@@ -256,6 +256,7 @@ This switching function $S = \lambda_v - 1$ governs. If $S$ is positive or negat
 \Gamma_{\min}        & S < 0 \\
 \text{indeterminate} & S = 0
 \end{array}
+```
 In practice, for the instant $S = 0$, $\Gamma = \Gamma_min$ as a choice. All together, $\vec{\Gamma}_* = \Gamma_{\text{fuel}}_* \hat{\Gamma}_{\text{fuel}}_*$ is known for the minimization of fuel.
 
 ###### Minimum Energy
