@@ -321,7 +321,7 @@ where
 \end{array}
 ```
 
-Smooth Min and Max Functions
+where
 ```math
 \begin{array}{ll}
 & \text{smin}(a_1, a_2, k) & = & \frac{-1}{k} \left( b + \ln(e^{-k a_1 - b} + e^{-k a_2 - b}) \right) \\
