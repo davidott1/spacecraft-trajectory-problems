@@ -315,8 +315,8 @@ where
 \begin{array}{llll}
 \Gamma_{\text{energy}} = 
 \begin{cases}
-& \lambda_v                                                                                  & \text{if unconstrained} &              \\
-& \text{smin}\left(\text{smax}(\lambda_v,\Gamma_{\text{min}},k),\Gamma_{\text{max}},k\right) & \text{if constrained}   & k \to \infty
+\lambda_v                                                                                  & \text{if unconstrained} &              \\
+\text{smin}\left(\text{smax}(\lambda_v,\Gamma_{\text{min}},k),\Gamma_{\text{max}},k\right) & \text{if constrained}   & k \to \infty
 \end{cases}
 \end{array}
 ```
