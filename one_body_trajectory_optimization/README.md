@@ -248,7 +248,7 @@ H & = & \vec{\lambda}_r^{\top} \vec{v} + \Gamma ( 1 + \vec{\lambda}_v^{\top} \le
 \end{array}
 ```
 
-This switching function $\text{\$} = \lambda_v - 1$ governs. If $\$$ is positive or negative, $\Gamma$ ought to be maximized or minimized, respectively:
+This switching function $\text{$} = \lambda_v - 1$ governs. If $\$$ is positive or negative, $\Gamma$ ought to be maximized or minimized, respectively:
 ```math
 \Gamma_{\text{fuel}}_* = 
 \begin{array}{ll}
