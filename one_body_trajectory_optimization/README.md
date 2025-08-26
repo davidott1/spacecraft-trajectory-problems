@@ -225,9 +225,8 @@ For mininum fuel, represent the control as a magnitude and direction, $\vec{\Gam
 
 ```math
 \begin{array}{lll}
-H & = & \vec{\lambda}_r^{\top} \vec{v} + \Gamma ( 1 + \vec{\lambda}_v^{\top} \left( -\frac{\vec{\lambda}_v}{\lambda_v} \right) ) \\
-  & = & \vec{\lambda}_r^{\top} \vec{v} - \Gamma (\lambda_v - 1) \\
-  & = & \vec{\lambda}_r^{\top} \vec{v} - \Gamma S
+H & = & \Gamma \\
+  & = & xxx
 \end{array}
 ```
 
