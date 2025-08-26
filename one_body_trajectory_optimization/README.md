@@ -252,11 +252,11 @@ This switching function $S = \lambda_v - 1$ governs. If $S$ is positive or negat
 ```math
 \Gamma_{\text{fuel}}_* = 
 \begin{array}{ll}
-\Gamma_{\max}        & \$ > 0 \\
-\Gamma_{\min}        & \$ < 0 \\
-\text{indeterminate} & \$ = 0
+\Gamma_{\max}        & S > 0 \\
+\Gamma_{\min}        & S < 0 \\
+\text{indeterminate} & S = 0
 \end{array}
-In practice, for the instant $\$ = 0$, $\Gamma = \Gamma_min$ as a choice. All together, $\vec{\Gamma}_* = \Gamma_{\text{fuel}}_* \hat{\Gamma}_{\text{fuel}}_*$ is known for the minimization of fuel.
+In practice, for the instant $S = 0$, $\Gamma = \Gamma_min$ as a choice. All together, $\vec{\Gamma}_* = \Gamma_{\text{fuel}}_* \hat{\Gamma}_{\text{fuel}}_*$ is known for the minimization of fuel.
 
 ###### Minimum Energy
 For minimum energy, the control law derivation is much simpler. Take the derivative of $H$ with respect to $\vec{\Gamma}$ to yield the optimal control law
