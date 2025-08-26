@@ -147,9 +147,9 @@ python main.py input/example/10.json output/example
 | | | energy | $\vec{u} = \vec{\Gamma} = \Gamma \hat{\Gamma}$ | $\Gamma = \Gamma_{\text{energy}}$ | $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$ |
 | Dynamics | $\vec{f}(t,\vec{x},\vec{u})$ | | $\vec{f} = [ \vec{v}^\top \ \ \ \vec{\Gamma}^\top ]^\top$ | | |
 | Co-Dynamics | $\vec{g}(t,\vec{x},\vec{u})$ | | $\vec{g} = [ \vec{0}^\top \ \ \ -\vec{\lambda}_r^\top ]^\top$ | | |
-| Equality Constraints | $\vec{\Theta}_o$ | | $t_o=t_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ |
-| | $\vec{\Theta}_f$ | | $t_f=t_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ |
-| Inequality Constraints | $\Psi(t)$ | fuel | $\Gamma_{\min} \leq \Gamma_{\text{fuel}} \leq \Gamma_{\max}$ | or $T_{\min}/m \leq \Gamma_{\text{fuel}} \leq T_{\max}/m$ | |
+| Equality Constraints | | | $t_o=t_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ | $\vec{v}(t_o)={\vec v}_{os}$ |
+| | $\vec{\Theta}_f$ | | $t_f=t_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ | $\vec{v}(t_f)={\vec v}_{fs}$ |
+| Inequality Constraints | | fuel | $\Gamma_{\min} \leq \Gamma_{\text{fuel}} \leq \Gamma_{\max}$ | or $T_{\min}/m \leq \Gamma_{\text{fuel}} \leq T_{\max}/m$ | |
 | | | energy | $\Gamma_{\min} \leq \Gamma_{\text{energy}} \leq \Gamma_{\max}$ | or $T_{\min}/m \leq \Gamma_{\text{energy}} \leq T_{\max}/m$ | or $0 \leq \Gamma_{\text{energy}} \leq \infty$ |
 
 ### Derivation
@@ -284,7 +284,16 @@ where
 \end{array}
 ```
 
-###### Inequality Constraints: Thrust and Thrust-Acceleration
+#### Equality Constraints: Flight Time, Initial Position and Velocity, Final Position and Velocity
+
+The equality conditions or boundary conditions are variable.
+- Flight time is $\Delta t = t_f - t_o$, where $t_o$ and $t_f$ aree initial and final time. If both $t_o$ and $t_f$ are fixed, $\Delta t$ is fixed. Otherwise flight time is free. 
+- Initial position and velocity are either fixed or free (specified or not, respectively): \vec{r}(t_o)=\vec{r}_{os} and \vec{v}(t_o)=\vec{v}_{os}.
+- Final position and velocity are either fixed or free (specified or not, respectively): \vec{r}(t_f)=\vec{r}_{fs} and \vec{v}(t_f)=\vec{v}_{fs}.
+
+#### Inequality Constraints: Thrust and Thrust-Acceleration
+
+The inequality conditions are variables as well. For minimum energy problems, thrust or thrust acceleration is either unconstrained or less than a maximum. For minimum fuel problems, thrust or thrust acceleration is necessarily less than a maximum. 
 
 ```math
 \begin{array}{llll}
@@ -332,7 +341,5 @@ and
 ```math
 b = \text{max}(k a_1, k a_2)
 ```
-
-The equality conditions or boundary conditions are variable: flight time is fixed or free, as well as final position and velocity. Flight time is $\Delta t = t_f - t_o = t_f$. The initial time is assumed to be $t_o = 0$. Free initial position and velocity is not implemented, but the problem structure is reversible in time. The inequality conditions are variables as well. For minimum energy problems, thrust or thrust acceleration is either unconstrained or less than a maximum. For minimum fuel problems, thrust or thrust acceleration is necessarily less than a maximum. The coordinate system is Cartesian in two dimensions and with respect to an inertial frame. The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy.
 
 ---
