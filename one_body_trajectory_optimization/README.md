@@ -244,7 +244,7 @@ For thrust-acceleration magnitude $\Gamma$, substitute thrust-acceleration direc
 \begin{array}{lll}
 H & = & \vec{\lambda}_r^{\top} \vec{v} + \Gamma ( 1 + \vec{\lambda}_v^{\top} \left( -\frac{\vec{\lambda}_v}{\lambda_v} \right) ) \\
   & = & \vec{\lambda}_r^{\top} \vec{v} - \Gamma (\lambda_v - 1) \\
-  & = & \vec{\lambda}_r^{\top} \vec{v} - \Gamma S
+  & = & \vec{\lambda}_r^{\top} \vec{v} - \Gamma \$
 \end{array}
 ```
 
