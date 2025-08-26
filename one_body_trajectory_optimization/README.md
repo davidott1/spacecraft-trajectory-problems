@@ -244,11 +244,11 @@ For thrust-acceleration magnitude $\Gamma$, substitute thrust-acceleration direc
 \begin{array}{lll}
 H & = & \vec{\lambda}_r^{\top} \vec{v} + \Gamma ( 1 + \vec{\lambda}_v^{\top} \left( -\frac{\vec{\lambda}_v}{\lambda_v} \right) ) \\
   & = & \vec{\lambda}_r^{\top} \vec{v} - \Gamma (\lambda_v - 1) \\
-  & = & \vec{\lambda}_r^{\top} \vec{v} - \Gamma \$
+  & = & \vec{\lambda}_r^{\top} \vec{v} - \Gamma S
 \end{array}
 ```
 
-This switching function $\text{$} = \lambda_v - 1$ governs. If $\$$ is positive or negative, $\Gamma$ ought to be maximized or minimized, respectively:
+This switching function $S = \lambda_v - 1$ governs. If $S$ is positive or negative, $\Gamma$ ought to be maximized or minimized, respectively:
 ```math
 \Gamma_{\text{fuel}}_* = 
 \begin{array}{ll}
