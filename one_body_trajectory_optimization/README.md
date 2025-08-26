@@ -272,6 +272,13 @@ For minimum energy, the control law derivation is much simpler. Take the derivat
 ```math
 \frac{dH}{d\vec{\Gamma}} = \vec{0}^\top \to \vec{\Gamma} + \vec{\lambda}_v = \vec{0} \to \vec{\Gamma}_* = -\vec{\lambda}_v
 ```
+Convenient for inequality constraint application, the optimal control law for energy in magnitude and direction form is
+```math
+\begin{array}{ll}
+& \Gamma_{\text{energy}*} & = & xxx \\
+& \hat{\Gamma}_{\text{energy}*} & = & xxx \\
+\end{array}
+```
 
 ###### Inequality Constraints: Thrust and Thrust-Acceleration
 
@@ -297,15 +304,15 @@ For minimum energy, the control law derivation is much simpler. Take the derivat
 
 ```math
 \Gamma_{\text{fuel}} = 
-\Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k \$) \right) \ \ \ k = 1 \to \infty
+\Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k S) \right) \ \ \ k = 1 \to \infty
 ```
 
 ```math
 \begin{array}{llll}
 \Gamma_{\text{energy}} = 
 \begin{cases}
-& \lambda_v                                                                                  & \text{if unconstrained} &                  \\
-& \text{smin}\left(\text{smax}(\lambda_v,\Gamma_{\text{min}},k),\Gamma_{\text{max}},k\right) & \text{if constrained}   & k = 1 \to \infty
+& \lambda_v                                                                                  & \text{if unconstrained} &              \\
+& \text{smin}\left(\text{smax}(\lambda_v,\Gamma_{\text{min}},k),\Gamma_{\text{max}},k\right) & \text{if constrained}   & k \to \infty
 \end{cases}
 \end{array}
 ```
