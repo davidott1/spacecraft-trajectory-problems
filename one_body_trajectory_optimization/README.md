@@ -293,8 +293,7 @@ The equality conditions or boundary conditions are variable.
 
 #### Inequality Constraints: Thrust and Thrust-Acceleration
 
-The inequality conditions are variables as well. For minimum energy problems, thrust or thrust acceleration is either unconstrained or less than a maximum. For minimum fuel problems, thrust or thrust acceleration is necessarily less than a maximum. 
-
+The inequality conditions are variables as well. Thrust as a force and or thrust as acceleration can be constrained between a minimum and maximum. If thrust acceleration is constrained, specified min and max, $\Gamma_{\text{min},s}$ and $\Gamma_{\text{max},s}$, are used. If thrust as a forcee is constrained, specified min and max, $T_{\text{min},s}$ and $T_{\text{max},s}$, are used. Mass is integrated along with the state $\vec{x}$ to map the thrust-force constraint to a thrust acceleration:
 ```math
 \begin{array}{llll}
 \Gamma_{\text{min}} = 
@@ -304,7 +303,6 @@ The inequality conditions are variables as well. For minimum energy problems, th
 \end{cases}
 \end{array}
 ```
-
 ```math
 \begin{array}{llll}
 \Gamma_{\text{max}} = 
@@ -315,11 +313,13 @@ The inequality conditions are variables as well. For minimum energy problems, th
 \end{array}
 ```
 
+In practice, for fuel-minimization problems, thrust-acceleration is smoothly applied using a hyperbolic tangenent function $\tanh$. As input, the switching function $S$ is scaled with factor $k$ to better approximate the optimal bang-bang thrust:
 ```math
 \Gamma_{\text{fuel}} = 
 \Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k S) \right) \ \ \ k = 1 \to \infty
 ```
 
+Similarly, for energy-minization problems, thrust-acceleration, or thrust-force mapped to thrust acceleration, is smoothly constrained with a smoothing min and max function, $\smin$ or $\smax$:
 ```math
 \begin{array}{llll}
 \Gamma_{\text{energy}} = 
@@ -329,7 +329,6 @@ The inequality conditions are variables as well. For minimum energy problems, th
 \end{cases}
 \end{array}
 ```
-
 where
 ```math
 \begin{array}{ll}
