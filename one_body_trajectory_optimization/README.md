@@ -277,8 +277,8 @@ For minimum energy, the control law derivation is much simpler. Take the derivat
 \begin{array}{llll}
 \Gamma_{\text{min}} = 
 \begin{cases}
-\Gamma_{\text{min},s}     & S < 0 & \text{and if using thrust-acc constraints} \\
-     T_{\text{min},s} / m & S < 0 & \text{and if using thrust     constraints}
+\Gamma_{\text{min},s}     & S < 0 & \text{and if using thrust-acceleration constraints} \\
+     T_{\text{min},s} / m & S < 0 & \text{and if using thrust constraints}
 \end{cases}
 \end{array}
 ```
@@ -287,8 +287,8 @@ For minimum energy, the control law derivation is much simpler. Take the derivat
 \begin{array}{llll}
 \Gamma_{\text{max}} = 
 \begin{cases}
-\Gamma_{\text{max},s}     & S > 0 & \text{and if using thrust-acc constraints} \\
-     T_{\text{max},s} / m & S > 0 & \text{and if using thrust     constraints}
+\Gamma_{\text{max},s}     & S > 0 & \text{and if using thrust-acceleration constraints} \\
+     T_{\text{max},s} / m & S > 0 & \text{and if using thrust constraints}
 \end{cases}
 \end{array}
 ```
