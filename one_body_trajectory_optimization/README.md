@@ -304,7 +304,7 @@ For minimum energy, the control law derivation is much simpler. Take the derivat
 \begin{array}{llll}
 \Gamma_{\text{energy}} = 
 \begin{cases}
-& -\lambda_v                                                                                 & \text{if unconstrained} &                  \\
+& \lambda_v                                                                                  & \text{if unconstrained} &                  \\
 & \text{smin}\left(\text{smax}(\lambda_v,\Gamma_{\text{min}},k),\Gamma_{\text{max}},k\right) & \text{if constrained}   & k = 1 \to \infty
 \end{cases}
 \end{array}
