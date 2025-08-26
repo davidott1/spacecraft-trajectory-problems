@@ -326,10 +326,8 @@ where
 \begin{array}{ll}
 & \text{smin}(a_1, a_2, k) & = & \frac{-1}{k} \left( b + \ln(e^{-k a_1 - b} + e^{-k a_2 - b}) \right) \\
 & \text{smax}(a_1, a_2, k) & = & \frac{ 1}{k} \left( b + \ln(e^{ k a_1 - b} + e^{ k a_2 - b}) \right) \\
+& b & = & \text{max}(k a_1, k a_2)
 \end{array}
-```
-```math
-b = \text{max}(k a_1, k a_2)
 ```
 
 The equality conditions or boundary conditions are variable: flight time is fixed or free, as well as final position and velocity. Flight time is $\Delta t = t_f - t_o = t_f$. The initial time is assumed to be $t_o = 0$. Free initial position and velocity is not implemented, but the problem structure is reversible in time. The inequality conditions are variables as well. For minimum energy problems, thrust or thrust acceleration is either unconstrained or less than a maximum. For minimum fuel problems, thrust or thrust acceleration is necessarily less than a maximum. The coordinate system is Cartesian in two dimensions and with respect to an inertial frame. The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy.
