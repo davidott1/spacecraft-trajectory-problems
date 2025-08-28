@@ -90,7 +90,7 @@ def generate_guess(
     print(f"  Knowns (fixed): {fixed_vars_len}")
     print(f"    {', '.join(fixed_vars)}")
     print(f"  Known State: {', '.join([str(t_or_f) for t_or_f in equality_parameters['known_states']])}")
-    breakpoint()
+
     # Set initial guess for fixed variables
     if time_o_mode == 'fixed':
         time_o_pls = time_o_mns
@@ -236,7 +236,7 @@ def generate_guess(
                             (bnd == 'o' and side == 'pls')
                             or (bnd == 'f' and side == 'mns')
                         ):
-                            number_elements = np.size(equality_parameters[var][bnd][side]['value'])
+                            number_elements = np.size(equality_parameters[var][bnd][side])
                             fixed_or_free   = str('Fixed' if equality_parameters['known_states'][idx_decision_state] else 'Free')
                             print("    " + f"{f'{var}_{bnd}_{side}':<15s}" + " : " + f"{fixed_or_free:<5s}" + " : " + f"{decision_state_idx[idx_decision_state:idx_decision_state+number_elements]}")
                             idx_decision_state += number_elements

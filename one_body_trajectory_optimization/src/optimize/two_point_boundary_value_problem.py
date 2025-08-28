@@ -191,7 +191,7 @@ def tpbvp_objective_and_jacobian(
                 if number_elements == 1:
                     value_slice = value_slice[0]
                 
-                equality_parameters[var][bnd][side]['value'] = value_slice
+                equality_parameters[var][bnd][side] = value_slice
                 idx += number_elements
 
     # Unpack
@@ -351,23 +351,14 @@ def tpbvp_objective_and_jacobian(
     #   jacobian = d(state_costate_f) / d(state_costate_o)
 
     # Enforce overrides for free variables
-    # ordered_variables  = ['time', 'pos_vec', 'vel_vec', 'copos_vec', 'covel_vec', 'ham']
-    # ordered_boundaries = ['o', 'f']
-    # ordered_sides      = ['pls', 'mns']
     for var in ordered_variables:
-        print(f"var: {var}")
         for bound in ordered_boundaries:
-            if var == 'time':
-                breakpoint()
             if equality_parameters[var][bound]['mode'] == 'free':
-                if var == 'time':
-                    breakpoint()
-                
                 if bound == 'o':
                     exec(f"{var}_{bound}_mns = {var}_{bound}_pls")
                 else: # assume bound == 'f'
                     exec(f"{var}_{bound}_pls = {var}_{bound}_mns")
-
+    breakpoint()
     # Time error
     error_time_o = time_o_pls - time_o_mns
     error_time_f = time_f_pls - time_f_mns

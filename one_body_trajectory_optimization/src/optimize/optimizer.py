@@ -134,10 +134,10 @@ def optimal_trajectory_solve(
     inequality_parameters['use_thrust_smoothing']     = False # should be False
     # decision_state_initguess = soln_root.x
     # time_span     = np.array([decision_state_initguess[0], decision_state_initguess[10]])
-    pos_vec_o_mns = equality_parameters['pos_vec']['o']['mns']['value']
-    vel_vec_o_mns = equality_parameters['vel_vec']['o']['mns']['value']
-    pos_vec_f_pls = equality_parameters['pos_vec']['f']['pls']['value']
-    vel_vec_f_pls = equality_parameters['vel_vec']['f']['pls']['value']
+    pos_vec_o_mns = equality_parameters['pos_vec']['o']['mns']
+    vel_vec_o_mns = equality_parameters['vel_vec']['o']['mns']
+    pos_vec_f_pls = equality_parameters['pos_vec']['f']['pls']
+    vel_vec_f_pls = equality_parameters['vel_vec']['f']['pls']
     # state_costate_o = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state_initguess])
 
     decision_state_initguess = soln_root.x
