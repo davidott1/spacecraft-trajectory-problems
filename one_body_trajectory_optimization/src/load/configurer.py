@@ -89,9 +89,15 @@ def _convert_parameters_to_standard_units(
         'time_o'                : (           0.0e+0  , u.s       , float ),
         'pos_vec_o'             : ( [ 0.0e+0, 0.0e+0 ], u.m       , float ), # type: ignore
         'vel_vec_o'             : ( [ 0.0e+0, 0.0e+0 ], u.m/u.s   , float ), # type: ignore
+        'copos_vec_o'           : ( [ 0.0e+0, 0.0e+0 ], None      , float ), # type: ignore
+        'covel_vec_o'           : ( [ 0.0e+0, 0.0e+0 ], None      , float ), # type: ignore
+        'ham_o'                 : (           0.0e+0  , None      , float ),
         'time_f'                : (           1.0e+1  , u.s       , float ),
         'pos_vec_f'             : ( [ 1.0e+1, 1.0e+1 ], u.m       , float ), # type: ignore
         'vel_vec_f'             : ( [ 1.0e+0, 1.0e+0 ], u.m/u.s   , float ), # type: ignore
+        'copos_vec_f'           : ( [ 0.0e+0, 0.0e+0 ], None      , float ), # type: ignore
+        'covel_vec_f'           : ( [ 0.0e+0, 0.0e+0 ], None      , float ), # type: ignore
+        'ham_f'                 : (           0.0e+0  , None      , float ),
         'mass_o'                : (             1.0e+3, u.kg      , float ), # type: ignore
         'use_thrust_acc_limits' : (              False, None      , bool  ),
         'thrust_acc_min'        : (             0.0e+0, u.m/u.s**2, float ), # type: ignore
@@ -105,8 +111,8 @@ def _convert_parameters_to_standard_units(
         'init_guess_steps'      : (               3000, u.one     , int   ),
     } # fix later: needs more parameters
 
-    # Build the parameter-without-units dictionary by applying defaults and converting units
-    parameters_without_units = {}
+    # Build the parameter-standard-units dictionary by applying defaults and converting units
+    parameters_standard_units = {}
     standard_units = {
         'one'      : u.one,
         'time'     : u.s  , # type: ignore
@@ -115,36 +121,41 @@ def _convert_parameters_to_standard_units(
     }
     for param, (val_default, val_unit, val_type) in parameters_with_units_defaults.items():
         if isinstance(val_default, str):
-            parameters_without_units[param] = parameters_with_units.get(param, val_default)
+            parameters_standard_units[param] = parameters_with_units.get(param, val_default)
         elif isinstance(val_default, bool):
-            parameters_without_units[param] = parameters_with_units.get(param, val_default)
+            parameters_standard_units[param] = parameters_with_units.get(param, val_default)
         elif val_default is None:
             if parameters_with_units.get(param, val_default) is None:
-                parameters_without_units[param] = parameters_with_units.get(param, val_default)
+                parameters_standard_units[param] = parameters_with_units.get(param, val_default)
             elif parameters_with_units.get(param, val_default).unit == u.one:
-                parameters_without_units[param] = parameters_with_units.get(param, val_default).to_value(standard_units['one'])
+                parameters_standard_units[param] = parameters_with_units.get(param, val_default).to_value(standard_units['one'])
             else:
-                parameters_without_units[param] = parameters_with_units.get(param, val_default)
+                parameters_standard_units[param] = parameters_with_units.get(param, val_default)
         else:
             if val_unit in (u.one, None):
-                parameters_without_units[param] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['one'])
+                parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['one'])
             elif val_unit in (u.s,): # type: ignore
-                parameters_without_units[param] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['time'])
+                parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['time'])
             elif val_unit in (u.m, u.km): # type: ignore
-                parameters_without_units[param] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['distance'])
+                parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['distance'])
             elif val_unit in (u.m/u.s, u.km/u.s): # type: ignore
-                parameters_without_units[param] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['distance']/standard_units['time'])
+                parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['distance']/standard_units['time'])
             elif val_unit in (u.kg,): # type: ignore
-                parameters_without_units[param] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['mass'])
+                parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['mass'])
             elif val_unit in (u.N, u.kN, u.kg*u.m/u.s**2, u.kg*u.km/u.s**2): # type: ignore
-                parameters_without_units[param] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['mass']*standard_units['distance']/standard_units['time']**2)
+                parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['mass']*standard_units['distance']/standard_units['time']**2)
             elif val_unit in (u.N/u.kg, u.kN/u.kg, u.m/u.s**2, u.km/u.s**2): # type: ignore
-                parameters_without_units[param] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['distance']/standard_units['time']**2)
-        
+                parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['distance']/standard_units['time']**2)
+
         # Enforce types
-        if val_type == int and parameters_without_units[param] is not None:
-            parameters_without_units[param] = int(parameters_without_units[param])
-    return parameters_without_units
+        if val_type == int and parameters_standard_units[param] is not None:
+            parameters_standard_units[param] = int(parameters_standard_units[param])
+
+        # Determine units and include in dictionary
+        breakpoint()
+    # all_parameters_standard_units['time_o']['value']
+
+    return parameters_standard_units
 
 
 # Validate input
@@ -236,16 +247,16 @@ def configure_validate_input(
     }
 
     # Create parameters dictionary and print to screen
-    all_parameters_with_units = \
+    all_parameters_variable_units = \
         _configure_parameters(
             input_files_params,
             system_parameters ,
         )
 
     # Convert to standard units: seconds, meters, kilograms, one
-    all_parameters_without_units = \
+    all_parameters_standard_units = \
         _convert_parameters_to_standard_units(
-            all_parameters_with_units,
+            all_parameters_variable_units,
         )
 
     # Organize parameters into dictionaries: system parameters, integration-state parameters, equality parameters, and inequality parameters
@@ -267,89 +278,90 @@ def configure_validate_input(
         'post_process'   : False                                                                          ,
         'include_scstm'  : False                                                                          ,
     }
+    breakpoint()
     equality_parameters: Dict[str, Any]  = {
         'time': {
             'o': {
-                'mode': 'fixed',
-                'unit': 's',
-                'mns': { 'value': all_parameters_without_units['time_o'] },
-                'pls': { 'value': all_parameters_without_units['time_o'] }
+                'mode' : 'fixed',
+                'unit' : all_parameters_standard_units['time_o']['unit'],
+                'mns'  : all_parameters_standard_units['time_o']['value'],
+                'pls'  : all_parameters_standard_units['time_o']['value']
             },
             'f': {
-                'mode': 'fixed',
-                'unit': 's',
-                'mns': { 'value': all_parameters_without_units['time_f'] },
-                'pls': { 'value': all_parameters_without_units['time_f'] }
+                'mode' : 'fixed',
+                'unit' : all_parameters_standard_units['time_f']['unit'],
+                'mns'  : all_parameters_standard_units['time_f']['value'],
+                'pls'  : all_parameters_standard_units['time_f']['value']
             }
         },
         'pos_vec': {
             'o': {
-                'mode': 'fixed',
-                'unit': 'm',
-                'mns': { 'value': all_parameters_without_units['pos_vec_o'] },
-                'pls': { 'value': all_parameters_without_units['pos_vec_o'] }
+                'mode' : 'fixed',
+                'unit': all_parameters_standard_units['pos_vec_o']['unit'],
+                'mns': all_parameters_standard_units['pos_vec_o']['value'],
+                'pls': all_parameters_standard_units['pos_vec_o']['value']
             },
             'f': {
-                'mode': 'fixed',
-                'unit': 'm',
-                'mns': { 'value': all_parameters_without_units['pos_vec_f'] },
-                'pls': { 'value': all_parameters_without_units['pos_vec_f'] }
+                'mode' : 'fixed',
+                'unit' : all_parameters_standard_units['pos_vec_f']['unit'],
+                'mns'  : all_parameters_standard_units['pos_vec_f']['value'],
+                'pls'  : all_parameters_standard_units['pos_vec_f']['value']
             }
         },
         'vel_vec': {
             'o': {
-                'mode': 'fixed',
-                'unit': 'm/s',
-                'mns': { 'value': all_parameters_without_units['vel_vec_o'] },
-                'pls': { 'value': all_parameters_without_units['vel_vec_o'] }
+                'mode' : 'fixed',
+                'unit' : all_parameters_standard_units['vel_vec_o']['unit'],
+                'mns'  : all_parameters_standard_units['vel_vec_o']['value'],
+                'pls'  : all_parameters_standard_units['vel_vec_o']['value']
             },
             'f': {
-                'mode': 'fixed',
-                'unit': 'm/s',
-                'mns': { 'value': all_parameters_without_units['vel_vec_f'] },
-                'pls': { 'value': all_parameters_without_units['vel_vec_f'] }
+                'mode' : 'fixed',
+                'unit' : all_parameters_standard_units['vel_vec_f']['unit'],
+                'mns'  : all_parameters_standard_units['vel_vec_f']['value'],
+                'pls'  : all_parameters_standard_units['vel_vec_f']['value']
             }
         },
         'copos_vec': {
             'o': {
-                'mode': 'free',
-                'unit': 'm/s^3',
-                'mns': { 'value': np.array([0.0, 0.0]) },
-                'pls': { 'value': np.array([0.0, 0.0]) }
+                'mode' : 'free',
+                'unit' : all_parameters_standard_units['copos_vec_o']['unit'],
+                'mns'  : all_parameters_standard_units['copos_vec_o']['value'],
+                'pls'  : all_parameters_standard_units['copos_vec_o']['value']
             },
             'f': {
-                'mode': 'free',
-                'unit': 'm/s^3',
-                'mns': { 'value': np.array([0.0, 0.0]) },
-                'pls': { 'value': np.array([0.0, 0.0]) }
+                'mode' : 'free',
+                'unit' : all_parameters_standard_units['copos_vec_f']['unit'],
+                'mns'  : all_parameters_standard_units['copos_vec_f']['value'],
+                'pls'  : all_parameters_standard_units['copos_vec_f']['value']
             }
         },
         'covel_vec': {
             'o': {
-                'mode': 'free',
-                'unit': 'm/s^2',
-                'mns': { 'value': np.array([0.0, 0.0]) },
-                'pls': { 'value': np.array([0.0, 0.0]) }
+                'mode' : 'free',
+                'unit' : all_parameters_standard_units['covel_vec_o']['unit'],
+                'mns'  : all_parameters_standard_units['covel_vec_o']['value'],
+                'pls'  : all_parameters_standard_units['covel_vec_o']['value']
             },
             'f': {
-                'mode': 'free',
-                'unit': 'm/s^2',
-                'mns': { 'value': np.array([0.0, 0.0]) },
-                'pls': { 'value': np.array([0.0, 0.0]) }
+                'mode' : 'free',
+                'unit' : all_parameters_standard_units['covel_vec_f']['unit'],
+                'mns'  : all_parameters_standard_units['covel_vec_f']['value'],
+                'pls'  : all_parameters_standard_units['covel_vec_f']['value']
             }
         },
         'ham': {
             'o': {
-                'mode': 'free',
-                'unit': 'xxx',
-                'mns': { 'value': np.array([0.0]) },
-                'pls': { 'value': np.array([0.0]) }
+                'mode' : 'free',
+                'unit' : all_parameters_standard_units['ham_o']['unit'],
+                'mns'  : all_parameters_standard_units['ham_o']['value'],
+                'pls'  : all_parameters_standard_units['ham_o']['value']
             },
             'f': {
-                'mode': 'free',
-                'unit': 'xxx',
-                'mns': { 'value': np.array([0.0]) },
-                'pls': { 'value': np.array([0.0]) }
+                'mode' : 'free',
+                'unit' : all_parameters_standard_units['ham_f']['unit'],
+                'mns'  : all_parameters_standard_units['ham_f']['value'],
+                'pls'  : all_parameters_standard_units['ham_f']['value']
             }
         }
     }
@@ -364,6 +376,7 @@ def configure_validate_input(
             num_elements = np.size(var_bnd['mns']['value'])
             known_states.extend([is_known] * num_elements)
     equality_parameters['known_states'] = known_states
+    breakpoint()
     inequality_parameters = {
         'use_thrust_acc_limits'    : all_parameters_without_units['use_thrust_acc_limits'],
         'use_thrust_acc_smoothing' : False                                                ,

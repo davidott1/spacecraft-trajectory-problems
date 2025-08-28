@@ -355,8 +355,14 @@ def tpbvp_objective_and_jacobian(
     # ordered_boundaries = ['o', 'f']
     # ordered_sides      = ['pls', 'mns']
     for var in ordered_variables:
+        print(f"var: {var}")
         for bound in ordered_boundaries:
+            if var == 'time':
+                breakpoint()
             if equality_parameters[var][bound]['mode'] == 'free':
+                if var == 'time':
+                    breakpoint()
+                
                 if bound == 'o':
                     exec(f"{var}_{bound}_mns = {var}_{bound}_pls")
                 else: # assume bound == 'f'
