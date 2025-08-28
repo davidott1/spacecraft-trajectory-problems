@@ -132,7 +132,7 @@ def generate_guess(
     for idx in range(init_guess_steps):
         decision_state_idx = np.array([])
         if time_o_mode == 'free':
-            time_o_pls = np.random.uniform(low=-1, high=1, size=1)
+            time_o_pls = np.random.uniform(low=0, high=1, size=1)
         # decision_state_idx = np.hstack([decision_state_idx, time_o_pls])
         if pos_vec_o_mode == 'free':
             pos_vec_o_pls = np.random.uniform(low=-1, high=1, size=2)
@@ -151,7 +151,7 @@ def generate_guess(
         # decision_state_idx = np.hstack([decision_state_idx, ham_o_pls])
 
         if time_f_mode == 'free':
-            time_f_mns = np.random.uniform(low=-1, high=1, size=1)
+            time_f_mns = np.random.uniform(low=1, high=300, size=1)
         # decision_state_idx = np.hstack([decision_state_idx, time_f_mns])
         if pos_vec_f_mode == 'free':
             pos_vec_f_mns = np.random.uniform(low=-1, high=1, size=2)

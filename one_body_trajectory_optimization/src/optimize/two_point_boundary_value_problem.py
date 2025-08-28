@@ -351,14 +351,20 @@ def tpbvp_objective_and_jacobian(
     #   jacobian = d(state_costate_f) / d(state_costate_o)
 
     # Enforce overrides for free variables
-    for var in ordered_variables:
-        for bound in ordered_boundaries:
-            if equality_parameters[var][bound]['mode'] == 'free':
-                if bound == 'o':
-                    exec(f"{var}_{bound}_mns = {var}_{bound}_pls")
-                else: # assume bound == 'f'
-                    exec(f"{var}_{bound}_pls = {var}_{bound}_mns")
-    breakpoint()
+    if equality_parameters['time'     ]['o']['mode'] == 'free': time_o_mns      = time_o_pls
+    if equality_parameters['pos_vec'  ]['o']['mode'] == 'free': pos_vec_o_mns   = pos_vec_o_pls
+    if equality_parameters['vel_vec'  ]['o']['mode'] == 'free': vel_vec_o_mns   = vel_vec_o_pls
+    if equality_parameters['copos_vec']['o']['mode'] == 'free': copos_vec_o_mns = copos_vec_o_pls
+    if equality_parameters['covel_vec']['o']['mode'] == 'free': covel_vec_o_mns = covel_vec_o_pls
+    if equality_parameters['ham'      ]['o']['mode'] == 'free': ham_o_mns       = ham_o_pls
+
+    if equality_parameters['time'     ]['f']['mode'] == 'free': time_f_pls      = time_f_mns
+    if equality_parameters['pos_vec'  ]['f']['mode'] == 'free': pos_vec_f_pls   = pos_vec_f_mns
+    if equality_parameters['vel_vec'  ]['f']['mode'] == 'free': vel_vec_f_pls   = vel_vec_f_mns
+    if equality_parameters['copos_vec']['f']['mode'] == 'free': copos_vec_f_pls = copos_vec_f_mns
+    if equality_parameters['covel_vec']['f']['mode'] == 'free': covel_vec_f_pls = covel_vec_f_mns
+    if equality_parameters['ham'      ]['f']['mode'] == 'free': ham_f_pls       = ham_f_mns
+
     # Time error
     error_time_o = time_o_pls - time_o_mns
     error_time_f = time_f_pls - time_f_mns
