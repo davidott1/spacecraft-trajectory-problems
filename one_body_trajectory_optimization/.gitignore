@@ -3,4 +3,4 @@ untracked/
 __pycache__/
 *.pyc
 *.DS_Store
-example_custom.json
+example/custom.json
