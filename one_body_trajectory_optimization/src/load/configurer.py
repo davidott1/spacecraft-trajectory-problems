@@ -41,7 +41,8 @@ def _configure_parameters(
                         'm/s', 'km/s',
                         'm/s^2', 'N/kg', 'km/s^2',
                         'm/s^3', 'km/s^3',
-                        'N', 'kg*m/s^2' 
+                        'm^2/s^2', 'km^2/s^2',
+                        'N', 'kg*m/s^2'
                     ):
                     u_unit_unit_str = u.Unit(unit_str)
                 else:
@@ -83,33 +84,48 @@ def _configure_parameters(
 def _convert_parameters_to_standard_units(
         parameters_with_units: dict
     ) -> dict:
-    
     parameters_with_units_defaults = {
-        'min_type'              : (           'energy', None      , str   ),
-        'time_o'                : (           0.0e+0  , u.s       , float ),
-        'pos_vec_o'             : ( [ 0.0e+0, 0.0e+0 ], u.m       , float ), # type: ignore
-        'vel_vec_o'             : ( [ 0.0e+0, 0.0e+0 ], u.m/u.s   , float ), # type: ignore
-        'copos_vec_o'           : ( [ 0.0e+0, 0.0e+0 ], None      , float ), # type: ignore
-        'covel_vec_o'           : ( [ 0.0e+0, 0.0e+0 ], None      , float ), # type: ignore
-        'ham_o'                 : (           0.0e+0  , None      , float ),
-        'time_f'                : (           1.0e+1  , u.s       , float ),
-        'pos_vec_f'             : ( [ 1.0e+1, 1.0e+1 ], u.m       , float ), # type: ignore
-        'vel_vec_f'             : ( [ 1.0e+0, 1.0e+0 ], u.m/u.s   , float ), # type: ignore
-        'copos_vec_f'           : ( [ 0.0e+0, 0.0e+0 ], None      , float ), # type: ignore
-        'covel_vec_f'           : ( [ 0.0e+0, 0.0e+0 ], None      , float ), # type: ignore
-        'ham_f'                 : (           0.0e+0  , None      , float ),
-        'mass_o'                : (             1.0e+3, u.kg      , float ), # type: ignore
-        'use_thrust_acc_limits' : (              False, None      , bool  ),
-        'thrust_acc_min'        : (             0.0e+0, u.m/u.s**2, float ), # type: ignore
-        'thrust_acc_max'        : (             1.0e+0, u.m/u.s**2, float ), # type: ignore
-        'use_thrust_limits'     : (              False, None      , bool  ),
-        'thrust_min'            : (             0.0e+0, u.N       , float ), # type: ignore
-        'thrust_max'            : (             1.0e+0, u.N       , float ), # type: ignore
-        'k_idxinitguess'        : (               None, None      , int   ),
-        'k_idxfinsoln'          : (               None, None      , int   ),
-        'k_idxdivs'             : (                 10, u.one     , int   ),
-        'init_guess_steps'      : (               3000, u.one     , int   ),
-    } # fix later: needs more parameters
+        'min_type'              : [           'energy', None      , str   ],
+        'time_o'                : [           0.0e+0  , u.s       , float ],
+        'pos_vec_o'             : [ [ 0.0e+0, 0.0e+0 ], u.m       , float ], # type: ignore
+        'vel_vec_o'             : [ [ 0.0e+0, 0.0e+0 ], u.m/u.s   , float ], # type: ignore
+        'copos_vec_o'           : [ [ 0.0e+0, 0.0e+0 ], None      , float ], # type: ignore
+        'covel_vec_o'           : [ [ 0.0e+0, 0.0e+0 ], None      , float ], # type: ignore
+        'ham_o'                 : [           0.0e+0  , None      , float ],
+        'time_f'                : [           1.0e+1  , u.s       , float ],
+        'pos_vec_f'             : [ [ 1.0e+1, 1.0e+1 ], u.m       , float ], # type: ignore
+        'vel_vec_f'             : [ [ 1.0e+0, 1.0e+0 ], u.m/u.s   , float ], # type: ignore
+        'copos_vec_f'           : [ [ 0.0e+0, 0.0e+0 ], None      , float ], # type: ignore
+        'covel_vec_f'           : [ [ 0.0e+0, 0.0e+0 ], None      , float ], # type: ignore
+        'ham_f'                 : [           0.0e+0  , None      , float ],
+        'mass_o'                : [             1.0e+3, u.kg      , float ], # type: ignore
+        'use_thrust_acc_limits' : [              False, None      , bool  ],
+        'thrust_acc_min'        : [             0.0e+0, u.m/u.s**2, float ], # type: ignore
+        'thrust_acc_max'        : [             1.0e+0, u.m/u.s**2, float ], # type: ignore
+        'use_thrust_limits'     : [              False, None      , bool  ],
+        'thrust_min'            : [             0.0e+0, u.N       , float ], # type: ignore
+        'thrust_max'            : [             1.0e+0, u.N       , float ], # type: ignore
+        'k_idxinitguess'        : [               None, None      , int   ],
+        'k_idxfinsoln'          : [               None, None      , int   ],
+        'k_idxdivs'             : [                 10, u.one     , int   ],
+        'init_guess_steps'      : [               3000, u.one     , int   ],
+    }
+
+    # Dynamically set the default units for co-state
+    if parameters_with_units_defaults['min_type'] == 'fuel':
+        parameters_with_units_defaults['copos_vec_o'][1] = 1.0  /u.s
+        parameters_with_units_defaults['covel_vec_o'][1] = u.one
+        parameters_with_units_defaults['ham_o'      ][1] = u.m  /u.s**2 # type: ignore
+        parameters_with_units_defaults['copos_vec_f'][1] = 1.0  /u.s
+        parameters_with_units_defaults['covel_vec_f'][1] = u.one
+        parameters_with_units_defaults['ham_f'      ][1] = u.m  /u.s**2 # type: ignore
+    else: # assume min_type == 'energy'
+        parameters_with_units_defaults['copos_vec_o'][1] = u.m   /u.s**3 # type: ignore
+        parameters_with_units_defaults['covel_vec_o'][1] = u.m   /u.s**2 # type: ignore
+        parameters_with_units_defaults['ham_o'      ][1] = u.m**2/u.s**4 # type: ignore
+        parameters_with_units_defaults['copos_vec_f'][1] = u.m   /u.s**3 # type: ignore
+        parameters_with_units_defaults['covel_vec_f'][1] = u.m   /u.s**2 # type: ignore
+        parameters_with_units_defaults['ham_f'      ][1] = u.m**2/u.s**4 # type: ignore
 
     # Build the parameter-standard-units dictionary by applying defaults and converting units
     parameters_standard_units = {}
@@ -120,39 +136,53 @@ def _convert_parameters_to_standard_units(
         'mass'     : u.kg , # type: ignore
     }
     for param, (val_default, val_unit, val_type) in parameters_with_units_defaults.items():
+        print(f"{param}")
+        parameters_standard_units[param] = {}
         if isinstance(val_default, str):
-            parameters_standard_units[param] = parameters_with_units.get(param, val_default)
+            parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default)
+            parameters_standard_units[param]['unit' ] = "None"
         elif isinstance(val_default, bool):
-            parameters_standard_units[param] = parameters_with_units.get(param, val_default)
+            parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default)
+            parameters_standard_units[param]['unit' ] = "None"
         elif val_default is None:
             if parameters_with_units.get(param, val_default) is None:
-                parameters_standard_units[param] = parameters_with_units.get(param, val_default)
+                parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default)
+                parameters_standard_units[param]['unit' ] = "None"
             elif parameters_with_units.get(param, val_default).unit == u.one:
-                parameters_standard_units[param] = parameters_with_units.get(param, val_default).to_value(standard_units['one'])
+                parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default).to_value(standard_units['one'])
+                parameters_standard_units[param]['unit' ] = str(standard_units['one'])
             else:
-                parameters_standard_units[param] = parameters_with_units.get(param, val_default)
+                parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default)
+                parameters_standard_units[param]['unit' ] = str(val_unit)
         else:
             if val_unit in (u.one, None):
                 parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['one'])
+                parameters_standard_units[param]['unit' ] = str(standard_units['one'])
             elif val_unit in (u.s,): # type: ignore
                 parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['time'])
+                parameters_standard_units[param]['unit' ] = str(standard_units['time'])
             elif val_unit in (u.m, u.km): # type: ignore
                 parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['distance'])
+                parameters_standard_units[param]['unit' ] = str(standard_units['distance'])
             elif val_unit in (u.m/u.s, u.km/u.s): # type: ignore
                 parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['distance']/standard_units['time'])
+                parameters_standard_units[param]['unit' ] = str(standard_units['distance']/standard_units['time'])
             elif val_unit in (u.kg,): # type: ignore
                 parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['mass'])
+                parameters_standard_units[param]['unit' ] = str(standard_units['mass'])
             elif val_unit in (u.N, u.kN, u.kg*u.m/u.s**2, u.kg*u.km/u.s**2): # type: ignore
                 parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['mass']*standard_units['distance']/standard_units['time']**2)
+                parameters_standard_units[param]['unit' ] = str(standard_units['mass']*standard_units['distance']/standard_units['time']**2)
             elif val_unit in (u.N/u.kg, u.kN/u.kg, u.m/u.s**2, u.km/u.s**2): # type: ignore
                 parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['distance']/standard_units['time']**2)
+                parameters_standard_units[param]['unit' ] = str(standard_units['distance']/standard_units['time']**2)
 
         # Enforce types
         if val_type == int and parameters_standard_units[param] is not None:
-            parameters_standard_units[param] = int(parameters_standard_units[param])
+            parameters_standard_units[param]['value'] = int(parameters_standard_units[param]['value'])
 
         # Determine units and include in dictionary
-        breakpoint()
+        # breakpoint()
     # all_parameters_standard_units['time_o']['value']
 
     return parameters_standard_units

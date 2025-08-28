@@ -279,7 +279,7 @@ Convenient for inequality constraint application, the optimal control law for en
 where
 ```math
 \begin{array}{ll}
-& \Gamma_{\text{energy}*} & = & \vec{\lambda}_v \\
+& \Gamma_{\text{energy}*} & = & \lambda_v \\
 & \hat{\Gamma}_{\text{energy}*} & = & -\frac{\vec{\lambda}_v}{\lambda_v} \\
 \end{array}
 ```
