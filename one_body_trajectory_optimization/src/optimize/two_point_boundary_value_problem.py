@@ -350,13 +350,17 @@ def tpbvp_objective_and_jacobian(
     #           [ delta [time_f, pos_vec_f, vel_vec_f, copos_vec_f, covel_vel_f, ham_f] ]
     #   jacobian = d(state_costate_f) / d(state_costate_o)
 
-    # # Enforce trivial overrides
-    # time_o_mns      = time_o_pls      # trivial
-    time_f_pls      = time_f_mns      # trivial, fix later
-    copos_vec_f_pls = copos_vec_f_mns # trivial, fix later
-    covel_vec_f_pls = covel_vec_f_mns # trivial, fix later
-    ham_o_mns       = ham_o_pls       # trivial, might not be correct
-    ham_f_pls       = ham_f_mns       # trivial, might not be correct
+    # Enforce overrides for free variables
+    # ordered_variables  = ['time', 'pos_vec', 'vel_vec', 'copos_vec', 'covel_vec', 'ham']
+    # ordered_boundaries = ['o', 'f']
+    # ordered_sides      = ['pls', 'mns']
+    for var in ordered_variables:
+        for bound in ordered_boundaries:
+            if equality_parameters[var][bound]['mode'] == 'free':
+                if bound == 'o':
+                    exec(f"{var}_{bound}_mns = {var}_{bound}_pls")
+                else: # assume bound == 'f'
+                    exec(f"{var}_{bound}_pls = {var}_{bound}_mns")
 
     # Time error
     error_time_o = time_o_pls - time_o_mns
