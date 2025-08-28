@@ -185,7 +185,7 @@ def tpbvp_objective_and_jacobian(
                 # elif var_bnd['mode'] == 'free':
                 # print(f"(mode, var, bnd, side): {var_bnd['mode']}, {var}, {bnd}, {side}")
 
-                number_elements = np.size(var_bnd[side]['value'])
+                number_elements = np.size(var_bnd[side])
                 value_slice     = decision_state[idx:idx+number_elements]
 
                 if number_elements == 1:
@@ -198,28 +198,28 @@ def tpbvp_objective_and_jacobian(
     include_jacobian = optimization_parameters['include_jacobian']
 
     time_o_mns, pos_vec_o_mns, vel_vec_o_mns, copos_vec_o_mns, covel_vec_o_mns, ham_o_mns = (
-        equality_parameters[     'time']['o']['mns']['value'],
-        equality_parameters[  'pos_vec']['o']['mns']['value'], equality_parameters[  'vel_vec']['o']['mns']['value'],
-        equality_parameters['copos_vec']['o']['mns']['value'], equality_parameters['covel_vec']['o']['mns']['value'],
-        equality_parameters[      'ham']['o']['mns']['value']
+        equality_parameters[     'time']['o']['mns'],
+        equality_parameters[  'pos_vec']['o']['mns'], equality_parameters[  'vel_vec']['o']['mns'],
+        equality_parameters['copos_vec']['o']['mns'], equality_parameters['covel_vec']['o']['mns'],
+        equality_parameters[      'ham']['o']['mns']
     )
     time_o_pls, pos_vec_o_pls, vel_vec_o_pls, copos_vec_o_pls, covel_vec_o_pls, ham_o_pls = (
-        equality_parameters[     'time']['o']['pls']['value'],
-        equality_parameters[  'pos_vec']['o']['pls']['value'], equality_parameters[  'vel_vec']['o']['pls']['value'],
-        equality_parameters['copos_vec']['o']['pls']['value'], equality_parameters['covel_vec']['o']['pls']['value'],
-        equality_parameters[      'ham']['o']['pls']['value']
+        equality_parameters[     'time']['o']['pls'],
+        equality_parameters[  'pos_vec']['o']['pls'], equality_parameters[  'vel_vec']['o']['pls'],
+        equality_parameters['copos_vec']['o']['pls'], equality_parameters['covel_vec']['o']['pls'],
+        equality_parameters[      'ham']['o']['pls']
     )
     time_f_mns, pos_vec_f_mns, vel_vec_f_mns, copos_vec_f_mns, covel_vec_f_mns, ham_f_mns = (
-        equality_parameters[     'time']['f']['mns']['value'],
-        equality_parameters[  'pos_vec']['f']['mns']['value'], equality_parameters[  'vel_vec']['f']['mns']['value'],
-        equality_parameters['copos_vec']['f']['mns']['value'], equality_parameters['covel_vec']['f']['mns']['value'],
-        equality_parameters[      'ham']['f']['mns']['value']
+        equality_parameters[     'time']['f']['mns'],
+        equality_parameters[  'pos_vec']['f']['mns'], equality_parameters[  'vel_vec']['f']['mns'],
+        equality_parameters['copos_vec']['f']['mns'], equality_parameters['covel_vec']['f']['mns'],
+        equality_parameters[      'ham']['f']['mns']
     )
     time_f_pls, pos_vec_f_pls, vel_vec_f_pls, copos_vec_f_pls, covel_vec_f_pls, ham_f_pls = (
-        equality_parameters[     'time']['f']['pls']['value'],
-        equality_parameters[  'pos_vec']['f']['pls']['value'], equality_parameters[  'vel_vec']['f']['pls']['value'],
-        equality_parameters['copos_vec']['f']['pls']['value'], equality_parameters['covel_vec']['f']['pls']['value'],
-        equality_parameters[      'ham']['f']['pls']['value']
+        equality_parameters[     'time']['f']['pls'],
+        equality_parameters[  'pos_vec']['f']['pls'], equality_parameters[  'vel_vec']['f']['pls'],
+        equality_parameters['copos_vec']['f']['pls'], equality_parameters['covel_vec']['f']['pls'],
+        equality_parameters[      'ham']['f']['pls']
     )
 
     # Time span

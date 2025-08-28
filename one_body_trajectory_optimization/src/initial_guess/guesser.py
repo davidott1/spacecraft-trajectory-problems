@@ -24,59 +24,59 @@ def generate_guess(
     # Unpack
     #   Some parameters will unpack as zero and be set by the guesser
     init_guess_steps = optimization_parameters['init_guess_steps']
+    
+    time_o_mns       = equality_parameters[     'time']['o']['mns']
+    pos_vec_o_mns    = equality_parameters[  'pos_vec']['o']['mns']
+    vel_vec_o_mns    = equality_parameters[  'vel_vec']['o']['mns']
+    copos_vec_o_mns  = equality_parameters['copos_vec']['o']['mns']
+    covel_vec_o_mns  = equality_parameters['covel_vec']['o']['mns']
+    ham_o_mns        = equality_parameters[      'ham']['o']['mns']
 
-    time_o_mns       = equality_parameters[     'time']['o']['mns']['value']
-    pos_vec_o_mns    = equality_parameters[  'pos_vec']['o']['mns']['value']
-    vel_vec_o_mns    = equality_parameters[  'vel_vec']['o']['mns']['value']
-    copos_vec_o_mns  = equality_parameters['copos_vec']['o']['mns']['value']
-    covel_vec_o_mns  = equality_parameters['covel_vec']['o']['mns']['value']
-    ham_o_mns        = equality_parameters[      'ham']['o']['mns']['value']
+    time_o_pls       = equality_parameters[     'time']['o']['pls']
+    pos_vec_o_pls    = equality_parameters[  'pos_vec']['o']['pls']
+    vel_vec_o_pls    = equality_parameters[  'vel_vec']['o']['pls']
+    copos_vec_o_pls  = equality_parameters['copos_vec']['o']['pls']
+    covel_vec_o_pls  = equality_parameters['covel_vec']['o']['pls']
+    ham_o_pls        = equality_parameters[      'ham']['o']['pls']
 
-    time_o_pls       = equality_parameters[     'time']['o']['pls']['value']
-    pos_vec_o_pls    = equality_parameters[  'pos_vec']['o']['pls']['value']
-    vel_vec_o_pls    = equality_parameters[  'vel_vec']['o']['pls']['value']
-    copos_vec_o_pls  = equality_parameters['copos_vec']['o']['pls']['value']
-    covel_vec_o_pls  = equality_parameters['covel_vec']['o']['pls']['value']
-    ham_o_pls        = equality_parameters[      'ham']['o']['pls']['value']
+    time_f_mns       = equality_parameters[     'time']['f']['mns']
+    pos_vec_f_mns    = equality_parameters[  'pos_vec']['f']['mns']
+    vel_vec_f_mns    = equality_parameters[  'vel_vec']['f']['mns']
+    copos_vec_f_mns  = equality_parameters['copos_vec']['f']['mns']
+    covel_vec_f_mns  = equality_parameters['covel_vec']['f']['mns']
+    ham_f_mns        = equality_parameters[      'ham']['f']['mns']
 
-    time_f_mns       = equality_parameters[     'time']['f']['mns']['value']
-    pos_vec_f_mns    = equality_parameters[  'pos_vec']['f']['mns']['value']
-    vel_vec_f_mns    = equality_parameters[  'vel_vec']['f']['mns']['value']
-    copos_vec_f_mns  = equality_parameters['copos_vec']['f']['mns']['value']
-    covel_vec_f_mns  = equality_parameters['covel_vec']['f']['mns']['value']
-    ham_f_mns        = equality_parameters[      'ham']['f']['mns']['value']
+    time_f_pls       = equality_parameters[     'time']['f']['pls']
+    pos_vec_f_pls    = equality_parameters[  'pos_vec']['f']['pls']
+    vel_vec_f_pls    = equality_parameters[  'vel_vec']['f']['pls']
+    copos_vec_f_pls  = equality_parameters['copos_vec']['f']['pls']
+    covel_vec_f_pls  = equality_parameters['covel_vec']['f']['pls']
+    ham_f_pls        = equality_parameters[      'ham']['f']['pls']
 
-    time_f_pls       = equality_parameters[     'time']['f']['pls']['value']
-    pos_vec_f_pls    = equality_parameters[  'pos_vec']['f']['pls']['value']
-    vel_vec_f_pls    = equality_parameters[  'vel_vec']['f']['pls']['value']
-    copos_vec_f_pls  = equality_parameters['copos_vec']['f']['pls']['value']
-    covel_vec_f_pls  = equality_parameters['covel_vec']['f']['pls']['value']
-    ham_f_pls        = equality_parameters[      'ham']['f']['pls']['value']
-
-    time_o_mode      = equality_parameters[     'time']['o']['mode'] # choice: not used
+    time_o_mode      = equality_parameters[     'time']['o']['mode']
     pos_vec_o_mode   = equality_parameters[  'pos_vec']['o']['mode']
     vel_vec_o_mode   = equality_parameters[  'vel_vec']['o']['mode']
     copos_vec_o_mode = equality_parameters['copos_vec']['o']['mode']
     covel_vec_o_mode = equality_parameters['covel_vec']['o']['mode']
     ham_o_mode       = equality_parameters[      'ham']['o']['mode']
 
-    time_f_mode      = equality_parameters[     'time']['f']['mode'] # choice: used
+    time_f_mode      = equality_parameters[     'time']['f']['mode']
     pos_vec_f_mode   = equality_parameters[  'pos_vec']['f']['mode']
     vel_vec_f_mode   = equality_parameters[  'vel_vec']['f']['mode']
     copos_vec_f_mode = equality_parameters['copos_vec']['f']['mode']
     covel_vec_f_mode = equality_parameters['covel_vec']['f']['mode']
     ham_f_mode       = equality_parameters[      'ham']['f']['mode']
-    
+
     # Print free and fixed variables
-    free_vars = []
-    fixed_vars = []
-    free_vars_len = 0
+    free_vars      = []
+    fixed_vars     = []
+    free_vars_len  = 0
     fixed_vars_len = 0
     for var_name, var_data in equality_parameters.items():
         if isinstance(var_data, list):
             continue
         for boundary_type, boundary_data in var_data.items():
-            var_len = np.size(boundary_data['pls']['value'])
+            var_len = np.size(boundary_data['pls'])
             full_var_name = f"{var_name}_{boundary_type}"
             if boundary_data['mode'] == 'free':
                 free_vars.append(full_var_name)
@@ -90,7 +90,7 @@ def generate_guess(
     print(f"  Knowns (fixed): {fixed_vars_len}")
     print(f"    {', '.join(fixed_vars)}")
     print(f"  Known State: {', '.join([str(t_or_f) for t_or_f in equality_parameters['known_states']])}")
-
+    breakpoint()
     # Set initial guess for fixed variables
     if time_o_mode == 'fixed':
         time_o_pls = time_o_mns

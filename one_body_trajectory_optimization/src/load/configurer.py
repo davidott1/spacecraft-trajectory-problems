@@ -42,6 +42,7 @@ def _configure_parameters(
                         'm/s^2', 'N/kg', 'km/s^2',
                         'm/s^3', 'km/s^3',
                         'm^2/s^2', 'km^2/s^2',
+                        'm^2/s^4', 'km^2/s^4',
                         'N', 'kg*m/s^2'
                     ):
                     u_unit_unit_str = u.Unit(unit_str)
@@ -98,13 +99,13 @@ def _convert_parameters_to_standard_units(
         'copos_vec_f'           : [ [ 0.0e+0, 0.0e+0 ], None      , float ], # type: ignore
         'covel_vec_f'           : [ [ 0.0e+0, 0.0e+0 ], None      , float ], # type: ignore
         'ham_f'                 : [           0.0e+0  , None      , float ],
-        'mass_o'                : [             1.0e+3, u.kg      , float ], # type: ignore
+        'mass_o'                : [           1.0e+3  , u.kg      , float ], # type: ignore
         'use_thrust_acc_limits' : [              False, None      , bool  ],
-        'thrust_acc_min'        : [             0.0e+0, u.m/u.s**2, float ], # type: ignore
-        'thrust_acc_max'        : [             1.0e+0, u.m/u.s**2, float ], # type: ignore
+        'thrust_acc_min'        : [           0.0e+0  , u.m/u.s**2, float ], # type: ignore
+        'thrust_acc_max'        : [           1.0e+0  , u.m/u.s**2, float ], # type: ignore
         'use_thrust_limits'     : [              False, None      , bool  ],
-        'thrust_min'            : [             0.0e+0, u.N       , float ], # type: ignore
-        'thrust_max'            : [             1.0e+0, u.N       , float ], # type: ignore
+        'thrust_min'            : [           0.0e+0  , u.N       , float ], # type: ignore
+        'thrust_max'            : [           1.0e+0  , u.N       , float ], # type: ignore
         'k_idxinitguess'        : [               None, None      , int   ],
         'k_idxfinsoln'          : [               None, None      , int   ],
         'k_idxdivs'             : [                 10, u.one     , int   ],
@@ -112,7 +113,7 @@ def _convert_parameters_to_standard_units(
     }
 
     # Dynamically set the default units for co-state
-    if parameters_with_units_defaults['min_type'] == 'fuel':
+    if parameters_with_units_defaults['min_type'][0] == 'fuel':
         parameters_with_units_defaults['copos_vec_o'][1] = 1.0  /u.s
         parameters_with_units_defaults['covel_vec_o'][1] = u.one
         parameters_with_units_defaults['ham_o'      ][1] = u.m  /u.s**2 # type: ignore
@@ -176,6 +177,16 @@ def _convert_parameters_to_standard_units(
             elif val_unit in (u.N/u.kg, u.kN/u.kg, u.m/u.s**2, u.km/u.s**2): # type: ignore
                 parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['distance']/standard_units['time']**2)
                 parameters_standard_units[param]['unit' ] = str(standard_units['distance']/standard_units['time']**2)
+            elif val_unit in (1.0/u.s,): # type: ignore
+                breakpoint()
+                parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default * val_unit).to_value(1.0/standard_units['time'])
+                parameters_standard_units[param]['unit' ] = str(1.0/standard_units['time'])
+            elif val_unit in (u.m/u.s**3, u.km/u.s**3): # type: ignore
+                parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['distance']/standard_units['time']**3)
+                parameters_standard_units[param]['unit' ] = str(standard_units['distance']/standard_units['time']**3)
+            elif val_unit in (u.m**2/u.s**4, u.km**2/u.s**4): # type: ignore
+                parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default * val_unit).to_value(standard_units['distance']**2/standard_units['time']**4)
+                parameters_standard_units[param]['unit' ] = str(standard_units['distance']**2/standard_units['time']**4)
 
         # Enforce types
         if val_type == int and parameters_standard_units[param] is not None:
@@ -291,137 +302,137 @@ def configure_validate_input(
 
     # Organize parameters into dictionaries: system parameters, integration-state parameters, equality parameters, and inequality parameters
     optimization_parameters = {
-        'min_type'         : all_parameters_without_units['min_type'        ],
-        'init_guess_steps' : all_parameters_without_units['init_guess_steps'],
+        'min_type'         : all_parameters_standard_units['min_type'        ]['value'],
+        'init_guess_steps' : all_parameters_standard_units['init_guess_steps']['value'],
         'include_jacobian' : False                                           ,
     }
     integration_state_parameters = {
-        'time_o'         : all_parameters_without_units['time_o']                                         ,
-        'time_f'         : all_parameters_without_units['time_f']                                         ,
-        'delta_time_of'  : all_parameters_without_units['time_f'] - all_parameters_without_units['time_o'],
-        'pos_vec_o'      : all_parameters_without_units['pos_vec_o']                                      , # type: ignore
-        'vel_vec_o'      : all_parameters_without_units['vel_vec_o']                                      , # type: ignore
-        'pos_vec_f'      : all_parameters_without_units['pos_vec_f']                                      , # type: ignore
-        'vel_vec_f'      : all_parameters_without_units['vel_vec_f']                                      , # type: ignore
-        'mass_o'         : all_parameters_without_units['mass_o']                                         , # type: ignore
-        'opt_ctrl_obj_o' : np.float64(0.0)                                                                , # type: ignore
-        'post_process'   : False                                                                          ,
-        'include_scstm'  : False                                                                          ,
+        'time_o'         : all_parameters_standard_units['time_o']                                                            ,
+        'time_f'         : all_parameters_standard_units['time_f']                                                            ,
+        'delta_time_of'  : all_parameters_standard_units['time_f']['value'] - all_parameters_standard_units['time_o']['value'],
+        'pos_vec_o'      : all_parameters_standard_units['pos_vec_o']['value']                                                , # type: ignore
+        'vel_vec_o'      : all_parameters_standard_units['vel_vec_o']['value']                                                , # type: ignore
+        'pos_vec_f'      : all_parameters_standard_units['pos_vec_f']['value']                                                , # type: ignore
+        'vel_vec_f'      : all_parameters_standard_units['vel_vec_f']['value']                                                , # type: ignore
+        'mass_o'         : all_parameters_standard_units['mass_o']['value']                                                   , # type: ignore
+        'opt_ctrl_obj_o' : np.float64(0.0)                                                                                    , # type: ignore
+        'post_process'   : False                                                                                              ,
+        'include_scstm'  : False                                                                                              ,
     }
-    breakpoint()
     equality_parameters: Dict[str, Any]  = {
         'time': {
             'o': {
-                'mode' : 'fixed',
-                'unit' : all_parameters_standard_units['time_o']['unit'],
+                'mode' : 'fixed'                                         ,
+                'unit' : all_parameters_standard_units['time_o']['unit' ],
                 'mns'  : all_parameters_standard_units['time_o']['value'],
                 'pls'  : all_parameters_standard_units['time_o']['value']
             },
             'f': {
-                'mode' : 'fixed',
-                'unit' : all_parameters_standard_units['time_f']['unit'],
+                'mode' : 'fixed'                                         ,
+                'unit' : all_parameters_standard_units['time_f']['unit' ],
                 'mns'  : all_parameters_standard_units['time_f']['value'],
                 'pls'  : all_parameters_standard_units['time_f']['value']
             }
         },
         'pos_vec': {
             'o': {
-                'mode' : 'fixed',
-                'unit': all_parameters_standard_units['pos_vec_o']['unit'],
-                'mns': all_parameters_standard_units['pos_vec_o']['value'],
-                'pls': all_parameters_standard_units['pos_vec_o']['value']
+                'mode' : 'fixed'                                            ,
+                'unit' : all_parameters_standard_units['pos_vec_o']['unit' ],
+                'mns'  : all_parameters_standard_units['pos_vec_o']['value'],
+                'pls'  : all_parameters_standard_units['pos_vec_o']['value']
             },
             'f': {
-                'mode' : 'fixed',
-                'unit' : all_parameters_standard_units['pos_vec_f']['unit'],
+                'mode' : 'fixed'                                            ,
+                'unit' : all_parameters_standard_units['pos_vec_f']['unit' ],
                 'mns'  : all_parameters_standard_units['pos_vec_f']['value'],
                 'pls'  : all_parameters_standard_units['pos_vec_f']['value']
             }
         },
         'vel_vec': {
             'o': {
-                'mode' : 'fixed',
-                'unit' : all_parameters_standard_units['vel_vec_o']['unit'],
+                'mode' : 'fixed'                                            ,
+                'unit' : all_parameters_standard_units['vel_vec_o']['unit' ],
                 'mns'  : all_parameters_standard_units['vel_vec_o']['value'],
                 'pls'  : all_parameters_standard_units['vel_vec_o']['value']
             },
             'f': {
-                'mode' : 'fixed',
-                'unit' : all_parameters_standard_units['vel_vec_f']['unit'],
+                'mode' : 'fixed'                                            ,
+                'unit' : all_parameters_standard_units['vel_vec_f']['unit' ],
                 'mns'  : all_parameters_standard_units['vel_vec_f']['value'],
                 'pls'  : all_parameters_standard_units['vel_vec_f']['value']
             }
         },
         'copos_vec': {
             'o': {
-                'mode' : 'free',
-                'unit' : all_parameters_standard_units['copos_vec_o']['unit'],
+                'mode' : 'free'                                               ,
+                'unit' : all_parameters_standard_units['copos_vec_o']['unit' ],
                 'mns'  : all_parameters_standard_units['copos_vec_o']['value'],
                 'pls'  : all_parameters_standard_units['copos_vec_o']['value']
             },
             'f': {
-                'mode' : 'free',
-                'unit' : all_parameters_standard_units['copos_vec_f']['unit'],
+                'mode' : 'free'                                               ,
+                'unit' : all_parameters_standard_units['copos_vec_f']['unit' ],
                 'mns'  : all_parameters_standard_units['copos_vec_f']['value'],
                 'pls'  : all_parameters_standard_units['copos_vec_f']['value']
             }
         },
         'covel_vec': {
             'o': {
-                'mode' : 'free',
-                'unit' : all_parameters_standard_units['covel_vec_o']['unit'],
+                'mode' : 'free'                                               ,
+                'unit' : all_parameters_standard_units['covel_vec_o']['unit' ],
                 'mns'  : all_parameters_standard_units['covel_vec_o']['value'],
                 'pls'  : all_parameters_standard_units['covel_vec_o']['value']
             },
             'f': {
-                'mode' : 'free',
-                'unit' : all_parameters_standard_units['covel_vec_f']['unit'],
+                'mode' : 'free'                                               ,
+                'unit' : all_parameters_standard_units['covel_vec_f']['unit' ],
                 'mns'  : all_parameters_standard_units['covel_vec_f']['value'],
                 'pls'  : all_parameters_standard_units['covel_vec_f']['value']
             }
         },
         'ham': {
             'o': {
-                'mode' : 'free',
-                'unit' : all_parameters_standard_units['ham_o']['unit'],
+                'mode' : 'free'                                         ,
+                'unit' : all_parameters_standard_units['ham_o']['unit' ],
                 'mns'  : all_parameters_standard_units['ham_o']['value'],
                 'pls'  : all_parameters_standard_units['ham_o']['value']
             },
             'f': {
-                'mode' : 'free',
-                'unit' : all_parameters_standard_units['ham_f']['unit'],
+                'mode' : 'free'                                         ,
+                'unit' : all_parameters_standard_units['ham_f']['unit' ],
                 'mns'  : all_parameters_standard_units['ham_f']['value'],
                 'pls'  : all_parameters_standard_units['ham_f']['value']
             }
         }
     }
     # Generate known_states list based on known/unknown (fixed/free) modes
-    ordered_variables = ['time', 'pos_vec', 'vel_vec', 'copos_vec', 'covel_vec', 'ham']
+    ordered_variables  = ['time', 'pos_vec', 'vel_vec', 'copos_vec', 'covel_vec', 'ham']
+    ordered_boundaries = ['o', 'f']
     known_states = []
-    for boundary in ['o', 'f']:
+    for boundary in ordered_boundaries:
         for variable in ordered_variables:
+            print(f"{variable} {boundary}")
             var_bnd = equality_parameters[variable][boundary]
             is_known = var_bnd['mode'] == 'fixed'
             # Use np.size to handle both scalars and numpy arrays
-            num_elements = np.size(var_bnd['mns']['value'])
+            num_elements = np.size(var_bnd['mns'])
             known_states.extend([is_known] * num_elements)
     equality_parameters['known_states'] = known_states
-    breakpoint()
     inequality_parameters = {
-        'use_thrust_acc_limits'    : all_parameters_without_units['use_thrust_acc_limits'],
-        'use_thrust_acc_smoothing' : False                                                ,
-        'thrust_acc_min'           : all_parameters_without_units['thrust_acc_min'       ], # type: ignore
-        'thrust_acc_max'           : all_parameters_without_units['thrust_acc_max'       ], # type: ignore
-        'use_thrust_limits'        : all_parameters_without_units['use_thrust_limits'    ],
-        'use_thrust_smoothing'     : False                                                ,
-        'thrust_min'               : all_parameters_without_units['thrust_min'           ], # type: ignore
-        'thrust_max'               : all_parameters_without_units['thrust_max'           ], # type: ignore
-        'k_idxinitguess'           : all_parameters_without_units['k_idxinitguess'       ],
-        'k_idxfinsoln'             : all_parameters_without_units['k_idxfinsoln'         ],
-        'k_idxdivs'                : all_parameters_without_units['k_idxdivs'            ],
-        'k_steepness'              : all_parameters_without_units['k_idxinitguess'       ],  
+        'use_thrust_acc_limits'    : all_parameters_standard_units['use_thrust_acc_limits']['value'],
+        'use_thrust_acc_smoothing' : False                                                          ,
+        'thrust_acc_min'           : all_parameters_standard_units['thrust_acc_min'       ]['value'],
+        'thrust_acc_max'           : all_parameters_standard_units['thrust_acc_max'       ]['value'],
+        'use_thrust_limits'        : all_parameters_standard_units['use_thrust_limits'    ]['value'],
+        'use_thrust_smoothing'     : False                                                          ,
+        'thrust_min'               : all_parameters_standard_units['thrust_min'           ]['value'],
+        'thrust_max'               : all_parameters_standard_units['thrust_max'           ]['value'],
+        'k_idxinitguess'           : all_parameters_standard_units['k_idxinitguess'       ]['value'],
+        'k_idxfinsoln'             : all_parameters_standard_units['k_idxfinsoln'         ]['value'],
+        'k_idxdivs'                : all_parameters_standard_units['k_idxdivs'            ]['value'],
+        'k_steepness'              : all_parameters_standard_units['k_idxinitguess'       ]['value'],
     }
-
+    
     # Validate input
     #   Need to check "squareness" of boundary-value problem: n free = m fixed
     _validate_input(
@@ -429,7 +440,7 @@ def configure_validate_input(
         optimization_parameters,
         inequality_parameters  ,
     )
-
+    
     return (
         files_folders_parameters    ,
         system_parameters           ,
