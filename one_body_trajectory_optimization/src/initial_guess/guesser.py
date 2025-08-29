@@ -215,7 +215,7 @@ def generate_guess(
         if error_mag_idx < error_mag_min:
             idx_min            = idx
             error_mag_min      = error_mag_idx
-            print(f"  New Minimum Error: {error_mag_min:>14.6e} at step {idx_min:>5d}/{init_guess_steps:>4d}")
+            # print(f"  New Minimum Error: {error_mag_min:>14.6e} at step {idx_min:>5d}/{init_guess_steps:>4d}")
             decision_state_min = decision_state_idx
 
             pos_vec_o_pls   = decision_state_idx[1:3]
@@ -225,8 +225,8 @@ def generate_guess(
             state_costate_o_min = np.hstack([pos_vec_o_pls, vel_vec_o_pls, copos_vec_o_pls, covel_vec_o_pls])
 
             # Print decision state
-            print(f"  Decision State")
-            print(f"    {decision_state_idx}")
+            # print(f"  Decision State")
+            # print(f"    {decision_state_idx}")
             idx_decision_state = 0
             idx_parameter      = 0
             for bnd in ordered_boundaries:
@@ -238,7 +238,7 @@ def generate_guess(
                         ):
                             number_elements = np.size(equality_parameters[var][bnd][side])
                             fixed_or_free   = str('Fixed' if equality_parameters['known_states'][idx_decision_state] else 'Free')
-                            print("    " + f"{f'{var}_{bnd}_{side}':<15s}" + " : " + f"{fixed_or_free:<5s}" + " : " + f"{decision_state_idx[idx_decision_state:idx_decision_state+number_elements]}")
+                            # print("    " + f"{f'{var}_{bnd}_{side}':<15s}" + " : " + f"{fixed_or_free:<5s}" + " : " + f"{decision_state_idx[idx_decision_state:idx_decision_state+number_elements]}")
                             idx_decision_state += number_elements
                             idx_parameter      += 1
 

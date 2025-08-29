@@ -137,7 +137,6 @@ def _convert_parameters_to_standard_units(
         'mass'     : u.kg , # type: ignore
     }
     for param, (val_default, val_unit, val_type) in parameters_with_units_defaults.items():
-        print(f"{param}")
         parameters_standard_units[param] = {}
         if isinstance(val_default, str):
             parameters_standard_units[param]['value'] = parameters_with_units.get(param, val_default)
@@ -293,13 +292,13 @@ def configure_validate_input(
             input_files_params,
             system_parameters ,
         )
-
+    
     # Convert to standard units: seconds, meters, kilograms, one
     all_parameters_standard_units = \
         _convert_parameters_to_standard_units(
             all_parameters_variable_units,
         )
-
+    
     # Organize parameters into dictionaries: system parameters, integration-state parameters, equality parameters, and inequality parameters
     optimization_parameters = {
         'min_type'         : all_parameters_standard_units['min_type'        ]['value'],
@@ -405,13 +404,13 @@ def configure_validate_input(
             }
         }
     }
+    
     # Generate known_states list based on known/unknown (fixed/free) modes
     ordered_variables  = ['time', 'pos_vec', 'vel_vec', 'copos_vec', 'covel_vec', 'ham']
     ordered_boundaries = ['o', 'f']
     known_states = []
     for boundary in ordered_boundaries:
         for variable in ordered_variables:
-            print(f"{variable} {boundary}")
             var_bnd = equality_parameters[variable][boundary]
             is_known = var_bnd['mode'] == 'fixed'
             # Use np.size to handle both scalars and numpy arrays

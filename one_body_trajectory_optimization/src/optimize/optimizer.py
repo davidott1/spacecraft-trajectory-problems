@@ -118,10 +118,17 @@ def optimal_trajectory_solve(
     for key, value in soln_root.items():
         if isinstance(value, np.ndarray):
             if len(value.shape) == 1:
-                value_construct = '  '.join([str(f"{val:>13.6e}") for val in value])
+                if len(value) <= 4:
+                    value_construct = '  '.join([str(f"{val:>13.6e}") for val in value])
+                else:
+                    value_construct = '  '.join([str(f"{val:>13.6e}") for val in value[:4]]) + '  ...'
             elif len(value.shape) == 2:
-                value_construct = ['  '.join( str(f"{val:>13.6e}") for val in row) for row in value]
-                value_construct = '\n            : '.join(value_construct)
+                if value.shape[1] <= 4:
+                    value_construct = ['  '.join( str(f"{val:>13.6e}") for val in row) for row in value]
+                    value_construct = '\n            : '.join(value_construct)
+                else:
+                    value_construct = ['  '.join( str(f"{val:>13.6e}") for val in row[:4]) for row in value]
+                    value_construct = '  ...\n            : '.join(value_construct) + '  ...'
         else:
             value_construct = value
         print(f"    {key:>7s} : {value_construct}")
