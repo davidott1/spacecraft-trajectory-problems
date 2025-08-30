@@ -389,7 +389,7 @@ def optimal_trajectory_solve(
     # Print error check
     print("\n  Error Check: Time, State, Co-State, and Hamiltonian")
     print(
-        "            "
+        "                      "
         f" {'Time-o':>14s}"
         f" {   'Pos-Xo':>14s} {   'Pos-Yo':>14s}"
         f" {   'Vel-Xo':>14s} {   'Vel-Yo':>14s}"
@@ -398,11 +398,11 @@ def optimal_trajectory_solve(
         f" {    'Ham-o':>14s}"
     )
     if min_type == 'fuel':
-        print(f"             {'s':>14s} {'m':>14s} {'m':>14s} {'m/s':>14s} {'m/s':>14s} {'1/s':>14s} {'1/s':>14s} {'1':>14s} {'1':>14s} {'m/s^2':>14s}")
+        print(f"                       {'s':>14s} {'m':>14s} {'m':>14s} {'m/s':>14s} {'m/s':>14s} {'1/s':>14s} {'1/s':>14s} {'1':>14s} {'1':>14s} {'m/s^2':>14s}")
     else: # assume min_type == 'energy'
-        print(f"             {'s':>14s} {'m':>14s} {'m':>14s} {'m/s':>14s} {'m/s':>14s} {'m/s^3':>14s} {'m/s^3':>14s} {'m/s^2':>14s} {'m/s^2':>14s} {'m^2/s^4':>14s}")
+        print(f"                       {'s':>14s} {'m':>14s} {'m':>14s} {'m/s':>14s} {'m/s':>14s} {'m/s^3':>14s} {'m/s^3':>14s} {'m/s^2':>14s} {'m/s^2':>14s} {'m^2/s^4':>14s}")
     print(
-        f"            "
+        f"                      "
         f" {equality_parameters[     'time']['o']['mode']:>14s}" 
         f" {equality_parameters[  'pos_vec']['o']['mode']:>14s} {equality_parameters[  'pos_vec']['o']['mode']:>14s}"
         f" {equality_parameters[  'vel_vec']['o']['mode']:>14s} {equality_parameters[  'vel_vec']['o']['mode']:>14s}"
@@ -411,7 +411,7 @@ def optimal_trajectory_solve(
         f" {equality_parameters[      'ham']['o']['mode']:>14s}"
     )
     print(
-        "    Target :"
+        "        Target Value :"
         f" {     time_o_mns   :>14.6e}"
         f" {  pos_vec_o_mns[0]:>14.6e} {  pos_vec_o_mns[1]:>14.6e}"
         f" {  vel_vec_o_mns[0]:>14.6e} {  vel_vec_o_mns[1]:>14.6e}"
@@ -420,7 +420,7 @@ def optimal_trajectory_solve(
         f" {      ham_o_mns   :>14.6e}"
     )
     print(
-        "    Approx :"
+        "        Smooth Value :"
         f" {         time_o_pls                :>14.6e}"
         f" {state_costate_o_approx_finalsoln[0]:>14.6e} {state_costate_o_approx_finalsoln[1]:>14.6e}"
         f" {state_costate_o_approx_finalsoln[2]:>14.6e} {state_costate_o_approx_finalsoln[3]:>14.6e}"
@@ -429,7 +429,7 @@ def optimal_trajectory_solve(
         f" {          ham_o_pls                :>14.6e}"
     )
     print(
-        "    Error  :"
+        "               Error :"
         f" {error_o_approx_finalsoln_vec[0]:>14.6e} {error_o_approx_finalsoln_vec[1]:>14.6e}"
         f" {error_o_approx_finalsoln_vec[2]:>14.3e} {error_o_approx_finalsoln_vec[3]:>14.6e}"
         f" {error_o_approx_finalsoln_vec[4]:>14.6e} {error_o_approx_finalsoln_vec[5]:>14.6e}"
@@ -437,7 +437,7 @@ def optimal_trajectory_solve(
         f" {error_o_approx_finalsoln_vec[8]:>14.6e} {error_o_approx_finalsoln_vec[9]:>14.6e}"
     )
     print(
-        "    Actual :"
+        "    Non-Smooth Value :"
         f" {   time_o_pls         :>14.6e}"
         f" {  state_o_finalsoln[0]:>14.6e} {  state_o_finalsoln[1]:>14.6e}"
         f" {  state_o_finalsoln[2]:>14.6e} {  state_o_finalsoln[3]:>14.6e}"
@@ -446,7 +446,7 @@ def optimal_trajectory_solve(
         f" {    ham_o_pls         :>14.6e}"
     )
     print(
-        "    Error  :"
+        "               Error :"
         f" {error_o_finalsoln_vec[0]:>14.6e} {error_o_finalsoln_vec[1]:>14.6e}"
         f" {error_o_finalsoln_vec[2]:>14.3e} {error_o_finalsoln_vec[3]:>14.6e}"
         f" {error_o_finalsoln_vec[4]:>14.6e} {error_o_finalsoln_vec[5]:>14.6e}"
@@ -455,7 +455,7 @@ def optimal_trajectory_solve(
     )
     print()
     print(
-        "            "
+        "                      "
         f" {'Time-f':>14s}"
         f" {   'Pos-Xf':>14s} {   'Pos-Yf':>14s}"
         f" {   'Vel-Xf':>14s} {   'Vel-Yf':>14s}"
@@ -464,11 +464,11 @@ def optimal_trajectory_solve(
         f" {    'Ham-f':>14s}"
     )
     if min_type == 'fuel':
-        print(f"             {'s':>14s} {'m':>14s} {'m':>14s} {'m/s':>14s} {'m/s':>14s} {'1/s':>14s} {'1/s':>14s} {'1':>14s} {'1':>14s} {'m/s^2':>14s}")
+        print(f"                       {'s':>14s} {'m':>14s} {'m':>14s} {'m/s':>14s} {'m/s':>14s} {'1/s':>14s} {'1/s':>14s} {'1':>14s} {'1':>14s} {'m/s^2':>14s}")
     else: # assume min_type == 'energy'
-        print(f"             {'s':>14s} {'m':>14s} {'m':>14s} {'m/s':>14s} {'m/s':>14s} {'m/s^3':>14s} {'m/s^3':>14s} {'m/s^2':>14s} {'m/s^2':>14s} {'m^2/s^4':>14s}")
+        print(f"                       {'s':>14s} {'m':>14s} {'m':>14s} {'m/s':>14s} {'m/s':>14s} {'m/s^3':>14s} {'m/s^3':>14s} {'m/s^2':>14s} {'m/s^2':>14s} {'m^2/s^4':>14s}")
     print(
-        f"            "
+        f"                      "
         f" {equality_parameters[     'time']['f']['mode']:>14s}" 
         f" {equality_parameters[  'pos_vec']['f']['mode']:>14s} {equality_parameters[  'pos_vec']['f']['mode']:>14s}"
         f" {equality_parameters[  'vel_vec']['f']['mode']:>14s} {equality_parameters[  'vel_vec']['f']['mode']:>14s}"
@@ -477,7 +477,7 @@ def optimal_trajectory_solve(
         f" {equality_parameters[      'ham']['f']['mode']:>14s}"
     )
     print(
-        "    Target :"
+        "        Target Value :"
         f" {     time_f_pls   :>14.6e}"
         f" {  pos_vec_f_pls[0]:>14.6e} {  pos_vec_f_pls[1]:>14.6e}"
         f" {  vel_vec_f_pls[0]:>14.6e} {  vel_vec_f_pls[1]:>14.6e}"
@@ -486,7 +486,7 @@ def optimal_trajectory_solve(
         f" {      ham_f_pls   :>14.6e}"
     )
     print(
-        "    Approx :"
+        "        Smooth Value :"
         f" {time_f_mns:>14.6e}"
         f" {state_costate_f_approx_finalsoln[0]:>14.6e} {state_costate_f_approx_finalsoln[1]:>14.6e}"
         f" {state_costate_f_approx_finalsoln[2]:>14.6e} {state_costate_f_approx_finalsoln[3]:>14.6e}"
@@ -495,7 +495,7 @@ def optimal_trajectory_solve(
         f" {ham_f_mns:>14.6e}"
     )
     print(
-        "    Error  :"
+        "               Error :"
         f" {error_f_approx_finalsoln_vec[0]:>14.6e} {error_f_approx_finalsoln_vec[1]:>14.6e}"
         f" {error_f_approx_finalsoln_vec[2]:>14.3e} {error_f_approx_finalsoln_vec[3]:>14.6e}"
         f" {error_f_approx_finalsoln_vec[4]:>14.6e} {error_f_approx_finalsoln_vec[5]:>14.6e}"
@@ -503,7 +503,7 @@ def optimal_trajectory_solve(
         f" {error_f_approx_finalsoln_vec[8]:>14.6e} {error_f_approx_finalsoln_vec[9]:>14.6e}"
     )
     print(
-        "    Actual :"
+        "    Non-Smooth Value :"
         f" {   time_f_mns         :>14.6e}"
         f" {  state_f_finalsoln[0]:>14.6e} {  state_f_finalsoln[1]:>14.6e}"
         f" {  state_f_finalsoln[2]:>14.6e} {  state_f_finalsoln[3]:>14.6e}"
@@ -512,7 +512,7 @@ def optimal_trajectory_solve(
         f" {ham_f_mns:>14.6e}"
     )
     print(
-        "    Error  :"
+        "               Error :"
         f" {error_f_finalsoln_vec[0]:>14.6e} {error_f_finalsoln_vec[1]:>14.6e}"
         f" {error_f_finalsoln_vec[2]:>14.3e} {error_f_finalsoln_vec[3]:>14.6e}"
         f" {error_f_finalsoln_vec[4]:>14.6e} {error_f_finalsoln_vec[5]:>14.6e}"
