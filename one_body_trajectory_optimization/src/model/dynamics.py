@@ -2,6 +2,50 @@ import numpy as np
 from src.utility.bounding_functions import bounded_smooth_func, bounded_nonsmooth_func, derivative__bounded_smooth_func, derivative__bounded_nonsmooth_func
 
 
+def control_thrust_acceleration(
+        min_type, 
+        covel_x, covel_y,
+        mass,
+        use_thrust_acc_limits, use_thrust_acc_smoothing, thrust_acc_min, thrust_acc_max,
+        use_thrust_limits, use_thrust_smoothing, thrust_min, thrust_max,
+        k_steepness,
+    ):
+    # Control: thrust acceleration
+    #   fuel   : thrust_acc_vec = -covel_vec / cvel_mag
+    #   energy : thrust_acc_vec =  covel_vec
+    if min_type == 'fuel':
+        epsilon   = 1.0e-6
+        covel_mag = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
+    else: # assume 'energy'
+        covel_mag = np.sqrt(covel_x**2 + covel_y**2)
+    covel_mag_inv = 1.0 / covel_mag
+    if use_thrust_limits:
+        thrust_acc_min = thrust_min / mass
+        thrust_acc_max = thrust_max / mass
+    if min_type == 'fuel':
+        switching_func = covel_mag - 1.0
+        if use_thrust_smoothing or use_thrust_acc_smoothing:
+            heaviside_approx = 0.5 + 0.5 * np.tanh(k_steepness * switching_func)
+            thrust_acc_mag   = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx
+        else: # no use_thrust_smoothing and no use_thrust_acc_smoothing
+            thrust_acc_mag = np.where(switching_func > 0.0, thrust_acc_max, thrust_acc_min)
+        thrust_acc_x_dir = -covel_x * covel_mag_inv
+        thrust_acc_y_dir = -covel_y * covel_mag_inv
+    else: # assume 'energy'
+        thrust_acc_mag = covel_mag
+        if use_thrust_limits or use_thrust_acc_limits:
+            if use_thrust_smoothing or use_thrust_acc_smoothing:
+                thrust_acc_mag = bounded_smooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max, k_steepness)
+            else: # no use_thrust_smoothing and no use_thrust_acc_smoothing
+                thrust_acc_mag = bounded_nonsmooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max)
+        thrust_acc_x_dir = covel_x * covel_mag_inv
+        thrust_acc_y_dir = covel_y * covel_mag_inv
+    thrust_acc_x = thrust_acc_mag * thrust_acc_x_dir
+    thrust_acc_y = thrust_acc_mag * thrust_acc_y_dir
+
+    return thrust_acc_x, thrust_acc_y
+
+
 def one_body_dynamics__indirect(
         time                     : np.float64                     ,
         state_costate_scstm      : np.ndarray                     ,
@@ -85,35 +129,15 @@ def one_body_dynamics__indirect(
     # Control: thrust acceleration
     #   fuel   : thrust_acc_vec = -covel_vec / cvel_mag
     #   energy : thrust_acc_vec =  covel_vec
-    if min_type == 'fuel':
-        epsilon   = 1.0e-6
-        covel_mag = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
-    else: # assume 'energy'
-        covel_mag = np.sqrt(covel_x**2 + covel_y**2)
-    covel_mag_inv = 1.0 / covel_mag
-    if use_thrust_limits:
-        thrust_acc_min = thrust_min / mass
-        thrust_acc_max = thrust_max / mass
-    if min_type == 'fuel':
-        switching_func = covel_mag - 1.0
-        if use_thrust_smoothing or use_thrust_acc_smoothing:
-            heaviside_approx = 0.5 + 0.5 * np.tanh(k_steepness * switching_func)
-            thrust_acc_mag   = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx
-        else: # no use_thrust_smoothing and no use_thrust_acc_smoothing
-            thrust_acc_mag = np.where(switching_func > 0.0, thrust_acc_max, thrust_acc_min)
-        thrust_acc_x_dir = -covel_x * covel_mag_inv
-        thrust_acc_y_dir = -covel_y * covel_mag_inv
-    else: # assume 'energy'
-        thrust_acc_mag = covel_mag
-        if use_thrust_limits or use_thrust_acc_limits:
-            if use_thrust_smoothing or use_thrust_acc_smoothing:
-                thrust_acc_mag = bounded_smooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max, k_steepness)
-            else: # no use_thrust_smoothing and no use_thrust_acc_smoothing
-                thrust_acc_mag = bounded_nonsmooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max)
-        thrust_acc_x_dir = covel_x * covel_mag_inv
-        thrust_acc_y_dir = covel_y * covel_mag_inv
-    thrust_acc_x = thrust_acc_mag * thrust_acc_x_dir
-    thrust_acc_y = thrust_acc_mag * thrust_acc_y_dir
+    thrust_acc_x, thrust_acc_y = \
+        control_thrust_acceleration(
+            min_type, 
+            covel_x, covel_y,
+            mass,
+            use_thrust_acc_limits, use_thrust_acc_smoothing, thrust_acc_min, thrust_acc_max,
+            use_thrust_limits, use_thrust_smoothing, thrust_min, thrust_max,
+            k_steepness,
+        )
 
     # Dynamics: free-body
     #   dstate/dtime = dynamics(time,state)

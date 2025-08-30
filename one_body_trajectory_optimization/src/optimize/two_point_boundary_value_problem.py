@@ -154,6 +154,35 @@ def solve_for_root_and_compute_progress(
     return soln_root, soln_ivp
 
 
+def compute_hamiltonian(
+        min_type    ,
+        vel_x       ,
+        vel_y       ,
+        copos_x     ,
+        copos_y     ,
+        covel_x     ,
+        covel_y     ,
+        thrust_acc_x,
+        thrust_acc_y,
+        acc_x       ,
+        acc_y       ,
+    ):
+    if min_type == 'fuel':
+        # ham = 1/2 (Gamma_vec^T Gamma_vec)^(1/2) + lambda_pos_vec^T vel_vec + lambda_vel_vec^T Gamma_vec
+        return (
+            (thrust_acc_x**2 + thrust_acc_y**2)**(1/2)
+            + copos_x * vel_x + copos_y * vel_y
+            + covel_x * acc_x + covel_y * acc_y
+        )
+    else: # assume min_type == 'energy'
+        # ham = 1/2 (Gamma_vec^T Gamma_vec) + lambda_pos_vec^T vel_vec + lambda_vel_vec^T Gamma_vec
+        return (
+            1/2 * (thrust_acc_x**2 + thrust_acc_y**2)
+            + copos_x * vel_x + copos_y * vel_y
+            + covel_x * acc_x + covel_y * acc_y
+        )
+
+
 def tpbvp_objective_and_jacobian(
         decision_state               : np.ndarray,
         optimization_parameters      : dict      ,
@@ -304,35 +333,33 @@ def tpbvp_objective_and_jacobian(
         thrust_acc_y_dir_f_mns = -covel_y_f_mns * covel_mag_f_mns_inv
         thrust_acc_x_f_mns = thrust_acc_mag_f_mns * thrust_acc_x_dir_f_mns
         thrust_acc_y_f_mns = thrust_acc_mag_f_mns * thrust_acc_y_dir_f_mns
-    else: # optimization_parameters['min_type'] == 'energy':
-        # H = 1/2 (Gamma_x^2 + Gamma_y^2) + lambda_r_x v_x + lambda_r_y v_y + lambda_v_x Gamma_x + lambda_v_y Gamma_y
-        vel_x_o_pls        =      vel_vec_o_pls[0]
-        vel_y_o_pls        =      vel_vec_o_pls[1]
-        copos_x_o_pls      =    copos_vec_o_pls[0]
-        copos_y_o_pls      =    copos_vec_o_pls[1]
-        covel_x_o_pls      =    covel_vec_o_pls[0]
-        covel_y_o_pls      =    covel_vec_o_pls[1]
-        thrust_acc_x_o_pls =      covel_x_o_pls # should be negative
-        thrust_acc_y_o_pls =      covel_y_o_pls # should be negative
-        acc_x_o_pls        = thrust_acc_x_o_pls
-        acc_y_o_pls        = thrust_acc_y_o_pls
-        ham_o_pls          = 1/2 * (thrust_acc_x_o_pls**2 + thrust_acc_y_o_pls**2) \
-            + copos_x_o_pls * vel_x_o_pls + copos_y_o_pls * vel_y_o_pls \
-            + covel_x_o_pls * acc_x_o_pls + covel_y_o_pls * acc_y_o_pls
-
-        vel_x_f_mns        =   vel_vec_f_mns[0]
-        vel_y_f_mns        =   vel_vec_f_mns[1]
-        copos_x_f_mns      = copos_vec_f_mns[0]
-        copos_y_f_mns      = copos_vec_f_mns[1]
-        covel_x_f_mns      = covel_vec_f_mns[0]
-        covel_y_f_mns      = covel_vec_f_mns[1]
-        thrust_acc_x_f_mns = covel_x_f_mns # should be negative
-        thrust_acc_y_f_mns = covel_y_f_mns # should be negative
-        acc_x_f_mns        = thrust_acc_x_f_mns
-        acc_y_f_mns        = thrust_acc_y_f_mns
-        ham_f_mns          = 1/2 * (thrust_acc_x_f_mns**2 + thrust_acc_y_f_mns**2) \
-            + copos_x_f_mns * vel_x_f_mns + copos_y_f_mns * vel_y_f_mns \
-            + covel_x_f_mns * acc_x_f_mns + covel_y_f_mns * acc_y_f_mns
+    else: # optimization_parameters['min_type'] == 'energy':  
+        ham_o_pls = compute_hamiltonian(
+            min_type     = optimization_parameters['min_type'],
+            vel_x        = vel_vec_o_pls[0]   ,
+            vel_y        = vel_vec_o_pls[1]   ,
+            copos_x      = copos_vec_o_pls[0] ,
+            copos_y      = copos_vec_o_pls[1] ,
+            covel_x      = covel_vec_o_pls[0] ,
+            covel_y      = covel_vec_o_pls[1] ,
+            thrust_acc_x = -covel_vec_o_pls[0],
+            thrust_acc_y = -covel_vec_o_pls[1],
+            acc_x        = -covel_vec_o_pls[0],
+            acc_y        = -covel_vec_o_pls[1],
+        )
+        ham_f_mns = compute_hamiltonian(
+            min_type     = optimization_parameters['min_type'],
+            vel_x        = vel_vec_f_mns[0]   ,
+            vel_y        = vel_vec_f_mns[1]   ,
+            copos_x      = copos_vec_f_mns[0] ,
+            copos_y      = copos_vec_f_mns[1] ,
+            covel_x      = covel_vec_f_mns[0] ,
+            covel_y      = covel_vec_f_mns[1] ,
+            thrust_acc_x = -covel_vec_f_mns[0],
+            thrust_acc_y = -covel_vec_f_mns[1],
+            acc_x        = -covel_vec_f_mns[0],
+            acc_y        = -covel_vec_f_mns[1],
+        )
     if include_jacobian:
         # Partials of the Hamiltonian at the initial time
         # xxx

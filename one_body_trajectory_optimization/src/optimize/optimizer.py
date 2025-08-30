@@ -1,8 +1,9 @@
 import numpy as np
-from tqdm                      import tqdm
-from src.initial_guess.guesser import generate_guess
-from src.optimize.two_point_boundary_value_problem        import solve_for_root_and_compute_progress, solve_ivp_func
-from src.plot.final_results    import plot_final_results
+from tqdm                                          import tqdm
+from src.initial_guess.guesser                     import generate_guess
+from src.optimize.two_point_boundary_value_problem import solve_for_root_and_compute_progress, solve_ivp_func, compute_hamiltonian
+from src.plot.final_results                        import plot_final_results
+from src.dynamics                                  import control_thrust_acceleration
 
 
 def optimal_trajectory_solve(
@@ -140,19 +141,49 @@ def optimal_trajectory_solve(
     inequality_parameters['use_thrust_acc_smoothing'] = False # should be False
     inequality_parameters['use_thrust_smoothing']     = False # should be False
     # decision_state_initguess = soln_root.x
-    # time_span     = np.array([decision_state_initguess[0], decision_state_initguess[10]])
-    pos_vec_o_mns = equality_parameters['pos_vec']['o']['mns']
-    vel_vec_o_mns = equality_parameters['vel_vec']['o']['mns']
-    pos_vec_f_pls = equality_parameters['pos_vec']['f']['pls']
-    vel_vec_f_pls = equality_parameters['vel_vec']['f']['pls']
-    # state_costate_o = np.hstack([pos_vec_o_mns, vel_vec_o_mns, decision_state_initguess])
+    # pos_vec_o_mns   = equality_parameters[  'pos_vec']['o']['mns']
+    # vel_vec_o_mns   = equality_parameters[  'vel_vec']['o']['mns']
+    # time_f_pls      = equality_parameters[     'time']['f']['pls']
+    # pos_vec_f_pls   = equality_parameters[  'pos_vec']['f']['pls']
+    # vel_vec_f_pls   = equality_parameters[  'vel_vec']['f']['pls']
+    # copos_vec_f_pls = equality_parameters['copos_vec']['f']['pls']
+    # covel_vec_f_pls = equality_parameters['covel_vec']['f']['pls']
+    # ham_f_pls       = equality_parameters[      'ham']['f']['pls']
 
     decision_state_initguess = soln_root.x
-    time_span       = np.array([decision_state_initguess[0], decision_state_initguess[10]])
+    time_o_pls      = decision_state_initguess[0]
+    time_f_mns      = decision_state_initguess[10]
+    time_span       = np.array([time_o_pls, time_f_mns])
     pos_vec_o_pls   = decision_state_initguess[1:3]
     vel_vec_o_pls   = decision_state_initguess[3:5]
     copos_vec_o_pls = decision_state_initguess[5:7]
     covel_vec_o_pls = decision_state_initguess[7:9]
+
+    thrust_acc_x, thrust_acc_y = \
+        control_thrust_acceleration(
+            min_type, 
+            covel_vec_o_pls[0], covel_vec_o_pls[1],
+            mass_o_pls,
+            use_thrust_acc_limits, use_thrust_acc_smoothing, thrust_acc_min, thrust_acc_max,
+            use_thrust_limits, use_thrust_smoothing, thrust_min, thrust_max,
+            k_steepness,
+        )
+
+    ham_o_pls       = compute_hamiltonian(
+            min_type     = optimization_parameters['min_type'],
+            vel_x        = vel_vec_o_pls[0]                   ,
+            vel_y        = vel_vec_o_pls[1]                   ,
+            copos_x      = copos_vec_o_pls[0]                 ,
+            copos_y      = copos_vec_o_pls[1]                 ,
+            covel_x      = covel_vec_o_pls[0]                 ,
+            covel_y      = covel_vec_o_pls[1]                 ,
+            thrust_acc_x = -covel_vec_o_pls[0]                ,
+            thrust_acc_y = -covel_vec_o_pls[1]                ,
+            acc_x        = -covel_vec_o_pls[0]                ,
+            acc_y        = -covel_vec_o_pls[1]                ,
+        )
+
+
     state_costate_o = np.hstack([pos_vec_o_pls, vel_vec_o_pls, copos_vec_o_pls, covel_vec_o_pls])
 
     soln_ivp = \
@@ -167,6 +198,40 @@ def optimal_trajectory_solve(
     results_finalsoln = soln_ivp
     state_f_finalsoln = results_finalsoln.y[0:4, -1]
 
+    # Update initial minus and final plus value if parameter is free
+
+    # pos_vec_o_mns   = equality_parameters[  'pos_vec']['o']['mns']
+    # vel_vec_o_mns   = equality_parameters[  'vel_vec']['o']['mns']
+    # time_f_pls      = equality_parameters[     'time']['f']['pls']
+    # pos_vec_f_pls   = equality_parameters[  'pos_vec']['f']['pls']
+    # vel_vec_f_pls   = equality_parameters[  'vel_vec']['f']['pls']
+    # copos_vec_f_pls = equality_parameters['copos_vec']['f']['pls']
+    # covel_vec_f_pls = equality_parameters['covel_vec']['f']['pls']
+    # ham_f_pls       = equality_parameters[      'ham']['f']['pls']
+
+    if equality_parameters['time'     ]['o']['mode'] == 'free': equality_parameters['time'     ]['o']['mns'] = time_o_pls
+    if equality_parameters['pos_vec'  ]['o']['mode'] == 'free': equality_parameters['pos_vec'  ]['o']['mns'] = pos_vec_o_pls
+    if equality_parameters['vel_vec'  ]['o']['mode'] == 'free': equality_parameters['vel_vec'  ]['o']['mns'] = vel_vec_o_pls
+    if equality_parameters['copos_vec']['o']['mode'] == 'free': equality_parameters['copos_vec']['o']['mns'] = copos_vec_o_pls
+    if equality_parameters['covel_vec']['o']['mode'] == 'free': equality_parameters['covel_vec']['o']['mns'] = covel_vec_o_pls
+    if equality_parameters['ham'      ]['o']['mode'] == 'free': equality_parameters['ham'      ]['o']['mns'] = ham_o_pls
+
+    if equality_parameters['time'     ]['f']['mode'] == 'free': time_f_pls      = time_f_mns
+    if equality_parameters['pos_vec'  ]['f']['mode'] == 'free': pos_vec_f_pls   = pos_vec_f_mns
+    if equality_parameters['vel_vec'  ]['f']['mode'] == 'free': vel_vec_f_pls   = vel_vec_f_mns
+    if equality_parameters['copos_vec']['f']['mode'] == 'free': copos_vec_f_pls = copos_vec_f_mns
+    if equality_parameters['covel_vec']['f']['mode'] == 'free': covel_vec_f_pls = covel_vec_f_mns
+    if equality_parameters['ham'      ]['f']['mode'] == 'free': ham_f_pls       = ham_f_mns
+
+    equality_parameters['copos_vec_o_mns'] = decision_state_initguess[0:2]
+    equality_parameters['covel_vec_o_mns'] = decision_state_initguess[2:4]
+    equality_parameters['copos_vec_o_pls'] = decision_state_initguess[0:2]
+    equality_parameters['covel_vec_o_pls'] = decision_state_initguess[2:4]
+    equality_parameters['copos_vec_f_mns'] = results_finalsoln.y[4:6, -1]
+    equality_parameters['covel_vec_f_mns'] = results_finalsoln.y[6:8, -1]
+    equality_parameters['copos_vec_f_pls'] = results_finalsoln.y[4:6, -1]
+    equality_parameters['covel_vec_f_pls'] = results_finalsoln.y[6:8, -1]
+
     # Final solution: approx and true
     results_approx_finalsoln = results_k_idx[k_idxinitguess_to_idxfinsoln[-1]]
     state_f_approx_finalsoln = results_approx_finalsoln.y[0:4, -1]
@@ -176,23 +241,16 @@ def optimal_trajectory_solve(
     error_finalsoln_vec        = np.hstack([pos_vec_f_pls, vel_vec_f_pls]) - state_f_finalsoln
 
     print("\n  State Error Check")
-    print(f"             {'Pos-Xf':>14s} {'Pos-Yf':>14s} {'Vel-Xf':>14s} {'Vel-Yf':>14s}")
-    print(f"             {     'm':>14s} {     'm':>14s} {   'm/s':>14s} {   'm/s':>14s}")
-    print(f"    Target : {             pos_vec_f_pls[0]:>14.6e} {             pos_vec_f_pls[1]:>14.6e} {             vel_vec_f_pls[0]:>14.6e} {             vel_vec_f_pls[1]:>14.6e}")
-    print(f"    Approx : {  state_f_approx_finalsoln[0]:>14.6e} {  state_f_approx_finalsoln[1]:>14.6e} {  state_f_approx_finalsoln[2]:>14.6e} {  state_f_approx_finalsoln[3]:>14.6e}")
-    print(f"    Error  : {error_approx_finalsoln_vec[0]:>14.6e} {error_approx_finalsoln_vec[1]:>14.3e} {error_approx_finalsoln_vec[2]:>14.6e} {error_approx_finalsoln_vec[3]:>14.6e}")
-    print(f"    Actual : {         state_f_finalsoln[0]:>14.6e} {         state_f_finalsoln[1]:>14.6e} {         state_f_finalsoln[2]:>14.6e} {         state_f_finalsoln[3]:>14.6e}")
-    print(f"    Error  : {       error_finalsoln_vec[0]:>14.6e} {       error_finalsoln_vec[1]:>14.3e} {       error_finalsoln_vec[2]:>14.6e} {       error_finalsoln_vec[3]:>14.6e}")
-
-    # Final solution: enforce initial and final co-state boundary conditions (trivial right now)
-    equality_parameters['copos_vec_o_mns'] = decision_state_initguess[0:2]
-    equality_parameters['covel_vec_o_mns'] = decision_state_initguess[2:4]
-    equality_parameters['copos_vec_o_pls'] = decision_state_initguess[0:2]
-    equality_parameters['covel_vec_o_pls'] = decision_state_initguess[2:4]
-    equality_parameters['copos_vec_f_mns'] = results_finalsoln.y[4:6, -1]
-    equality_parameters['covel_vec_f_mns'] = results_finalsoln.y[6:8, -1]
-    equality_parameters['copos_vec_f_pls'] = results_finalsoln.y[4:6, -1]
-    equality_parameters['covel_vec_f_pls'] = results_finalsoln.y[6:8, -1]
+    print(f"             {'Time-f':>14s} {'Pos-Xf':>14s} {'Pos-Yf':>14s} {'Vel-Xf':>14s} {'Vel-Yf':>14s} {'Co-Pos-Xf':>14s} {'Co-Pos-Yf':>14s} {'Co-Vel-Xf':>14s} {'Co-Vel-Yf':>14s} {  'Ham-f':>14s}")
+    if min_type == 'fuel':
+        print(f"             {'s':>14s} {'m':>14s} {'m':>14s} {'m/s':>14s} {'m/s':>14s} {'1/s':>14s} {'1/s':>14s} {'1':>14s} {'1':>14s} {'m/s^2':>14s}")
+    else: # assume min_type == 'energy'
+        print(f"             {'s':>14s} {'m':>14s} {'m':>14s} {'m/s':>14s} {'m/s':>14s} {'m/s^3':>14s} {'m/s^3':>14s} {'m/s^2':>14s} {'m/s^2':>14s} {'m^2/s^4':>14s}")
+    print(f"    Target : {time_f_pls:>14.6e} {pos_vec_f_pls[0]:>14.6e} {pos_vec_f_pls[1]:>14.6e} {vel_vec_f_pls[0]:>14.6e} {vel_vec_f_pls[1]:>14.6e} {copos_vec_f_pls[0]:>14.6e} {copos_vec_f_pls[1]:>14.6e} {covel_vec_f_pls[0]:>14.6e} {covel_vec_f_pls[1]:>14.6e} {ham_f_pls:>14.6e}")
+    print(f"    Approx : {0.0:>14.6e} {  state_f_approx_finalsoln[0]:>14.6e} {  state_f_approx_finalsoln[1]:>14.6e} {  state_f_approx_finalsoln[2]:>14.6e} {  state_f_approx_finalsoln[3]:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e}")
+    print(f"    Error  : {0.0:>14.6e} {error_approx_finalsoln_vec[0]:>14.6e} {error_approx_finalsoln_vec[1]:>14.3e} {error_approx_finalsoln_vec[2]:>14.6e} {error_approx_finalsoln_vec[3]:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e}")
+    print(f"    Actual : {0.0:>14.6e} {         state_f_finalsoln[0]:>14.6e} {         state_f_finalsoln[1]:>14.6e} {         state_f_finalsoln[2]:>14.6e} {         state_f_finalsoln[3]:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e}")
+    print(f"    Error  : {0.0:>14.6e} {       error_finalsoln_vec[0]:>14.6e} {       error_finalsoln_vec[1]:>14.3e} {       error_finalsoln_vec[2]:>14.6e} {       error_finalsoln_vec[3]:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e}")
 
     # Final solution: plot the results
     print("\n  Plot Final Solution Trajectory")
