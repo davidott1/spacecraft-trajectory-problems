@@ -192,6 +192,8 @@ def optimal_trajectory_solve(
         )
     
     results_finalsoln   = soln_ivp
+    state_o_finalsoln   = results_finalsoln.y[0:4,  0]
+    costate_o_finalsoln = results_finalsoln.y[4:8,  0]
     state_f_finalsoln   = results_finalsoln.y[0:4, -1]
     costate_f_finalsoln = results_finalsoln.y[4:8, -1]
 
@@ -263,7 +265,10 @@ def optimal_trajectory_solve(
     covel_vec_f_pls = equality_parameters['covel_vec']['f']['pls']
     ham_f_pls       = equality_parameters['ham'      ]['f']['pls']
 
-    error_finalsoln_vec = \
+    error_o_finalsoln_vec = \
+        np.hstack([time_o_mns, pos_vec_o_mns, vel_vec_o_mns, copos_vec_o_mns, covel_vec_o_mns, ham_o_mns]) \
+        - np.hstack([time_o_pls, state_o_finalsoln, costate_o_finalsoln, ham_o_pls])
+    error_f_finalsoln_vec = \
         np.hstack([time_f_pls, pos_vec_f_pls, vel_vec_f_pls, copos_vec_f_pls, covel_vec_f_pls, ham_f_pls]) \
         - np.hstack([time_f_mns, state_f_finalsoln, costate_f_finalsoln, ham_f_mns])
 
@@ -431,23 +436,23 @@ def optimal_trajectory_solve(
         f" {error_o_approx_finalsoln_vec[6]:>14.6e} {error_o_approx_finalsoln_vec[7]:>14.6e}"
         f" {error_o_approx_finalsoln_vec[8]:>14.6e} {error_o_approx_finalsoln_vec[9]:>14.6e}"
     )
-    # print(
-    #     "    Actual :"
-    #     f" {   time_o_mns         :>14.6e}"
-    #     f" {  state_o_finalsoln[0]:>14.6e} {  state_o_finalsoln[1]:>14.6e}"
-    #     f" {  state_o_finalsoln[2]:>14.6e} {  state_o_finalsoln[3]:>14.6e}"
-    #     f" {costate_o_finalsoln[0]:>14.6e} {costate_o_finalsoln[1]:>14.6e}"
-    #     f" {costate_o_finalsoln[2]:>14.6e} {costate_o_finalsoln[3]:>14.6e}"
-    #     f" {ham_o_mns:>14.6e}"
-    # )
-    # print(
-    #     "    Error  :"
-    #     f" {error_finalsoln_vec[0]:>14.6e} {error_finalsoln_vec[1]:>14.6e}"
-    #     f" {error_finalsoln_vec[2]:>14.3e} {error_finalsoln_vec[3]:>14.6e}"
-    #     f" {error_finalsoln_vec[4]:>14.6e} {error_finalsoln_vec[5]:>14.6e}"
-    #     f" {error_finalsoln_vec[6]:>14.6e} {error_finalsoln_vec[7]:>14.6e}"
-    #     f" {error_finalsoln_vec[8]:>14.6e} {error_finalsoln_vec[9]:>14.6e}"
-    # )
+    print(
+        "    Actual :"
+        f" {   time_o_pls         :>14.6e}"
+        f" {  state_o_finalsoln[0]:>14.6e} {  state_o_finalsoln[1]:>14.6e}"
+        f" {  state_o_finalsoln[2]:>14.6e} {  state_o_finalsoln[3]:>14.6e}"
+        f" {costate_o_finalsoln[0]:>14.6e} {costate_o_finalsoln[1]:>14.6e}"
+        f" {costate_o_finalsoln[2]:>14.6e} {costate_o_finalsoln[3]:>14.6e}"
+        f" {    ham_o_pls         :>14.6e}"
+    )
+    print(
+        "    Error  :"
+        f" {error_o_finalsoln_vec[0]:>14.6e} {error_o_finalsoln_vec[1]:>14.6e}"
+        f" {error_o_finalsoln_vec[2]:>14.3e} {error_o_finalsoln_vec[3]:>14.6e}"
+        f" {error_o_finalsoln_vec[4]:>14.6e} {error_o_finalsoln_vec[5]:>14.6e}"
+        f" {error_o_finalsoln_vec[6]:>14.6e} {error_o_finalsoln_vec[7]:>14.6e}"
+        f" {error_o_finalsoln_vec[8]:>14.6e} {error_o_finalsoln_vec[9]:>14.6e}"
+    )
     print()
     print(
         "            "
@@ -508,11 +513,11 @@ def optimal_trajectory_solve(
     )
     print(
         "    Error  :"
-        f" {error_finalsoln_vec[0]:>14.6e} {error_finalsoln_vec[1]:>14.6e}"
-        f" {error_finalsoln_vec[2]:>14.3e} {error_finalsoln_vec[3]:>14.6e}"
-        f" {error_finalsoln_vec[4]:>14.6e} {error_finalsoln_vec[5]:>14.6e}"
-        f" {error_finalsoln_vec[6]:>14.6e} {error_finalsoln_vec[7]:>14.6e}"
-        f" {error_finalsoln_vec[8]:>14.6e} {error_finalsoln_vec[9]:>14.6e}"
+        f" {error_f_finalsoln_vec[0]:>14.6e} {error_f_finalsoln_vec[1]:>14.6e}"
+        f" {error_f_finalsoln_vec[2]:>14.3e} {error_f_finalsoln_vec[3]:>14.6e}"
+        f" {error_f_finalsoln_vec[4]:>14.6e} {error_f_finalsoln_vec[5]:>14.6e}"
+        f" {error_f_finalsoln_vec[6]:>14.6e} {error_f_finalsoln_vec[7]:>14.6e}"
+        f" {error_f_finalsoln_vec[8]:>14.6e} {error_f_finalsoln_vec[9]:>14.6e}"
     )
 
     # Final solution: plot the results
