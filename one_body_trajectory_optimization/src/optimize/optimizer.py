@@ -83,7 +83,7 @@ def optimal_trajectory_solve(
             )
         
         # Record the results of the current step and update the decision state initial guess
-        results_k_idx[k_idx] = soln_ivp
+        results_k_idx[k_idx]     = soln_ivp
         decision_state_initguess = soln_root.x
 
         # Print the results of the current step
@@ -140,15 +140,6 @@ def optimal_trajectory_solve(
     integration_state_parameters['post_process']      = True  # should be True
     inequality_parameters['use_thrust_acc_smoothing'] = False # should be False
     inequality_parameters['use_thrust_smoothing']     = False # should be False
-    # decision_state_initguess = soln_root.x
-    # pos_vec_o_mns   = equality_parameters[  'pos_vec']['o']['mns']
-    # vel_vec_o_mns   = equality_parameters[  'vel_vec']['o']['mns']
-    # time_f_pls      = equality_parameters[     'time']['f']['pls']
-    # pos_vec_f_pls   = equality_parameters[  'pos_vec']['f']['pls']
-    # vel_vec_f_pls   = equality_parameters[  'vel_vec']['f']['pls']
-    # copos_vec_f_pls = equality_parameters['copos_vec']['f']['pls']
-    # covel_vec_f_pls = equality_parameters['covel_vec']['f']['pls']
-    # ham_f_pls       = equality_parameters[      'ham']['f']['pls']
 
     decision_state_initguess = soln_root.x
     time_o_pls      = decision_state_initguess[0]
@@ -270,13 +261,49 @@ def optimal_trajectory_solve(
     covel_vec_f_pls = equality_parameters['covel_vec']['f']['pls']
     ham_f_pls       = equality_parameters['ham'      ]['f']['pls']
 
-    # Final solution: approx and true
+    # Final solution: approx
     results_approx_finalsoln = results_k_idx[k_idxinitguess_to_idxfinsoln[-1]]
     state_f_approx_finalsoln = results_approx_finalsoln.y[0:8, -1]
+    if inequality_parameters['use_thrust_limits']:
+        mass_f_mns = results_approx_finalsoln.y[8, -1]
+    else:
+        mass_f_mns = 1.0 # dummy value
+
+    thrust_acc_x_f_mns, thrust_acc_y_f_mns, _ = \
+        control_thrust_acceleration(
+            min_type                 = optimization_parameters['min_type']              ,
+            covel_x                  = results_approx_finalsoln.y[6,-1]                 ,
+            covel_y                  = results_approx_finalsoln.y[7,-1]                 ,
+            use_thrust_acc_limits    = inequality_parameters['use_thrust_acc_limits']   ,
+            use_thrust_acc_smoothing = inequality_parameters['use_thrust_acc_smoothing'],
+            thrust_acc_min           = inequality_parameters['thrust_acc_min']          ,
+            thrust_acc_max           = inequality_parameters['thrust_acc_max']          ,
+            use_thrust_limits        = inequality_parameters['use_thrust_limits']       ,
+            use_thrust_smoothing     = inequality_parameters['use_thrust_smoothing']    ,
+            thrust_min               = inequality_parameters['thrust_min']              ,
+            thrust_max               = inequality_parameters['thrust_max']              ,
+            k_steepness              = inequality_parameters['k_steepness']             ,
+            mass                     = mass_f_mns                                       ,
+        )
+    ham_f_mns_approx_finalsoln = \
+        compute_hamiltonian(
+            min_type     = optimization_parameters['min_type'],
+            vel_x        = results_approx_finalsoln.y[2,-1]   ,
+            vel_y        = results_approx_finalsoln.y[3,-1]   ,
+            copos_x      = results_approx_finalsoln.y[4,-1]   ,
+            copos_y      = results_approx_finalsoln.y[5,-1]   ,
+            covel_x      = results_approx_finalsoln.y[6,-1]   ,
+            covel_y      = results_approx_finalsoln.y[7,-1]   ,
+            thrust_acc_x = thrust_acc_x_f_mns                 ,
+            thrust_acc_y = thrust_acc_y_f_mns                 ,
+            acc_x        = thrust_acc_x_f_mns                 ,
+            acc_y        = thrust_acc_y_f_mns                 ,
+        )
+
 
     # Final solution: check final state error
-    # error_approx_finalsoln_vec = np.hstack([time_f_pls, pos_vec_f_pls, vel_vec_f_pls, copos_vec_f_pls, covel_vec_f_pls, ham_f_pls]) - np.hstack([time_f_mns, state_f_approx_finalsoln[0:8], ham_f_mns])
-    error_finalsoln_vec = np.hstack([time_f_pls, pos_vec_f_pls, vel_vec_f_pls, copos_vec_f_pls, covel_vec_f_pls, ham_f_pls]) - np.hstack([time_f_mns, state_f_finalsoln, costate_f_finalsoln, ham_f_mns])
+    error_approx_finalsoln_vec = np.hstack([time_f_pls, pos_vec_f_pls, vel_vec_f_pls, copos_vec_f_pls, covel_vec_f_pls, ham_f_pls]) - np.hstack([time_f_mns, state_f_approx_finalsoln[0:8], ham_f_mns_approx_finalsoln])
+    error_finalsoln_vec        = np.hstack([time_f_pls, pos_vec_f_pls, vel_vec_f_pls, copos_vec_f_pls, covel_vec_f_pls, ham_f_pls]) - np.hstack([time_f_mns, state_f_finalsoln, costate_f_finalsoln, ham_f_mns])
 
     print("\n  State Error Check")
     print(f"             {'Time-f':>14s} {'Pos-Xf':>14s} {'Pos-Yf':>14s} {'Vel-Xf':>14s} {'Vel-Yf':>14s} {'Co-Pos-Xf':>14s} {'Co-Pos-Yf':>14s} {'Co-Vel-Xf':>14s} {'Co-Vel-Yf':>14s} {  'Ham-f':>14s}")
@@ -285,8 +312,8 @@ def optimal_trajectory_solve(
     else: # assume min_type == 'energy'
         print(f"             {'s':>14s} {'m':>14s} {'m':>14s} {'m/s':>14s} {'m/s':>14s} {'m/s^3':>14s} {'m/s^3':>14s} {'m/s^2':>14s} {'m/s^2':>14s} {'m^2/s^4':>14s}")
     print(f"    Target : {time_f_pls:>14.6e} {pos_vec_f_pls[0]:>14.6e} {pos_vec_f_pls[1]:>14.6e} {vel_vec_f_pls[0]:>14.6e} {vel_vec_f_pls[1]:>14.6e} {copos_vec_f_pls[0]:>14.6e} {copos_vec_f_pls[1]:>14.6e} {covel_vec_f_pls[0]:>14.6e} {covel_vec_f_pls[1]:>14.6e} {ham_f_pls:>14.6e}")
-    # print(f"    Approx : {state_f_approx_finalsoln[10]:>14.6e} {state_f_approx_finalsoln[11]:>14.6e} {state_f_approx_finalsoln[12]:>14.6e} {state_f_approx_finalsoln[13]:>14.6e} {state_f_approx_finalsoln[14]:>14.6e} {state_f_approx_finalsoln[15]:>14.6e} {state_f_approx_finalsoln[16]:>14.6e} {state_f_approx_finalsoln[17]:>14.6e} {state_f_approx_finalsoln[18]:>14.6e} {state_f_approx_finalsoln[19]:>14.6e}")
-    # print(f"    Error  : {error_approx_finalsoln_vec[0]:>14.6e} {error_approx_finalsoln_vec[1]:>14.6e} {error_approx_finalsoln_vec[2]:>14.3e} {error_approx_finalsoln_vec[3 ]:>14.6e} {error_approx_finalsoln_vec[4]:>14.6e} {error_approx_finalsoln_vec[5]:>14.6e} {error_approx_finalsoln_vec[6]:>14.6e} {error_approx_finalsoln_vec[7]:>14.6e} {error_approx_finalsoln_vec[8]:>14.6e} {error_approx_finalsoln_vec[9]:>14.6e}")
+    print(f"    Approx : {time_f_mns:>14.6e} {state_f_approx_finalsoln[0]:>14.6e} {state_f_approx_finalsoln[1]:>14.6e} {state_f_approx_finalsoln[2]:>14.6e} {state_f_approx_finalsoln[3]:>14.6e} {state_f_approx_finalsoln[4]:>14.6e} {state_f_approx_finalsoln[5]:>14.6e} {state_f_approx_finalsoln[6]:>14.6e} {state_f_approx_finalsoln[7]:>14.6e} {ham_f_mns_approx_finalsoln:>14.6e}")
+    print(f"    Error  : {error_approx_finalsoln_vec[0]:>14.6e} {error_approx_finalsoln_vec[1]:>14.6e} {error_approx_finalsoln_vec[2]:>14.3e} {error_approx_finalsoln_vec[3 ]:>14.6e} {error_approx_finalsoln_vec[4]:>14.6e} {error_approx_finalsoln_vec[5]:>14.6e} {error_approx_finalsoln_vec[6]:>14.6e} {error_approx_finalsoln_vec[7]:>14.6e} {error_approx_finalsoln_vec[8]:>14.6e} {error_approx_finalsoln_vec[9]:>14.6e}")
     print(f"    Actual : {time_f_mns:>14.6e} {state_f_finalsoln[0]:>14.6e} {state_f_finalsoln[1]:>14.6e} {state_f_finalsoln[2]:>14.6e} {state_f_finalsoln[3]:>14.6e} {costate_f_finalsoln[0]:>14.6e} {costate_f_finalsoln[1]:>14.6e} {costate_f_finalsoln[2]:>14.6e} {costate_f_finalsoln[3]:>14.6e} {ham_f_mns:>14.6e}")
     print(f"    Error  : {error_finalsoln_vec[0]:>14.6e} {error_finalsoln_vec[1]:>14.6e} {error_finalsoln_vec[2]:>14.3e} {error_finalsoln_vec[3]:>14.6e} {error_finalsoln_vec[4]:>14.6e} {error_finalsoln_vec[5]:>14.6e} {error_finalsoln_vec[6]:>14.6e} {error_finalsoln_vec[7]:>14.6e} {error_finalsoln_vec[8]:>14.6e} {error_finalsoln_vec[9]:>14.6e}")
 
