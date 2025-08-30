@@ -134,7 +134,7 @@ def optimal_trajectory_solve(
             value_construct = value
         print(f"    {key:>7s} : {value_construct}")
     
-    # Final solution: post-process step
+    # Final solution: post-process step, no use smoothing
     optimization_parameters['include_jacobian']       = False # should be False
     integration_state_parameters['include_scstm']     = False # should be False
     integration_state_parameters['post_process']      = True  # should be True
@@ -230,8 +230,122 @@ def optimal_trajectory_solve(
             acc_x        = thrust_acc_x_f_mns                 ,
             acc_y        = thrust_acc_y_f_mns                 ,
         )
+    
+    # fix later <
+    if equality_parameters['time'     ]['o']['mode'] == 'free': equality_parameters['time'     ]['o']['mns'] =      time_o_pls
+    if equality_parameters['pos_vec'  ]['o']['mode'] == 'free': equality_parameters['pos_vec'  ]['o']['mns'] =   pos_vec_o_pls
+    if equality_parameters['vel_vec'  ]['o']['mode'] == 'free': equality_parameters['vel_vec'  ]['o']['mns'] =   vel_vec_o_pls
+    if equality_parameters['copos_vec']['o']['mode'] == 'free': equality_parameters['copos_vec']['o']['mns'] = copos_vec_o_pls
+    if equality_parameters['covel_vec']['o']['mode'] == 'free': equality_parameters['covel_vec']['o']['mns'] = covel_vec_o_pls
+    if equality_parameters['ham'      ]['o']['mode'] == 'free': equality_parameters['ham'      ]['o']['mns'] =       ham_o_pls
+    # > fix later
 
-    # Update initial minus and final plus value if parameter is free
+    if equality_parameters['time'     ]['f']['mode'] == 'free': equality_parameters['time'     ]['f']['pls'] =      time_f_mns
+    if equality_parameters['pos_vec'  ]['f']['mode'] == 'free': equality_parameters['pos_vec'  ]['f']['pls'] =   pos_vec_f_mns
+    if equality_parameters['vel_vec'  ]['f']['mode'] == 'free': equality_parameters['vel_vec'  ]['f']['pls'] =   vel_vec_f_mns
+    if equality_parameters['copos_vec']['f']['mode'] == 'free': equality_parameters['copos_vec']['f']['pls'] = copos_vec_f_mns
+    if equality_parameters['covel_vec']['f']['mode'] == 'free': equality_parameters['covel_vec']['f']['pls'] = covel_vec_f_mns
+    if equality_parameters['ham'      ]['f']['mode'] == 'free': equality_parameters['ham'      ]['f']['pls'] =       ham_f_mns
+
+    # fix later <
+    time_o_mns      = equality_parameters['time'     ]['o']['mns']
+    vel_vec_o_mns   = equality_parameters['vel_vec'  ]['o']['mns']
+    pos_vec_o_mns   = equality_parameters['pos_vec'  ]['o']['mns']
+    copos_vec_o_mns = equality_parameters['copos_vec']['o']['mns']
+    covel_vec_o_mns = equality_parameters['covel_vec']['o']['mns']
+    ham_o_mns       = equality_parameters['ham'      ]['o']['mns']
+    # > fix later
+
+    time_f_pls      = equality_parameters['time'     ]['f']['pls']
+    vel_vec_f_pls   = equality_parameters['vel_vec'  ]['f']['pls']
+    pos_vec_f_pls   = equality_parameters['pos_vec'  ]['f']['pls']
+    copos_vec_f_pls = equality_parameters['copos_vec']['f']['pls']
+    covel_vec_f_pls = equality_parameters['covel_vec']['f']['pls']
+    ham_f_pls       = equality_parameters['ham'      ]['f']['pls']
+
+    error_finalsoln_vec = \
+        np.hstack([time_f_pls, pos_vec_f_pls, vel_vec_f_pls, copos_vec_f_pls, covel_vec_f_pls, ham_f_pls]) \
+        - np.hstack([time_f_mns, state_f_finalsoln, costate_f_finalsoln, ham_f_mns])
+
+    # Final solution: approximate (use smoothing)
+    results_approx_finalsoln = results_k_idx[k_idxinitguess_to_idxfinsoln[-1]]
+    state_costate_o_approx_finalsoln = results_approx_finalsoln.y[0:8,  0]
+    state_costate_f_approx_finalsoln = results_approx_finalsoln.y[0:8, -1]
+    if inequality_parameters['use_thrust_limits']:
+        mass_f_mns = results_approx_finalsoln.y[8, -1]
+    else:
+        mass_f_mns = 1.0 # dummy value
+
+    pos_vec_o_pls   = state_costate_o_approx_finalsoln[0:2]
+    vel_vec_o_pls   = state_costate_o_approx_finalsoln[2:4]
+    copos_vec_o_pls = state_costate_o_approx_finalsoln[4:6]
+    covel_vec_o_pls = state_costate_o_approx_finalsoln[6:8]
+    thrust_acc_x_o_pls, thrust_acc_y_o_pls, _ = \
+        control_thrust_acceleration(
+            min_type                 = optimization_parameters['min_type']              ,
+            covel_x                  = state_costate_o_approx_finalsoln[6]              ,
+            covel_y                  = state_costate_o_approx_finalsoln[7]              ,
+            use_thrust_acc_limits    = inequality_parameters['use_thrust_acc_limits']   ,
+            use_thrust_acc_smoothing = inequality_parameters['use_thrust_acc_smoothing'],
+            thrust_acc_min           = inequality_parameters['thrust_acc_min']          ,
+            thrust_acc_max           = inequality_parameters['thrust_acc_max']          ,
+            use_thrust_limits        = inequality_parameters['use_thrust_limits']       ,
+            use_thrust_smoothing     = inequality_parameters['use_thrust_smoothing']    ,
+            thrust_min               = inequality_parameters['thrust_min']              ,
+            thrust_max               = inequality_parameters['thrust_max']              ,
+            k_steepness              = inequality_parameters['k_steepness']             ,
+            mass                     = mass_f_mns                                       ,
+        )
+    ham_o_pls = \
+        compute_hamiltonian(
+            min_type     = optimization_parameters['min_type'],
+            vel_x        = state_costate_o_approx_finalsoln[2],
+            vel_y        = state_costate_o_approx_finalsoln[3],
+            copos_x      = state_costate_o_approx_finalsoln[4],
+            copos_y      = state_costate_o_approx_finalsoln[5],
+            covel_x      = state_costate_o_approx_finalsoln[6],
+            covel_y      = state_costate_o_approx_finalsoln[7],
+            thrust_acc_x = thrust_acc_x_f_mns                 ,
+            thrust_acc_y = thrust_acc_y_f_mns                 ,
+            acc_x        = thrust_acc_x_f_mns                 ,
+            acc_y        = thrust_acc_y_f_mns                 ,
+        )
+
+    pos_vec_f_mns   = state_costate_f_approx_finalsoln[0:2]
+    vel_vec_f_mns   = state_costate_f_approx_finalsoln[2:4]
+    copos_vec_f_mns = state_costate_f_approx_finalsoln[4:6]
+    covel_vec_f_mns = state_costate_f_approx_finalsoln[6:8]
+    thrust_acc_x_f_mns, thrust_acc_y_f_mns, _ = \
+        control_thrust_acceleration(
+            min_type                 = optimization_parameters['min_type']              ,
+            covel_x                  = state_costate_f_approx_finalsoln[6]              ,
+            covel_y                  = state_costate_f_approx_finalsoln[7]              ,
+            use_thrust_acc_limits    = inequality_parameters['use_thrust_acc_limits']   ,
+            use_thrust_acc_smoothing = inequality_parameters['use_thrust_acc_smoothing'],
+            thrust_acc_min           = inequality_parameters['thrust_acc_min']          ,
+            thrust_acc_max           = inequality_parameters['thrust_acc_max']          ,
+            use_thrust_limits        = inequality_parameters['use_thrust_limits']       ,
+            use_thrust_smoothing     = inequality_parameters['use_thrust_smoothing']    ,
+            thrust_min               = inequality_parameters['thrust_min']              ,
+            thrust_max               = inequality_parameters['thrust_max']              ,
+            k_steepness              = inequality_parameters['k_steepness']             ,
+            mass                     = mass_f_mns                                       ,
+        )
+    ham_f_mns = \
+        compute_hamiltonian(
+            min_type     = optimization_parameters['min_type'],
+            vel_x        = state_costate_f_approx_finalsoln[2],
+            vel_y        = state_costate_f_approx_finalsoln[3],
+            copos_x      = state_costate_f_approx_finalsoln[4],
+            copos_y      = state_costate_f_approx_finalsoln[5],
+            covel_x      = state_costate_f_approx_finalsoln[6],
+            covel_y      = state_costate_f_approx_finalsoln[7],
+            thrust_acc_x = thrust_acc_x_f_mns                 ,
+            thrust_acc_y = thrust_acc_y_f_mns                 ,
+            acc_x        = thrust_acc_x_f_mns                 ,
+            acc_y        = thrust_acc_y_f_mns                 ,
+        )
+
     if equality_parameters['time'     ]['o']['mode'] == 'free': equality_parameters['time'     ]['o']['mns'] =      time_o_pls
     if equality_parameters['pos_vec'  ]['o']['mode'] == 'free': equality_parameters['pos_vec'  ]['o']['mns'] =   pos_vec_o_pls
     if equality_parameters['vel_vec'  ]['o']['mode'] == 'free': equality_parameters['vel_vec'  ]['o']['mns'] =   vel_vec_o_pls
@@ -246,7 +360,6 @@ def optimal_trajectory_solve(
     if equality_parameters['covel_vec']['f']['mode'] == 'free': equality_parameters['covel_vec']['f']['pls'] = covel_vec_f_mns
     if equality_parameters['ham'      ]['f']['mode'] == 'free': equality_parameters['ham'      ]['f']['pls'] =       ham_f_mns
 
-    # Get boundary conditions
     time_o_mns      = equality_parameters['time'     ]['o']['mns']
     vel_vec_o_mns   = equality_parameters['vel_vec'  ]['o']['mns']
     pos_vec_o_mns   = equality_parameters['pos_vec'  ]['o']['mns']
@@ -261,61 +374,146 @@ def optimal_trajectory_solve(
     covel_vec_f_pls = equality_parameters['covel_vec']['f']['pls']
     ham_f_pls       = equality_parameters['ham'      ]['f']['pls']
 
-    # Final solution: approx
-    results_approx_finalsoln = results_k_idx[k_idxinitguess_to_idxfinsoln[-1]]
-    state_f_approx_finalsoln = results_approx_finalsoln.y[0:8, -1]
-    if inequality_parameters['use_thrust_limits']:
-        mass_f_mns = results_approx_finalsoln.y[8, -1]
-    else:
-        mass_f_mns = 1.0 # dummy value
+    error_o_approx_finalsoln_vec = \
+        np.hstack([time_o_mns, pos_vec_o_mns, vel_vec_o_mns, copos_vec_o_mns, covel_vec_o_mns, ham_o_mns]) \
+        - np.hstack([time_o_pls, state_costate_o_approx_finalsoln[0:8], ham_o_pls])
+    error_f_approx_finalsoln_vec = \
+        np.hstack([time_f_pls, pos_vec_f_pls, vel_vec_f_pls, copos_vec_f_pls, covel_vec_f_pls, ham_f_pls]) \
+        - np.hstack([time_f_mns, state_costate_f_approx_finalsoln[0:8], ham_f_mns])
 
-    thrust_acc_x_f_mns, thrust_acc_y_f_mns, _ = \
-        control_thrust_acceleration(
-            min_type                 = optimization_parameters['min_type']              ,
-            covel_x                  = results_approx_finalsoln.y[6,-1]                 ,
-            covel_y                  = results_approx_finalsoln.y[7,-1]                 ,
-            use_thrust_acc_limits    = inequality_parameters['use_thrust_acc_limits']   ,
-            use_thrust_acc_smoothing = inequality_parameters['use_thrust_acc_smoothing'],
-            thrust_acc_min           = inequality_parameters['thrust_acc_min']          ,
-            thrust_acc_max           = inequality_parameters['thrust_acc_max']          ,
-            use_thrust_limits        = inequality_parameters['use_thrust_limits']       ,
-            use_thrust_smoothing     = inequality_parameters['use_thrust_smoothing']    ,
-            thrust_min               = inequality_parameters['thrust_min']              ,
-            thrust_max               = inequality_parameters['thrust_max']              ,
-            k_steepness              = inequality_parameters['k_steepness']             ,
-            mass                     = mass_f_mns                                       ,
-        )
-    ham_f_mns_approx_finalsoln = \
-        compute_hamiltonian(
-            min_type     = optimization_parameters['min_type'],
-            vel_x        = results_approx_finalsoln.y[2,-1]   ,
-            vel_y        = results_approx_finalsoln.y[3,-1]   ,
-            copos_x      = results_approx_finalsoln.y[4,-1]   ,
-            copos_y      = results_approx_finalsoln.y[5,-1]   ,
-            covel_x      = results_approx_finalsoln.y[6,-1]   ,
-            covel_y      = results_approx_finalsoln.y[7,-1]   ,
-            thrust_acc_x = thrust_acc_x_f_mns                 ,
-            thrust_acc_y = thrust_acc_y_f_mns                 ,
-            acc_x        = thrust_acc_x_f_mns                 ,
-            acc_y        = thrust_acc_y_f_mns                 ,
-        )
-
-
-    # Final solution: check final state error
-    error_approx_finalsoln_vec = np.hstack([time_f_pls, pos_vec_f_pls, vel_vec_f_pls, copos_vec_f_pls, covel_vec_f_pls, ham_f_pls]) - np.hstack([time_f_mns, state_f_approx_finalsoln[0:8], ham_f_mns_approx_finalsoln])
-    error_finalsoln_vec        = np.hstack([time_f_pls, pos_vec_f_pls, vel_vec_f_pls, copos_vec_f_pls, covel_vec_f_pls, ham_f_pls]) - np.hstack([time_f_mns, state_f_finalsoln, costate_f_finalsoln, ham_f_mns])
-
-    print("\n  State Error Check")
-    print(f"             {'Time-f':>14s} {'Pos-Xf':>14s} {'Pos-Yf':>14s} {'Vel-Xf':>14s} {'Vel-Yf':>14s} {'Co-Pos-Xf':>14s} {'Co-Pos-Yf':>14s} {'Co-Vel-Xf':>14s} {'Co-Vel-Yf':>14s} {  'Ham-f':>14s}")
+    # Print error check
+    print("\n  Error Check: Time, State, Co-State, and Hamiltonian")
+    print(
+        "            "
+        f" {'Time-o':>14s}"
+        f" {   'Pos-Xo':>14s} {   'Pos-Yo':>14s}"
+        f" {   'Vel-Xo':>14s} {   'Vel-Yo':>14s}"
+        f" {'Co-Pos-Xo':>14s} {'Co-Pos-Yo':>14s}"
+        f" {'Co-Vel-Xo':>14s} {'Co-Vel-Yo':>14s}"
+        f" {    'Ham-o':>14s}"
+    )
     if min_type == 'fuel':
         print(f"             {'s':>14s} {'m':>14s} {'m':>14s} {'m/s':>14s} {'m/s':>14s} {'1/s':>14s} {'1/s':>14s} {'1':>14s} {'1':>14s} {'m/s^2':>14s}")
     else: # assume min_type == 'energy'
         print(f"             {'s':>14s} {'m':>14s} {'m':>14s} {'m/s':>14s} {'m/s':>14s} {'m/s^3':>14s} {'m/s^3':>14s} {'m/s^2':>14s} {'m/s^2':>14s} {'m^2/s^4':>14s}")
-    print(f"    Target : {time_f_pls:>14.6e} {pos_vec_f_pls[0]:>14.6e} {pos_vec_f_pls[1]:>14.6e} {vel_vec_f_pls[0]:>14.6e} {vel_vec_f_pls[1]:>14.6e} {copos_vec_f_pls[0]:>14.6e} {copos_vec_f_pls[1]:>14.6e} {covel_vec_f_pls[0]:>14.6e} {covel_vec_f_pls[1]:>14.6e} {ham_f_pls:>14.6e}")
-    print(f"    Approx : {time_f_mns:>14.6e} {state_f_approx_finalsoln[0]:>14.6e} {state_f_approx_finalsoln[1]:>14.6e} {state_f_approx_finalsoln[2]:>14.6e} {state_f_approx_finalsoln[3]:>14.6e} {state_f_approx_finalsoln[4]:>14.6e} {state_f_approx_finalsoln[5]:>14.6e} {state_f_approx_finalsoln[6]:>14.6e} {state_f_approx_finalsoln[7]:>14.6e} {ham_f_mns_approx_finalsoln:>14.6e}")
-    print(f"    Error  : {error_approx_finalsoln_vec[0]:>14.6e} {error_approx_finalsoln_vec[1]:>14.6e} {error_approx_finalsoln_vec[2]:>14.3e} {error_approx_finalsoln_vec[3 ]:>14.6e} {error_approx_finalsoln_vec[4]:>14.6e} {error_approx_finalsoln_vec[5]:>14.6e} {error_approx_finalsoln_vec[6]:>14.6e} {error_approx_finalsoln_vec[7]:>14.6e} {error_approx_finalsoln_vec[8]:>14.6e} {error_approx_finalsoln_vec[9]:>14.6e}")
-    print(f"    Actual : {time_f_mns:>14.6e} {state_f_finalsoln[0]:>14.6e} {state_f_finalsoln[1]:>14.6e} {state_f_finalsoln[2]:>14.6e} {state_f_finalsoln[3]:>14.6e} {costate_f_finalsoln[0]:>14.6e} {costate_f_finalsoln[1]:>14.6e} {costate_f_finalsoln[2]:>14.6e} {costate_f_finalsoln[3]:>14.6e} {ham_f_mns:>14.6e}")
-    print(f"    Error  : {error_finalsoln_vec[0]:>14.6e} {error_finalsoln_vec[1]:>14.6e} {error_finalsoln_vec[2]:>14.3e} {error_finalsoln_vec[3]:>14.6e} {error_finalsoln_vec[4]:>14.6e} {error_finalsoln_vec[5]:>14.6e} {error_finalsoln_vec[6]:>14.6e} {error_finalsoln_vec[7]:>14.6e} {error_finalsoln_vec[8]:>14.6e} {error_finalsoln_vec[9]:>14.6e}")
+    print(
+        f"            "
+        f" {equality_parameters[     'time']['o']['mode']:>14s}" 
+        f" {equality_parameters[  'pos_vec']['o']['mode']:>14s} {equality_parameters[  'pos_vec']['o']['mode']:>14s}"
+        f" {equality_parameters[  'vel_vec']['o']['mode']:>14s} {equality_parameters[  'vel_vec']['o']['mode']:>14s}"
+        f" {equality_parameters['copos_vec']['o']['mode']:>14s} {equality_parameters['copos_vec']['o']['mode']:>14s}"
+        f" {equality_parameters['covel_vec']['o']['mode']:>14s} {equality_parameters['covel_vec']['o']['mode']:>14s}"
+        f" {equality_parameters[      'ham']['o']['mode']:>14s}"
+    )
+    print(
+        "    Target :"
+        f" {     time_o_mns   :>14.6e}"
+        f" {  pos_vec_o_mns[0]:>14.6e} {  pos_vec_o_mns[1]:>14.6e}"
+        f" {  vel_vec_o_mns[0]:>14.6e} {  vel_vec_o_mns[1]:>14.6e}"
+        f" {copos_vec_o_mns[0]:>14.6e} {copos_vec_o_mns[1]:>14.6e}"
+        f" {covel_vec_o_mns[0]:>14.6e} {covel_vec_o_mns[1]:>14.6e}"
+        f" {      ham_o_mns   :>14.6e}"
+    )
+    print(
+        "    Approx :"
+        f" {         time_o_pls                :>14.6e}"
+        f" {state_costate_o_approx_finalsoln[0]:>14.6e} {state_costate_o_approx_finalsoln[1]:>14.6e}"
+        f" {state_costate_o_approx_finalsoln[2]:>14.6e} {state_costate_o_approx_finalsoln[3]:>14.6e}"
+        f" {state_costate_o_approx_finalsoln[4]:>14.6e} {state_costate_o_approx_finalsoln[5]:>14.6e}"
+        f" {state_costate_o_approx_finalsoln[6]:>14.6e} {state_costate_o_approx_finalsoln[7]:>14.6e}"
+        f" {          ham_o_pls                :>14.6e}"
+    )
+    print(
+        "    Error  :"
+        f" {error_o_approx_finalsoln_vec[0]:>14.6e} {error_o_approx_finalsoln_vec[1]:>14.6e}"
+        f" {error_o_approx_finalsoln_vec[2]:>14.3e} {error_o_approx_finalsoln_vec[3]:>14.6e}"
+        f" {error_o_approx_finalsoln_vec[4]:>14.6e} {error_o_approx_finalsoln_vec[5]:>14.6e}"
+        f" {error_o_approx_finalsoln_vec[6]:>14.6e} {error_o_approx_finalsoln_vec[7]:>14.6e}"
+        f" {error_o_approx_finalsoln_vec[8]:>14.6e} {error_o_approx_finalsoln_vec[9]:>14.6e}"
+    )
+    # print(
+    #     "    Actual :"
+    #     f" {   time_o_mns         :>14.6e}"
+    #     f" {  state_o_finalsoln[0]:>14.6e} {  state_o_finalsoln[1]:>14.6e}"
+    #     f" {  state_o_finalsoln[2]:>14.6e} {  state_o_finalsoln[3]:>14.6e}"
+    #     f" {costate_o_finalsoln[0]:>14.6e} {costate_o_finalsoln[1]:>14.6e}"
+    #     f" {costate_o_finalsoln[2]:>14.6e} {costate_o_finalsoln[3]:>14.6e}"
+    #     f" {ham_o_mns:>14.6e}"
+    # )
+    # print(
+    #     "    Error  :"
+    #     f" {error_finalsoln_vec[0]:>14.6e} {error_finalsoln_vec[1]:>14.6e}"
+    #     f" {error_finalsoln_vec[2]:>14.3e} {error_finalsoln_vec[3]:>14.6e}"
+    #     f" {error_finalsoln_vec[4]:>14.6e} {error_finalsoln_vec[5]:>14.6e}"
+    #     f" {error_finalsoln_vec[6]:>14.6e} {error_finalsoln_vec[7]:>14.6e}"
+    #     f" {error_finalsoln_vec[8]:>14.6e} {error_finalsoln_vec[9]:>14.6e}"
+    # )
+    print()
+    print(
+        "            "
+        f" {'Time-f':>14s}"
+        f" {   'Pos-Xf':>14s} {   'Pos-Yf':>14s}"
+        f" {   'Vel-Xf':>14s} {   'Vel-Yf':>14s}"
+        f" {'Co-Pos-Xf':>14s} {'Co-Pos-Yf':>14s}"
+        f" {'Co-Vel-Xf':>14s} {'Co-Vel-Yf':>14s}"
+        f" {    'Ham-f':>14s}"
+    )
+    if min_type == 'fuel':
+        print(f"             {'s':>14s} {'m':>14s} {'m':>14s} {'m/s':>14s} {'m/s':>14s} {'1/s':>14s} {'1/s':>14s} {'1':>14s} {'1':>14s} {'m/s^2':>14s}")
+    else: # assume min_type == 'energy'
+        print(f"             {'s':>14s} {'m':>14s} {'m':>14s} {'m/s':>14s} {'m/s':>14s} {'m/s^3':>14s} {'m/s^3':>14s} {'m/s^2':>14s} {'m/s^2':>14s} {'m^2/s^4':>14s}")
+    print(
+        f"            "
+        f" {equality_parameters[     'time']['f']['mode']:>14s}" 
+        f" {equality_parameters[  'pos_vec']['f']['mode']:>14s} {equality_parameters[  'pos_vec']['f']['mode']:>14s}"
+        f" {equality_parameters[  'vel_vec']['f']['mode']:>14s} {equality_parameters[  'vel_vec']['f']['mode']:>14s}"
+        f" {equality_parameters['copos_vec']['f']['mode']:>14s} {equality_parameters['copos_vec']['f']['mode']:>14s}"
+        f" {equality_parameters['covel_vec']['f']['mode']:>14s} {equality_parameters['covel_vec']['f']['mode']:>14s}"
+        f" {equality_parameters[      'ham']['f']['mode']:>14s}"
+    )
+    print(
+        "    Target :"
+        f" {     time_f_pls   :>14.6e}"
+        f" {  pos_vec_f_pls[0]:>14.6e} {  pos_vec_f_pls[1]:>14.6e}"
+        f" {  vel_vec_f_pls[0]:>14.6e} {  vel_vec_f_pls[1]:>14.6e}"
+        f" {copos_vec_f_pls[0]:>14.6e} {copos_vec_f_pls[1]:>14.6e}"
+        f" {covel_vec_f_pls[0]:>14.6e} {covel_vec_f_pls[1]:>14.6e}"
+        f" {      ham_f_pls   :>14.6e}"
+    )
+    print(
+        "    Approx :"
+        f" {time_f_mns:>14.6e}"
+        f" {state_costate_f_approx_finalsoln[0]:>14.6e} {state_costate_f_approx_finalsoln[1]:>14.6e}"
+        f" {state_costate_f_approx_finalsoln[2]:>14.6e} {state_costate_f_approx_finalsoln[3]:>14.6e}"
+        f" {state_costate_f_approx_finalsoln[4]:>14.6e} {state_costate_f_approx_finalsoln[5]:>14.6e}"
+        f" {state_costate_f_approx_finalsoln[6]:>14.6e} {state_costate_f_approx_finalsoln[7]:>14.6e}"
+        f" {ham_f_mns:>14.6e}"
+    )
+    print(
+        "    Error  :"
+        f" {error_f_approx_finalsoln_vec[0]:>14.6e} {error_f_approx_finalsoln_vec[1]:>14.6e}"
+        f" {error_f_approx_finalsoln_vec[2]:>14.3e} {error_f_approx_finalsoln_vec[3]:>14.6e}"
+        f" {error_f_approx_finalsoln_vec[4]:>14.6e} {error_f_approx_finalsoln_vec[5]:>14.6e}"
+        f" {error_f_approx_finalsoln_vec[6]:>14.6e} {error_f_approx_finalsoln_vec[7]:>14.6e}"
+        f" {error_f_approx_finalsoln_vec[8]:>14.6e} {error_f_approx_finalsoln_vec[9]:>14.6e}"
+    )
+    print(
+        "    Actual :"
+        f" {   time_f_mns         :>14.6e}"
+        f" {  state_f_finalsoln[0]:>14.6e} {  state_f_finalsoln[1]:>14.6e}"
+        f" {  state_f_finalsoln[2]:>14.6e} {  state_f_finalsoln[3]:>14.6e}"
+        f" {costate_f_finalsoln[0]:>14.6e} {costate_f_finalsoln[1]:>14.6e}"
+        f" {costate_f_finalsoln[2]:>14.6e} {costate_f_finalsoln[3]:>14.6e}"
+        f" {ham_f_mns:>14.6e}"
+    )
+    print(
+        "    Error  :"
+        f" {error_finalsoln_vec[0]:>14.6e} {error_finalsoln_vec[1]:>14.6e}"
+        f" {error_finalsoln_vec[2]:>14.3e} {error_finalsoln_vec[3]:>14.6e}"
+        f" {error_finalsoln_vec[4]:>14.6e} {error_finalsoln_vec[5]:>14.6e}"
+        f" {error_finalsoln_vec[6]:>14.6e} {error_finalsoln_vec[7]:>14.6e}"
+        f" {error_finalsoln_vec[8]:>14.6e} {error_finalsoln_vec[9]:>14.6e}"
+    )
 
     # Final solution: plot the results
     print("\n  Plot Final Solution Trajectory")
