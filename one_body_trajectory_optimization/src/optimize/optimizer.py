@@ -200,8 +200,9 @@ def optimal_trajectory_solve(
             inequality_parameters       ,
         )
     
-    results_finalsoln = soln_ivp
-    state_f_finalsoln = results_finalsoln.y[0:4, -1]
+    results_finalsoln   = soln_ivp
+    state_f_finalsoln   = results_finalsoln.y[0:4, -1]
+    costate_f_finalsoln = results_finalsoln.y[4:8, -1]
 
     pos_vec_f_mns   = results_finalsoln.y[0:2, -1]
     vel_vec_f_mns   = results_finalsoln.y[2:4, -1]
@@ -240,16 +241,6 @@ def optimal_trajectory_solve(
         )
 
     # Update initial minus and final plus value if parameter is free
-
-    # pos_vec_o_mns   = equality_parameters[  'pos_vec']['o']['mns']
-    # vel_vec_o_mns   = equality_parameters[  'vel_vec']['o']['mns']
-    # time_f_pls      = equality_parameters[     'time']['f']['pls']
-    # pos_vec_f_pls   = equality_parameters[  'pos_vec']['f']['pls']
-    # vel_vec_f_pls   = equality_parameters[  'vel_vec']['f']['pls']
-    # copos_vec_f_pls = equality_parameters['copos_vec']['f']['pls']
-    # covel_vec_f_pls = equality_parameters['covel_vec']['f']['pls']
-    # ham_f_pls       = equality_parameters[      'ham']['f']['pls']
-
     if equality_parameters['time'     ]['o']['mode'] == 'free': equality_parameters['time'     ]['o']['mns'] =      time_o_pls
     if equality_parameters['pos_vec'  ]['o']['mode'] == 'free': equality_parameters['pos_vec'  ]['o']['mns'] =   pos_vec_o_pls
     if equality_parameters['vel_vec'  ]['o']['mode'] == 'free': equality_parameters['vel_vec'  ]['o']['mns'] =   vel_vec_o_pls
@@ -264,6 +255,7 @@ def optimal_trajectory_solve(
     if equality_parameters['covel_vec']['f']['mode'] == 'free': equality_parameters['covel_vec']['f']['pls'] = covel_vec_f_mns
     if equality_parameters['ham'      ]['f']['mode'] == 'free': equality_parameters['ham'      ]['f']['pls'] =       ham_f_mns
 
+    # Get boundary conditions
     time_o_mns      = equality_parameters['time'     ]['o']['mns']
     vel_vec_o_mns   = equality_parameters['vel_vec'  ]['o']['mns']
     pos_vec_o_mns   = equality_parameters['pos_vec'  ]['o']['mns']
@@ -280,11 +272,11 @@ def optimal_trajectory_solve(
 
     # Final solution: approx and true
     results_approx_finalsoln = results_k_idx[k_idxinitguess_to_idxfinsoln[-1]]
-    state_f_approx_finalsoln = results_approx_finalsoln.y[0:4, -1]
+    state_f_approx_finalsoln = results_approx_finalsoln.y[0:8, -1]
 
     # Final solution: check final state error
-    error_approx_finalsoln_vec = np.hstack([pos_vec_f_pls, vel_vec_f_pls]) - state_f_approx_finalsoln
-    error_finalsoln_vec        = np.hstack([pos_vec_f_pls, vel_vec_f_pls]) - state_f_finalsoln
+    # error_approx_finalsoln_vec = np.hstack([time_f_pls, pos_vec_f_pls, vel_vec_f_pls, copos_vec_f_pls, covel_vec_f_pls, ham_f_pls]) - np.hstack([time_f_mns, state_f_approx_finalsoln[0:8], ham_f_mns])
+    error_finalsoln_vec = np.hstack([time_f_pls, pos_vec_f_pls, vel_vec_f_pls, copos_vec_f_pls, covel_vec_f_pls, ham_f_pls]) - np.hstack([time_f_mns, state_f_finalsoln, costate_f_finalsoln, ham_f_mns])
 
     print("\n  State Error Check")
     print(f"             {'Time-f':>14s} {'Pos-Xf':>14s} {'Pos-Yf':>14s} {'Vel-Xf':>14s} {'Vel-Yf':>14s} {'Co-Pos-Xf':>14s} {'Co-Pos-Yf':>14s} {'Co-Vel-Xf':>14s} {'Co-Vel-Yf':>14s} {  'Ham-f':>14s}")
@@ -293,10 +285,10 @@ def optimal_trajectory_solve(
     else: # assume min_type == 'energy'
         print(f"             {'s':>14s} {'m':>14s} {'m':>14s} {'m/s':>14s} {'m/s':>14s} {'m/s^3':>14s} {'m/s^3':>14s} {'m/s^2':>14s} {'m/s^2':>14s} {'m^2/s^4':>14s}")
     print(f"    Target : {time_f_pls:>14.6e} {pos_vec_f_pls[0]:>14.6e} {pos_vec_f_pls[1]:>14.6e} {vel_vec_f_pls[0]:>14.6e} {vel_vec_f_pls[1]:>14.6e} {copos_vec_f_pls[0]:>14.6e} {copos_vec_f_pls[1]:>14.6e} {covel_vec_f_pls[0]:>14.6e} {covel_vec_f_pls[1]:>14.6e} {ham_f_pls:>14.6e}")
-    print(f"    Approx : {0.0:>14.6e} {  state_f_approx_finalsoln[0]:>14.6e} {  state_f_approx_finalsoln[1]:>14.6e} {  state_f_approx_finalsoln[2]:>14.6e} {  state_f_approx_finalsoln[3]:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e}")
-    print(f"    Error  : {0.0:>14.6e} {error_approx_finalsoln_vec[0]:>14.6e} {error_approx_finalsoln_vec[1]:>14.3e} {error_approx_finalsoln_vec[2]:>14.6e} {error_approx_finalsoln_vec[3]:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e}")
-    print(f"    Actual : {0.0:>14.6e} {         state_f_finalsoln[0]:>14.6e} {         state_f_finalsoln[1]:>14.6e} {         state_f_finalsoln[2]:>14.6e} {         state_f_finalsoln[3]:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e}")
-    print(f"    Error  : {0.0:>14.6e} {       error_finalsoln_vec[0]:>14.6e} {       error_finalsoln_vec[1]:>14.3e} {       error_finalsoln_vec[2]:>14.6e} {       error_finalsoln_vec[3]:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e} {0.0:>14.6e}")
+    # print(f"    Approx : {state_f_approx_finalsoln[10]:>14.6e} {state_f_approx_finalsoln[11]:>14.6e} {state_f_approx_finalsoln[12]:>14.6e} {state_f_approx_finalsoln[13]:>14.6e} {state_f_approx_finalsoln[14]:>14.6e} {state_f_approx_finalsoln[15]:>14.6e} {state_f_approx_finalsoln[16]:>14.6e} {state_f_approx_finalsoln[17]:>14.6e} {state_f_approx_finalsoln[18]:>14.6e} {state_f_approx_finalsoln[19]:>14.6e}")
+    # print(f"    Error  : {error_approx_finalsoln_vec[0]:>14.6e} {error_approx_finalsoln_vec[1]:>14.6e} {error_approx_finalsoln_vec[2]:>14.3e} {error_approx_finalsoln_vec[3 ]:>14.6e} {error_approx_finalsoln_vec[4]:>14.6e} {error_approx_finalsoln_vec[5]:>14.6e} {error_approx_finalsoln_vec[6]:>14.6e} {error_approx_finalsoln_vec[7]:>14.6e} {error_approx_finalsoln_vec[8]:>14.6e} {error_approx_finalsoln_vec[9]:>14.6e}")
+    print(f"    Actual : {time_f_mns:>14.6e} {state_f_finalsoln[0]:>14.6e} {state_f_finalsoln[1]:>14.6e} {state_f_finalsoln[2]:>14.6e} {state_f_finalsoln[3]:>14.6e} {costate_f_finalsoln[0]:>14.6e} {costate_f_finalsoln[1]:>14.6e} {costate_f_finalsoln[2]:>14.6e} {costate_f_finalsoln[3]:>14.6e} {ham_f_mns:>14.6e}")
+    print(f"    Error  : {error_finalsoln_vec[0]:>14.6e} {error_finalsoln_vec[1]:>14.6e} {error_finalsoln_vec[2]:>14.3e} {error_finalsoln_vec[3]:>14.6e} {error_finalsoln_vec[4]:>14.6e} {error_finalsoln_vec[5]:>14.6e} {error_finalsoln_vec[6]:>14.6e} {error_finalsoln_vec[7]:>14.6e} {error_finalsoln_vec[8]:>14.6e} {error_finalsoln_vec[9]:>14.6e}")
 
     # Final solution: plot the results
     print("\n  Plot Final Solution Trajectory")
