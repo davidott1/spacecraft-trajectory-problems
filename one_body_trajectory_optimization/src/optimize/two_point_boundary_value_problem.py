@@ -11,10 +11,6 @@ def solve_ivp_func(
         integration_state_parameters,
         inequality_parameters       ,
     ):
-    """
-    Solve IVP function for the final solution.
-    """
-
     min_type                 =      optimization_parameters['min_type'                ]
     include_jacobian         =      optimization_parameters['include_jacobian'        ]
     use_thrust_acc_limits    =        inequality_parameters['use_thrust_acc_limits'   ]

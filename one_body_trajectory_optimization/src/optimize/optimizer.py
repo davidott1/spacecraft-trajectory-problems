@@ -3,7 +3,7 @@ from tqdm                                          import tqdm
 from src.initial_guess.guesser                     import generate_guess
 from src.optimize.two_point_boundary_value_problem import solve_for_root_and_compute_progress, solve_ivp_func, compute_hamiltonian
 from src.plot.final_results                        import plot_final_results
-from src.dynamics                                  import control_thrust_acceleration
+from src.model.dynamics                            import control_thrust_acceleration
 
 
 def optimal_trajectory_solve(
@@ -158,18 +158,24 @@ def optimal_trajectory_solve(
     vel_vec_o_pls   = decision_state_initguess[3:5]
     copos_vec_o_pls = decision_state_initguess[5:7]
     covel_vec_o_pls = decision_state_initguess[7:9]
-
-    thrust_acc_x, thrust_acc_y = \
+    thrust_acc_x_o_pls, thrust_acc_y_o_pls, _ = \
         control_thrust_acceleration(
-            min_type, 
-            covel_vec_o_pls[0], covel_vec_o_pls[1],
-            mass_o_pls,
-            use_thrust_acc_limits, use_thrust_acc_smoothing, thrust_acc_min, thrust_acc_max,
-            use_thrust_limits, use_thrust_smoothing, thrust_min, thrust_max,
-            k_steepness,
+            min_type                 = optimization_parameters['min_type'],
+            covel_x                  = covel_vec_o_pls[0],
+            covel_y                  = covel_vec_o_pls[1],
+            use_thrust_acc_limits    = inequality_parameters['use_thrust_acc_limits'],
+            use_thrust_acc_smoothing = inequality_parameters['use_thrust_acc_smoothing'],
+            thrust_acc_min           = inequality_parameters['thrust_acc_min'],
+            thrust_acc_max           = inequality_parameters['thrust_acc_max'],
+            use_thrust_limits        = inequality_parameters['use_thrust_limits'],
+            use_thrust_smoothing     = inequality_parameters['use_thrust_smoothing'],
+            thrust_min               = inequality_parameters['thrust_min'],
+            thrust_max               = inequality_parameters['thrust_max'],
+            k_steepness              = inequality_parameters['k_steepness'],
+            mass                     = integration_state_parameters['mass_o'],
         )
-
-    ham_o_pls       = compute_hamiltonian(
+    ham_o_pls = \
+        compute_hamiltonian(
             min_type     = optimization_parameters['min_type'],
             vel_x        = vel_vec_o_pls[0]                   ,
             vel_y        = vel_vec_o_pls[1]                   ,
@@ -177,12 +183,11 @@ def optimal_trajectory_solve(
             copos_y      = copos_vec_o_pls[1]                 ,
             covel_x      = covel_vec_o_pls[0]                 ,
             covel_y      = covel_vec_o_pls[1]                 ,
-            thrust_acc_x = -covel_vec_o_pls[0]                ,
-            thrust_acc_y = -covel_vec_o_pls[1]                ,
-            acc_x        = -covel_vec_o_pls[0]                ,
-            acc_y        = -covel_vec_o_pls[1]                ,
+            thrust_acc_x = thrust_acc_x_o_pls                 ,
+            thrust_acc_y = thrust_acc_y_o_pls                 ,
+            acc_x        = thrust_acc_x_o_pls                 ,
+            acc_y        = thrust_acc_y_o_pls                 ,
         )
-
 
     state_costate_o = np.hstack([pos_vec_o_pls, vel_vec_o_pls, copos_vec_o_pls, covel_vec_o_pls])
 
@@ -198,6 +203,42 @@ def optimal_trajectory_solve(
     results_finalsoln = soln_ivp
     state_f_finalsoln = results_finalsoln.y[0:4, -1]
 
+    pos_vec_f_mns   = results_finalsoln.y[0:2, -1]
+    vel_vec_f_mns   = results_finalsoln.y[2:4, -1]
+    copos_vec_f_mns = results_finalsoln.y[4:6, -1]
+    covel_vec_f_mns = results_finalsoln.y[6:8, -1]
+    mass_f_mns      = results_finalsoln.y[  8, -1]
+    thrust_acc_x_f_mns, thrust_acc_y_f_mns, _ = \
+        control_thrust_acceleration(
+            min_type                 = optimization_parameters['min_type'],
+            covel_x                  = covel_vec_f_mns[0],
+            covel_y                  = covel_vec_f_mns[1],
+            use_thrust_acc_limits    = inequality_parameters['use_thrust_acc_limits'],
+            use_thrust_acc_smoothing = inequality_parameters['use_thrust_acc_smoothing'],
+            thrust_acc_min           = inequality_parameters['thrust_acc_min'],
+            thrust_acc_max           = inequality_parameters['thrust_acc_max'],
+            use_thrust_limits        = inequality_parameters['use_thrust_limits'],
+            use_thrust_smoothing     = inequality_parameters['use_thrust_smoothing'],
+            thrust_min               = inequality_parameters['thrust_min'],
+            thrust_max               = inequality_parameters['thrust_max'],
+            k_steepness              = inequality_parameters['k_steepness'],
+            mass                     = mass_f_mns,
+        )
+    ham_f_mns = \
+        compute_hamiltonian(
+            min_type     = optimization_parameters['min_type'],
+            vel_x        = vel_vec_f_mns[0]                   ,
+            vel_y        = vel_vec_f_mns[1]                   ,
+            copos_x      = copos_vec_f_mns[0]                 ,
+            copos_y      = copos_vec_f_mns[1]                 ,
+            covel_x      = covel_vec_f_mns[0]                 ,
+            covel_y      = covel_vec_f_mns[1]                 ,
+            thrust_acc_x = thrust_acc_x_f_mns                 ,
+            thrust_acc_y = thrust_acc_y_f_mns                 ,
+            acc_x        = thrust_acc_x_f_mns                 ,
+            acc_y        = thrust_acc_y_f_mns                 ,
+        )
+
     # Update initial minus and final plus value if parameter is free
 
     # pos_vec_o_mns   = equality_parameters[  'pos_vec']['o']['mns']
@@ -209,28 +250,33 @@ def optimal_trajectory_solve(
     # covel_vec_f_pls = equality_parameters['covel_vec']['f']['pls']
     # ham_f_pls       = equality_parameters[      'ham']['f']['pls']
 
-    if equality_parameters['time'     ]['o']['mode'] == 'free': equality_parameters['time'     ]['o']['mns'] = time_o_pls
-    if equality_parameters['pos_vec'  ]['o']['mode'] == 'free': equality_parameters['pos_vec'  ]['o']['mns'] = pos_vec_o_pls
-    if equality_parameters['vel_vec'  ]['o']['mode'] == 'free': equality_parameters['vel_vec'  ]['o']['mns'] = vel_vec_o_pls
+    if equality_parameters['time'     ]['o']['mode'] == 'free': equality_parameters['time'     ]['o']['mns'] =      time_o_pls
+    if equality_parameters['pos_vec'  ]['o']['mode'] == 'free': equality_parameters['pos_vec'  ]['o']['mns'] =   pos_vec_o_pls
+    if equality_parameters['vel_vec'  ]['o']['mode'] == 'free': equality_parameters['vel_vec'  ]['o']['mns'] =   vel_vec_o_pls
     if equality_parameters['copos_vec']['o']['mode'] == 'free': equality_parameters['copos_vec']['o']['mns'] = copos_vec_o_pls
     if equality_parameters['covel_vec']['o']['mode'] == 'free': equality_parameters['covel_vec']['o']['mns'] = covel_vec_o_pls
-    if equality_parameters['ham'      ]['o']['mode'] == 'free': equality_parameters['ham'      ]['o']['mns'] = ham_o_pls
+    if equality_parameters['ham'      ]['o']['mode'] == 'free': equality_parameters['ham'      ]['o']['mns'] =       ham_o_pls
 
-    if equality_parameters['time'     ]['f']['mode'] == 'free': time_f_pls      = time_f_mns
-    if equality_parameters['pos_vec'  ]['f']['mode'] == 'free': pos_vec_f_pls   = pos_vec_f_mns
-    if equality_parameters['vel_vec'  ]['f']['mode'] == 'free': vel_vec_f_pls   = vel_vec_f_mns
-    if equality_parameters['copos_vec']['f']['mode'] == 'free': copos_vec_f_pls = copos_vec_f_mns
-    if equality_parameters['covel_vec']['f']['mode'] == 'free': covel_vec_f_pls = covel_vec_f_mns
-    if equality_parameters['ham'      ]['f']['mode'] == 'free': ham_f_pls       = ham_f_mns
+    if equality_parameters['time'     ]['f']['mode'] == 'free': equality_parameters['time'     ]['f']['pls'] =      time_f_mns
+    if equality_parameters['pos_vec'  ]['f']['mode'] == 'free': equality_parameters['pos_vec'  ]['f']['pls'] =   pos_vec_f_mns
+    if equality_parameters['vel_vec'  ]['f']['mode'] == 'free': equality_parameters['vel_vec'  ]['f']['pls'] =   vel_vec_f_mns
+    if equality_parameters['copos_vec']['f']['mode'] == 'free': equality_parameters['copos_vec']['f']['pls'] = copos_vec_f_mns
+    if equality_parameters['covel_vec']['f']['mode'] == 'free': equality_parameters['covel_vec']['f']['pls'] = covel_vec_f_mns
+    if equality_parameters['ham'      ]['f']['mode'] == 'free': equality_parameters['ham'      ]['f']['pls'] =       ham_f_mns
 
-    equality_parameters['copos_vec_o_mns'] = decision_state_initguess[0:2]
-    equality_parameters['covel_vec_o_mns'] = decision_state_initguess[2:4]
-    equality_parameters['copos_vec_o_pls'] = decision_state_initguess[0:2]
-    equality_parameters['covel_vec_o_pls'] = decision_state_initguess[2:4]
-    equality_parameters['copos_vec_f_mns'] = results_finalsoln.y[4:6, -1]
-    equality_parameters['covel_vec_f_mns'] = results_finalsoln.y[6:8, -1]
-    equality_parameters['copos_vec_f_pls'] = results_finalsoln.y[4:6, -1]
-    equality_parameters['covel_vec_f_pls'] = results_finalsoln.y[6:8, -1]
+    time_o_mns      = equality_parameters['time'     ]['o']['mns']
+    vel_vec_o_mns   = equality_parameters['vel_vec'  ]['o']['mns']
+    pos_vec_o_mns   = equality_parameters['pos_vec'  ]['o']['mns']
+    copos_vec_o_mns = equality_parameters['copos_vec']['o']['mns']
+    covel_vec_o_mns = equality_parameters['covel_vec']['o']['mns']
+    ham_o_mns       = equality_parameters['ham'      ]['o']['mns']
+
+    time_f_pls      = equality_parameters['time'     ]['f']['pls']
+    vel_vec_f_pls   = equality_parameters['vel_vec'  ]['f']['pls']
+    pos_vec_f_pls   = equality_parameters['pos_vec'  ]['f']['pls']
+    copos_vec_f_pls = equality_parameters['copos_vec']['f']['pls']
+    covel_vec_f_pls = equality_parameters['covel_vec']['f']['pls']
+    ham_f_pls       = equality_parameters['ham'      ]['f']['pls']
 
     # Final solution: approx and true
     results_approx_finalsoln = results_k_idx[k_idxinitguess_to_idxfinsoln[-1]]

@@ -5,14 +5,14 @@ from src.utility.bounding_functions import bounded_smooth_func, bounded_nonsmoot
 def control_thrust_acceleration(
         min_type, 
         covel_x, covel_y,
-        mass,
         use_thrust_acc_limits, use_thrust_acc_smoothing, thrust_acc_min, thrust_acc_max,
         use_thrust_limits, use_thrust_smoothing, thrust_min, thrust_max,
         k_steepness,
+        mass = 1.0,
     ):
-    # Control: thrust acceleration
-    #   fuel   : thrust_acc_vec = -covel_vec / cvel_mag
-    #   energy : thrust_acc_vec =  covel_vec
+    """
+    Control: thrust_acceleration_vector = thrust_acceleration_magnitude * thrust_acceleration_direction
+    """
     if min_type == 'fuel':
         epsilon   = 1.0e-6
         covel_mag = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
@@ -43,7 +43,7 @@ def control_thrust_acceleration(
     thrust_acc_x = thrust_acc_mag * thrust_acc_x_dir
     thrust_acc_y = thrust_acc_mag * thrust_acc_y_dir
 
-    return thrust_acc_x, thrust_acc_y
+    return thrust_acc_x, thrust_acc_y, thrust_acc_mag
 
 
 def one_body_dynamics__indirect(
@@ -120,6 +120,7 @@ def one_body_dynamics__indirect(
     pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y = state_costate
 
     # Unpack: post-process states mass and objective
+    mass = 1.0 # dummy value
     if post_process:
         mass                      = state_costate_scstm[-2]
         optimal_control_objective = state_costate_scstm[-1]
@@ -129,14 +130,14 @@ def one_body_dynamics__indirect(
     # Control: thrust acceleration
     #   fuel   : thrust_acc_vec = -covel_vec / cvel_mag
     #   energy : thrust_acc_vec =  covel_vec
-    thrust_acc_x, thrust_acc_y = \
+    thrust_acc_x, thrust_acc_y, thrust_acc_mag = \
         control_thrust_acceleration(
             min_type, 
             covel_x, covel_y,
-            mass,
             use_thrust_acc_limits, use_thrust_acc_smoothing, thrust_acc_min, thrust_acc_max,
             use_thrust_limits, use_thrust_smoothing, thrust_min, thrust_max,
             k_steepness,
+            mass,
         )
 
     # Dynamics: free-body
