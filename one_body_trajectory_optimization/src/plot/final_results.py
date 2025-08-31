@@ -59,6 +59,9 @@ def plot_final_results(
         switching_func_t = covel_mag_t - 1.0
         thrust_acc_mag_t = np.zeros_like(switching_func_t)
         for idx, switching_func_t_value in enumerate(switching_func_t):
+            if use_thrust_limits:
+                thrust_acc_min = thrust_min / mass_t[idx]
+                thrust_acc_max = thrust_max / mass_t[idx]
             if switching_func_t_value > 0:
                 thrust_acc_mag_t[idx] = thrust_acc_max
             elif switching_func_t_value < 0:

@@ -27,7 +27,6 @@ def solve_ivp_func(
     post_process             = integration_state_parameters['post_process'            ]
 
     # Form integration state
-    if include_jacobian: breakpoint()
     if include_jacobian:
         integration_state_parameters['include_scstm'] = True
         stm_oo                                        = np.identity(8).flatten()

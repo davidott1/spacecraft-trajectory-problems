@@ -99,7 +99,7 @@ def one_body_dynamics__indirect(
         [   dpos_x__dtime,   dpos_y__dtime,   dvel_x__dtime,   dvel_y__dtime,
           dcopos_x__dtime, dcopos_y__dtime, dcovel_x__dtime, dcovel_y__dtime  ]
     """
-    
+
     # Validate input
     if use_thrust_acc_limits and use_thrust_limits:
         use_thrust_limits = False
@@ -128,8 +128,6 @@ def one_body_dynamics__indirect(
         mass = state_costate_scstm[-1]
 
     # Control: thrust acceleration
-    #   fuel   : thrust_acc_vec = -covel_vec / cvel_mag
-    #   energy : thrust_acc_vec =  covel_vec
     thrust_acc_x, thrust_acc_y, thrust_acc_mag = \
         control_thrust_acceleration(
             min_type, 

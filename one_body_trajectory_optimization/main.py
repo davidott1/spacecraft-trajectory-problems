@@ -24,7 +24,7 @@ def main():
         equality_parameters         ,
         inequality_parameters       ,
     ) = optimal_trajectory_input()
-    
+
     # Optimal trajectory solve
     optimal_trajectory_solve(
         files_folders_parameters    ,

@@ -96,7 +96,7 @@ def optimal_trajectory_solve(
     # Final solution: no thrust or thrust-acc smoothing
     print("\n\nFINAL SOLUTION PROCESS")
     print("  Root-Solve Results")
-    
+
     # Final solution: root solve and compute progress of current root solve
     optimization_parameters['include_jacobian']       = False # should be True
     integration_state_parameters['include_scstm']     = False # should be True
@@ -302,10 +302,10 @@ def optimal_trajectory_solve(
             copos_y      = state_costate_o_approx_finalsoln[5],
             covel_x      = state_costate_o_approx_finalsoln[6],
             covel_y      = state_costate_o_approx_finalsoln[7],
-            thrust_acc_x = thrust_acc_x_f_mns                 ,
-            thrust_acc_y = thrust_acc_y_f_mns                 ,
-            acc_x        = thrust_acc_x_f_mns                 ,
-            acc_y        = thrust_acc_y_f_mns                 ,
+            thrust_acc_x = thrust_acc_x_o_pls                 ,
+            thrust_acc_y = thrust_acc_y_o_pls                 ,
+            acc_x        = thrust_acc_x_o_pls                 ,
+            acc_y        = thrust_acc_y_o_pls                 ,
         )
 
     pos_vec_f_mns   = state_costate_f_approx_finalsoln[0:2]
