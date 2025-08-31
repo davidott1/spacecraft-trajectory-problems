@@ -11,15 +11,8 @@ def generate_guess(
     ):
     """
     Generates a robust initial guess for the co-states: copos_vec, covel_vec
-
-    [delta_time_of, pos_vec_o, vel_vec_o, copos_vec_o, covel_vec_o, mass_o, opt_ctrl_obj_o] : 1, 2, 2, 2, 2, 1, 1
     """
     print("\n\nINITIAL GUESS PROCESS")
-    
-    # Define list for dictionary structure
-    ordered_variables  = ['time', 'pos_vec', 'vel_vec', 'copos_vec', 'covel_vec', 'ham']
-    ordered_boundaries = ['o', 'f']
-    ordered_sides      = ['pls', 'mns']
 
     # Unpack
     #   Some parameters will unpack as zero and be set by the guesser
@@ -128,8 +121,8 @@ def generate_guess(
     # Loop through random guesses for the costates
     print("  Random Initial Guess Generation")
     error_mag_min = np.Inf
-    # for idx in tqdm(range(init_guess_steps), desc="Processing", leave=False, total=init_guess_steps):
-    for idx in range(init_guess_steps):
+    for idx in tqdm(range(init_guess_steps), desc="Processing", leave=False, total=init_guess_steps):
+    # for idx in range(init_guess_steps):
         decision_state_idx = np.array([])
         if time_o_mode == 'free':
             time_o_pls = np.random.uniform(low=0, high=1, size=1)
@@ -186,8 +179,8 @@ def generate_guess(
             idx_min            = idx
             error_mag_min      = error_mag_idx
             if idx==0:
-                print("    Minimum Error         Step")
-            print(f"    {error_mag_min:>13.6e}  {idx_min:>5d}/{init_guess_steps:>4d}")
+                tqdm.write("    Minimum Error         Step")
+            tqdm.write(f"    {error_mag_min:>13.6e}  {idx_min:>5d}/{init_guess_steps:>4d}")
             decision_state_min = decision_state_idx
 
     # Pack up and print solution

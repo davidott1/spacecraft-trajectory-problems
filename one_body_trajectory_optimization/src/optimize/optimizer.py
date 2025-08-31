@@ -29,16 +29,12 @@ def optimal_trajectory_solve(
         )
 
     # Unpack files and folders parameters
-    min_type              =      optimization_parameters['min_type'             ]
-    # pos_vec_o_mns         =          equality_parameters['pos_vec']['o']['mns']['value']
-    # vel_vec_o_mns         =          equality_parameters['vel_vec']['o']['mns']['value']
-    # pos_vec_f_pls         =          equality_parameters['pos_vec']['f']['pls']['value']
-    # vel_vec_f_pls         =          equality_parameters['vel_vec']['f']['pls']['value']
-    use_thrust_acc_limits =        inequality_parameters['use_thrust_acc_limits']
-    use_thrust_limits     =        inequality_parameters['use_thrust_limits'    ]
-    k_idxinitguess        =        inequality_parameters['k_idxinitguess'       ]
-    k_idxfinsoln          =        inequality_parameters['k_idxfinsoln'         ]
-    k_idxdivs             =        inequality_parameters['k_idxdivs'            ]
+    min_type              = optimization_parameters['min_type'             ]
+    use_thrust_acc_limits =   inequality_parameters['use_thrust_acc_limits']
+    use_thrust_limits     =   inequality_parameters['use_thrust_limits'    ]
+    k_idxinitguess        =   inequality_parameters['k_idxinitguess'       ]
+    k_idxfinsoln          =   inequality_parameters['k_idxfinsoln'         ]
+    k_idxdivs             =   inequality_parameters['k_idxdivs'            ]
 
     # Optimize and enforce thrust or thrust-acc constraints
     print("\n\nOPTIMIZATION PROCESS")
@@ -102,8 +98,8 @@ def optimal_trajectory_solve(
     print("  Root-Solve Results")
     
     # Final solution: root solve and compute progress of current root solve
-    optimization_parameters['include_jacobian']       = False  # should be True
-    integration_state_parameters['include_scstm']     = False  # should be True
+    optimization_parameters['include_jacobian']       = False # should be True
+    integration_state_parameters['include_scstm']     = False # should be True
     integration_state_parameters['post_process']      = False # should be False
     inequality_parameters['use_thrust_acc_smoothing'] = False # should be False
     inequality_parameters['use_thrust_smoothing']     = False # should be False
@@ -233,14 +229,12 @@ def optimal_trajectory_solve(
             acc_y        = thrust_acc_y_f_mns                 ,
         )
     
-    # fix later <
     if equality_parameters['time'     ]['o']['mode'] == 'free': equality_parameters['time'     ]['o']['mns'] =      time_o_pls
     if equality_parameters['pos_vec'  ]['o']['mode'] == 'free': equality_parameters['pos_vec'  ]['o']['mns'] =   pos_vec_o_pls
     if equality_parameters['vel_vec'  ]['o']['mode'] == 'free': equality_parameters['vel_vec'  ]['o']['mns'] =   vel_vec_o_pls
     if equality_parameters['copos_vec']['o']['mode'] == 'free': equality_parameters['copos_vec']['o']['mns'] = copos_vec_o_pls
     if equality_parameters['covel_vec']['o']['mode'] == 'free': equality_parameters['covel_vec']['o']['mns'] = covel_vec_o_pls
     if equality_parameters['ham'      ]['o']['mode'] == 'free': equality_parameters['ham'      ]['o']['mns'] =       ham_o_pls
-    # > fix later
 
     if equality_parameters['time'     ]['f']['mode'] == 'free': equality_parameters['time'     ]['f']['pls'] =      time_f_mns
     if equality_parameters['pos_vec'  ]['f']['mode'] == 'free': equality_parameters['pos_vec'  ]['f']['pls'] =   pos_vec_f_mns
@@ -249,14 +243,12 @@ def optimal_trajectory_solve(
     if equality_parameters['covel_vec']['f']['mode'] == 'free': equality_parameters['covel_vec']['f']['pls'] = covel_vec_f_mns
     if equality_parameters['ham'      ]['f']['mode'] == 'free': equality_parameters['ham'      ]['f']['pls'] =       ham_f_mns
 
-    # fix later <
     time_o_mns      = equality_parameters['time'     ]['o']['mns']
     vel_vec_o_mns   = equality_parameters['vel_vec'  ]['o']['mns']
     pos_vec_o_mns   = equality_parameters['pos_vec'  ]['o']['mns']
     copos_vec_o_mns = equality_parameters['copos_vec']['o']['mns']
     covel_vec_o_mns = equality_parameters['covel_vec']['o']['mns']
     ham_o_mns       = equality_parameters['ham'      ]['o']['mns']
-    # > fix later
 
     time_f_pls      = equality_parameters['time'     ]['f']['pls']
     vel_vec_f_pls   = equality_parameters['vel_vec'  ]['f']['pls']
