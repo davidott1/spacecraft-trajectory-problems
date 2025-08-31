@@ -378,10 +378,10 @@ def plot_final_results(
 
     # Thrust-Acc or Thrust Profile
     ax3 = fig.add_subplot(gs[1,1])
-    if min_type=='fuel':
+    if use_thrust_limits:
         ax3.axhline(y=float(thrust_min), color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Min')
         ax3.axhline(y=float(thrust_max), color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Max')
-    else: # assume min_type=='energy'
+    elif use_thrust_acc_limits:
         ax3.axhline(y=float(thrust_acc_min), color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Min')
         ax3.axhline(y=float(thrust_acc_max), color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Max')
     if use_thrust_limits:
