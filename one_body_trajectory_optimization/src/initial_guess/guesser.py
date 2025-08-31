@@ -133,41 +133,29 @@ def generate_guess(
         decision_state_idx = np.array([])
         if time_o_mode == 'free':
             time_o_pls = np.random.uniform(low=0, high=1, size=1)
-        # decision_state_idx = np.hstack([decision_state_idx, time_o_pls])
         if pos_vec_o_mode == 'free':
             pos_vec_o_pls = np.random.uniform(low=-1, high=1, size=2)
-        # decision_state_idx = np.hstack([decision_state_idx, pos_vec_o_pls])
         if vel_vec_o_mode == 'free':
             vel_vec_o_pls = np.random.uniform(low=-1, high=1, size=2)
-        # decision_state_idx = np.hstack([decision_state_idx, vel_vec_o_pls])
         if copos_vec_o_mode == 'free':
             copos_vec_o_pls = np.random.uniform(low=-1, high=1, size=2)
-        # decision_state_idx = np.hstack([decision_state_idx, copos_vec_o_pls])
         if covel_vec_o_mode == 'free':
             covel_vec_o_pls = np.random.uniform(low=-1, high=1, size=2)
-        # decision_state_idx = np.hstack([decision_state_idx, covel_vec_o_pls])
         if ham_o_mode == 'free':
             ham_o_pls = np.random.uniform(low=-1, high=1, size=1)
-        # decision_state_idx = np.hstack([decision_state_idx, ham_o_pls])
 
         if time_f_mode == 'free':
             time_f_mns = np.random.uniform(low=1, high=300, size=1)
-        # decision_state_idx = np.hstack([decision_state_idx, time_f_mns])
         if pos_vec_f_mode == 'free':
             pos_vec_f_mns = np.random.uniform(low=-1, high=1, size=2)
-        # decision_state_idx = np.hstack([decision_state_idx, pos_vec_f_mns])
         if vel_vec_f_mode == 'free':
             vel_vec_f_mns = np.random.uniform(low=-1, high=1, size=2)
-        # decision_state_idx = np.hstack([decision_state_idx, vel_vec_f_mns])
         if copos_vec_f_mode == 'free':
             copos_vec_f_mns = np.random.uniform(low=-1, high=1, size=2)
-        # decision_state_idx = np.hstack([decision_state_idx, copos_vec_f_mns])
         if covel_vec_f_mode == 'free':
             covel_vec_f_mns = np.random.uniform(low=-1, high=1, size=2)
-        # decision_state_idx = np.hstack([decision_state_idx, covel_vec_f_mns])
         if ham_f_mode == 'free':
             ham_f_mns = np.random.uniform(low=-1, high=1, size=1)
-        # decision_state_idx = np.hstack([decision_state_idx, ham_f_mns])
 
         decision_state_idx = np.hstack([
             time_o_pls     ,
@@ -184,23 +172,6 @@ def generate_guess(
             ham_f_mns      ,
         ])
 
-        # # Print decision state
-        # print(f"  Decision State")
-        # idx_decision_state = 0
-        # idx_parameter      = 0
-        # for bnd in ordered_boundaries:
-        #     for var in ordered_variables:
-        #         for side in ordered_sides:
-        #             if (
-        #                 (bnd == 'o' and side == 'pls')
-        #                 or (bnd == 'f' and side == 'mns')
-        #             ):
-        #                 number_elements = np.size(equality_parameters[var][bnd][side]['value'])
-        #                 fixed_or_free   = str('Fixed' if equality_parameters['known_states'][idx_decision_state] else 'Free')
-        #                 print("    " + f"{f'{var}_{bnd}_{side}':<15s}" + " : " + f"{fixed_or_free:<5s}" + " : " + f"{decision_state_idx[idx_decision_state:idx_decision_state+number_elements]}")
-        #                 idx_decision_state += number_elements
-        #                 idx_parameter      += 1
-
         error_idx = \
             tpbvp_objective_and_jacobian(
                 decision_state_idx          ,
@@ -211,42 +182,13 @@ def generate_guess(
             )
 
         error_mag_idx = np.linalg.norm(error_idx)
-
         if error_mag_idx < error_mag_min:
             idx_min            = idx
             error_mag_min      = error_mag_idx
-            # print(f"  New Minimum Error: {error_mag_min:>14.6e} at step {idx_min:>5d}/{init_guess_steps:>4d}")
+            if idx==0:
+                print("    Minimum Error         Step")
+            print(f"    {error_mag_min:>13.6e}  {idx_min:>5d}/{init_guess_steps:>4d}")
             decision_state_min = decision_state_idx
-
-            pos_vec_o_pls   = decision_state_idx[1:3]
-            vel_vec_o_pls   = decision_state_idx[3:5]
-            copos_vec_o_pls = decision_state_idx[5:7]
-            covel_vec_o_pls = decision_state_idx[7:9]
-            state_costate_o_min = np.hstack([pos_vec_o_pls, vel_vec_o_pls, copos_vec_o_pls, covel_vec_o_pls])
-
-            # Print decision state
-            # print(f"  Decision State")
-            # print(f"    {decision_state_idx}")
-            idx_decision_state = 0
-            idx_parameter      = 0
-            for bnd in ordered_boundaries:
-                for var in ordered_variables:
-                    for side in ordered_sides:
-                        if (
-                            (bnd == 'o' and side == 'pls')
-                            or (bnd == 'f' and side == 'mns')
-                        ):
-                            number_elements = np.size(equality_parameters[var][bnd][side])
-                            fixed_or_free   = str('Fixed' if equality_parameters['known_states'][idx_decision_state] else 'Free')
-                            # print("    " + f"{f'{var}_{bnd}_{side}':<15s}" + " : " + f"{fixed_or_free:<5s}" + " : " + f"{decision_state_idx[idx_decision_state:idx_decision_state+number_elements]}")
-                            idx_decision_state += number_elements
-                            idx_parameter      += 1
-
-            # if idx==0:
-            #     tqdm.write(f"                               {'Fixed':>14s} {'Fixed':>14s} {'Fixed':>14s} {'Fixed':>14s} {'Free':>14s} {'Free':>14s} {'Free':>14s} {'Free':>14s}")
-            #     tqdm.write(f"          {'Step':>5s} {'Error-Mag':>14s} {'Pos-Xo':>14s} {'Pos-Yo':>14s} {'Vel-Xo':>14s} {'Vel-Yo':>14s} {'Co-Pos-Xo':>14s} {'Co-Pos-Yo':>14s} {'Co-Vel-Xo':>14s} {'Co-Vel-Yo':>14s}")
-            # state_costate_o_min_str = ' '.join(f"{x:>14.6e}" for x in state_costate_o_min)
-            # tqdm.write(f"     {idx_min:>5d}/{init_guess_steps:>4d} {error_mag_min:>14.6e} {state_costate_o_min_str}")
 
     # Pack up and print solution
     return decision_state_min
