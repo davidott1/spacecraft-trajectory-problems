@@ -9,7 +9,6 @@ except Exception:
     try:
         from scipy.optimize._numdiff import approx_derivative  # type: ignore
     except Exception:
-        breakpoint()
         def approx_derivative(fun, x0, method="3-point", rel_step=1e-6):
             x0 = np.asarray(x0, dtype=float)
             f0 = np.asarray(fun(x0), dtype=float)
@@ -386,7 +385,7 @@ def tpbvp_objective_and_jacobian(
     
     # Compute the hamiltonian at the initial and final time
     if optimization_parameters['min_type'] == 'fuel':
-        thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _, _, _ = \
+        thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _, _, _, _ = \
             control_thrust_acceleration(
                 min_type                 = optimization_parameters['min_type'],
                 covel_x                  = covel_vec_o_pls[0],
@@ -416,7 +415,7 @@ def tpbvp_objective_and_jacobian(
                 acc_x        = thrust_acc_x_o_pls,
                 acc_y        = thrust_acc_y_o_pls,
             )
-        thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _, _, _ = \
+        thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _, _, _, _ = \
             control_thrust_acceleration(
                 min_type                 = optimization_parameters['min_type'],
                 covel_x                  = covel_vec_f_mns[0],
@@ -447,7 +446,7 @@ def tpbvp_objective_and_jacobian(
                 acc_y        = thrust_acc_y_f_mns,
             )
     else: # optimization_parameters['min_type'] == 'energy':
-        thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _, _, _ = \
+        thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _, _, _, _ = \
             control_thrust_acceleration(
                 min_type                 = optimization_parameters['min_type'],
                 covel_x                  = covel_vec_o_pls[0],
@@ -477,7 +476,7 @@ def tpbvp_objective_and_jacobian(
                 acc_x        = thrust_acc_x_o_pls,
                 acc_y        = thrust_acc_y_o_pls,
             )
-        thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _, _, _ = \
+        thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _, _, _, _ = \
             control_thrust_acceleration(
                 min_type                 = optimization_parameters['min_type'],
                 covel_x                  = covel_vec_f_mns[0],
@@ -621,11 +620,18 @@ def tpbvp_objective_and_jacobian(
 
         # d(error_ham_o)/d(time_o_pls) = - d(ham_f_mns)/d(state_costate_f) d(state_costate_f)/d(state_costate_o) d(state_costate_o)/d(time_o_pls)
 
+        # Build RHS state with mass if thrust limits are active
+        if inequality_parameters['use_thrust_limits']:
+            mass_o = integration_state_parameters['mass_o']
+            integration_state_o = np.hstack([state_costate_o, mass_o])
+        else:
+            integration_state_o = state_costate_o
+
         # d(error_state_costate_f)/d(time_o_pls) = -d(state_costate_f)/d(time_o_pls) = scstm_of * (d(state_o)/dt)
         d_state_costate_o__d_t = \
             one_body_dynamics__indirect(
                 time_o_pls,
-                state_costate_o,
+                integration_state_o,
                 include_scstm=False,
                 min_type=optimization_parameters['min_type'],
                 use_thrust_acc_limits=inequality_parameters['use_thrust_acc_limits'],
@@ -639,6 +645,7 @@ def tpbvp_objective_and_jacobian(
                 post_process=False,
                 k_steepness=inequality_parameters['k_steepness'],
             )
+
         d_state_costate_o__d_t = d_state_costate_o__d_t[0:8]
 
         d_state_costate_f_mns__d_time_o_pls = -1 * scstm_of @ d_state_costate_o__d_t
@@ -652,10 +659,14 @@ def tpbvp_objective_and_jacobian(
         error_jacobian[17:19, 0] = -1 * d_state_costate_f_mns__d_time_o_pls[6:8]
 
         # d(error_ham_f)/d(time_o_pls) = - d(ham_f_mns)/d(state_costate_f) d(state_costate_f)/d(state_costate_o) d(state_costate_o)/d(time_o_pls)
+        if inequality_parameters['use_thrust_limits']:
+            integration_state_f = np.hstack([state_costate_f, mass_f_mns])
+        else:
+            integration_state_f = state_costate_f
         d_state_costate_f_mns__d_t = \
             one_body_dynamics__indirect(
                 time_f_mns,
-                state_costate_f,
+                integration_state_f,
                 include_scstm=False,
                 min_type=optimization_parameters['min_type'],
                 use_thrust_acc_limits=inequality_parameters['use_thrust_acc_limits'],

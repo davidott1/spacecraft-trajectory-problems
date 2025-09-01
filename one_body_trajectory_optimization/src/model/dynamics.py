@@ -30,6 +30,7 @@ def control_thrust_acceleration(
         else: # no use_thrust_smoothing and no use_thrust_acc_smoothing
             thrust_acc_mag = np.where(switching_func > 0.0, thrust_acc_max, thrust_acc_min)
     else: # assume 'energy'
+        switching_func = np.zeros_like(covel_mag)
         thrust_acc_mag = covel_mag
         if use_thrust_limits or use_thrust_acc_limits:
             if use_thrust_smoothing or use_thrust_acc_smoothing:
@@ -41,7 +42,7 @@ def control_thrust_acceleration(
     thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
     thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
 
-    return thrust_acc_x, thrust_acc_y, thrust_acc_mag, thrust_acc_x_dir, thrust_acc_y_dir, covel_mag, covel_mag_inv
+    return thrust_acc_x, thrust_acc_y, thrust_acc_mag, thrust_acc_x_dir, thrust_acc_y_dir, covel_mag, covel_mag_inv, switching_func
 
 
 def one_body_dynamics__indirect(
@@ -126,7 +127,7 @@ def one_body_dynamics__indirect(
         mass = state_costate_scstm[-1]
 
     # Control: thrust acceleration
-    thrust_acc_x, thrust_acc_y, thrust_acc_mag, thrust_acc_x_dir, thrust_acc_y_dir, covel_mag, covel_mag_inv = \
+    thrust_acc_x, thrust_acc_y, thrust_acc_mag, thrust_acc_x_dir, thrust_acc_y_dir, covel_mag, covel_mag_inv, switching_func = \
         control_thrust_acceleration(
             min_type, 
             covel_x, covel_y,
@@ -220,7 +221,7 @@ def one_body_dynamics__indirect(
                 dthrust_acc_y_dir__dcovel_x =                                          - covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
 
                 if use_thrust_smoothing or use_thrust_acc_smoothing:
-                    
+                    breakpoint()
                     one_mns_tanhsq                 = 1.0 - np.tanh(k_steepness * switching_func)**2
                     onehalf_times_k_one_mns_tanhsq = 0.5 * k_steepness * one_mns_tanhsq
                     dheaviside_approx__dcovel_x    = onehalf_times_k_one_mns_tanhsq * dcovel_mag__dcovel_x
