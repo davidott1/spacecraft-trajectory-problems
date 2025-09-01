@@ -54,8 +54,7 @@ def optimal_trajectory_solve(
         'xtol'    : 1.0e-8, # 1e-8
         'gtol'    : 1.0e-8, # 1e-8
     }
-    optimization_parameters['include_jacobian'] = False # should be True
-    # integration_state_parameters['include_scstm'] = True
+    optimization_parameters['include_jacobian'] = True # should be True
     if use_thrust_acc_limits:
         inequality_parameters['use_thrust_acc_smoothing'] = True
     if use_thrust_limits:

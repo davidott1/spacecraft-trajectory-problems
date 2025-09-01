@@ -82,8 +82,8 @@ def plot_final_results(
                 thrust_acc_mag_t = covel_mag_t
                 thrust_acc_mag_t = np.minimum( thrust_acc_mag_t, thrust_max / mass_t ) # max thrust-acc constraint
                 thrust_acc_mag_t = np.maximum( thrust_acc_mag_t, thrust_min / mass_t ) # min thrust-acc constraint
-            thrust_acc_x_dir_t = covel_x_t / covel_mag_t
-            thrust_acc_y_dir_t = covel_y_t / covel_mag_t
+            thrust_acc_x_dir_t = -covel_x_t / covel_mag_t
+            thrust_acc_y_dir_t = -covel_y_t / covel_mag_t
             thrust_acc_dir_t   = np.vstack([thrust_acc_x_dir_t, thrust_acc_y_dir_t])
             thrust_acc_x_t     = thrust_acc_mag_t * thrust_acc_x_dir_t
             thrust_acc_y_t     = thrust_acc_mag_t * thrust_acc_y_dir_t
@@ -99,15 +99,15 @@ def plot_final_results(
                 thrust_acc_mag_t = covel_mag_t
                 thrust_acc_mag_t = np.minimum( thrust_acc_mag_t, thrust_acc_max ) # max thrust-acc constraint
                 thrust_acc_mag_t = np.maximum( thrust_acc_mag_t, thrust_acc_min ) # min thrust-acc constraint
-            thrust_acc_x_dir_t = covel_x_t / covel_mag_t
-            thrust_acc_y_dir_t = covel_y_t / covel_mag_t
+            thrust_acc_x_dir_t = -covel_x_t / covel_mag_t
+            thrust_acc_y_dir_t = -covel_y_t / covel_mag_t
             thrust_acc_dir_t   = np.vstack([thrust_acc_x_dir_t, thrust_acc_y_dir_t])
             thrust_acc_x_t     = thrust_acc_mag_t * thrust_acc_x_dir_t
             thrust_acc_y_t     = thrust_acc_mag_t * thrust_acc_y_dir_t
             thrust_acc_vec_t   = np.vstack([thrust_acc_x_t, thrust_acc_y_t])
         else: # assume no thrust nor thrust-acc constraints
             # Thrust or thrust-acc constraints
-            thrust_acc_vec_t = np.array([ covel_x_t, covel_y_t ])
+            thrust_acc_vec_t = np.array([ -covel_x_t, -covel_y_t ])
             thrust_acc_dir_t = thrust_acc_vec_t / np.linalg.norm(thrust_acc_vec_t, axis=0, keepdims=True)
             thrust_acc_mag_t = np.sqrt( thrust_acc_vec_t[0]**2 + thrust_acc_vec_t[1]**2 )
     thrust_mag_t = mass_t * thrust_acc_mag_t

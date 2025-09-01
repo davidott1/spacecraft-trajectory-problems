@@ -451,66 +451,67 @@ def tpbvp_objective_and_jacobian(
     error_covel_vec_f = covel_vec_f_pls - covel_vec_f_mns
 
     # Hamiltonian error
-    error_ham_o = ham_o_pls - ham_o_mns # trivial
+    error_ham_o = ham_o_pls - ham_o_mns
     error_ham_f = ham_f_pls - ham_f_mns
 
     # Full error vector
     error_full = {
         'time' : {
-            'o': error_time_o, # trivial
-            'f': error_time_f  # trivial
+            'o': error_time_o,
+            'f': error_time_f 
         },
         'pos_vec' : {
-            'o': error_pos_vec_o, # trivial
+            'o': error_pos_vec_o,
             'f': error_pos_vec_f
         },
         'vel_vec' : {
-            'o': error_vel_vec_o, # trivial
+            'o': error_vel_vec_o,
             'f': error_vel_vec_f
         },
         'copos_vec' : {
-            'o': error_copos_vec_o, # trivial
-            'f': error_copos_vec_f  # trivial
+            'o': error_copos_vec_o,
+            'f': error_copos_vec_f
         },
         'covel_vec' : {
-            'o': error_covel_vec_o, # trivial
-            'f': error_covel_vec_f  # trivial
+            'o': error_covel_vec_o,
+            'f': error_covel_vec_f
         },
         'ham' : {
-            'o': error_ham_o, # trivial
-            'f': error_ham_f  
+            'o': error_ham_o,
+            'f': error_ham_f
         }
     }
 
-    # Error vector (currently not consolidated)
+    # Error vector
     error_components = []
     for bnd in ordered_boundaries:
         for var in ordered_variables:
-            # print(f"error {var}_{bnd}: {error_full[var][bnd]}")
             error_components.append(error_full[var][bnd])
     error = np.hstack(error_components)
 
-    # start here: error is correct. need to get rid of trivial zero errors
+    # Error jacobian
     if include_jacobian:
-        # 4x4 : -d(pos_vec_f_mns, vel_vec_f_mns) / d(copos_vec_o_pls, covel_vec_o_pls)
-        # 5x5: -d(pos_vec_f_mns, vel_vec_f_mns, ham_f_mns) / d(time_f_mns, copos_vec_o_pls, covel_vec_o_pls)
+        #   error = [ delta [time_o, pos_vec_o, vel_vec_o, copos_vec_o, covel_vel_o, ham_o] ]
+        #           [ delta [time_f, pos_vec_f, vel_vec_f, copos_vec_f, covel_vel_f, ham_f] ]
+        #   jacobian = d(state_costate_f) / d(state_costate_o)
+        #   error_jacobian = d(error) / d(decision_state)
+        #                  = [ d(delta_time_o)      / d(time_o_pls)    d(delta_time_o)      / d(pos_vec_o_pls)    ...
+        #                      d(delta_pos_vec_o)   / d(time_o_pls)    d(delta_pos_vec_o)   / d(pos_vec_o_pls)    ...
+        #                      d(delta_vel_vec_o)   / d(time_o_pls)    d(delta_vel_vec_o)   / d(pos_vec_o_pls)    ...
+        #                      d(delta_copos_vec_o) / d(time_o_pls)    d(delta_copos_vec_o) / d(pos_vec_o_pls)    ...
+        #                      d(delta_covel_vel_o) / d(time_o_pls)    d(delta_covel_vel_o) / d(pos_vec_o_pls)    ...
+        #                      d(delta_ham_o)       / d(time_o_pls)    d(delta_ham_o)       / d(pos_vec_o_pls)    ...
+        #                      d(delta_time_f)      / d(time_f_pls)    d(delta_time_f)      / d(pos_vec_f_pls)    ...
+        #                      d(delta_pos_vec_f)   / d(time_f_pls)    d(delta_pos_vec_f)   / d(pos_vec_f_pls)    ...
+        #                      d(delta_vel_vec_f)   / d(time_f_pls)    d(delta_vel_vec_f)   / d(pos_vec_f_pls)    ...
+        #                      d(delta_copos_vec_f) / d(time_f_pls)    d(delta_copos_vec_f) / d(pos_vec_f_pls)    ...
+        #                      d(delta_covel_vel_f) / d(time_f_pls)    d(delta_covel_vel_f) / d(pos_vec_f_pls)    ...
+        #                      d(delta_ham_f)       / d(time_f_pls)    d(delta_ham_f)       / d(pos_vec_f_pls)    ...
+        # breakpoint()
+        # stm_of
         error_jacobian = np.zeros((len(error), len(error)))
 
-    # # Consolidate errors
-    # case_choice = 1 # 1 : fixed fin-time; fixed init-pos; fixed init-vel; fixed fin-pos; fixed fin-vel
-    #                 # 2 :  free fin-time; fixed init-pos; fixed init-vel; fixed fin-pos; fixed fin-vel
-    # if case_choice == 1:
-    #     error = np.hstack([error_pos_vec_f, error_vel_vec_f]) # 4 constraints
-    #     if include_jacobian:
-    #         error_jacobian = -stm_of[0:4, 4:8] # 4x4 : -d(pos_vec_f_mns, vel_vec_f_mns) / d(copos_vec_o_pls, covel_vec_o_pls)
-    # elif case_choice == 2:
-    #     error = np.hstack([error_pos_vec_f, error_vel_vec_f, error_ham_f]) # 5 constraints
-    #     if include_jacobian:
-    #         ... # 5x5: -d(pos_vec_f_mns, vel_vec_f_mns, ham_f_mns) / d(time_f_mns, copos_vec_o_pls, covel_vec_o_pls)
 
-    # error = state_costate_f[:4] - np.hstack([pos_vec_f_pls, vel_vec_f_pls])
-    # if include_jacobian:
-    #     error_jacobian = stm_of[0:4, 4:8]
 
     # Return
     if include_jacobian:

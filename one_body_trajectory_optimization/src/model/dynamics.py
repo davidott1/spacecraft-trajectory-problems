@@ -29,8 +29,6 @@ def control_thrust_acceleration(
             thrust_acc_mag   = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx
         else: # no use_thrust_smoothing and no use_thrust_acc_smoothing
             thrust_acc_mag = np.where(switching_func > 0.0, thrust_acc_max, thrust_acc_min)
-        thrust_acc_x_dir = -covel_x * covel_mag_inv
-        thrust_acc_y_dir = -covel_y * covel_mag_inv
     else: # assume 'energy'
         thrust_acc_mag = covel_mag
         if use_thrust_limits or use_thrust_acc_limits:
@@ -38,8 +36,8 @@ def control_thrust_acceleration(
                 thrust_acc_mag = bounded_smooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max, k_steepness)
             else: # no use_thrust_smoothing and no use_thrust_acc_smoothing
                 thrust_acc_mag = bounded_nonsmooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max)
-        thrust_acc_x_dir = covel_x * covel_mag_inv
-        thrust_acc_y_dir = covel_y * covel_mag_inv
+    thrust_acc_x_dir = -covel_x * covel_mag_inv
+    thrust_acc_y_dir = -covel_y * covel_mag_inv
     thrust_acc_x = thrust_acc_mag * thrust_acc_x_dir
     thrust_acc_y = thrust_acc_mag * thrust_acc_y_dir
 
