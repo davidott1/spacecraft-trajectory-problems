@@ -386,7 +386,7 @@ def tpbvp_objective_and_jacobian(
     
     # Compute the hamiltonian at the initial and final time
     if optimization_parameters['min_type'] == 'fuel':
-        thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _ = \
+        thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _, _, _ = \
             control_thrust_acceleration(
                 min_type                 = optimization_parameters['min_type'],
                 covel_x                  = covel_vec_o_pls[0],
@@ -416,7 +416,7 @@ def tpbvp_objective_and_jacobian(
                 acc_x        = thrust_acc_x_o_pls,
                 acc_y        = thrust_acc_y_o_pls,
             )
-        thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _ = \
+        thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _, _, _ = \
             control_thrust_acceleration(
                 min_type                 = optimization_parameters['min_type'],
                 covel_x                  = covel_vec_f_mns[0],
@@ -447,7 +447,7 @@ def tpbvp_objective_and_jacobian(
                 acc_y        = thrust_acc_y_f_mns,
             )
     else: # optimization_parameters['min_type'] == 'energy':
-        thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _ = \
+        thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _, _, _ = \
             control_thrust_acceleration(
                 min_type                 = optimization_parameters['min_type'],
                 covel_x                  = covel_vec_o_pls[0],
@@ -477,7 +477,7 @@ def tpbvp_objective_and_jacobian(
                 acc_x        = thrust_acc_x_o_pls,
                 acc_y        = thrust_acc_y_o_pls,
             )
-        thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _ = \
+        thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _, _, _ = \
             control_thrust_acceleration(
                 min_type                 = optimization_parameters['min_type'],
                 covel_x                  = covel_vec_f_mns[0],
@@ -639,6 +639,7 @@ def tpbvp_objective_and_jacobian(
                 post_process=False,
                 k_steepness=inequality_parameters['k_steepness'],
             )
+        d_state_costate_o__d_t = d_state_costate_o__d_t[0:8]
 
         d_state_costate_f_mns__d_time_o_pls = -1 * scstm_of @ d_state_costate_o__d_t
         # d(error_pos_vec_f)/d(time_o_pls)
@@ -668,6 +669,7 @@ def tpbvp_objective_and_jacobian(
                 post_process=False,
                 k_steepness=inequality_parameters['k_steepness'],
             )
+        d_state_costate_f_mns__d_t = d_state_costate_f_mns__d_t[0:8]
         d_ham_f_mns__d_state_costate_f = np.hstack([
             -d_state_costate_f_mns__d_t[4:6], # -d(copos)/dt
             -d_state_costate_f_mns__d_t[6:8], # -d(covel)/dt
@@ -718,13 +720,13 @@ def tpbvp_objective_and_jacobian(
         # error_jacobian[9, 0] = d_ham_o_pls__d_time_o_pls
 
         # d(error_pos_vec_f)/d(state_costate_o) = -d(pos_vec_f_mns)/d(state_costate_o) = -scstm_of[0:2, 0:8]
-        error_jacobian[11:13, 1:9] = -scstm_of[0:2, 0:8] # should be negative?
+        error_jacobian[11:13, 1:9] = -scstm_of[0:2, 0:8] # should be negative
         # d(error_vel_vec_f)/d(state_costate_o) = -d(vel_vec_f_mns)/d(state_costate_o) = -scstm_of[2:4, 0:8]
-        error_jacobian[13:15, 1:9] = -scstm_of[2:4, 0:8] # should be negative?
+        error_jacobian[13:15, 1:9] = -scstm_of[2:4, 0:8] # should be negative
         # d(error_copos_vec_f)/d(state_costate_o) = -d(copos_vec_f_mns)/d(state_costate_o) = -scstm_of[4:6, 0:8]
-        error_jacobian[15:17, 1:9] = -scstm_of[4:6, 0:8] # should be negative?
+        error_jacobian[15:17, 1:9] = -scstm_of[4:6, 0:8] # should be negative
         # d(error_covel_vec_f)/d(state_costate_o) = -d(covel_vec_f_mns)/d(state_costate_o) = -scstm_of[6:8, 0:8]
-        error_jacobian[17:19, 1:9] = -scstm_of[6:8, 0:8] # should be negative?
+        error_jacobian[17:19, 1:9] = -scstm_of[6:8, 0:8] # should be negative
 
         # d(error_ham_f)/d(state_costate_o) = -d(ham_f_mns)/d(state_costate_o) = -d(ham_f_mns)/d(state_costate_f) * d(state_costate_f)/d(state_costate_o)
         d_ham_f_mns__d_state_costate_o = d_ham_f_mns__d_state_costate_f @ scstm_of

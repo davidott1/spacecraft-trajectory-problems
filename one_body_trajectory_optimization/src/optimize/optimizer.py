@@ -49,7 +49,7 @@ def optimal_trajectory_solve(
     results_k_idx                = {}
     k_idxinitguess_to_idxfinsoln = np.logspace(np.log10(k_idxinitguess), np.log10(k_idxfinsoln), k_idxdivs)
     options_root                 = {
-        'maxiter' : 100 * len(decision_state_initguess), # 100 * n
+        'maxiter' : 100 * len(decision_state_initguess), # 100 * len(decision_state_initguess)
         'ftol'    : 1.0e-8, # 1e-8
         'xtol'    : 1.0e-8, # 1e-8
         'gtol'    : 1.0e-8, # 1e-8
@@ -76,7 +76,7 @@ def optimal_trajectory_solve(
                 inequality_parameters       ,
                 options_root                ,
             )
-        
+
         # Record the results of the current step and update the decision state initial guess
         results_k_idx[k_idx]     = soln_ivp
         decision_state_initguess = soln_root.x
@@ -144,7 +144,7 @@ def optimal_trajectory_solve(
     vel_vec_o_pls   = decision_state_initguess[3:5]
     copos_vec_o_pls = decision_state_initguess[5:7]
     covel_vec_o_pls = decision_state_initguess[7:9]
-    thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _ = \
+    thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _, _, _ = \
         control_thrust_acceleration(
             min_type                 = optimization_parameters['min_type'],
             covel_x                  = covel_vec_o_pls[0],
@@ -197,7 +197,7 @@ def optimal_trajectory_solve(
     copos_vec_f_mns = results_finalsoln.y[4:6, -1]
     covel_vec_f_mns = results_finalsoln.y[6:8, -1]
     mass_f_mns      = results_finalsoln.y[  8, -1]
-    thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _ = \
+    thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _, _, _ = \
         control_thrust_acceleration(
             min_type                 = optimization_parameters['min_type'],
             covel_x                  = covel_vec_f_mns[0],
@@ -276,7 +276,7 @@ def optimal_trajectory_solve(
     vel_vec_o_pls   = state_costate_o_approx_finalsoln[2:4]
     copos_vec_o_pls = state_costate_o_approx_finalsoln[4:6]
     covel_vec_o_pls = state_costate_o_approx_finalsoln[6:8]
-    thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _ = \
+    thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _, _, _ = \
         control_thrust_acceleration(
             min_type                 = optimization_parameters['min_type']              ,
             covel_x                  = state_costate_o_approx_finalsoln[6]              ,
@@ -311,7 +311,7 @@ def optimal_trajectory_solve(
     vel_vec_f_mns   = state_costate_f_approx_finalsoln[2:4]
     copos_vec_f_mns = state_costate_f_approx_finalsoln[4:6]
     covel_vec_f_mns = state_costate_f_approx_finalsoln[6:8]
-    thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _ = \
+    thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _, _, _ = \
         control_thrust_acceleration(
             min_type                 = optimization_parameters['min_type']              ,
             covel_x                  = state_costate_f_approx_finalsoln[6]              ,
@@ -422,7 +422,7 @@ def optimal_trajectory_solve(
     print(
         "               Error :"
         f" {error_o_approx_finalsoln_vec[0]:>14.6e} {error_o_approx_finalsoln_vec[1]:>14.6e}"
-        f" {error_o_approx_finalsoln_vec[2]:>14.3e} {error_o_approx_finalsoln_vec[3]:>14.6e}"
+        f" {error_o_approx_finalsoln_vec[2]:>14.6e} {error_o_approx_finalsoln_vec[3]:>14.6e}"
         f" {error_o_approx_finalsoln_vec[4]:>14.6e} {error_o_approx_finalsoln_vec[5]:>14.6e}"
         f" {error_o_approx_finalsoln_vec[6]:>14.6e} {error_o_approx_finalsoln_vec[7]:>14.6e}"
         f" {error_o_approx_finalsoln_vec[8]:>14.6e} {error_o_approx_finalsoln_vec[9]:>14.6e}"
@@ -439,7 +439,7 @@ def optimal_trajectory_solve(
     print(
         "               Error :"
         f" {error_o_finalsoln_vec[0]:>14.6e} {error_o_finalsoln_vec[1]:>14.6e}"
-        f" {error_o_finalsoln_vec[2]:>14.3e} {error_o_finalsoln_vec[3]:>14.6e}"
+        f" {error_o_finalsoln_vec[2]:>14.6e} {error_o_finalsoln_vec[3]:>14.6e}"
         f" {error_o_finalsoln_vec[4]:>14.6e} {error_o_finalsoln_vec[5]:>14.6e}"
         f" {error_o_finalsoln_vec[6]:>14.6e} {error_o_finalsoln_vec[7]:>14.6e}"
         f" {error_o_finalsoln_vec[8]:>14.6e} {error_o_finalsoln_vec[9]:>14.6e}"
@@ -488,7 +488,7 @@ def optimal_trajectory_solve(
     print(
         "               Error :"
         f" {error_f_approx_finalsoln_vec[0]:>14.6e} {error_f_approx_finalsoln_vec[1]:>14.6e}"
-        f" {error_f_approx_finalsoln_vec[2]:>14.3e} {error_f_approx_finalsoln_vec[3]:>14.6e}"
+        f" {error_f_approx_finalsoln_vec[2]:>14.6e} {error_f_approx_finalsoln_vec[3]:>14.6e}"
         f" {error_f_approx_finalsoln_vec[4]:>14.6e} {error_f_approx_finalsoln_vec[5]:>14.6e}"
         f" {error_f_approx_finalsoln_vec[6]:>14.6e} {error_f_approx_finalsoln_vec[7]:>14.6e}"
         f" {error_f_approx_finalsoln_vec[8]:>14.6e} {error_f_approx_finalsoln_vec[9]:>14.6e}"
@@ -505,7 +505,7 @@ def optimal_trajectory_solve(
     print(
         "               Error :"
         f" {error_f_finalsoln_vec[0]:>14.6e} {error_f_finalsoln_vec[1]:>14.6e}"
-        f" {error_f_finalsoln_vec[2]:>14.3e} {error_f_finalsoln_vec[3]:>14.6e}"
+        f" {error_f_finalsoln_vec[2]:>14.6e} {error_f_finalsoln_vec[3]:>14.6e}"
         f" {error_f_finalsoln_vec[4]:>14.6e} {error_f_finalsoln_vec[5]:>14.6e}"
         f" {error_f_finalsoln_vec[6]:>14.6e} {error_f_finalsoln_vec[7]:>14.6e}"
         f" {error_f_finalsoln_vec[8]:>14.6e} {error_f_finalsoln_vec[9]:>14.6e}"

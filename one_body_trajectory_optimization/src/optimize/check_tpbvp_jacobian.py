@@ -87,11 +87,11 @@ def make_default_params():
         "use_thrust_acc_limits": False,
         "use_thrust_acc_smoothing": False,
         "thrust_acc_min": 0.0,
-        "thrust_acc_max": 0.0,
-        "use_thrust_limits": False,
-        "use_thrust_smoothing": False,
+        "thrust_acc_max": 2.5,
+        "use_thrust_limits": True,
+        "use_thrust_smoothing": True,
         "thrust_min": 0.0,
-        "thrust_max": 0.0,
+        "thrust_max": 4.0e-2,
         "k_steepness": 100.0,
     }
 

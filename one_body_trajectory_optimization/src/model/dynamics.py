@@ -38,10 +38,10 @@ def control_thrust_acceleration(
                 thrust_acc_mag = bounded_nonsmooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max)
     thrust_acc_x_dir = -covel_x * covel_mag_inv
     thrust_acc_y_dir = -covel_y * covel_mag_inv
-    thrust_acc_x = thrust_acc_mag * thrust_acc_x_dir
-    thrust_acc_y = thrust_acc_mag * thrust_acc_y_dir
+    thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
+    thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
 
-    return thrust_acc_x, thrust_acc_y, thrust_acc_mag, covel_mag, covel_mag_inv
+    return thrust_acc_x, thrust_acc_y, thrust_acc_mag, thrust_acc_x_dir, thrust_acc_y_dir, covel_mag, covel_mag_inv
 
 
 def one_body_dynamics__indirect(
@@ -126,7 +126,7 @@ def one_body_dynamics__indirect(
         mass = state_costate_scstm[-1]
 
     # Control: thrust acceleration
-    thrust_acc_x, thrust_acc_y, thrust_acc_mag, covel_mag, covel_mag_inv = \
+    thrust_acc_x, thrust_acc_y, thrust_acc_mag, thrust_acc_x_dir, thrust_acc_y_dir, covel_mag, covel_mag_inv = \
         control_thrust_acceleration(
             min_type, 
             covel_x, covel_y,
@@ -259,10 +259,10 @@ def one_body_dynamics__indirect(
                 dthrust_acc_mag__dcovel_x = dthrust_acc_mag__dcovel_mag * dcovel_mag__dcovel_x
                 dthrust_acc_mag__dcovel_y = dthrust_acc_mag__dcovel_mag * dcovel_mag__dcovel_y
 
-                dthrust_acc_x_dir__dcovel_x = dcovel_x__covel_x * covel_mag_inv + covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
-                dthrust_acc_x_dir__dcovel_y =                                   + covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
-                dthrust_acc_y_dir__dcovel_y = dcovel_y__covel_y * covel_mag_inv + covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
-                dthrust_acc_y_dir__dcovel_x =                                   + covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
+                dthrust_acc_x_dir__dcovel_x = -1 * dcovel_x__covel_x * covel_mag_inv + -1 * covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
+                dthrust_acc_x_dir__dcovel_y =                                          -1 * covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
+                dthrust_acc_y_dir__dcovel_y = -1 * dcovel_y__covel_y * covel_mag_inv + -1 * covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
+                dthrust_acc_y_dir__dcovel_x =                                          -1 * covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
 
                 # Row 3 and 4
                 #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
