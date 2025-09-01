@@ -2,6 +2,117 @@ import numpy as np
 from scipy.integrate    import solve_ivp
 from scipy.optimize     import root
 from src.model.dynamics import one_body_dynamics__indirect, control_thrust_acceleration
+# approx_derivative import with fallback for environments missing the public symbol
+try:
+    from scipy.optimize import approx_derivative  # type: ignore[attr-defined]
+except Exception:
+    try:
+        from scipy.optimize._numdiff import approx_derivative  # type: ignore
+    except Exception:
+        breakpoint()
+        def approx_derivative(fun, x0, method="3-point", rel_step=1e-6):
+            x0 = np.asarray(x0, dtype=float)
+            f0 = np.asarray(fun(x0), dtype=float)
+            n = x0.size
+            m = f0.size
+            J = np.empty((m, n), dtype=float)
+            for j in range(n):
+                h = rel_step * max(1.0, abs(x0[j]))
+                xp = x0.copy()
+                xm = x0.copy()
+                xp[j] += h
+                xm[j] -= h
+                fp = np.asarray(fun(xp), dtype=float)
+                fm = np.asarray(fun(xm), dtype=float)
+                J[:, j] = (fp - fm) / (2.0 * h)
+            return J
+
+
+def check_jacobian(
+    decision_state,
+    optimization_parameters,
+    integration_state_parameters,
+    equality_parameters,
+    inequality_parameters,
+    rel_step=1e-6,
+    abs_tol=1e-6,
+    rel_tol=1e-5,
+    n_dir_checks=5,
+):
+    """
+    Finite-difference check for the analytical Jacobian of tpbvp_objective_and_jacobian.
+    Returns a dict with error metrics and prints a short report.
+    """
+
+    # Analytical error and Jacobian
+    opt_params_analytic = dict(optimization_parameters)
+    opt_params_analytic['include_jacobian'] = True
+    err_analytic, jac_analytic = tpbvp_objective_and_jacobian(
+        decision_state,
+        opt_params_analytic,
+        integration_state_parameters,
+        equality_parameters,
+        inequality_parameters,
+    )
+
+    # Numerical Jacobian by finite differences (vector-valued function)
+    opt_params_fd = dict(optimization_parameters)
+    opt_params_fd['include_jacobian'] = False
+
+    def f_only(x):
+        return tpbvp_objective_and_jacobian(
+            x,
+            opt_params_fd,
+            integration_state_parameters,
+            equality_parameters,
+            inequality_parameters,
+        )
+
+    jac_numeric = approx_derivative(
+        f_only,
+        decision_state,
+        method='3-point',
+        rel_step=rel_step,
+    )
+
+    # Metrics
+    diff = jac_analytic - jac_numeric
+    max_abs_err = np.max(np.abs(diff))
+    with np.errstate(divide='ignore', invalid='ignore'):
+        rel = np.abs(diff) / np.maximum(1.0, np.abs(jac_numeric))
+    max_rel_err = np.nanmax(rel)
+
+    i_max, j_max = np.unravel_index(np.abs(diff).argmax(), diff.shape)
+
+    # Directional derivative spot checks
+    rng = np.random.default_rng(123)
+    dir_stats = []
+    for _ in range(n_dir_checks):
+        v = rng.standard_normal(decision_state.shape[0])
+        v /= np.linalg.norm(v) + 1e-16
+        eps = rel_step
+        f_plus  = f_only(decision_state + eps * v)
+        f_minus = f_only(decision_state - eps * v)
+        dd_fd   = (f_plus - f_minus) / (2 * eps)
+        dd_an   = jac_analytic @ v
+        dd_err  = np.linalg.norm(dd_an - dd_fd, ord=np.inf)
+        dir_stats.append(dd_err)
+    max_dir_err = float(np.max(dir_stats)) if dir_stats else 0.0
+
+    print("Jacobian check:")
+    print(f"  max abs error    = {max_abs_err:.3e} at ({i_max},{j_max})")
+    print(f"  max rel error    = {max_rel_err:.3e}")
+    print(f"  max dir-der error= {max_dir_err:.3e}")
+
+    return {
+        "err_analytic": err_analytic,
+        "jac_analytic": jac_analytic,
+        "jac_numeric": jac_numeric,
+        "max_abs_error": max_abs_err,
+        "max_rel_error": max_rel_err,
+        "max_dir_der_error": max_dir_err,
+        "worst_index": (int(i_max), int(j_max)),
+    }
 
 
 def solve_ivp_func(
@@ -129,12 +240,12 @@ def solve_for_root_and_compute_progress(
 
     # Unpack decision-state initial guess and update the state-costate
     decision_state_initguess = soln_root.x
-    time_span       = np.array([decision_state_initguess[0], decision_state_initguess[10]])
-    pos_vec_o_pls   = decision_state_initguess[1:3]
-    vel_vec_o_pls   = decision_state_initguess[3:5]
-    copos_vec_o_pls = decision_state_initguess[5:7]
-    covel_vec_o_pls = decision_state_initguess[7:9]
-    state_costate_o = np.hstack([pos_vec_o_pls, vel_vec_o_pls, copos_vec_o_pls, covel_vec_o_pls])
+    time_span                = np.array([decision_state_initguess[0], decision_state_initguess[10]])
+    pos_vec_o_pls            = decision_state_initguess[1:3]
+    vel_vec_o_pls            = decision_state_initguess[3:5]
+    copos_vec_o_pls          = decision_state_initguess[5:7]
+    covel_vec_o_pls          = decision_state_initguess[7:9]
+    state_costate_o          = np.hstack([pos_vec_o_pls, vel_vec_o_pls, copos_vec_o_pls, covel_vec_o_pls])
 
     # Solve initial value problem
     soln_ivp = \
@@ -200,14 +311,8 @@ def tpbvp_objective_and_jacobian(
         for var in ordered_variables:
             for side in ordered_sides:
                 var_bnd = equality_parameters[var][bnd]
-                if (
-                    (bnd == 'o' and side == 'mns')
-                    or (bnd == 'f' and side == 'pls')
-                    # or var_bnd['mode'] == 'fixed' # include later, doing len_dec_state = 20 first
-                ):
+                if ( (bnd == 'o' and side == 'mns') or (bnd == 'f' and side == 'pls') ):
                     continue
-                # elif var_bnd['mode'] == 'free':
-                # print(f"(mode, var, bnd, side): {var_bnd['mode']}, {var}, {bnd}, {side}")
 
                 number_elements = np.size(var_bnd[side])
                 value_slice     = decision_state[idx:idx+number_elements]
@@ -273,7 +378,7 @@ def tpbvp_objective_and_jacobian(
     copos_vec_f_mns       = state_costate_f[4:6]
     covel_vec_f_mns       = state_costate_f[6:8]
     if include_jacobian:
-        stm_of = state_costate_scstm_f[8:8+8**2].reshape((8,8))
+        scstm_of = state_costate_scstm_f[8:8+8**2].reshape((8,8))
     if inequality_parameters['use_thrust_limits']:
         mass_f_mns = state_costate_scstm_f[-1]
     else:
@@ -281,7 +386,7 @@ def tpbvp_objective_and_jacobian(
     
     # Compute the hamiltonian at the initial and final time
     if optimization_parameters['min_type'] == 'fuel':
-        thrust_acc_x_o_pls, thrust_acc_y_o_pls, _ = \
+        thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _ = \
             control_thrust_acceleration(
                 min_type                 = optimization_parameters['min_type'],
                 covel_x                  = covel_vec_o_pls[0],
@@ -311,7 +416,7 @@ def tpbvp_objective_and_jacobian(
                 acc_x        = thrust_acc_x_o_pls,
                 acc_y        = thrust_acc_y_o_pls,
             )
-        thrust_acc_x_f_mns, thrust_acc_y_f_mns, _ = \
+        thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _ = \
             control_thrust_acceleration(
                 min_type                 = optimization_parameters['min_type'],
                 covel_x                  = covel_vec_f_mns[0],
@@ -342,7 +447,7 @@ def tpbvp_objective_and_jacobian(
                 acc_y        = thrust_acc_y_f_mns,
             )
     else: # optimization_parameters['min_type'] == 'energy':
-        thrust_acc_x_o_pls, thrust_acc_y_o_pls, _ = \
+        thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _ = \
             control_thrust_acceleration(
                 min_type                 = optimization_parameters['min_type'],
                 covel_x                  = covel_vec_o_pls[0],
@@ -372,7 +477,7 @@ def tpbvp_objective_and_jacobian(
                 acc_x        = thrust_acc_x_o_pls,
                 acc_y        = thrust_acc_y_o_pls,
             )
-        thrust_acc_x_f_mns, thrust_acc_y_f_mns, _ = \
+        thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _ = \
             control_thrust_acceleration(
                 min_type                 = optimization_parameters['min_type'],
                 covel_x                  = covel_vec_f_mns[0],
@@ -402,17 +507,17 @@ def tpbvp_objective_and_jacobian(
                 acc_x        = thrust_acc_x_f_mns,
                 acc_y        = thrust_acc_y_f_mns,
             )
-    if include_jacobian:
-        # Partials of the Hamiltonian at the initial time
-        # xxx
+    # if include_jacobian:
+    #     # Partials of the Hamiltonian at the initial time
+    #     # xxx
 
-        # Partials of the Hamiltonian at the final time
-        d_ham_f_mns__d_time_o_pls      = 0.0
-        d_ham_f_mns__d_pos_vec_o_pls   = 0.0
-        d_ham_f_mns__d_vel_vec_o_pls   = 0.0
-        d_ham_f_mns__d_copos_vec_o_pls = 0.0
-        d_ham_f_mns__d_covel_vec_o_pls = 0.0
-        d_ham_f_mns__d_ham_o_pls       = 0.0
+    #     # Partials of the Hamiltonian at the final time
+    #     d_ham_f_mns__d_time_o_pls      = 0.0
+    #     d_ham_f_mns__d_pos_vec_o_pls   = 0.0
+    #     d_ham_f_mns__d_vel_vec_o_pls   = 0.0
+    #     d_ham_f_mns__d_copos_vec_o_pls = 0.0
+    #     d_ham_f_mns__d_covel_vec_o_pls = 0.0
+    #     d_ham_f_mns__d_ham_o_pls       = 0.0
 
     # Calculate the error vector and error vector Jacobian
     #   error = [ delta [time_o, pos_vec_o, vel_vec_o, copos_vec_o, covel_vel_o, ham_o] ]
@@ -507,10 +612,133 @@ def tpbvp_objective_and_jacobian(
         #                      d(delta_copos_vec_f) / d(time_f_pls)    d(delta_copos_vec_f) / d(pos_vec_f_pls)    ...
         #                      d(delta_covel_vel_f) / d(time_f_pls)    d(delta_covel_vel_f) / d(pos_vec_f_pls)    ...
         #                      d(delta_ham_f)       / d(time_f_pls)    d(delta_ham_f)       / d(pos_vec_f_pls)    ...
-        # breakpoint()
+        
         # stm_of
         error_jacobian = np.zeros((len(error), len(error)))
 
+        # d(error_time_o)/d(time_o_pls)
+        error_jacobian[0,0] = 1.0
+
+        # d(error_ham_o)/d(time_o_pls) = - d(ham_f_mns)/d(state_costate_f) d(state_costate_f)/d(state_costate_o) d(state_costate_o)/d(time_o_pls)
+
+        # d(error_state_costate_f)/d(time_o_pls) = -d(state_costate_f)/d(time_o_pls) = scstm_of * (d(state_o)/dt)
+        d_state_costate_o__d_t = \
+            one_body_dynamics__indirect(
+                time_o_pls,
+                state_costate_o,
+                include_scstm=False,
+                min_type=optimization_parameters['min_type'],
+                use_thrust_acc_limits=inequality_parameters['use_thrust_acc_limits'],
+                use_thrust_acc_smoothing=inequality_parameters['use_thrust_acc_smoothing'],
+                thrust_acc_min=inequality_parameters['thrust_acc_min'],
+                thrust_acc_max=inequality_parameters['thrust_acc_max'],
+                use_thrust_limits=inequality_parameters['use_thrust_limits'],
+                use_thrust_smoothing=inequality_parameters['use_thrust_smoothing'],
+                thrust_min=inequality_parameters['thrust_min'],
+                thrust_max=inequality_parameters['thrust_max'],
+                post_process=False,
+                k_steepness=inequality_parameters['k_steepness'],
+            )
+
+        d_state_costate_f_mns__d_time_o_pls = -1 * scstm_of @ d_state_costate_o__d_t
+        # d(error_pos_vec_f)/d(time_o_pls)
+        error_jacobian[11:13, 0] = -1 * d_state_costate_f_mns__d_time_o_pls[0:2]
+        # d(error_vel_vec_f)/d(time_o_pls)
+        error_jacobian[13:15, 0] = -1 * d_state_costate_f_mns__d_time_o_pls[2:4]
+        # d(error_copos_vec_f)/d(time_o_pls)
+        error_jacobian[15:17, 0] = -1 * d_state_costate_f_mns__d_time_o_pls[4:6]
+        # d(error_covel_vec_f)/d(time_o_pls)
+        error_jacobian[17:19, 0] = -1 * d_state_costate_f_mns__d_time_o_pls[6:8]
+
+        # d(error_ham_f)/d(time_o_pls) = - d(ham_f_mns)/d(state_costate_f) d(state_costate_f)/d(state_costate_o) d(state_costate_o)/d(time_o_pls)
+        d_state_costate_f_mns__d_t = \
+            one_body_dynamics__indirect(
+                time_f_mns,
+                state_costate_f,
+                include_scstm=False,
+                min_type=optimization_parameters['min_type'],
+                use_thrust_acc_limits=inequality_parameters['use_thrust_acc_limits'],
+                use_thrust_acc_smoothing=inequality_parameters['use_thrust_acc_smoothing'],
+                thrust_acc_min=inequality_parameters['thrust_acc_min'],
+                thrust_acc_max=inequality_parameters['thrust_acc_max'],
+                use_thrust_limits=inequality_parameters['use_thrust_limits'],
+                use_thrust_smoothing=inequality_parameters['use_thrust_smoothing'],
+                thrust_min=inequality_parameters['thrust_min'],
+                thrust_max=inequality_parameters['thrust_max'],
+                post_process=False,
+                k_steepness=inequality_parameters['k_steepness'],
+            )
+        d_ham_f_mns__d_state_costate_f = np.hstack([
+            -d_state_costate_f_mns__d_t[4:6], # -d(copos)/dt
+            -d_state_costate_f_mns__d_t[6:8], # -d(covel)/dt
+             d_state_costate_f_mns__d_t[0:2], #  d(pos)/dt
+             d_state_costate_f_mns__d_t[2:4]  #  d(vel)/dt
+        ])
+        d_ham_f_mns__d_time_o_pls = d_ham_f_mns__d_state_costate_f @ d_state_costate_f_mns__d_time_o_pls
+        error_jacobian[19, 0] = -1.0 * d_ham_f_mns__d_time_o_pls
+
+        # d(error_time_f)/d(time_f_mns) = d(time_f_pls - time_f_mns)/d(time_f_mns)
+        error_jacobian[10, 10] = -1.0
+
+        # d(error_f)/d(time_f_mns) = -d(state_f)/d(time_f_mns) = -d(state_f)/dt
+        d_state_costate_f_mns__d_time_f_mns = d_state_costate_f_mns__d_t
+        # d(error_pos_vec_f)/d(time_f_mns)
+        error_jacobian[11:13, 10] = -1 * d_state_costate_f_mns__d_time_f_mns[0:2]
+        # d(error_vel_vec_f)/d(time_f_mns)
+        error_jacobian[13:15, 10] = -1 * d_state_costate_f_mns__d_time_f_mns[2:4]
+        # d(error_copos_vec_f)/d(time_f_mns)
+        error_jacobian[15:17, 10] = -1 * d_state_costate_f_mns__d_time_f_mns[4:6]
+        # d(error_covel_vec_f)/d(time_f_mns)
+        error_jacobian[17:19, 10] = -1 * d_state_costate_f_mns__d_time_f_mns[6:8]
+
+        # d(error_f)/d(time_f_mns) = -f(x_f) already set for state/costate blocks
+        d_state_costate_f_mns__d_time_f_mns = d_state_costate_f_mns__d_t
+        # d(error_ham_f)/d(time_f_mns) = - dH_f/dx_f · f(x_f)
+        d_ham_f_mns__d_time_f_mns = d_ham_f_mns__d_state_costate_f @ d_state_costate_f_mns__d_time_f_mns
+        error_jacobian[19, 10] = -1.0 * d_ham_f_mns__d_time_f_mns
+
+        # d(error_pos_vec_o)/d(pos_vec_o_pls) = d(pos_vec_o_pls - pos_vec_o_mns)/d(pos_vec_o_pls) = I
+        error_jacobian[1:3, 1:3] = np.identity(2)
+        # d(error_vel_vec_o)/d(vel_vec_o_pls) = d(vel_vec_o_pls - vel_vec_o_mns)/d(vel_vec_o_pls) = I
+        error_jacobian[3:5, 3:5] = np.identity(2)
+        # d(error_copos_vec_o)/d(copos_vec_o_pls) = d(copos_vec_o_pls - copos_vec_o_mns)/d(copos_vec_o_pls) = I
+        error_jacobian[5:7, 5:7] = np.identity(2)
+        # d(error_covel_vec_o)/d(covel_vec_o_pls) = d(covel_vec_o_pls - covel_vec_o_mns)/d(covel_vec_o_pls) = I
+        error_jacobian[7:9, 7:9] = np.identity(2)
+
+        # Add d(error_ham_o)/d(state_costate_o) and d(error_ham_o)/d(time_o_pls)
+        d_ham_o_pls__d_state_costate_o = np.hstack([
+            -d_state_costate_o__d_t[4:6], # -d(copos)/dt at t0
+            -d_state_costate_o__d_t[6:8], # -d(covel)/dt at t0
+             d_state_costate_o__d_t[0:2], #  d(pos)/dt at t0
+             d_state_costate_o__d_t[2:4]  #  d(vel)/dt at t0
+        ])
+        error_jacobian[9, 1:9] = d_ham_o_pls__d_state_costate_o
+        # d_ham_o_pls__d_time_o_pls = d_ham_o_pls__d_state_costate_o @ d_state_costate_o__d_t
+        # error_jacobian[9, 0] = d_ham_o_pls__d_time_o_pls
+
+        # d(error_pos_vec_f)/d(state_costate_o) = -d(pos_vec_f_mns)/d(state_costate_o) = -scstm_of[0:2, 0:8]
+        error_jacobian[11:13, 1:9] = -scstm_of[0:2, 0:8] # should be negative?
+        # d(error_vel_vec_f)/d(state_costate_o) = -d(vel_vec_f_mns)/d(state_costate_o) = -scstm_of[2:4, 0:8]
+        error_jacobian[13:15, 1:9] = -scstm_of[2:4, 0:8] # should be negative?
+        # d(error_copos_vec_f)/d(state_costate_o) = -d(copos_vec_f_mns)/d(state_costate_o) = -scstm_of[4:6, 0:8]
+        error_jacobian[15:17, 1:9] = -scstm_of[4:6, 0:8] # should be negative?
+        # d(error_covel_vec_f)/d(state_costate_o) = -d(covel_vec_f_mns)/d(state_costate_o) = -scstm_of[6:8, 0:8]
+        error_jacobian[17:19, 1:9] = -scstm_of[6:8, 0:8] # should be negative?
+
+        # d(error_ham_f)/d(state_costate_o) = -d(ham_f_mns)/d(state_costate_o) = -d(ham_f_mns)/d(state_costate_f) * d(state_costate_f)/d(state_costate_o)
+        d_ham_f_mns__d_state_costate_o = d_ham_f_mns__d_state_costate_f @ scstm_of
+        error_jacobian[19, 1:9]        = -1 * d_ham_f_mns__d_state_costate_o
+
+        # Zero out jacobian rows for free variables, as their error is always zero
+        idx = 0
+        for bnd in ordered_boundaries:
+            for var in ordered_variables:
+                num_elements = np.size(error_full[var][bnd])
+                if equality_parameters[var][bnd]['mode'] == 'free':
+                    error_jacobian[idx:idx+num_elements, :] = 0.0
+                idx += num_elements
+    
 
 
     # Return

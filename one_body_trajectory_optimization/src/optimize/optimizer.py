@@ -97,8 +97,8 @@ def optimal_trajectory_solve(
     print("  Root-Solve Results")
 
     # Final solution: root solve and compute progress of current root solve
-    optimization_parameters['include_jacobian']       = False # should be True
-    integration_state_parameters['include_scstm']     = False # should be True
+    optimization_parameters['include_jacobian']       = True # should be True
+    integration_state_parameters['include_scstm']     = True # should be True
     integration_state_parameters['post_process']      = False # should be False
     inequality_parameters['use_thrust_acc_smoothing'] = False # should be False
     inequality_parameters['use_thrust_smoothing']     = False # should be False
@@ -144,7 +144,7 @@ def optimal_trajectory_solve(
     vel_vec_o_pls   = decision_state_initguess[3:5]
     copos_vec_o_pls = decision_state_initguess[5:7]
     covel_vec_o_pls = decision_state_initguess[7:9]
-    thrust_acc_x_o_pls, thrust_acc_y_o_pls, _ = \
+    thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _ = \
         control_thrust_acceleration(
             min_type                 = optimization_parameters['min_type'],
             covel_x                  = covel_vec_o_pls[0],
@@ -197,7 +197,7 @@ def optimal_trajectory_solve(
     copos_vec_f_mns = results_finalsoln.y[4:6, -1]
     covel_vec_f_mns = results_finalsoln.y[6:8, -1]
     mass_f_mns      = results_finalsoln.y[  8, -1]
-    thrust_acc_x_f_mns, thrust_acc_y_f_mns, _ = \
+    thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _ = \
         control_thrust_acceleration(
             min_type                 = optimization_parameters['min_type'],
             covel_x                  = covel_vec_f_mns[0],
@@ -276,7 +276,7 @@ def optimal_trajectory_solve(
     vel_vec_o_pls   = state_costate_o_approx_finalsoln[2:4]
     copos_vec_o_pls = state_costate_o_approx_finalsoln[4:6]
     covel_vec_o_pls = state_costate_o_approx_finalsoln[6:8]
-    thrust_acc_x_o_pls, thrust_acc_y_o_pls, _ = \
+    thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _ = \
         control_thrust_acceleration(
             min_type                 = optimization_parameters['min_type']              ,
             covel_x                  = state_costate_o_approx_finalsoln[6]              ,
@@ -311,7 +311,7 @@ def optimal_trajectory_solve(
     vel_vec_f_mns   = state_costate_f_approx_finalsoln[2:4]
     copos_vec_f_mns = state_costate_f_approx_finalsoln[4:6]
     covel_vec_f_mns = state_costate_f_approx_finalsoln[6:8]
-    thrust_acc_x_f_mns, thrust_acc_y_f_mns, _ = \
+    thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _ = \
         control_thrust_acceleration(
             min_type                 = optimization_parameters['min_type']              ,
             covel_x                  = state_costate_f_approx_finalsoln[6]              ,

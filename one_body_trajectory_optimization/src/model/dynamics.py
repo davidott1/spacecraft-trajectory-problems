@@ -41,7 +41,7 @@ def control_thrust_acceleration(
     thrust_acc_x = thrust_acc_mag * thrust_acc_x_dir
     thrust_acc_y = thrust_acc_mag * thrust_acc_y_dir
 
-    return thrust_acc_x, thrust_acc_y, thrust_acc_mag
+    return thrust_acc_x, thrust_acc_y, thrust_acc_mag, covel_mag, covel_mag_inv
 
 
 def one_body_dynamics__indirect(
@@ -126,7 +126,7 @@ def one_body_dynamics__indirect(
         mass = state_costate_scstm[-1]
 
     # Control: thrust acceleration
-    thrust_acc_x, thrust_acc_y, thrust_acc_mag = \
+    thrust_acc_x, thrust_acc_y, thrust_acc_mag, covel_mag, covel_mag_inv = \
         control_thrust_acceleration(
             min_type, 
             covel_x, covel_y,
@@ -277,12 +277,12 @@ def one_body_dynamics__indirect(
                 # Row 3 and 4
                 #   d(dvel_x/dtime)/dcovel_x
                 #   d(dvel_y/dtime)/dcovel_y
-                ddstatedtime__dstate[2,6] = 1.0
-                ddstatedtime__dstate[3,7] = 1.0
+                ddstatedtime__dstate[2,6] = -1.0
+                ddstatedtime__dstate[3,7] = -1.0
 
         # Row 7 and 8
-        #   d(dcovel_x_dtime)/dcopos_x
-        #   d(dcovel_y__dttime)/dcopos_y
+        #   d(dcovel_x__dtime)/dcopos_x
+        #   d(dcovel_y__dtime)/dcopos_y
         ddstatedtime__dstate[6,4] = -1.0
         ddstatedtime__dstate[7,5] = -1.0
 
