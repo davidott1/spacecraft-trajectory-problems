@@ -244,9 +244,9 @@ where $\theta$ is the angle between the vectors $\vec{\lambda}_v$ and $\hat{\Gam
 For thrust-acceleration magnitude $\Gamma$, substitute thrust-acceleration direction $\hat{\Gamma}$ into $H$ to yield
 ```math
 \begin{array}{lll}
-H & = & \vec{\lambda}_r^{\top} \vec{v} + \Gamma ( 1 + \vec{\lambda}_v^{\top} \left( -\frac{\vec{\lambda}_v}{\lambda_v} \right) ) \\
-  & = & \vec{\lambda}_r^{\top} \vec{v} - \Gamma (\lambda_v - 1) \\
-  & = & \vec{\lambda}_r^{\top} \vec{v} - \Gamma S
+H & = & \vec{\lambda}_r^{\top} \vec{v} + \vec{\lambda}_v^\top (g \hat{y}) + \Gamma ( 1 + \vec{\lambda}_v^{\top} \left( -\frac{\vec{\lambda}_v}{\lambda_v} \right) ) \\
+  & = & \vec{\lambda}_r^{\top} \vec{v} + \vec{\lambda}_v^\top (g \hat{y}) - \Gamma (\lambda_v - 1) \\
+  & = & \vec{\lambda}_r^{\top} \vec{v} + \vec{\lambda}_v^\top (g \hat{y}) - \Gamma S
 \end{array}
 ```
 
