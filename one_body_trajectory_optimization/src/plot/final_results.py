@@ -149,8 +149,8 @@ def plot_final_results(
     else: # assume energy
         title_min_type = "Minimum Energy"
     fig.suptitle(
-        f"OPTIMAL, ONE-BODY TRAJECTORY: {title_min_type}"
-        + "\nFree-Body Dynamics"
+        f"OPTIMAL TRAJECTORY: {title_min_type}"
+        + "\nOne-Body Dynamics"
         + "\nFixed Time-of-Flight | Fixed-Initial-Position, Fixed-Initial-Velocity to Fixed-Final-Position, Fixed-Final-Velocity"
         + f"\n{title_thrust}",
         fontsize   = 16      ,
