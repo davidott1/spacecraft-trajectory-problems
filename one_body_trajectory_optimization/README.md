@@ -8,16 +8,13 @@ This project simulates the optimal trajectory of a free-body. The spacecraft dyn
 one_body_trajectory_optimization/
 ├── input/
 │   └── example/
-│       ├── 01.json
-│       ├── 02.json
-│       ├── 03.json
-│       ├── 04.json
-│       ├── 05.json
-│       ├── 06.json
-│       ├── 07.json
-│       ├── 08.json
-│       ├── 09.json
-│       └── 10.json
+│       ├── 01_minenergy_uncon.json
+│       ├── 02_minenergy_thrustaccmax.json
+│       ├── 03_minenergy_thrustmax.json
+│       ├── 04_minfuel_thrustaccmax.json
+│       ├── 05_minfuel_thrustmax.json
+│       ├── 06_minenergy_uncon_timefree.json
+│       └── 07_minfuel_thrustmax_timefree.json
 ├── output/
 │   └── example/
 ├── src/
@@ -81,54 +78,39 @@ scipy==1.13.1
 
 ## Examples
 
-### Example 01: `input/example/01.json`
+### Example 01: `input/example/01_minenergy_uncon.json`
 ```
 python main.py input/example/01.json output/example
 ```
 
-### Example 02: `input/example/02.json`
+### Example 02: `input/example/02_minenergy_thrustaccmax.json`
 ```
 python main.py input/example/02.json output/example
 ```
 
-### Example 03: `input/example/03.json`
+### Example 03: `input/example/03_minenergy_thrustmax.json`
 ```
 python main.py input/example/03.json output/example
 ```
 
-### Example 04: `input/example/04.json`
+### Example 04: `input/example/04_minfuel_thrustaccmax.json`
 ```
 python main.py input/example/04.json output/example
 ```
 
-### Example 05: `input/example/05.json`
+### Example 05: `input/example/05_minfuel_thrustmax.json`
 ```
 python main.py input/example/05.json output/example
 ```
 
-### Example 06: `input/example/06.json`
+### Example 06: `input/example/06_minenergy_uncon_timefree.json`
 ```
 python main.py input/example/06.json output/example
 ```
 
-### Example 07: `input/example/07.json`
+### Example 07: `input/example/07_minfuel_thrustmax_timefree.json`
 ```
 python main.py input/example/07.json output/example
-```
-
-### Example 08: `input/example/08.json`
-```
-python main.py input/example/08.json output/example
-```
-
-### Example 09: `input/example/09.json`
-```
-python main.py input/example/09.json output/example
-```
-
-### Example 10: `input/example/10.json`
-```
-python main.py input/example/10.json output/example
 ```
 
 ---
