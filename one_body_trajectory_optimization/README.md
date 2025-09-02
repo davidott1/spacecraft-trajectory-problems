@@ -287,7 +287,7 @@ where
 #### Equality Constraints: Flight Time, Initial Position and Velocity, Final Position and Velocity
 
 The equality conditions or boundary conditions are variable.
-- Flight time is $\Delta t = t_f - t_o$, where $t_o$ and $t_f$ aree initial and final time. If both $t_o$ and $t_f$ are fixed, $\Delta t$ is fixed. Otherwise flight time is free. 
+- Flight time is $\Delta t = t_f - t_o$, where $t_o$ and $t_f$ are initial and final time. If both $t_o$ and $t_f$ are fixed, $\Delta t$ is fixed. Otherwise flight time is free. 
 - Initial position and velocity are either fixed or free (specified or not, respectively): $\vec{r}(t_o)=\vec{r}_{os} and \vec{v}(t_o)=\vec{v}_{os}$.
 - Final position and velocity are either fixed or free (specified or not, respectively): $\vec{r}(t_f)=\vec{r}_{fs} and \vec{v}(t_f)=\vec{v}_{fs}$.
 
