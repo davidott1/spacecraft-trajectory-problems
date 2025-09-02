@@ -16,7 +16,7 @@ def dsmax__dval2(val1, val2, k):
     """
     Calculates the partial derivative of smax(val1, val2, k) with respect to val2.
     """
-    return dsmax_dval1(val2, val1, k)
+    return dsmax__dval1(val2, val1, k)
 def smin(val1, val2, k):
     """
     Smooth minimum using Log-Sum-Exp. This expression is mumerically stable and produces a value 

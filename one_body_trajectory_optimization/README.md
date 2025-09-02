@@ -132,77 +132,213 @@ python main.py input/example/10.json output/example
 ```
 
 ---
-## Optimal Control Problem Derivation
+## Optimal Control Problem 
 
-The optimal control problem is solved using an indirect method. The objective `J` minimizes fuel and energy, representative as the integral of magnitude `Gamma` or square `Gamma^2` of thrust acceleration, respectively. The one-body dynamics `x_vec_dot` are free from natural acceleration with control is thrust acceleration `Gamma_vec`. The equality conditions or boundary conditions are variable: flight time is fixed or free, as well as final position and velocity. Flight timee is `delta_t = t_f - t_o = t_f`. The initial time is assumed to be `t_o = 0`. Free initial position and velocity is not implemented, but the problem structure is reversible in time. The inequality conditions are variables as well. For minimum energy problems, thrust or thrust acceleration is either unconstrained or less than a maximum. For minimum fuel problems, thrust or thrust acceleration is necessarily less than a maximum. The coordinate system is Cartesian in two dimensions and with respect to an inertial frame.
+### Summary
 
-The problem is summarized:
+| System <br> Component | <br> Symbol | Minimization <br> Type | <br> Expressions | | |
+| :- | :- | :- | :- | :- | :- |
+| Objective | $J$ | fuel | $J = \int \ L \ dt = \int_{t_o}^{t_f} \ \Gamma \ dt$ | | |
+| | | energy | $J = \int \ L \ dt = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$ | | |
+| Timespan | $t$ | | $t \in [t_o \ \ \ t_f]$ | | |
+| State | $\vec{x}(t)$ | | $\vec{x} = [ \vec{r}^\top \ \ \ \vec{v}^\top ]^\top$ | | |
+| Co-State | $\vec{\lambda}(t)$ | | $\vec{\lambda} = [ \vec{\lambda}_r^\top \ \ \ \vec{\lambda}_v^\top ]^\top$ | | |
+| Control | $\vec{u}(t)$ | fuel | $\vec{u} = \vec{\Gamma} = \Gamma \hat{\Gamma}$ | $\Gamma = \Gamma_{\text{fuel}}$ | $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$ |
+| | | energy | $\vec{u} = \vec{\Gamma} = \Gamma \hat{\Gamma}$ | $\Gamma = \Gamma_{\text{energy}}$ | $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$ |
+| Dynamics | $\vec{f}(t,\vec{x},\vec{u})$ | | $\vec{f} = [ \vec{v}^\top \ \ \ \vec{\Gamma}^\top ]^\top$ | | |
+| Co-Dynamics | $\vec{g}(t,\vec{x},\vec{u})$ | | $\vec{g} = [ \vec{0}^\top \ \ \ -\vec{\lambda}_r^\top ]^\top$ | | |
+| Equality Constraints | | | $t_o=t_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ | $\vec{v}(t_o)={\vec v}_{os}$ |
+| | | | $t_f=t_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ | $\vec{v}(t_f)={\vec v}_{fs}$ |
+| Inequality Constraints | | fuel | $\Gamma_{\min} \leq \Gamma_{\text{fuel}} \leq \Gamma_{\max}$ | or $T_{\min}/m \leq \Gamma_{\text{fuel}} \leq T_{\max}/m$ | |
+| | | energy | $\Gamma_{\min} \leq \Gamma_{\text{energy}} \leq \Gamma_{\max}$ | or $T_{\min}/m \leq \Gamma_{\text{energy}} \leq T_{\max}/m$ | or $0 \leq \Gamma_{\text{energy}} \leq \infty$ |
+
+### Derivation
+
+#### Objective and State
+The optimal control problem is solved using an indirect method. The objective $J$ minimizes fuel and energy as follows, respectively:
+```math
+\begin{array}{llll}
+& \text{fuel}   : & J & = & \int \ L \ dt = \int_{t_o}^{t_f} \              \Gamma   \ dt \\
+& \text{energy} : & J & = & \int \ L \ dt = \int_{t_o}^{t_f} \ \tfrac{1}{2} \Gamma^2 \ dt
+\end{array}
 ```
-Objective, J                 : min fuel   : J = integral L dt = integral Gamma dt
-                             : min energy : J = integral L dt = integral 1/2 Gamma^2 dt
-Timespan, t                  : t = [ t_o, t_f ]
-Stat, x_vec                  : x_vec = [ r_vec^T, v_vec^T ]^T = [ r_x, r_y, v_x, v_y ]^T
-Control, u_vec               : u_vec = [ Gamma_x, Gamma_y ]^T
-Dynamics, f_vec(x_vec,u_vec) : f_vec = [ v_x, v_y, Gamma_x, Gamma_y ]^T
-Equality Constraints         : t_f = t_f_s
-                             : Initial : r_vec_o = r_vec_o_s, v_vec_o = r_vec_o_s
-                             : Final   : r_vec_f = r_vec_f_s, v_vec_f = r_vec_f_s
-Inequality Constraints       : min fuel   : Gamma <= Gamma_max or T <= T_max
-                             : min energy : Gamma <= Gamma_max or T <= T_max or unconstrainted
+The state of the one body is representead in a Cartesian xy-system with respect to an inertial frame
+```math
+\vec{x} = [ \vec{r}^\top \ \ \ \vec{v}^\top ]^\top = [ r_x \ \ \ r_y \ \ \ v_x \ \ \ v_y ]^\top
+```
+where $\vec{r} = [ r_x \ \ \ r_y ]^\top$ is position and $\vec{v} = [ v_x \ \ \ v_y ]^\top$ is velocity.
+
+#### Hamiltonian Formulation
+The indirect method means to derive the optimal control law by minimizing a Hamiltonian $H$. The derivatives of the Hamiltonian provide the necessary, but not sufficient, conditions for a minimum solution. The Hamiltonian is a function of the integrand $L$ of the objective $J$, state $\vec{x}$, co-state $\vec{\lambda}$, dynamics $\vec{f}$, and control $\vec{u}$. In particular, the co-state in component form is $\vec{\lambda} = \left[ \lambda_{r_x} \ \ \ \lambda_{r_y} \ \ \ \lambda_{v_x} \ \ \ \lambda_{v_y} \right]^\top$ and the control. The Hamiltonian $H$ is
+```math
+H = L + \vec{\lambda}^\top \vec{f}(t, \vec{x}, \vec{u})
+```
+For minimization of of fuel and energy, $L = \Gamma$ and $\frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma}$, respectively. Substituting into the Hamilitonian yields for fuel minimization
+```math
+H = \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma}
+  = \Gamma + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
+```
+and for energy minimization
+```math
+H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma}
+  = \frac{1}{2} \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
 ```
 
-The optimal control law is found by minimizing the Hamiltonian, taking two forms for min fuel and energy. 
+#### Necessary Conditions for Optimality
+Using the Hamiltonian, we derive the necessary conditions for optimality using Pontryagin's Minimum Principle. The Hamiltonian-minimizing conditions are 
+the dynamical state equations $\dot{\vec{x}} = ( dH / d\vec{\lambda} )^\top$, 
+the co-state dynamical equations $\dot{\vec{\lambda}} = -( dH / d\vec{x} )^\top$, and 
+the optimal control $dH / d\vec{u} = \vec{0}^\top$.
 
----
-### Hamiltonian Formulation
-The indirect method means to derive the optimal control law a Hamiltonian `H` must be formed to minimize. The derivatives of the Hamiltonian will provide the necessary, but not sufficient, conditions for a minimum solution. The Hamiltonian is a function of the integrand `L` of the objective `J`, state `x_vec`, co-state `lambda_vec`, dynamics `x_vec_dot`, and control `Gamma_vec`. In particular, the co-state in component form is `lambda_vec = [ lambda_r_x, lambda_r_y, lambda_v_x, lambda_v_y ]^T`.
-
-The Hamiltonian `H` is in general
+##### State Dynamical Equations
+The one-body dynamics $\dot{\vec{x}} = \vec{f}$ are free from natural acceleration with control as thrust acceleration, $\vec{\Gamma} = [ \Gamma_x \ \ \ \Gamma_y ]$. These state dynamics are also given by $\dot{\vec{x}} = ( dH / d\vec{\lambda} )^\top$:
+```math
+\begin{align}
+&\dot{r}_x = \frac{dH}{d\lambda_{r_x}} &\to &\dot{r}_x = v_x \\
+&\dot{r}_y = \frac{dH}{d\lambda_{r_y}} &\to &\dot{r}_y = v_y \\
+&\dot{v}_x = \frac{dH}{d\lambda_{v_x}} &\to &\dot{v}_x = \Gamma_x \\
+&\dot{v}_y = \frac{dH}{d\lambda_{v_y}} &\to &\dot{v}_y = \Gamma_y \\
+\end{align}
 ```
-H = L + lambda_vec^T f(x, u)
+Mass is not needed as an explicit state variable, but it needs to be integrated along with the state to model thrust, $T = \Gamma m$. The time-derivative of mass is
+```math
+\dot{m} = -\frac{\Gamma m}{c_{\text{ev}}}
 ```
-and more specifically in component form, 
+where $c_{\text{ev}}$ is the exhaust velocity of the engine, assumed constant.
+
+##### Co-state Dynamical Equations
+The co-state dynamics are given by $\dot{\vec{\lambda}} = -\left( dH/d\vec{x} \right)^\top$:
+```math
+\begin{align}
+&\dot{\lambda}_{r_x} = -\frac{dH}{dr_x} &\to &\dot{\lambda}_{r_x} = 0              \\
+&\dot{\lambda}_{r_y} = -\frac{dH}{dr_y} &\to &\dot{\lambda}_{r_y} = 0              \\
+&\dot{\lambda}_{v_x} = -\frac{dH}{dv_x} &\to &\dot{\lambda}_{v_x} = -\lambda_{r_x} \\
+&\dot{\lambda}_{v_y} = -\frac{dH}{dv_y} &\to &\dot{\lambda}_{v_y} = -\lambda_{r_y}
+\end{align}
 ```
-H = 1/2 (Gamma_x^2 + Gamma_y^2) + lambda_r_x r_x_dot + lambda_r_y r_y_dot + lambda_v_x v_x_dot + lambda_v_y v_y_dot
+
+##### Optimal Control
+The optimal control $\vec{u}_*$ must minimize the Hamiltonian. This condition is found by setting the derivative of the Hamiltonian with respect to the control to zero, $dH/d\vec{u} = \vec{0}^\top$. The minimum-fuel control-law derivation is first and the minimum-energy law is second. 
+
+###### Minimum Fuel
+For mininum fuel, represent the control as a magnitude and direction, $\vec{\Gamma} = \Gamma \hat{\Gamma}$. Both must be determined. Subsitute this representation into $H$ and rearrange:
+
+```math
+\begin{array}{lll}
+H & = & \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top \Gamma \hat{\Gamma} \\
+  & = & \vec{\lambda}_r^\top \vec{v} + \Gamma (1 + \vec{\lambda}_v^\top \hat{\Gamma})
+\end{array}
 ```
-The time-derivative of the state `x_vec_dot` must conform to the dynamics, so `x_vec_dot = f(x_vec,u_vec)`. Substituting the dynamics into the Hamilitonian yields
+
+To minimize this $H$, consider the control-dependent term, $\Gamma (1 + \vec{\lambda}_v^\top \hat{\Gamma})$. The two cases for $\Gamma$ are when it is and is not zero:
+- If $\Gamma = 0$, then there is no thrust direction and thus the term $\Gamma (1 + \vec{\lambda}_v^\top \hat{\Gamma}) = 0$.
+- If $\Gamma > 0$, then $\vec{\lambda}_v^\top \hat{\Gamma}$ must be minimized. The dot product for this term can be expressed as
+```math
+\vec{\lambda}_v^\top \hat{\Gamma} = \|\vec{\lambda}_v\| \|\hat{\Gamma}\| \cos(\theta) = \lambda_v \cos(\theta)
 ```
-H = 1/2 (Gamma_x^2 + Gamma_y^2) + lambda_r_x v_x + lambda_r_y v_y + lambda_v_x Gamma_x + lambda_v_y Gamma_y
+where $\theta$ is the angle between the vectors $\vec{\lambda}_v$ and $\hat{\Gamma}$. The minimum is associated with $\cos(\theta) = -1$, so $\vec{\lambda}_v^\top \hat{\Gamma} = -\lambda_v$ and thus the optimal thrust-acceleration direction is 
+```math
+\hat{\Gamma}_{\text{fuel}*} = -\frac{\vec{\lambda}_v}{\lambda_v}
 ```
 
----
-### Necessary Conditions for Optimality
-From the Hamiltonian, we derive the necessary conditions for optimality using Pontryagin's Minimum Principle, deriving the co-state dynamical equations and the optimal control.
+For thrust-acceleration magnitude $\Gamma$, substitute thrust-acceleration direction $\hat{\Gamma}$ into $H$ to yield
+```math
+\begin{array}{lll}
+H & = & \vec{\lambda}_r^{\top} \vec{v} + \Gamma ( 1 + \vec{\lambda}_v^{\top} \left( -\frac{\vec{\lambda}_v}{\lambda_v} \right) ) \\
+  & = & \vec{\lambda}_r^{\top} \vec{v} - \Gamma (\lambda_v - 1) \\
+  & = & \vec{\lambda}_r^{\top} \vec{v} - \Gamma S
+\end{array}
+```
 
-#### Co-state Equations
-The co-state dynamics are given by `lambda_vec_dot = -dH/dx`.
-* `lambda_r_x_dot = -dH/dr_x` => `lambda_r_x_dot = 0`
-* `lambda_r_y_dot = -dH/dr_y` => `lambda_r_y_dot = 0`
-* `lambda_v_x_dot = -dH/dv_x` => `lambda_v_x_dot = -lambda_r_x`
-* `lambda_v_y_dot = -dH/dv_y` => `lambda_v_y_dot = -lambda_r_y`
+This switching function $S = \lambda_v - 1$ governs. If $S$ is positive or negative, $\Gamma$ ought to be maximized or minimized, respectively:
 
-#### Optimal Control
-The optimal control `u*` must minimize the Hamiltonian. This condition is found by setting the partial derivative of the Hamiltonian with respect to the control to zero, `dH/du = 0`.
-* `dH/dGamma_x = 0` => `Gamma_x + lambda_v_x = 0` => `Gamma_x_* = -lambda_v_x`
-* `dH/dGamma_y = 0` => `Gamma_y + lambda_v_y = 0` => `Gamma_y_* = -lambda_v_y`
-This result explicitly defines the optimal control inputs in terms of the co-states associated with the velocity components.
+```math
+\Gamma_{\text{fuel}*} = 
+\begin{cases}
+\Gamma_{\max}        & S > 0 \\
+\Gamma_{\min}        & S < 0 \\
+\text{indeterminate} & S = 0
+\end{cases}
+```
 
----
-### Two-Point Boundary Value Problem (TPBVP)
-By substituting the optimal control law back into the state and co-state equations, we get a complete system of first-order ordinary differential equations (ODEs).
+In practice, for the instant $S = 0$, $\Gamma_{\text{fuel}} = \Gamma_\min$ as a choice. All together, 
+```math
+\vec{\Gamma}_{\text{fuel}*} = \Gamma_{\text{fuel}*} \hat{\Gamma}_{\text{fuel}*}
+```
+is known for the minimization of fuel.
 
-#### State Equations (4)
-* `r_x_dot = v_x`
-* `r_y_dot = v_y`
-* `v_x_dot = -lambda_v_x`
-* `v_y_dot = -lambda_v_y`
+###### Minimum Energy
+For minimum energy, the control law derivation is much simpler. Take the derivative of $H$ with respect to $\vec{\Gamma}$ to yield the optimal control law
+```math
+\frac{dH}{d\vec{\Gamma}} = \vec{0}^\top \to \vec{\Gamma} + \vec{\lambda}_v = \vec{0} \to \vec{\Gamma}_{\text{energy}*} = -\vec{\lambda}_v
+```
+Convenient for inequality constraint application, the optimal control law for energy in magnitude and direction form is
+```math
+\vec{\Gamma}_{\text{energy}*} \ \ \ = \ \ \ \Gamma_{\text{energy}*} \hat{\Gamma}_{\text{energy}*}
+```
+where
+```math
+\begin{array}{ll}
+& \Gamma_{\text{energy}*} & = & \lambda_v \\
+& \hat{\Gamma}_{\text{energy}*} & = & -\frac{\vec{\lambda}_v}{\lambda_v} \\
+\end{array}
+```
 
-#### Co-state Equations (4)
-* `lambda_r_x_dot = 0`
-* `lambda_r_y_dot = 0`
-* `lambda_v_x_dot = -lambda_rx`
-* `lambda_v_y_dot = -lambda_ry`
+#### Equality Constraints: Flight Time, Initial Position and Velocity, Final Position and Velocity
 
-Solving this system of eight ODEs requires eight boundary conditions (e.g., initial and final positions and velocities), forming a TPBVP. The solution yields the optimal trajectories for the states, co-states, and the control.
+The equality conditions or boundary conditions are variable.
+- Flight time is $\Delta t = t_f - t_o$, where $t_o$ and $t_f$ aree initial and final time. If both $t_o$ and $t_f$ are fixed, $\Delta t$ is fixed. Otherwise flight time is free. 
+- Initial position and velocity are either fixed or free (specified or not, respectively): $\vec{r}(t_o)=\vec{r}_{os} and \vec{v}(t_o)=\vec{v}_{os}$.
+- Final position and velocity are either fixed or free (specified or not, respectively): $\vec{r}(t_f)=\vec{r}_{fs} and \vec{v}(t_f)=\vec{v}_{fs}$.
+
+#### Inequality Constraints: Thrust and Thrust-Acceleration
+
+The inequality conditions are variables as well. Thrust as a force and or thrust as acceleration can be constrained between a minimum and maximum. If thrust acceleration is constrained, specified min and max, $\Gamma_{\text{min},s}$ and $\Gamma_{\text{max},s}$, are used. If thrust as a forcee is constrained, specified min and max, $T_{\text{min},s}$ and $T_{\text{max},s}$, are used. Mass is integrated along with the state $\vec{x}$ to map the thrust-force constraint to a thrust acceleration:
+```math
+\begin{array}{llll}
+\Gamma_{\text{min}} = 
+\begin{cases}
+\Gamma_{\text{min},s}     & S < 0 & \text{and if using thrust-acceleration constraints} \\
+     T_{\text{min},s} / m & S < 0 & \text{and if using thrust constraints}
+\end{cases}
+\end{array}
+```
+```math
+\begin{array}{llll}
+\Gamma_{\text{max}} = 
+\begin{cases}
+\Gamma_{\text{max},s}     & S > 0 & \text{and if using thrust-acceleration constraints} \\
+     T_{\text{max},s} / m & S > 0 & \text{and if using thrust constraints}
+\end{cases}
+\end{array}
+```
+
+In practice, for fuel-minimization problems, thrust-acceleration is smoothly applied using a hyperbolic tangenent function $\tanh$. As input, the switching function $S$ is scaled with factor $k$ to better approximate the optimal bang-bang thrust:
+```math
+\Gamma_{\text{fuel}} = 
+\Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k S) \right) \ \ \ k = 1 \to \infty
+```
+
+Similarly, for energy-minization problems, thrust-acceleration, or thrust-force mapped to thrust acceleration, is smoothly constrained with a smoothing min and max function, $\text{smin}$ or $\text{smax}$:
+```math
+\begin{array}{llll}
+\Gamma_{\text{energy}} = 
+\begin{cases}
+\lambda_v                                                                                  & \text{if unconstrained} &              \\
+\text{smin}\left(\text{smax}(\lambda_v,\Gamma_{\text{min}},k),\Gamma_{\text{max}},k\right) & \text{if constrained}   & k \to \infty
+\end{cases}
+\end{array}
+```
+where
+```math
+\begin{array}{ll}
+& \text{smin}(a_1, a_2, k) & = & \frac{-1}{k} \left( b + \ln(e^{-k a_1 - b} + e^{-k a_2 - b}) \right) \\
+& \text{smax}(a_1, a_2, k) & = & \frac{ 1}{k} \left( b + \ln(e^{ k a_1 - b} + e^{ k a_2 - b}) \right)
+\end{array}
+```
+and 
+```math
+b = \text{max}(k a_1, k a_2)
+```
 
 ---

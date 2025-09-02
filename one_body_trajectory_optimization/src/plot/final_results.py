@@ -20,29 +20,20 @@ def plot_final_results(
     """
 
     # Unpack parameters
-    min_type                       = optimization_parameters['min_type']
-    use_thrust_acc_limits          = inequality_parameters['use_thrust_acc_limits']
-    use_thrust_acc_smoothing       = inequality_parameters['use_thrust_acc_smoothing']
-    thrust_acc_min                 = inequality_parameters['thrust_acc_min']
-    thrust_acc_max                 = inequality_parameters['thrust_acc_max']
-    use_thrust_limits              = inequality_parameters['use_thrust_limits']
-    use_thrust_smoothing           = inequality_parameters['use_thrust_smoothing']
-    thrust_min                     = inequality_parameters['thrust_min']
-    thrust_max                     = inequality_parameters['thrust_max']
-    k_steepness                    = inequality_parameters['k_steepness']
-    input_filepath                 =     files_folders_parameters['input_filepath'       ]
-    output_folderpath              =     files_folders_parameters['output_folderpath'    ]
-    plot_show                      = system_parameters['plot_show']
-    plot_save                      = system_parameters['plot_save']
-
-    pos_vec_o_mns   = equality_parameters['pos_vec_o_mns']
-    vel_vec_o_mns   = equality_parameters['vel_vec_o_mns']
-    copos_vec_o_mns = equality_parameters['copos_vec_o_mns']
-    covel_vec_o_mns = equality_parameters['covel_vec_o_mns']
-    pos_vec_f_pls   = equality_parameters['pos_vec_f_pls']
-    vel_vec_f_pls   = equality_parameters['vel_vec_f_pls']
-    copos_vec_f_pls = equality_parameters['copos_vec_f_pls']
-    covel_vec_f_pls = equality_parameters['covel_vec_f_pls']
+    min_type                 =  optimization_parameters['min_type'                ]
+    use_thrust_acc_limits    =    inequality_parameters['use_thrust_acc_limits'   ]
+    use_thrust_acc_smoothing =    inequality_parameters['use_thrust_acc_smoothing']
+    thrust_acc_min           =    inequality_parameters['thrust_acc_min'          ]
+    thrust_acc_max           =    inequality_parameters['thrust_acc_max'          ]
+    use_thrust_limits        =    inequality_parameters['use_thrust_limits'       ]
+    use_thrust_smoothing     =    inequality_parameters['use_thrust_smoothing'    ]
+    thrust_min               =    inequality_parameters['thrust_min'              ]
+    thrust_max               =    inequality_parameters['thrust_max'              ]
+    k_steepness              =    inequality_parameters['k_steepness'             ]
+    input_filepath           = files_folders_parameters['input_filepath'          ]
+    output_folderpath        = files_folders_parameters['output_folderpath'       ]
+    plot_show                =        system_parameters['plot_show'               ]
+    plot_save                =        system_parameters['plot_save'               ]
 
     # Unpack state and costate histories
     time_t                                     = results_finsoln.t
@@ -51,7 +42,26 @@ def plot_final_results(
     copos_x_t, copos_y_t, covel_x_t, covel_y_t = state_t[4:8]
     mass_t                                     = state_t[-2]
     opt_ctrl_obj_t                             = state_t[-1]
-    
+
+    # Double check terminal states if variable is free
+    if equality_parameters[  'pos_vec']['o']['mode'] == 'free': equality_parameters[  'pos_vec']['o']['mns'] = np.array([   pos_x_t[ 0],   pos_y_t[ 0] ])
+    if equality_parameters[  'vel_vec']['o']['mode'] == 'free': equality_parameters[  'vel_vec']['o']['mns'] = np.array([   vel_x_t[ 0],   vel_y_t[ 0] ])
+    if equality_parameters['copos_vec']['o']['mode'] == 'free': equality_parameters['copos_vec']['o']['mns'] = np.array([ copos_x_t[ 0], copos_y_t[ 0] ])
+    if equality_parameters['covel_vec']['o']['mode'] == 'free': equality_parameters['covel_vec']['o']['mns'] = np.array([ covel_x_t[ 0], covel_y_t[ 0] ])
+    if equality_parameters[  'pos_vec']['f']['mode'] == 'free': equality_parameters[  'pos_vec']['f']['pls'] = np.array([   pos_x_t[-1],   pos_y_t[-1] ])
+    if equality_parameters[  'vel_vec']['f']['mode'] == 'free': equality_parameters[  'vel_vec']['f']['pls'] = np.array([   vel_x_t[-1],   vel_y_t[-1] ])
+    if equality_parameters['copos_vec']['f']['mode'] == 'free': equality_parameters['copos_vec']['f']['pls'] = np.array([ copos_x_t[-1], copos_y_t[-1] ])
+    if equality_parameters['covel_vec']['f']['mode'] == 'free': equality_parameters['covel_vec']['f']['pls'] = np.array([ covel_x_t[-1], covel_y_t[-1] ])
+
+    pos_vec_o_mns   = equality_parameters[  'pos_vec']['o']['mns']
+    vel_vec_o_mns   = equality_parameters[  'vel_vec']['o']['mns']
+    copos_vec_o_mns = equality_parameters['copos_vec']['o']['mns']
+    covel_vec_o_mns = equality_parameters['covel_vec']['o']['mns']
+    pos_vec_f_pls   = equality_parameters[  'pos_vec']['f']['pls']
+    vel_vec_f_pls   = equality_parameters[  'vel_vec']['f']['pls']
+    copos_vec_f_pls = equality_parameters['copos_vec']['f']['pls']
+    covel_vec_f_pls = equality_parameters['covel_vec']['f']['pls']
+
     # Recalculate the thrust profile to match the dynamics function
     if min_type == 'fuel':
         epsilon          = np.float64(1.0e-6)
@@ -59,6 +69,9 @@ def plot_final_results(
         switching_func_t = covel_mag_t - 1.0
         thrust_acc_mag_t = np.zeros_like(switching_func_t)
         for idx, switching_func_t_value in enumerate(switching_func_t):
+            if use_thrust_limits:
+                thrust_acc_min = thrust_min / mass_t[idx]
+                thrust_acc_max = thrust_max / mass_t[idx]
             if switching_func_t_value > 0:
                 thrust_acc_mag_t[idx] = thrust_acc_max
             elif switching_func_t_value < 0:
@@ -79,8 +92,8 @@ def plot_final_results(
                 thrust_acc_mag_t = covel_mag_t
                 thrust_acc_mag_t = np.minimum( thrust_acc_mag_t, thrust_max / mass_t ) # max thrust-acc constraint
                 thrust_acc_mag_t = np.maximum( thrust_acc_mag_t, thrust_min / mass_t ) # min thrust-acc constraint
-            thrust_acc_x_dir_t = covel_x_t / covel_mag_t
-            thrust_acc_y_dir_t = covel_y_t / covel_mag_t
+            thrust_acc_x_dir_t = -covel_x_t / covel_mag_t
+            thrust_acc_y_dir_t = -covel_y_t / covel_mag_t
             thrust_acc_dir_t   = np.vstack([thrust_acc_x_dir_t, thrust_acc_y_dir_t])
             thrust_acc_x_t     = thrust_acc_mag_t * thrust_acc_x_dir_t
             thrust_acc_y_t     = thrust_acc_mag_t * thrust_acc_y_dir_t
@@ -96,15 +109,15 @@ def plot_final_results(
                 thrust_acc_mag_t = covel_mag_t
                 thrust_acc_mag_t = np.minimum( thrust_acc_mag_t, thrust_acc_max ) # max thrust-acc constraint
                 thrust_acc_mag_t = np.maximum( thrust_acc_mag_t, thrust_acc_min ) # min thrust-acc constraint
-            thrust_acc_x_dir_t = covel_x_t / covel_mag_t
-            thrust_acc_y_dir_t = covel_y_t / covel_mag_t
+            thrust_acc_x_dir_t = -covel_x_t / covel_mag_t
+            thrust_acc_y_dir_t = -covel_y_t / covel_mag_t
             thrust_acc_dir_t   = np.vstack([thrust_acc_x_dir_t, thrust_acc_y_dir_t])
             thrust_acc_x_t     = thrust_acc_mag_t * thrust_acc_x_dir_t
             thrust_acc_y_t     = thrust_acc_mag_t * thrust_acc_y_dir_t
             thrust_acc_vec_t   = np.vstack([thrust_acc_x_t, thrust_acc_y_t])
         else: # assume no thrust nor thrust-acc constraints
             # Thrust or thrust-acc constraints
-            thrust_acc_vec_t = np.array([ covel_x_t, covel_y_t ])
+            thrust_acc_vec_t = np.array([ -covel_x_t, -covel_y_t ])
             thrust_acc_dir_t = thrust_acc_vec_t / np.linalg.norm(thrust_acc_vec_t, axis=0, keepdims=True)
             thrust_acc_mag_t = np.sqrt( thrust_acc_vec_t[0]**2 + thrust_acc_vec_t[1]**2 )
     thrust_mag_t = mass_t * thrust_acc_mag_t
@@ -375,7 +388,10 @@ def plot_final_results(
 
     # Thrust-Acc or Thrust Profile
     ax3 = fig.add_subplot(gs[1,1])
-    if min_type=='fuel':
+    if use_thrust_limits:
+        ax3.axhline(y=float(thrust_min), color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Min')
+        ax3.axhline(y=float(thrust_max), color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Max')
+    elif use_thrust_acc_limits:
         ax3.axhline(y=float(thrust_acc_min), color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Min')
         ax3.axhline(y=float(thrust_acc_max), color=mcolors.CSS4_COLORS['black'], linestyle=':', linewidth=2.0, label=f'Thrust Acc Max')
     if use_thrust_limits:
