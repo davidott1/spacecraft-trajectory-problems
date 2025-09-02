@@ -35,6 +35,24 @@ def plot_final_results(
     plot_show                =        system_parameters['plot_show'               ]
     plot_save                =        system_parameters['plot_save'               ]
 
+    # Unpack state and costate histories
+    time_t                                     = results_finsoln.t
+    state_t                                    = results_finsoln.y
+    pos_x_t, pos_y_t, vel_x_t, vel_y_t         = state_t[0:4]
+    copos_x_t, copos_y_t, covel_x_t, covel_y_t = state_t[4:8]
+    mass_t                                     = state_t[-2]
+    opt_ctrl_obj_t                             = state_t[-1]
+
+    # Double check terminal states if variable is free
+    if equality_parameters[  'pos_vec']['o']['mode'] == 'free': equality_parameters[  'pos_vec']['o']['mns'] = np.array([   pos_x_t[ 0],   pos_y_t[ 0] ])
+    if equality_parameters[  'vel_vec']['o']['mode'] == 'free': equality_parameters[  'vel_vec']['o']['mns'] = np.array([   vel_x_t[ 0],   vel_y_t[ 0] ])
+    if equality_parameters['copos_vec']['o']['mode'] == 'free': equality_parameters['copos_vec']['o']['mns'] = np.array([ copos_x_t[ 0], copos_y_t[ 0] ])
+    if equality_parameters['covel_vec']['o']['mode'] == 'free': equality_parameters['covel_vec']['o']['mns'] = np.array([ covel_x_t[ 0], covel_y_t[ 0] ])
+    if equality_parameters[  'pos_vec']['f']['mode'] == 'free': equality_parameters[  'pos_vec']['f']['pls'] = np.array([   pos_x_t[-1],   pos_y_t[-1] ])
+    if equality_parameters[  'vel_vec']['f']['mode'] == 'free': equality_parameters[  'vel_vec']['f']['pls'] = np.array([   vel_x_t[-1],   vel_y_t[-1] ])
+    if equality_parameters['copos_vec']['f']['mode'] == 'free': equality_parameters['copos_vec']['f']['pls'] = np.array([ copos_x_t[-1], copos_y_t[-1] ])
+    if equality_parameters['covel_vec']['f']['mode'] == 'free': equality_parameters['covel_vec']['f']['pls'] = np.array([ covel_x_t[-1], covel_y_t[-1] ])
+
     pos_vec_o_mns   = equality_parameters[  'pos_vec']['o']['mns']
     vel_vec_o_mns   = equality_parameters[  'vel_vec']['o']['mns']
     copos_vec_o_mns = equality_parameters['copos_vec']['o']['mns']
@@ -44,14 +62,6 @@ def plot_final_results(
     copos_vec_f_pls = equality_parameters['copos_vec']['f']['pls']
     covel_vec_f_pls = equality_parameters['covel_vec']['f']['pls']
 
-    # Unpack state and costate histories
-    time_t                                     = results_finsoln.t
-    state_t                                    = results_finsoln.y
-    pos_x_t, pos_y_t, vel_x_t, vel_y_t         = state_t[0:4]
-    copos_x_t, copos_y_t, covel_x_t, covel_y_t = state_t[4:8]
-    mass_t                                     = state_t[-2]
-    opt_ctrl_obj_t                             = state_t[-1]
-    
     # Recalculate the thrust profile to match the dynamics function
     if min_type == 'fuel':
         epsilon          = np.float64(1.0e-6)
