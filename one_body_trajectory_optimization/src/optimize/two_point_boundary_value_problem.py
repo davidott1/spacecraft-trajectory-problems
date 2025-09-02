@@ -681,12 +681,13 @@ def tpbvp_objective_and_jacobian(
                 k_steepness=inequality_parameters['k_steepness'],
             )
         d_state_costate_f_mns__d_t = d_state_costate_f_mns__d_t[0:8]
-        d_ham_f_mns__d_state_costate_f = np.hstack([
-            -d_state_costate_f_mns__d_t[4:6], # -d(copos)/dt
-            -d_state_costate_f_mns__d_t[6:8], # -d(covel)/dt
-             d_state_costate_f_mns__d_t[0:2], #  d(pos)/dt
-             d_state_costate_f_mns__d_t[2:4]  #  d(vel)/dt
-        ])
+        d_ham_f_mns__d_state_costate_f = \
+            np.hstack([
+                -d_state_costate_f_mns__d_t[4:6], # -d(copos)/dt
+                -d_state_costate_f_mns__d_t[6:8], # -d(covel)/dt
+                 d_state_costate_f_mns__d_t[0:2], #  d(  pos)/dt
+                 d_state_costate_f_mns__d_t[2:4]  #  d(  vel)/dt
+            ])
         d_ham_f_mns__d_time_o_pls = d_ham_f_mns__d_state_costate_f @ d_state_costate_f_mns__d_time_o_pls
         error_jacobian[19, 0] = -1.0 * d_ham_f_mns__d_time_o_pls
 

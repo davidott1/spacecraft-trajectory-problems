@@ -221,7 +221,7 @@ def one_body_dynamics__indirect(
                 dthrust_acc_y_dir__dcovel_x =                                          - covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
 
                 if use_thrust_smoothing or use_thrust_acc_smoothing:
-                    breakpoint()
+
                     one_mns_tanhsq                 = 1.0 - np.tanh(k_steepness * switching_func)**2
                     onehalf_times_k_one_mns_tanhsq = 0.5 * k_steepness * one_mns_tanhsq
                     dheaviside_approx__dcovel_x    = onehalf_times_k_one_mns_tanhsq * dcovel_mag__dcovel_x

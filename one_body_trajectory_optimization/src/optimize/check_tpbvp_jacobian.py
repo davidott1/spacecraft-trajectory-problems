@@ -73,7 +73,7 @@ def make_default_params():
     }
 
     optimization_parameters = {
-        "min_type": "energy",          # or 'fuel'
+        "min_type": 'fuel',          # 'energy' or 'fuel'
         "include_jacobian": True,
     }
 
@@ -84,12 +84,12 @@ def make_default_params():
     }
 
     inequality_parameters = {
-        "use_thrust_acc_limits": False,
-        "use_thrust_acc_smoothing": False,
+        "use_thrust_acc_limits": True,
+        "use_thrust_acc_smoothing": True,
         "thrust_acc_min": 0.0,
-        "thrust_acc_max": 2.5,
-        "use_thrust_limits": True,
-        "use_thrust_smoothing": True,
+        "thrust_acc_max": 4.0e-2,
+        "use_thrust_limits": False,
+        "use_thrust_smoothing": False,
         "thrust_min": 0.0,
         "thrust_max": 4.0e-2,
         "k_steepness": 100.0,
