@@ -61,7 +61,7 @@ def one_body_dynamics__indirect(
         exhaust_velocity         : np.float64 = np.float64(3.0e+3),
         k_steepness              : np.float64 = np.float64(0.0e+0),
         post_process             : bool       = False             ,
-        constant_gravity         : np.float64 = np.float64(0.0e+0),
+        constant_gravity         : np.float64 = np.float64(-9.81e+0),
     ) -> np.ndarray:
     """
     Calculates the time derivatives of state variables for a free-body system
@@ -192,13 +192,13 @@ def one_body_dynamics__indirect(
         #       [                      0.0,                      0.0,                      0.0,                      0.0,                        0.0, d(dcovel_y/dtime)/dcopos_y,                        0.0,                        0.0 ]
         ddstatedtime__dstate = np.zeros((n_state_costate, n_state_costate))
 
-        # Row 1 and 2
+        # Row 0 and 1
         #   d(dpos_x/dtime)/dvel_x
         #   d(dpos_y/dtime)/dvel_y
         ddstatedtime__dstate[0,2] = 1.0
         ddstatedtime__dstate[1,3] = 1.0
 
-        # Row 3 and 4
+        # Row 2 and 3
         #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
         #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
         if use_thrust_limits:
@@ -241,7 +241,7 @@ def one_body_dynamics__indirect(
 
                 else: # no use_thrust_smoothing and no use_thrust_acc_smoothing
                     
-                    # Row 3 and 4
+                    # Row 2 and 3
                     #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
                     #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
                     ddstatedtime__dstate[2,6] = thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
@@ -266,7 +266,7 @@ def one_body_dynamics__indirect(
                 dthrust_acc_y_dir__dcovel_y = -1 * dcovel_y__covel_y * covel_mag_inv + -1 * covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
                 dthrust_acc_y_dir__dcovel_x =                                          -1 * covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
 
-                # Row 3 and 4
+                # Row 2 and 3
                 #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
                 #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
                 ddstatedtime__dstate[2,6] = dthrust_acc_mag__dcovel_x * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
@@ -276,13 +276,13 @@ def one_body_dynamics__indirect(
 
             else: # no_limits
 
-                # Row 3 and 4
+                # Row 2 and 3
                 #   d(dvel_x/dtime)/dcovel_x
                 #   d(dvel_y/dtime)/dcovel_y
                 ddstatedtime__dstate[2,6] = -1.0
                 ddstatedtime__dstate[3,7] = -1.0
 
-        # Row 7 and 8
+        # Row 6 and 7
         #   d(dcovel_x__dtime)/dcopos_x
         #   d(dcovel_y__dtime)/dcopos_y
         ddstatedtime__dstate[6,4] = -1.0
