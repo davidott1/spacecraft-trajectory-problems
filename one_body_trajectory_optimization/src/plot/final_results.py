@@ -7,6 +7,10 @@ from src.utility.bounding_functions import bounded_smooth_func
 from pathlib import Path
 
 
+def uppercase_first(s: str) -> str:
+    return s[:1].upper() + s[1:]
+
+
 def plot_final_results(
         results_finsoln             ,
         files_folders_parameters    ,
@@ -150,9 +154,13 @@ def plot_final_results(
         title_min_type = "Minimum Energy"
     fig.suptitle(
         f"OPTIMAL TRAJECTORY: {title_min_type}"
-        + "\nOne-Body Dynamics"
-        + "\nFixed Time-of-Flight | Fixed-Initial-Position, Fixed-Initial-Velocity to Fixed-Final-Position, Fixed-Final-Velocity"
-        + f"\n{title_thrust}",
+        "\nOne-Body Dynamics"
+        f"\n{uppercase_first(equality_parameters['time']['f']['mode'])} Time-f |"
+        f" {uppercase_first(equality_parameters['pos_vec']['o']['mode'])} Initial-Position"
+        f", {uppercase_first(equality_parameters['vel_vec']['o']['mode'])} Initial-Velocity"
+        f" to {uppercase_first(equality_parameters['pos_vec']['f']['mode'])} Final-Position"
+        f", {uppercase_first(equality_parameters['vel_vec']['f']['mode'])} Final-Velocity"
+        f"\n{title_thrust}",
         fontsize   = 16      ,
         fontweight = 'normal',
     )
