@@ -175,13 +175,13 @@ H = L + \vec{\lambda}^\top \vec{f}(t, \vec{x}, \vec{u})
 ```
 For minimization of of fuel and energy, $L = \Gamma$ and $\frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma}$, respectively. Substituting into the Hamilitonian yields for fuel minimization
 ```math
-H = \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma}
-  = \Gamma + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
+H = \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top (g \hat{y} + \vec{\Gamma})
+  = \Gamma + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} (g + \Gamma_y)
 ```
 and for energy minimization
 ```math
-H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma}
-  = \frac{1}{2} \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
+H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top (g \hat{y} + \vec{\Gamma})
+  = \frac{1}{2} \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} (g + \Gamma_y)
 ```
 
 #### Necessary Conditions for Optimality
@@ -197,7 +197,7 @@ The one-body dynamics $\dot{\vec{x}} = \vec{f}$ are free from natural accelerati
 &\dot{r}_x = \frac{dH}{d\lambda_{r_x}} &\to &\dot{r}_x = v_x \\
 &\dot{r}_y = \frac{dH}{d\lambda_{r_y}} &\to &\dot{r}_y = v_y \\
 &\dot{v}_x = \frac{dH}{d\lambda_{v_x}} &\to &\dot{v}_x = \Gamma_x \\
-&\dot{v}_y = \frac{dH}{d\lambda_{v_y}} &\to &\dot{v}_y = \Gamma_y \\
+&\dot{v}_y = \frac{dH}{d\lambda_{v_y}} &\to &\dot{v}_y = g + \Gamma_y \\
 \end{align}
 ```
 Mass is not needed as an explicit state variable, but it needs to be integrated along with the state to model thrust, $T = \Gamma m$. The time-derivative of mass is

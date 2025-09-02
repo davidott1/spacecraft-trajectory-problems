@@ -61,6 +61,7 @@ def one_body_dynamics__indirect(
         exhaust_velocity         : np.float64 = np.float64(3.0e+3),
         k_steepness              : np.float64 = np.float64(0.0e+0),
         post_process             : bool       = False             ,
+        constant_gravity         : np.float64 = np.float64(0.0e+0),
     ) -> np.ndarray:
     """
     Calculates the time derivatives of state variables for a free-body system
@@ -141,8 +142,8 @@ def one_body_dynamics__indirect(
     #   dstate/dtime = dynamics(time,state)
     dpos_x__dtime   = vel_x
     dpos_y__dtime   = vel_y
-    dvel_x__dtime   = thrust_acc_x
-    dvel_y__dtime   = thrust_acc_y
+    dvel_x__dtime   =                    thrust_acc_x
+    dvel_y__dtime   = constant_gravity + thrust_acc_y
     dcopos_x__dtime = 0.0
     dcopos_y__dtime = 0.0
     dcovel_x__dtime = -copos_x
@@ -153,7 +154,7 @@ def one_body_dynamics__indirect(
         if min_type == 'fuel':
             doptimal_control_objective__dtime =       thrust_acc_mag
         else: # assume 'energy'
-            doptimal_control_objective__dtime = 0.5 * thrust_acc_mag**2
+            doptimal_control_objective__dtime = 1/2 * thrust_acc_mag**2
     
     dstate_costate__dtime = \
         np.array([
@@ -308,89 +309,3 @@ def one_body_dynamics__indirect(
         else:
             return dstate_costate__dtime
 
-
-def constantgravitydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
-        time             : float              ,
-        state            : np.ndarray         ,
-        thrust_acc_min   : float      = 1.0e-1,
-        thrust_acc_max   : float      = 1.0e+1,
-        k_steepness      : float      = 1.0   ,
-        constant_gravity : float      = -9.81 , 
-    ) -> np.ndarray:
-    """
-    Calculates the time derivatives of state variables for a free-body system
-    with a minimum-fuel thrust control approximated by a smooth Heaviside function.
-
-    This function represents the right-hand side of the ordinary differential
-    equations (ODEs) for integration.
-
-    Input
-    -----
-    time : float
-        Current time (t).
-    state : np.ndarray
-        Current integration state:
-        [ pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y ]
-        -   pos_x,   pos_y : position in x and y
-        -   vel_x,   vel_y : velocity in x and y
-        - copos_x, copos_y : co-position in x and y
-        - covel_x, covel_y : co-velocity in x and y
-    thrust_acc_min : float, optional
-        Minimum thrust acceleration magnitude.
-        Defaults to 1.0e-1.
-    thrust_acc_max : float, optional
-        Maximum thrust acceleration magnitude.
-        Defaults to 1.0e1.
-    k_steepness : float, optional
-        Coefficient for the tanh approximation of the Heaviside function.
-        Higher values lead to a sharper transition.
-        Defaults to 1.0.
-    constant_gravity : float, optional
-        Gravity constant in the y-direction.
-        Defaults to -9.81 m/s^2.
-
-    Output
-    ------
-    np.ndarray
-        Array of time derivatives of the state variables:
-        [   dpos_x__dtime,   dpos_y__dtime,   dvel_x__dtime,   dvel_y__dtime,
-          dcopos_x__dtime, dcopos_y__dtime, dcovel_x__dtime, dcovel_y__dtime  ]
-    """
-
-    # Unpack: state into scalar components
-    pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y = state
-
-    # Control: thrust acceleration
-    #   thrust_acc_vec = -covel_vec / cvel_mag
-    epsilon          = np.float64(1.0e-6)
-    covel_mag        = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
-    switching_func   = covel_mag - 1.0
-    heaviside_approx = 0.5 + 0.5 * np.tanh(k_steepness * switching_func)
-    thrust_acc_mag   = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx
-    thrust_acc_x_dir = -covel_x / covel_mag
-    thrust_acc_y_dir = -covel_y / covel_mag
-    thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
-    thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
-
-    # Dynamics: free-body
-    #   dstate/dtime = dynamics(time,state)
-    dpos_x__dtime   = vel_x
-    dpos_y__dtime   = vel_y
-    dvel_x__dtime   =                    thrust_acc_x
-    dvel_y__dtime   = constant_gravity + thrust_acc_y
-    dcopos_x__dtime = 0.0
-    dcopos_y__dtime = 0.0
-    dcovel_x__dtime = -copos_x
-    dcovel_y__dtime = -copos_y
-    
-    # Pack up: scalar components into state
-    return np.array([
-        dpos_x__dtime,
-        dpos_y__dtime,
-        dvel_x__dtime,
-        dvel_y__dtime,
-        dcopos_x__dtime,
-        dcopos_y__dtime,
-        dcovel_x__dtime,
-        dcovel_y__dtime,
-    ])
