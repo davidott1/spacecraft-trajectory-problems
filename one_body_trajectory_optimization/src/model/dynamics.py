@@ -61,7 +61,7 @@ def one_body_dynamics__indirect(
         exhaust_velocity         : np.float64 = np.float64(3.0e+3),
         k_steepness              : np.float64 = np.float64(0.0e+0),
         post_process             : bool       = False             ,
-        constant_gravity         : np.float64 = np.float64(-9.81e+0),
+        constant_gravity         : np.float64 = np.float64(-9.81) ,
     ) -> np.ndarray:
     """
     Calculates the time derivatives of state variables for a free-body system
@@ -99,7 +99,7 @@ def one_body_dynamics__indirect(
         [   dpos_x__dtime,   dpos_y__dtime,   dvel_x__dtime,   dvel_y__dtime,
           dcopos_x__dtime, dcopos_y__dtime, dcovel_x__dtime, dcovel_y__dtime  ]
     """
-
+    print(f"exhaust_velocity {exhaust_velocity}")
     # Validate input
     if use_thrust_acc_limits and use_thrust_limits:
         use_thrust_limits = False

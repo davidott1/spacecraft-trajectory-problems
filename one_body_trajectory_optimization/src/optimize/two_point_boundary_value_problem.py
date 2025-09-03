@@ -133,6 +133,7 @@ def solve_ivp_func(
     thrust_max               =        inequality_parameters['thrust_max'              ]
     k_steepness              =        inequality_parameters['k_steepness'             ]
     mass_o                   = integration_state_parameters['mass_o'                  ]
+    exhaust_velocity         = integration_state_parameters['exhaust_velocity'       ]
     include_scstm            = integration_state_parameters['include_scstm'           ]
     post_process             = integration_state_parameters['post_process'            ]
 
@@ -170,6 +171,7 @@ def solve_ivp_func(
                 use_thrust_smoothing         = use_thrust_smoothing    ,
                 thrust_min                   = thrust_min              ,
                 thrust_max                   = thrust_max              ,
+                exhaust_velocity             = exhaust_velocity        ,
                 post_process                 = post_process            ,
                 k_steepness                  = k_steepness             ,
             )
@@ -353,8 +355,8 @@ def tpbvp_objective_and_jacobian(
     # Time span
     time_span = np.array([time_o_pls, time_f_mns])
 
+
     # Initial state
-    # state_costate_o = np.hstack([pos_vec_o_pls, vel_vec_o_pls, decision_state])
     state_o         = np.hstack([  pos_vec_o_pls,   vel_vec_o_pls])
     costate_o       = np.hstack([copos_vec_o_pls, covel_vec_o_pls])
     state_costate_o = np.hstack([state_o, costate_o])

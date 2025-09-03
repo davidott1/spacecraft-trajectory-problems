@@ -420,6 +420,14 @@ def plot_final_results(
             edgecolor        = 'none'                  ,
             alpha            = 0.5                     ,
         )
+        # ax3.fill_between(
+        #     time_t                             ,
+        #     thrust_mag_t                       ,
+        #     where        = (thrust_mag_t > 0.0), # type: ignore
+        #     facecolor    = color_thrust        ,
+        #     edgecolor    = 'none'              ,
+        #     alpha        = 0.5                 ,
+        # )
     ax3.set_xticklabels([])
     ax3.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
     ax3.set_ylabel(label_thrust_name + '\n' + label_thrust_unit)
@@ -437,6 +445,12 @@ def plot_final_results(
             plot_thrust_acc_min - (plot_thrust_acc_max - plot_thrust_acc_min) * 0.1,
             plot_thrust_acc_max + (plot_thrust_acc_max - plot_thrust_acc_min) * 0.1,
         )
+        # plot_thrust_min = 0.0
+        # plot_thrust_max = max(thrust_mag_t)
+        # ax3.set_ylim(
+        #     plot_thrust_min - (plot_thrust_max - plot_thrust_min) * 0.1,
+        #     plot_thrust_max + (plot_thrust_max - plot_thrust_min) * 0.1,
+        # )
     def _plot_thrust_vectors_on_thrust_vs_time(
             ax3                   : maxes.Axes        ,
             time_t                : np.ndarray        ,
