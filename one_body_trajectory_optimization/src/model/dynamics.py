@@ -16,6 +16,8 @@ def control_thrust_acceleration(
     if min_type == 'fuel':
         epsilon   = 1.0e-6
         covel_mag = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
+    elif min_type == 'energyfuel':
+        covel_mag = np.sqrt(covel_x**2 + covel_y**2)
     else: # assume 'energy'
         covel_mag = np.sqrt(covel_x**2 + covel_y**2)
     covel_mag_inv = 1.0 / covel_mag
@@ -99,8 +101,7 @@ def one_body_dynamics__indirect(
         [   dpos_x__dtime,   dpos_y__dtime,   dvel_x__dtime,   dvel_y__dtime,
           dcopos_x__dtime, dcopos_y__dtime, dcovel_x__dtime, dcovel_y__dtime  ]
     """
-    if exhaust_velocity != 3.0e+4:
-        print(f"exhaust_velocity {exhaust_velocity}")
+
     # Validate input
     if use_thrust_acc_limits and use_thrust_limits:
         use_thrust_limits = False
