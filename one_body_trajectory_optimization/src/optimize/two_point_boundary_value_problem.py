@@ -644,6 +644,7 @@ def tpbvp_objective_and_jacobian(
                 use_thrust_smoothing=inequality_parameters['use_thrust_smoothing'],
                 thrust_min=inequality_parameters['thrust_min'],
                 thrust_max=inequality_parameters['thrust_max'],
+                exhaust_velocity=integration_state_parameters['exhaust_velocity'],
                 post_process=False,
                 k_steepness=inequality_parameters['k_steepness'],
             )
@@ -679,6 +680,7 @@ def tpbvp_objective_and_jacobian(
                 use_thrust_smoothing=inequality_parameters['use_thrust_smoothing'],
                 thrust_min=inequality_parameters['thrust_min'],
                 thrust_max=inequality_parameters['thrust_max'],
+                exhaust_velocity=integration_state_parameters['exhaust_velocity'],
                 post_process=False,
                 k_steepness=inequality_parameters['k_steepness'],
             )
