@@ -427,6 +427,7 @@ def configure_validate_input(
         'k_idxfinsoln'             : all_parameters_standard_units['k_idxfinsoln'         ]['value'],
         'k_idxdivs'                : all_parameters_standard_units['k_idxdivs'            ]['value'],
         'k_steepness'              : all_parameters_standard_units['k_idxinitguess'       ]['value'],
+        'alpha'                    : 1.0
     }
     
     # Validate input

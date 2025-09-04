@@ -390,8 +390,12 @@ def plot_final_results(
     ax2.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
     if min_type == 'fuel':
         obj_label_unit = '[m/s]'
+    elif min_type == 'energyfuel':
+        obj_label_unit = '[xxx]'
     elif min_type == 'energy':
         obj_label_unit = '[m$^2$/$s^3$]'
+    else:
+        obj_label_unit = ''
     ax2.set_ylabel(f'Objective\n{obj_label_unit}')
 
     # Thrust-Acc or Thrust Profile

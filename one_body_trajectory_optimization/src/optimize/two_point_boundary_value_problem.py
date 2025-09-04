@@ -132,8 +132,9 @@ def solve_ivp_func(
     thrust_min               =        inequality_parameters['thrust_min'              ]
     thrust_max               =        inequality_parameters['thrust_max'              ]
     k_steepness              =        inequality_parameters['k_steepness'             ]
+    alpha                    =        inequality_parameters['alpha'                   ]
     mass_o                   = integration_state_parameters['mass_o'                  ]
-    exhaust_velocity         = integration_state_parameters['exhaust_velocity'       ]
+    exhaust_velocity         = integration_state_parameters['exhaust_velocity'        ]
     include_scstm            = integration_state_parameters['include_scstm'           ]
     post_process             = integration_state_parameters['post_process'            ]
 
@@ -174,6 +175,7 @@ def solve_ivp_func(
                 exhaust_velocity             = exhaust_velocity        ,
                 post_process                 = post_process            ,
                 k_steepness                  = k_steepness             ,
+                alpha                        = alpha                   ,
             )
 
     soln_ivp = \
@@ -354,7 +356,6 @@ def tpbvp_objective_and_jacobian(
 
     # Time span
     time_span = np.array([time_o_pls, time_f_mns])
-
 
     # Initial state
     state_o         = np.hstack([  pos_vec_o_pls,   vel_vec_o_pls])
@@ -736,13 +737,13 @@ def tpbvp_objective_and_jacobian(
         # error_jacobian[9, 0] = d_ham_o_pls__d_time_o_pls
 
         # d(error_pos_vec_f)/d(state_costate_o) = -d(pos_vec_f_mns)/d(state_costate_o) = -scstm_of[0:2, 0:8]
-        error_jacobian[11:13, 1:9] = -scstm_of[0:2, 0:8] # should be negative
+        error_jacobian[11:13, 1:9] = -scstm_of[0:2, 0:8]
         # d(error_vel_vec_f)/d(state_costate_o) = -d(vel_vec_f_mns)/d(state_costate_o) = -scstm_of[2:4, 0:8]
-        error_jacobian[13:15, 1:9] = -scstm_of[2:4, 0:8] # should be negative
+        error_jacobian[13:15, 1:9] = -scstm_of[2:4, 0:8]
         # d(error_copos_vec_f)/d(state_costate_o) = -d(copos_vec_f_mns)/d(state_costate_o) = -scstm_of[4:6, 0:8]
-        error_jacobian[15:17, 1:9] = -scstm_of[4:6, 0:8] # should be negative
+        error_jacobian[15:17, 1:9] = -scstm_of[4:6, 0:8]
         # d(error_covel_vec_f)/d(state_costate_o) = -d(covel_vec_f_mns)/d(state_costate_o) = -scstm_of[6:8, 0:8]
-        error_jacobian[17:19, 1:9] = -scstm_of[6:8, 0:8] # should be negative
+        error_jacobian[17:19, 1:9] = -scstm_of[6:8, 0:8]
 
         # d(error_ham_f)/d(state_costate_o) = -d(ham_f_mns)/d(state_costate_o) = -d(ham_f_mns)/d(state_costate_f) * d(state_costate_f)/d(state_costate_o)
         d_ham_f_mns__d_state_costate_o = d_ham_f_mns__d_state_costate_f @ scstm_of

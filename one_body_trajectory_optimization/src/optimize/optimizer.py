@@ -54,43 +54,92 @@ def optimal_trajectory_solve(
         'xtol'    : 1.0e-8, # 1e-8
         'gtol'    : 1.0e-8, # 1e-8
     }
-    optimization_parameters['include_jacobian'] = True # should be True
-    if use_thrust_acc_limits:
-        inequality_parameters['use_thrust_acc_smoothing'] = True
-    if use_thrust_limits:
-        inequality_parameters['use_thrust_smoothing'] = True
 
-    # Intermediate solution: loop though k values
-    for idx, k_idx in tqdm(enumerate(k_idxinitguess_to_idxfinsoln), desc="Processing", leave=False, total=len(k_idxinitguess_to_idxfinsoln)):
+    if min_type in ('energy', 'fuel'):
 
-        # Set the k-idx
-        inequality_parameters['k_steepness'] = k_idx
-        
-        # Root solve and compute progress of current root solve
-        soln_root, soln_ivp = \
-            solve_for_root_and_compute_progress(
-                decision_state_initguess    ,
-                optimization_parameters     ,
-                integration_state_parameters,
-                equality_parameters         ,
-                inequality_parameters       ,
-                options_root                ,
-            )
+        optimization_parameters['include_jacobian'] = True # should be True
+        if use_thrust_acc_limits:
+            inequality_parameters['use_thrust_acc_smoothing'] = True
+            inequality_parameters['use_thrust_smoothing'    ] = False
+        if use_thrust_limits:
+            inequality_parameters['use_thrust_acc_smoothing'] = False
+            inequality_parameters['use_thrust_smoothing'    ] = True
 
-        # Record the results of the current step and update the decision state initial guess
-        results_k_idx[k_idx]     = soln_ivp
-        decision_state_initguess = soln_root.x
+        # Intermediate solution: loop though k values
+        for idx, k_idx in tqdm(enumerate(k_idxinitguess_to_idxfinsoln), desc="Processing", leave=False, total=len(k_idxinitguess_to_idxfinsoln)):
 
-        # Print the results of the current step
-        error_mag = np.linalg.norm(soln_root.fun)
-        if min_type == 'energy' and not use_thrust_acc_limits and not use_thrust_limits:
-            if idx==0:
-                tqdm.write(f"       {'Step':>5s} {'Error-Mag':>14s}")
-            tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {error_mag:>14.6e}")
-        else:
-            if idx==0:
-                tqdm.write(f"       {'Step':>5s} {'k':>14s} {'Error-Mag':>14s}")
-            tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
+            # Set the k-idx
+            inequality_parameters['k_steepness'] = k_idx
+            
+            # Root solve and compute progress of current root solve
+            soln_root, soln_ivp = \
+                solve_for_root_and_compute_progress(
+                    decision_state_initguess    ,
+                    optimization_parameters     ,
+                    integration_state_parameters,
+                    equality_parameters         ,
+                    inequality_parameters       ,
+                    options_root                ,
+                )
+
+            # Record the results of the current step and update the decision state initial guess
+            results_k_idx[k_idx]     = soln_ivp
+            decision_state_initguess = soln_root.x
+
+            # Print the results of the current step
+            error_mag = np.linalg.norm(soln_root.fun)
+            if min_type == 'energy' and not use_thrust_acc_limits and not use_thrust_limits:
+                if idx==0:
+                    tqdm.write(f"       {'Step':>5s} {'Error-Mag':>14s}")
+                tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {error_mag:>14.6e}")
+            else:
+                if idx==0:
+                    tqdm.write(f"       {'Step':>5s} {'k':>14s} {'Error-Mag':>14s}")
+                tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
+
+    elif min_type == 'energyfuel':
+
+        optimization_parameters['include_jacobian'] = False # should be True
+        if use_thrust_acc_limits:
+            inequality_parameters['use_thrust_acc_smoothing'] = True
+            inequality_parameters['use_thrust_smoothing'    ] = False
+        if use_thrust_limits:
+            inequality_parameters['use_thrust_acc_smoothing'] = False
+            inequality_parameters['use_thrust_smoothing'    ] = True
+
+        inequality_parameters['alpha'] = 1.0
+
+        # Intermediate solution: loop though k values
+        for idx, k_idx in tqdm(enumerate(k_idxinitguess_to_idxfinsoln), desc="Processing", leave=False, total=len(k_idxinitguess_to_idxfinsoln)):
+
+            # Set the k-idx
+            inequality_parameters['k_steepness'] = k_idx
+            
+            # Root solve and compute progress of current root solve
+            soln_root, soln_ivp = \
+                solve_for_root_and_compute_progress(
+                    decision_state_initguess    ,
+                    optimization_parameters     ,
+                    integration_state_parameters,
+                    equality_parameters         ,
+                    inequality_parameters       ,
+                    options_root                ,
+                )
+            
+            # Record the results of the current step and update the decision state initial guess
+            results_k_idx[k_idx]     = soln_ivp
+            decision_state_initguess = soln_root.x
+
+            # Print the results of the current step
+            error_mag = np.linalg.norm(soln_root.fun)
+            if min_type == 'energy' and not use_thrust_acc_limits and not use_thrust_limits:
+                if idx==0:
+                    tqdm.write(f"       {'Step':>5s} {'Error-Mag':>14s}")
+                tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {error_mag:>14.6e}")
+            else:
+                if idx==0:
+                    tqdm.write(f"       {'Step':>5s} {'k':>14s} {'Error-Mag':>14s}")
+                tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
 
     # Final solution: no thrust or thrust-acc smoothing
     print("\n\nFINAL SOLUTION PROCESS")
