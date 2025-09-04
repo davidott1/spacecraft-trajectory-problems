@@ -7,6 +7,10 @@ from src.utility.bounding_functions import bounded_smooth_func
 from pathlib import Path
 
 
+def uppercase_first(s: str) -> str:
+    return s[:1].upper() + s[1:]
+
+
 def plot_final_results(
         results_finsoln             ,
         files_folders_parameters    ,
@@ -150,9 +154,13 @@ def plot_final_results(
         title_min_type = "Minimum Energy"
     fig.suptitle(
         f"OPTIMAL TRAJECTORY: {title_min_type}"
-        + "\nOne-Body Dynamics"
-        + "\nFixed Time-of-Flight | Fixed-Initial-Position, Fixed-Initial-Velocity to Fixed-Final-Position, Fixed-Final-Velocity"
-        + f"\n{title_thrust}",
+        "\nOne-Body Dynamics"
+        f"\n{uppercase_first(equality_parameters['time']['f']['mode'])} Time-f |"
+        f" {uppercase_first(equality_parameters['pos_vec']['o']['mode'])} Initial-Position"
+        f", {uppercase_first(equality_parameters['vel_vec']['o']['mode'])} Initial-Velocity"
+        f" to {uppercase_first(equality_parameters['pos_vec']['f']['mode'])} Final-Position"
+        f", {uppercase_first(equality_parameters['vel_vec']['f']['mode'])} Final-Velocity"
+        f"\n{title_thrust}",
         fontsize   = 16      ,
         fontweight = 'normal',
     )
@@ -412,6 +420,14 @@ def plot_final_results(
             edgecolor        = 'none'                  ,
             alpha            = 0.5                     ,
         )
+        # ax3.fill_between(
+        #     time_t                             ,
+        #     thrust_mag_t                       ,
+        #     where        = (thrust_mag_t > 0.0), # type: ignore
+        #     facecolor    = color_thrust        ,
+        #     edgecolor    = 'none'              ,
+        #     alpha        = 0.5                 ,
+        # )
     ax3.set_xticklabels([])
     ax3.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
     ax3.set_ylabel(label_thrust_name + '\n' + label_thrust_unit)
@@ -429,6 +445,12 @@ def plot_final_results(
             plot_thrust_acc_min - (plot_thrust_acc_max - plot_thrust_acc_min) * 0.1,
             plot_thrust_acc_max + (plot_thrust_acc_max - plot_thrust_acc_min) * 0.1,
         )
+        # plot_thrust_min = 0.0
+        # plot_thrust_max = max(thrust_mag_t)
+        # ax3.set_ylim(
+        #     plot_thrust_min - (plot_thrust_max - plot_thrust_min) * 0.1,
+        #     plot_thrust_max + (plot_thrust_max - plot_thrust_min) * 0.1,
+        # )
     def _plot_thrust_vectors_on_thrust_vs_time(
             ax3                   : maxes.Axes        ,
             time_t                : np.ndarray        ,

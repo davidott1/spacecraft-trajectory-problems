@@ -125,15 +125,15 @@ def generate_guess(
     # for idx in range(init_guess_steps):
         decision_state_idx = np.array([])
         if time_o_mode == 'free':
-            time_o_pls = np.random.uniform(low=0, high=1, size=1)
+            time_o_pls = np.random.uniform(low=0, high=0, size=1)
         if pos_vec_o_mode == 'free':
             pos_vec_o_pls = np.random.uniform(low=-1, high=1, size=2)
         if vel_vec_o_mode == 'free':
             vel_vec_o_pls = np.random.uniform(low=-1, high=1, size=2)
         if copos_vec_o_mode == 'free':
-            copos_vec_o_pls = np.random.uniform(low=-1, high=1, size=2)
+            copos_vec_o_pls = np.random.uniform(low=-10, high=10, size=2)
         if covel_vec_o_mode == 'free':
-            covel_vec_o_pls = np.random.uniform(low=-1, high=1, size=2)
+            covel_vec_o_pls = np.random.uniform(low=-10, high=10, size=2)
         if ham_o_mode == 'free':
             ham_o_pls = np.random.uniform(low=-1, high=1, size=1)
 
@@ -144,9 +144,9 @@ def generate_guess(
         if vel_vec_f_mode == 'free':
             vel_vec_f_mns = np.random.uniform(low=-1, high=1, size=2)
         if copos_vec_f_mode == 'free':
-            copos_vec_f_mns = np.random.uniform(low=-1, high=1, size=2)
+            copos_vec_f_mns = np.random.uniform(low=-10, high=10, size=2)
         if covel_vec_f_mode == 'free':
-            covel_vec_f_mns = np.random.uniform(low=-1, high=1, size=2)
+            covel_vec_f_mns = np.random.uniform(low=-10, high=10, size=2)
         if ham_f_mode == 'free':
             ham_f_mns = np.random.uniform(low=-1, high=1, size=1)
 

@@ -8,16 +8,13 @@ This project simulates the optimal trajectory of a free-body. The spacecraft dyn
 one_body_trajectory_optimization/
 ├── input/
 │   └── example/
-│       ├── 01.json
-│       ├── 02.json
-│       ├── 03.json
-│       ├── 04.json
-│       ├── 05.json
-│       ├── 06.json
-│       ├── 07.json
-│       ├── 08.json
-│       ├── 09.json
-│       └── 10.json
+│       ├── 01_minenergy_uncon.json
+│       ├── 02_minenergy_thrustaccmax.json
+│       ├── 03_minenergy_thrustmax.json
+│       ├── 04_minfuel_thrustaccmax.json
+│       ├── 05_minfuel_thrustmax.json
+│       ├── 06_minenergy_uncon_timefree.json
+│       └── 07_minfuel_thrustmax_timefree.json
 ├── output/
 │   └── example/
 ├── src/
@@ -81,54 +78,39 @@ scipy==1.13.1
 
 ## Examples
 
-### Example 01: `input/example/01.json`
+### Example 01: `input/example/01_minenergy_uncon.json`
 ```
 python main.py input/example/01.json output/example
 ```
 
-### Example 02: `input/example/02.json`
+### Example 02: `input/example/02_minenergy_thrustaccmax.json`
 ```
 python main.py input/example/02.json output/example
 ```
 
-### Example 03: `input/example/03.json`
+### Example 03: `input/example/03_minenergy_thrustmax.json`
 ```
 python main.py input/example/03.json output/example
 ```
 
-### Example 04: `input/example/04.json`
+### Example 04: `input/example/04_minfuel_thrustaccmax.json`
 ```
 python main.py input/example/04.json output/example
 ```
 
-### Example 05: `input/example/05.json`
+### Example 05: `input/example/05_minfuel_thrustmax.json`
 ```
 python main.py input/example/05.json output/example
 ```
 
-### Example 06: `input/example/06.json`
+### Example 06: `input/example/06_minenergy_uncon_timefree.json`
 ```
 python main.py input/example/06.json output/example
 ```
 
-### Example 07: `input/example/07.json`
+### Example 07: `input/example/07_minfuel_thrustmax_timefree.json`
 ```
 python main.py input/example/07.json output/example
-```
-
-### Example 08: `input/example/08.json`
-```
-python main.py input/example/08.json output/example
-```
-
-### Example 09: `input/example/09.json`
-```
-python main.py input/example/09.json output/example
-```
-
-### Example 10: `input/example/10.json`
-```
-python main.py input/example/10.json output/example
 ```
 
 ---
@@ -175,13 +157,13 @@ H = L + \vec{\lambda}^\top \vec{f}(t, \vec{x}, \vec{u})
 ```
 For minimization of of fuel and energy, $L = \Gamma$ and $\frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma}$, respectively. Substituting into the Hamilitonian yields for fuel minimization
 ```math
-H = \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma}
-  = \Gamma + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
+H = \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top (g \hat{y} + \vec{\Gamma})
+  = \Gamma + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} (g + \Gamma_y)
 ```
 and for energy minimization
 ```math
-H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top \vec{\Gamma}
-  = \frac{1}{2} \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} \Gamma_y
+H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top (g \hat{y} + \vec{\Gamma})
+  = \frac{1}{2} \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} (g + \Gamma_y)
 ```
 
 #### Necessary Conditions for Optimality
@@ -197,7 +179,7 @@ The one-body dynamics $\dot{\vec{x}} = \vec{f}$ are free from natural accelerati
 &\dot{r}_x = \frac{dH}{d\lambda_{r_x}} &\to &\dot{r}_x = v_x \\
 &\dot{r}_y = \frac{dH}{d\lambda_{r_y}} &\to &\dot{r}_y = v_y \\
 &\dot{v}_x = \frac{dH}{d\lambda_{v_x}} &\to &\dot{v}_x = \Gamma_x \\
-&\dot{v}_y = \frac{dH}{d\lambda_{v_y}} &\to &\dot{v}_y = \Gamma_y \\
+&\dot{v}_y = \frac{dH}{d\lambda_{v_y}} &\to &\dot{v}_y = g + \Gamma_y \\
 \end{align}
 ```
 Mass is not needed as an explicit state variable, but it needs to be integrated along with the state to model thrust, $T = \Gamma m$. The time-derivative of mass is
@@ -225,8 +207,8 @@ For mininum fuel, represent the control as a magnitude and direction, $\vec{\Gam
 
 ```math
 \begin{array}{lll}
-H & = & \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top \Gamma \hat{\Gamma} \\
-  & = & \vec{\lambda}_r^\top \vec{v} + \Gamma (1 + \vec{\lambda}_v^\top \hat{\Gamma})
+H & = & \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top (g \hat{y} + \Gamma \hat{\Gamma}) \\
+  & = & \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top (g \hat{y}) + \Gamma (1 + \vec{\lambda}_v^\top \hat{\Gamma}) 
 \end{array}
 ```
 
@@ -244,9 +226,9 @@ where $\theta$ is the angle between the vectors $\vec{\lambda}_v$ and $\hat{\Gam
 For thrust-acceleration magnitude $\Gamma$, substitute thrust-acceleration direction $\hat{\Gamma}$ into $H$ to yield
 ```math
 \begin{array}{lll}
-H & = & \vec{\lambda}_r^{\top} \vec{v} + \Gamma ( 1 + \vec{\lambda}_v^{\top} \left( -\frac{\vec{\lambda}_v}{\lambda_v} \right) ) \\
-  & = & \vec{\lambda}_r^{\top} \vec{v} - \Gamma (\lambda_v - 1) \\
-  & = & \vec{\lambda}_r^{\top} \vec{v} - \Gamma S
+H & = & \vec{\lambda}_r^{\top} \vec{v} + \vec{\lambda}_v^\top (g \hat{y}) + \Gamma ( 1 + \vec{\lambda}_v^{\top} \left( -\frac{\vec{\lambda}_v}{\lambda_v} \right) ) \\
+  & = & \vec{\lambda}_r^{\top} \vec{v} + \vec{\lambda}_v^\top (g \hat{y}) - \Gamma (\lambda_v - 1) \\
+  & = & \vec{\lambda}_r^{\top} \vec{v} + \vec{\lambda}_v^\top (g \hat{y}) - \Gamma S
 \end{array}
 ```
 
@@ -287,9 +269,15 @@ where
 #### Equality Constraints: Flight Time, Initial Position and Velocity, Final Position and Velocity
 
 The equality conditions or boundary conditions are variable.
-- Flight time is $\Delta t = t_f - t_o$, where $t_o$ and $t_f$ aree initial and final time. If both $t_o$ and $t_f$ are fixed, $\Delta t$ is fixed. Otherwise flight time is free. 
-- Initial position and velocity are either fixed or free (specified or not, respectively): $\vec{r}(t_o)=\vec{r}_{os} and \vec{v}(t_o)=\vec{v}_{os}$.
-- Final position and velocity are either fixed or free (specified or not, respectively): $\vec{r}(t_f)=\vec{r}_{fs} and \vec{v}(t_f)=\vec{v}_{fs}$.
+- Flight time is $\Delta t = t_f - t_o$, where $t_o$ and $t_f$ are initial and final time. If both $t_o$ and $t_f$ are fixed, $\Delta t$ is fixed. Otherwise flight time is free. 
+- Initial position and velocity are either fixed or free (specified or not, respectively):
+```math
+\vec{r}(t_o)=\vec{r}_{os} \ \ \ \text{and} \ \ \ \vec{v}(t_o)=\vec{v}_{os}
+```
+- Final position and velocity are either fixed or free (specified or not, respectively):
+```math
+\vec{r}(t_f)=\vec{r}_{fs} \ \ \ \text{and} \ \ \ \vec{v}(t_f)=\vec{v}_{fs}
+```
 
 #### Inequality Constraints: Thrust and Thrust-Acceleration
 

@@ -16,6 +16,8 @@ def control_thrust_acceleration(
     if min_type == 'fuel':
         epsilon   = 1.0e-6
         covel_mag = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
+    elif min_type == 'energyfuel':
+        covel_mag = np.sqrt(covel_x**2 + covel_y**2)
     else: # assume 'energy'
         covel_mag = np.sqrt(covel_x**2 + covel_y**2)
     covel_mag_inv = 1.0 / covel_mag
@@ -61,6 +63,7 @@ def one_body_dynamics__indirect(
         exhaust_velocity         : np.float64 = np.float64(3.0e+3),
         k_steepness              : np.float64 = np.float64(0.0e+0),
         post_process             : bool       = False             ,
+        constant_gravity         : np.float64 = np.float64(-9.81) ,
     ) -> np.ndarray:
     """
     Calculates the time derivatives of state variables for a free-body system
@@ -141,8 +144,8 @@ def one_body_dynamics__indirect(
     #   dstate/dtime = dynamics(time,state)
     dpos_x__dtime   = vel_x
     dpos_y__dtime   = vel_y
-    dvel_x__dtime   = thrust_acc_x
-    dvel_y__dtime   = thrust_acc_y
+    dvel_x__dtime   =                    thrust_acc_x
+    dvel_y__dtime   = constant_gravity + thrust_acc_y
     dcopos_x__dtime = 0.0
     dcopos_y__dtime = 0.0
     dcovel_x__dtime = -copos_x
@@ -153,7 +156,7 @@ def one_body_dynamics__indirect(
         if min_type == 'fuel':
             doptimal_control_objective__dtime =       thrust_acc_mag
         else: # assume 'energy'
-            doptimal_control_objective__dtime = 0.5 * thrust_acc_mag**2
+            doptimal_control_objective__dtime = 1/2 * thrust_acc_mag**2
     
     dstate_costate__dtime = \
         np.array([
@@ -191,13 +194,13 @@ def one_body_dynamics__indirect(
         #       [                      0.0,                      0.0,                      0.0,                      0.0,                        0.0, d(dcovel_y/dtime)/dcopos_y,                        0.0,                        0.0 ]
         ddstatedtime__dstate = np.zeros((n_state_costate, n_state_costate))
 
-        # Row 1 and 2
+        # Row 0 and 1
         #   d(dpos_x/dtime)/dvel_x
         #   d(dpos_y/dtime)/dvel_y
         ddstatedtime__dstate[0,2] = 1.0
         ddstatedtime__dstate[1,3] = 1.0
 
-        # Row 3 and 4
+        # Row 2 and 3
         #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
         #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
         if use_thrust_limits:
@@ -240,7 +243,7 @@ def one_body_dynamics__indirect(
 
                 else: # no use_thrust_smoothing and no use_thrust_acc_smoothing
                     
-                    # Row 3 and 4
+                    # Row 2 and 3
                     #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
                     #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
                     ddstatedtime__dstate[2,6] = thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
@@ -265,7 +268,7 @@ def one_body_dynamics__indirect(
                 dthrust_acc_y_dir__dcovel_y = -1 * dcovel_y__covel_y * covel_mag_inv + -1 * covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
                 dthrust_acc_y_dir__dcovel_x =                                          -1 * covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
 
-                # Row 3 and 4
+                # Row 2 and 3
                 #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
                 #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
                 ddstatedtime__dstate[2,6] = dthrust_acc_mag__dcovel_x * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
@@ -275,13 +278,13 @@ def one_body_dynamics__indirect(
 
             else: # no_limits
 
-                # Row 3 and 4
+                # Row 2 and 3
                 #   d(dvel_x/dtime)/dcovel_x
                 #   d(dvel_y/dtime)/dcovel_y
                 ddstatedtime__dstate[2,6] = -1.0
                 ddstatedtime__dstate[3,7] = -1.0
 
-        # Row 7 and 8
+        # Row 6 and 7
         #   d(dcovel_x__dtime)/dcopos_x
         #   d(dcovel_y__dtime)/dcopos_y
         ddstatedtime__dstate[6,4] = -1.0
@@ -308,89 +311,3 @@ def one_body_dynamics__indirect(
         else:
             return dstate_costate__dtime
 
-
-def constantgravitydynamics__minfuel__indirect_thrustaccmax_heaviside_stm(
-        time             : float              ,
-        state            : np.ndarray         ,
-        thrust_acc_min   : float      = 1.0e-1,
-        thrust_acc_max   : float      = 1.0e+1,
-        k_steepness      : float      = 1.0   ,
-        constant_gravity : float      = -9.81 , 
-    ) -> np.ndarray:
-    """
-    Calculates the time derivatives of state variables for a free-body system
-    with a minimum-fuel thrust control approximated by a smooth Heaviside function.
-
-    This function represents the right-hand side of the ordinary differential
-    equations (ODEs) for integration.
-
-    Input
-    -----
-    time : float
-        Current time (t).
-    state : np.ndarray
-        Current integration state:
-        [ pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y ]
-        -   pos_x,   pos_y : position in x and y
-        -   vel_x,   vel_y : velocity in x and y
-        - copos_x, copos_y : co-position in x and y
-        - covel_x, covel_y : co-velocity in x and y
-    thrust_acc_min : float, optional
-        Minimum thrust acceleration magnitude.
-        Defaults to 1.0e-1.
-    thrust_acc_max : float, optional
-        Maximum thrust acceleration magnitude.
-        Defaults to 1.0e1.
-    k_steepness : float, optional
-        Coefficient for the tanh approximation of the Heaviside function.
-        Higher values lead to a sharper transition.
-        Defaults to 1.0.
-    constant_gravity : float, optional
-        Gravity constant in the y-direction.
-        Defaults to -9.81 m/s^2.
-
-    Output
-    ------
-    np.ndarray
-        Array of time derivatives of the state variables:
-        [   dpos_x__dtime,   dpos_y__dtime,   dvel_x__dtime,   dvel_y__dtime,
-          dcopos_x__dtime, dcopos_y__dtime, dcovel_x__dtime, dcovel_y__dtime  ]
-    """
-
-    # Unpack: state into scalar components
-    pos_x, pos_y, vel_x, vel_y, copos_x, copos_y, covel_x, covel_y = state
-
-    # Control: thrust acceleration
-    #   thrust_acc_vec = -covel_vec / cvel_mag
-    epsilon          = np.float64(1.0e-6)
-    covel_mag        = np.sqrt(covel_x**2 + covel_y**2 + epsilon**2)
-    switching_func   = covel_mag - 1.0
-    heaviside_approx = 0.5 + 0.5 * np.tanh(k_steepness * switching_func)
-    thrust_acc_mag   = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx
-    thrust_acc_x_dir = -covel_x / covel_mag
-    thrust_acc_y_dir = -covel_y / covel_mag
-    thrust_acc_x     = thrust_acc_mag * thrust_acc_x_dir
-    thrust_acc_y     = thrust_acc_mag * thrust_acc_y_dir
-
-    # Dynamics: free-body
-    #   dstate/dtime = dynamics(time,state)
-    dpos_x__dtime   = vel_x
-    dpos_y__dtime   = vel_y
-    dvel_x__dtime   =                    thrust_acc_x
-    dvel_y__dtime   = constant_gravity + thrust_acc_y
-    dcopos_x__dtime = 0.0
-    dcopos_y__dtime = 0.0
-    dcovel_x__dtime = -copos_x
-    dcovel_y__dtime = -copos_y
-    
-    # Pack up: scalar components into state
-    return np.array([
-        dpos_x__dtime,
-        dpos_y__dtime,
-        dvel_x__dtime,
-        dvel_y__dtime,
-        dcopos_x__dtime,
-        dcopos_y__dtime,
-        dcovel_x__dtime,
-        dcovel_y__dtime,
-    ])
