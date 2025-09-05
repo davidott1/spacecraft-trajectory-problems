@@ -171,7 +171,7 @@ def plot_final_results(
     elif min_type == 'energy':
         title_min_type = "Minimum Energy"
     elif min_type == 'energyfuel':
-        title_min_type = "Minimum Energy" + " $\to$ " + "Fuel"
+        title_min_type = "Minimum Energy" + " to " + "Fuel"
     else: # assume energy
         title_min_type = ""
     fig.suptitle(

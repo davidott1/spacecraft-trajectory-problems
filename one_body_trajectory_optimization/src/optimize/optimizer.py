@@ -43,7 +43,7 @@ def optimal_trajectory_solve(
 
     # Intermediate solution: thrust- or thrust-acc-steepness continuation process
     if use_thrust_acc_limits or use_thrust_limits:
-        print("  Thrust- or Thrust-Acc-Steepness Continuation Process")
+        print("  Thrust- or Thrust-Acc Continuation Process: Smooth Inequality Enforcement Using k Steepness")
 
     # Intermediate solution: initialize loop
     results_k_idx                = {}
@@ -182,12 +182,14 @@ def optimal_trajectory_solve(
             # Print the results of the current step
             error_mag = np.linalg.norm(soln_root.fun)
             if min_type == 'energy' and not use_thrust_acc_limits and not use_thrust_limits:
-                if idx_k==0:
-                    tqdm.write(f"\n       {'Step':>5s} {'Error-Mag':>14s}")
+                if idx_alpha==1:
+                    tqdm.write("\n  Thrust- or Thrust-Acc Continuation Process: Smooth Energy to Fuel Transition Using alpha Weighting")
+                    tqdm.write(f"       {'Step':>5s} {'Error-Mag':>14s}")
                 tqdm.write(f"     {idx_alpha+1:>3d}/{len(alphas):>3d} {error_mag:>14.6e}")
             else:
-                if idx_k==0:
-                    tqdm.write(f"\n       {'Step':>5s} {'k':>14s} {'alpha':>14s} {'Error-Mag':>14s}")
+                if idx_alpha==1:
+                    tqdm.write("\n  Thrust- or Thrust-Acc Continuation Process: Smooth Energy to Fuel Transition Using alpha Weighting")
+                    tqdm.write(f"       {'Step':>5s} {'k':>14s} {'alpha':>14s} {'Error-Mag':>14s}")
                 tqdm.write(f"     {idx_alpha+1:>3d}/{len(alphas):>3d} {k_idx:>14.6e} {alpha:>14.6e} {error_mag:>14.6e}")
 
     # Final solution: no thrust or thrust-acc smoothing
