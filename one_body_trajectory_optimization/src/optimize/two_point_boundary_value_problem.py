@@ -135,6 +135,7 @@ def solve_ivp_func(
     alpha                    =        inequality_parameters['alpha'                   ]
     mass_o                   = integration_state_parameters['mass_o'                  ]
     exhaust_velocity         = integration_state_parameters['exhaust_velocity'        ]
+    constant_gravity         = integration_state_parameters['constant_gravity'        ]
     include_scstm            = integration_state_parameters['include_scstm'           ]
     post_process             = integration_state_parameters['post_process'            ]
 
@@ -156,7 +157,7 @@ def solve_ivp_func(
         integration_state_o         = np.hstack([state_costate_o, mass_o, optimal_control_objective_o])
 
     time_eval_points = np.linspace(time_span[0], time_span[1], 401)
-
+    
     solve_ivp_func = \
         lambda time, state_costate_scstm_mass_obj: \
             one_body_dynamics__indirect(
@@ -176,6 +177,7 @@ def solve_ivp_func(
                 post_process                 = post_process            ,
                 k_steepness                  = k_steepness             ,
                 alpha                        = alpha                   ,
+                constant_gravity             = constant_gravity        ,
             )
 
     soln_ivp = \
@@ -648,6 +650,7 @@ def tpbvp_objective_and_jacobian(
                 exhaust_velocity=integration_state_parameters['exhaust_velocity'],
                 post_process=False,
                 k_steepness=inequality_parameters['k_steepness'],
+                constant_gravity=integration_state_parameters['constant_gravity'],
             )
 
         d_state_costate_o__d_t = d_state_costate_o__d_t[0:8]
@@ -684,6 +687,7 @@ def tpbvp_objective_and_jacobian(
                 exhaust_velocity=integration_state_parameters['exhaust_velocity'],
                 post_process=False,
                 k_steepness=inequality_parameters['k_steepness'],
+                constant_gravity=integration_state_parameters['constant_gravity'],
             )
         d_state_costate_f_mns__d_t = d_state_costate_f_mns__d_t[0:8]
         d_ham_f_mns__d_state_costate_f = \

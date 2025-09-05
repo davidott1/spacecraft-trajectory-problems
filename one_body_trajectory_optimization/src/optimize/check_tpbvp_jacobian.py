@@ -10,7 +10,6 @@ except Exception:
     try:
         from scipy.optimize._numdiff import approx_derivative  # type: ignore
     except Exception:
-        breakpoint()
         def approx_derivative(fun, x0, method="3-point", rel_step=1e-6):
             x0 = np.asarray(x0, dtype=float)
             f0 = np.asarray(fun(x0), dtype=float)

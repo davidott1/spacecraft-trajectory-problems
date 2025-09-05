@@ -8,8 +8,8 @@ def control_thrust_acceleration(
         use_thrust_acc_limits, use_thrust_acc_smoothing, thrust_acc_min, thrust_acc_max,
         use_thrust_limits, use_thrust_smoothing, thrust_min, thrust_max,
         k_steepness,
-        mass = 1.0,
-        alpha = 1.0,
+        mass  : float = 1.0,
+        alpha : np.float64 = np.float64(1.0),
     ):
     """
     Control: thrust_acceleration_vector = thrust_acceleration_magnitude * thrust_acceleration_direction
@@ -148,7 +148,8 @@ def one_body_dynamics__indirect(
             use_thrust_acc_limits, use_thrust_acc_smoothing, thrust_acc_min, thrust_acc_max,
             use_thrust_limits, use_thrust_smoothing, thrust_min, thrust_max,
             k_steepness,
-            mass,
+            mass  = mass,
+            alpha = alpha,
         )
 
     # Dynamics: free-body
