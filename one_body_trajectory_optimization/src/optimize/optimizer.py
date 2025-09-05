@@ -129,7 +129,7 @@ def optimal_trajectory_solve(
 
         # Intermediate solution: loop though k values
         for idx_k, k_idx in tqdm(enumerate(k_idxinitguess_to_idxfinsoln), desc="Processing", leave=False, total=len(k_idxinitguess_to_idxfinsoln)):
-            tqdm.write(f"Processing: {k_idx} {alpha}")
+
             # Set the k-idx
             inequality_parameters['k_steepness'] = k_idx
             
@@ -156,11 +156,11 @@ def optimal_trajectory_solve(
                 tqdm.write(f"     {idx_k+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {error_mag:>14.6e}")
             else:
                 if idx_k==0:
-                    tqdm.write(f"       {'Step':>5s} {'k':>14s} {'Error-Mag':>14s}")
-                tqdm.write(f"     {idx_k+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
+                    tqdm.write(f"       {'Step':>5s} {'k':>14s} {'alpha':>14s} {'Error-Mag':>14s}")
+                tqdm.write(f"     {idx_k+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {alpha:>14.6e} {error_mag:>14.6e}")
 
-        for idx_alpha, alpha in tqdm(enumerate(alphas), desc="Processing", leave=False, total=len(alphas)):
-            print(f"Processing: {k_idx} {alpha}")
+        for idx_alpha, alpha in tqdm(enumerate(alphas[1:], start=1), desc="Processing", leave=False, total=len(alphas[1:])):
+
             inequality_parameters['alpha'] = alpha
             # inequality_parameters['k_steepness'] = k_idx
             
@@ -183,12 +183,12 @@ def optimal_trajectory_solve(
             error_mag = np.linalg.norm(soln_root.fun)
             if min_type == 'energy' and not use_thrust_acc_limits and not use_thrust_limits:
                 if idx_k==0:
-                    tqdm.write(f"       {'Step':>5s} {'Error-Mag':>14s}")
-                tqdm.write(f"     {idx_k+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {error_mag:>14.6e}")
+                    tqdm.write(f"\n       {'Step':>5s} {'Error-Mag':>14s}")
+                tqdm.write(f"     {idx_alpha+1:>3d}/{len(alphas):>3d} {error_mag:>14.6e}")
             else:
                 if idx_k==0:
-                    tqdm.write(f"       {'Step':>5s} {'k':>14s} {'Error-Mag':>14s}")
-                tqdm.write(f"     {idx_k+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
+                    tqdm.write(f"\n       {'Step':>5s} {'k':>14s} {'alpha':>14s} {'Error-Mag':>14s}")
+                tqdm.write(f"     {idx_alpha+1:>3d}/{len(alphas):>3d} {k_idx:>14.6e} {alpha:>14.6e} {error_mag:>14.6e}")
 
     # Final solution: no thrust or thrust-acc smoothing
     print("\n\nFINAL SOLUTION PROCESS")
