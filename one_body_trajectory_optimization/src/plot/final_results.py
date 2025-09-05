@@ -413,7 +413,7 @@ def plot_final_results(
     if min_type == 'fuel':
         obj_label_unit = '[m/s]'
     elif min_type == 'energyfuel':
-        obj_label_unit = '[xxx]'
+        obj_label_unit = ''
     elif min_type == 'energy':
         obj_label_unit = '[m$^2$/$s^3$]'
     else:
