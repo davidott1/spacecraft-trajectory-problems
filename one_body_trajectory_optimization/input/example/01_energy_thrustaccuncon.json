@@ -22,6 +22,7 @@
     "k_idxinitguess"        : { "value":             1.0e+0  , "unit": "None"                      },
     "k_idxfinsoln"          : { "value":             1.0e+3  , "unit": "None"                      },
     "k_idxdivs"             : { "value":                 10  , "unit": "None"                      },
+    "init_guess_steps"      : { "value":                300  , "unit": "None"                      },
     "exhaust_velocity"      : { "value":             3.0e+3  , "unit": "m/s"                       },
     "constant_gravity"      : { "value":            0.00e+0  , "unit": "m/s^2"                     }
 }
