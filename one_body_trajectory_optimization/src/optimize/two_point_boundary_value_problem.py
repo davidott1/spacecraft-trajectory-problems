@@ -311,22 +311,12 @@ def tpbvp_objective_and_jacobian(
     ordered_sides      = ['pls', 'mns']
 
     # Override the initial state with the relevant decision state variables
-    idx = 0
-    for bnd in ordered_boundaries:
-        for var in ordered_variables:
-            for side in ordered_sides:
-                var_bnd = equality_parameters[var][bnd]
-                if ( (bnd == 'o' and side == 'mns') or (bnd == 'f' and side == 'pls') ):
-                    continue
-
-                number_elements = np.size(var_bnd[side])
-                value_slice     = decision_state[idx:idx+number_elements]
-
-                if number_elements == 1:
-                    value_slice = value_slice[0]
-                
-                equality_parameters[var][bnd][side] = value_slice
-                idx += number_elements
+    #   decision_state = [pos_vec_o, vel_vec_o, copos_vec_o, covel_vec_o, time_f]
+    equality_parameters[  'pos_vec']['o']['pls'] = decision_state[0:2]
+    equality_parameters[  'vel_vec']['o']['pls'] = decision_state[2:4]
+    equality_parameters['copos_vec']['o']['pls'] = decision_state[4:6]
+    equality_parameters['covel_vec']['o']['pls'] = decision_state[6:8]
+    equality_parameters[     'time']['f']['mns'] = decision_state[8  ]
 
     # Unpack
     include_jacobian = optimization_parameters['include_jacobian']

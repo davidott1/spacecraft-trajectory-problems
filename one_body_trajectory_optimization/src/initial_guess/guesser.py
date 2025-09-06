@@ -18,47 +18,25 @@ def generate_guess(
     #   Some parameters will unpack as zero and be set by the guesser
     init_guess_steps = optimization_parameters['init_guess_steps']
     
-    time_o_mns       = equality_parameters[     'time']['o']['mns']
     pos_vec_o_mns    = equality_parameters[  'pos_vec']['o']['mns']
     vel_vec_o_mns    = equality_parameters[  'vel_vec']['o']['mns']
     copos_vec_o_mns  = equality_parameters['copos_vec']['o']['mns']
     covel_vec_o_mns  = equality_parameters['covel_vec']['o']['mns']
-    ham_o_mns        = equality_parameters[      'ham']['o']['mns']
 
-    time_o_pls       = equality_parameters[     'time']['o']['pls']
     pos_vec_o_pls    = equality_parameters[  'pos_vec']['o']['pls']
     vel_vec_o_pls    = equality_parameters[  'vel_vec']['o']['pls']
     copos_vec_o_pls  = equality_parameters['copos_vec']['o']['pls']
     covel_vec_o_pls  = equality_parameters['covel_vec']['o']['pls']
-    ham_o_pls        = equality_parameters[      'ham']['o']['pls']
 
     time_f_mns       = equality_parameters[     'time']['f']['mns']
-    pos_vec_f_mns    = equality_parameters[  'pos_vec']['f']['mns']
-    vel_vec_f_mns    = equality_parameters[  'vel_vec']['f']['mns']
-    copos_vec_f_mns  = equality_parameters['copos_vec']['f']['mns']
-    covel_vec_f_mns  = equality_parameters['covel_vec']['f']['mns']
-    ham_f_mns        = equality_parameters[      'ham']['f']['mns']
-
     time_f_pls       = equality_parameters[     'time']['f']['pls']
-    pos_vec_f_pls    = equality_parameters[  'pos_vec']['f']['pls']
-    vel_vec_f_pls    = equality_parameters[  'vel_vec']['f']['pls']
-    copos_vec_f_pls  = equality_parameters['copos_vec']['f']['pls']
-    covel_vec_f_pls  = equality_parameters['covel_vec']['f']['pls']
-    ham_f_pls        = equality_parameters[      'ham']['f']['pls']
 
-    time_o_mode      = equality_parameters[     'time']['o']['mode']
     pos_vec_o_mode   = equality_parameters[  'pos_vec']['o']['mode']
     vel_vec_o_mode   = equality_parameters[  'vel_vec']['o']['mode']
     copos_vec_o_mode = equality_parameters['copos_vec']['o']['mode']
     covel_vec_o_mode = equality_parameters['covel_vec']['o']['mode']
-    ham_o_mode       = equality_parameters[      'ham']['o']['mode']
 
     time_f_mode      = equality_parameters[     'time']['f']['mode']
-    pos_vec_f_mode   = equality_parameters[  'pos_vec']['f']['mode']
-    vel_vec_f_mode   = equality_parameters[  'vel_vec']['f']['mode']
-    copos_vec_f_mode = equality_parameters['copos_vec']['f']['mode']
-    covel_vec_f_mode = equality_parameters['covel_vec']['f']['mode']
-    ham_f_mode       = equality_parameters[      'ham']['f']['mode']
 
     # Print free and fixed variables
     free_vars      = []
@@ -85,8 +63,6 @@ def generate_guess(
     print(f"  Known State: {', '.join([str(t_or_f) for t_or_f in equality_parameters['known_states']])}")
 
     # Set initial guess for fixed variables
-    if time_o_mode == 'fixed':
-        time_o_pls = time_o_mns
     if pos_vec_o_mode == 'fixed':
         pos_vec_o_pls = pos_vec_o_mns
     if vel_vec_o_mode == 'fixed':
@@ -95,20 +71,8 @@ def generate_guess(
         copos_vec_o_pls = copos_vec_o_mns
     if covel_vec_o_mode == 'fixed':
         covel_vec_o_pls = covel_vec_o_mns
-    if ham_o_mode == 'fixed':
-        ham_o_pls = ham_o_mns
     if time_f_mode == 'fixed':
         time_f_mns = time_f_pls
-    if pos_vec_f_mode == 'fixed':
-        pos_vec_f_mns = pos_vec_f_pls
-    if vel_vec_f_mode == 'fixed':
-        vel_vec_f_mns = vel_vec_f_pls
-    if copos_vec_f_mode == 'fixed':
-        copos_vec_f_mns = copos_vec_f_pls
-    if covel_vec_f_mode == 'fixed':
-        covel_vec_f_mns = covel_vec_f_pls
-    if ham_f_mode == 'fixed':
-        ham_f_mns = ham_f_pls
 
     # Initialize loop for random guesses for free variables
     optimization_parameters['include_jacobian'] = False
@@ -124,8 +88,6 @@ def generate_guess(
     for idx in tqdm(range(init_guess_steps), desc="Processing", leave=False, total=init_guess_steps):
 
         decision_state_idx = np.array([])
-        if time_o_mode == 'free':
-            time_o_pls = np.random.uniform(low=0, high=0, size=1)
         if pos_vec_o_mode == 'free':
             pos_vec_o_pls = np.random.uniform(low=-1, high=1, size=2)
         if vel_vec_o_mode == 'free':
@@ -134,35 +96,15 @@ def generate_guess(
             copos_vec_o_pls = np.random.uniform(low=-10, high=10, size=2)
         if covel_vec_o_mode == 'free':
             covel_vec_o_pls = np.random.uniform(low=-10, high=10, size=2)
-        if ham_o_mode == 'free':
-            ham_o_pls = np.random.uniform(low=-1, high=1, size=1)
-
         if time_f_mode == 'free':
             time_f_mns = np.random.uniform(low=1, high=300, size=1)
-        if pos_vec_f_mode == 'free':
-            pos_vec_f_mns = np.random.uniform(low=-1, high=1, size=2)
-        if vel_vec_f_mode == 'free':
-            vel_vec_f_mns = np.random.uniform(low=-1, high=1, size=2)
-        if copos_vec_f_mode == 'free':
-            copos_vec_f_mns = np.random.uniform(low=-10, high=10, size=2)
-        if covel_vec_f_mode == 'free':
-            covel_vec_f_mns = np.random.uniform(low=-10, high=10, size=2)
-        if ham_f_mode == 'free':
-            ham_f_mns = np.random.uniform(low=-1, high=1, size=1)
 
         decision_state_idx = np.hstack([
-            time_o_pls     ,
             pos_vec_o_pls  ,
             vel_vec_o_pls  ,
             copos_vec_o_pls,
             covel_vec_o_pls,
-            ham_o_pls      ,
             time_f_mns     ,
-            pos_vec_f_mns  ,
-            vel_vec_f_mns  ,
-            copos_vec_f_mns,
-            covel_vec_f_mns,
-            ham_f_mns      ,
         ])
 
         error_idx = \
