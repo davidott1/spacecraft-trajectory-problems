@@ -80,7 +80,7 @@ scipy==1.13.1
 
 ### Example 01: `input/example/01_minenergy_uncon.json`
 ```
-python main.py input/example/01.json output/example
+python main.py input/example/01_minenergy_uncon.json output/example
 ```
 
 ### Example 02: `input/example/02_minenergy_thrustaccmax.json`

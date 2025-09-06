@@ -101,6 +101,7 @@ def _convert_parameters_to_standard_units(
         'ham_f'                 : [           0.0e+0  , None      , float ],
         'mass_o'                : [           1.0e+3  , u.kg      , float ], # type: ignore
         'exhaust_velocity'      : [           3.0e+3  , u.m/u.s   , float ], # type: ignore
+        'constant_gravity'      : [           0.0e+0  , u.m/u.s**2, float ], # type: ignore
         'use_thrust_acc_limits' : [              False, None      , bool  ],
         'thrust_acc_min'        : [           0.0e+0  , u.m/u.s**2, float ], # type: ignore
         'thrust_acc_max'        : [           1.0e+0  , u.m/u.s**2, float ], # type: ignore
@@ -188,7 +189,7 @@ def _convert_parameters_to_standard_units(
                 parameters_standard_units[param]['unit' ] = str(standard_units['distance']**2/standard_units['time']**4)
 
         # Enforce types
-        if val_type == int and parameters_standard_units[param] is not None:
+        if val_type == int and parameters_standard_units[param]['value'] is not None:
             parameters_standard_units[param]['value'] = int(parameters_standard_units[param]['value'])
 
     return parameters_standard_units
@@ -311,6 +312,7 @@ def configure_validate_input(
         'vel_vec_f'        : all_parameters_standard_units['vel_vec_f']['value']                                                , # type: ignore
         'mass_o'           : all_parameters_standard_units['mass_o']['value']                                                   , # type: ignore
         'exhaust_velocity' : all_parameters_standard_units['exhaust_velocity']['value']                                         , # type: ignore
+        'constant_gravity' : all_parameters_standard_units['constant_gravity']['value']                                         , # type: ignore
         'opt_ctrl_obj_o'   : np.float64(0.0)                                                                                    , # type: ignore
         'post_process'     : False                                                                                              ,
         'include_scstm'    : False                                                                                              ,
@@ -427,6 +429,7 @@ def configure_validate_input(
         'k_idxfinsoln'             : all_parameters_standard_units['k_idxfinsoln'         ]['value'],
         'k_idxdivs'                : all_parameters_standard_units['k_idxdivs'            ]['value'],
         'k_steepness'              : all_parameters_standard_units['k_idxinitguess'       ]['value'],
+        'alpha'                    : 1.0
     }
     
     # Validate input

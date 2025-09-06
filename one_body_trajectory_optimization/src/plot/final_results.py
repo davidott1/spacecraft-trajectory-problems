@@ -34,6 +34,7 @@ def plot_final_results(
     thrust_min               =    inequality_parameters['thrust_min'              ]
     thrust_max               =    inequality_parameters['thrust_max'              ]
     k_steepness              =    inequality_parameters['k_steepness'             ]
+    alpha                    =    inequality_parameters['alpha'                   ]
     input_filepath           = files_folders_parameters['input_filepath'          ]
     output_folderpath        = files_folders_parameters['output_folderpath'       ]
     plot_show                =        system_parameters['plot_show'               ]
@@ -83,6 +84,25 @@ def plot_final_results(
             else:
                 thrust_acc_mag_t[idx] = thrust_acc_min
         thrust_acc_dir_t = np.array([ -covel_x_t/covel_mag_t, -covel_y_t/covel_mag_t ])
+        thrust_acc_vec_t = thrust_acc_mag_t * thrust_acc_dir_t
+    elif min_type == 'energyfuel':
+        covel_mag_t      = np.sqrt(covel_x_t**2 + covel_y_t**2)
+        switching_func_t = covel_mag_t - (1.0 - alpha)
+        thrust_acc_mag_t = np.zeros_like(switching_func_t)
+        for idx, switching_func_t_value in enumerate(switching_func_t):
+            if use_thrust_limits:
+                thrust_acc_min = thrust_min / mass_t[idx]
+                thrust_acc_max = thrust_max / mass_t[idx]
+            if switching_func_t_value > 0:
+                # Thrust on
+                thrust_acc_mag_t[idx] = (covel_mag_t[idx] - (1 - alpha)) / alpha
+                thrust_acc_mag_t[idx] = bounded_smooth_func(thrust_acc_mag_t[idx], thrust_acc_min, thrust_acc_max, k_steepness)
+            else:
+                # Thrust off
+                thrust_acc_mag_t[idx] = 0.0
+        thrust_acc_x_dir_t = -covel_x_t / covel_mag_t
+        thrust_acc_y_dir_t = -covel_y_t / covel_mag_t
+        thrust_acc_dir_t   = np.vstack([thrust_acc_x_dir_t, thrust_acc_y_dir_t])
         thrust_acc_vec_t = thrust_acc_mag_t * thrust_acc_dir_t
     else: # assumes energy
         if use_thrust_limits:
@@ -150,8 +170,10 @@ def plot_final_results(
         title_min_type = "Minimum Fuel"
     elif min_type == 'energy':
         title_min_type = "Minimum Energy"
+    elif min_type == 'energyfuel':
+        title_min_type = "Minimum Energy to Fuel"
     else: # assume energy
-        title_min_type = "Minimum Energy"
+        title_min_type = ""
     fig.suptitle(
         f"OPTIMAL TRAJECTORY: {title_min_type}"
         "\nOne-Body Dynamics"
@@ -390,8 +412,12 @@ def plot_final_results(
     ax2.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
     if min_type == 'fuel':
         obj_label_unit = '[m/s]'
+    elif min_type == 'energyfuel':
+        obj_label_unit = ''
     elif min_type == 'energy':
         obj_label_unit = '[m$^2$/$s^3$]'
+    else:
+        obj_label_unit = ''
     ax2.set_ylabel(f'Objective\n{obj_label_unit}')
 
     # Thrust-Acc or Thrust Profile
@@ -420,14 +446,6 @@ def plot_final_results(
             edgecolor        = 'none'                  ,
             alpha            = 0.5                     ,
         )
-        # ax3.fill_between(
-        #     time_t                             ,
-        #     thrust_mag_t                       ,
-        #     where        = (thrust_mag_t > 0.0), # type: ignore
-        #     facecolor    = color_thrust        ,
-        #     edgecolor    = 'none'              ,
-        #     alpha        = 0.5                 ,
-        # )
     ax3.set_xticklabels([])
     ax3.ticklabel_format(style='scientific', axis='y', scilimits=(0,0), useMathText=True, useOffset=False)
     ax3.set_ylabel(label_thrust_name + '\n' + label_thrust_unit)

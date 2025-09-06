@@ -1,0 +1,15 @@
+{
+    "min_type"              : { "value":            "energy" , "unit": "None"                      },
+    "time_o"                : { "value":             0.0e+0  , "unit": "s"       , "mode": "fixed" },
+    "pos_vec_o"             : { "value": [  0.0e+0,  0.0e+0 ], "unit": "m"       , "mode": "fixed" },
+    "vel_vec_o"             : { "value": [  0.0e+0,  0.0e+0 ], "unit": "m/s"     , "mode": "fixed" },
+    "copos_vec_o"           : { "value": [  0.0e+0,  0.0e+0 ], "unit": "m/s^3"   , "mode": "free"  },
+    "covel_vec_o"           : { "value": [  0.0e+0,  0.0e+0 ], "unit": "m/s^2"   , "mode": "free"  },
+    "ham_o"                 : { "value":             0.0e+0  , "unit": "m^2/s^4" , "mode": "free"  },
+    "time_f"                : { "value":             5.0e+1  , "unit": "s"       , "mode": "fixed" },
+    "pos_vec_f"             : { "value": [  1.0e+1,  1.0e+1 ], "unit": "m"       , "mode": "fixed" },
+    "vel_vec_f"             : { "value": [  1.0e+0,  0.0e+0 ], "unit": "m/s"     , "mode": "fixed" },
+    "copos_vec_f"           : { "value": [  0.0e+0,  0.0e+0 ], "unit": "m/s^3"   , "mode": "free"  },
+    "covel_vec_f"           : { "value": [  0.0e+0,  0.0e+0 ], "unit": "m/s^2"   , "mode": "free"  },
+    "ham_f"                 : { "value":             0.0e+0  , "unit": "m^2/s^4" , "mode": "free"  }
+}

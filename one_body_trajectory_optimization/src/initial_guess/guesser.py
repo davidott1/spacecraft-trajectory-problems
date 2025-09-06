@@ -122,7 +122,7 @@ def generate_guess(
     print("  Random Initial Guess Generation")
     error_mag_min = np.Inf
     for idx in tqdm(range(init_guess_steps), desc="Processing", leave=False, total=init_guess_steps):
-    # for idx in range(init_guess_steps):
+
         decision_state_idx = np.array([])
         if time_o_mode == 'free':
             time_o_pls = np.random.uniform(low=0, high=0, size=1)

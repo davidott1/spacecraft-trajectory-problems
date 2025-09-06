@@ -8,7 +8,8 @@ def control_thrust_acceleration(
         use_thrust_acc_limits, use_thrust_acc_smoothing, thrust_acc_min, thrust_acc_max,
         use_thrust_limits, use_thrust_smoothing, thrust_min, thrust_max,
         k_steepness,
-        mass = 1.0,
+        mass  : float      = 1.0            ,
+        alpha : np.float64 = np.float64(1.0),
     ):
     """
     Control: thrust_acceleration_vector = thrust_acceleration_magnitude * thrust_acceleration_direction
@@ -31,6 +32,15 @@ def control_thrust_acceleration(
             thrust_acc_mag   = thrust_acc_min + (thrust_acc_max - thrust_acc_min) * heaviside_approx
         else: # no use_thrust_smoothing and no use_thrust_acc_smoothing
             thrust_acc_mag = np.where(switching_func > 0.0, thrust_acc_max, thrust_acc_min)
+    elif min_type == 'energyfuel':
+        switching_func = covel_mag - (1.0 - alpha)
+        if switching_func > 0:
+            # Thrust on
+            thrust_acc_mag = (covel_mag - (1 - alpha)) / alpha
+            thrust_acc_mag = bounded_smooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max, k_steepness)
+        else:
+            # Thrust off
+            thrust_acc_mag = 0.0
     else: # assume 'energy'
         switching_func = np.zeros_like(covel_mag)
         thrust_acc_mag = covel_mag
@@ -62,6 +72,7 @@ def one_body_dynamics__indirect(
         thrust_max               : np.float64 = np.float64(0.0e+0),
         exhaust_velocity         : np.float64 = np.float64(3.0e+3),
         k_steepness              : np.float64 = np.float64(0.0e+0),
+        alpha                    : np.float64 = np.float64(1.0)   ,
         post_process             : bool       = False             ,
         constant_gravity         : np.float64 = np.float64(-9.81) ,
     ) -> np.ndarray:
@@ -136,8 +147,9 @@ def one_body_dynamics__indirect(
             covel_x, covel_y,
             use_thrust_acc_limits, use_thrust_acc_smoothing, thrust_acc_min, thrust_acc_max,
             use_thrust_limits, use_thrust_smoothing, thrust_min, thrust_max,
-            k_steepness,
-            mass,
+            k_steepness  ,
+            mass  = mass ,
+            alpha = alpha,
         )
 
     # Dynamics: free-body
@@ -155,6 +167,8 @@ def one_body_dynamics__indirect(
     if post_process:
         if min_type == 'fuel':
             doptimal_control_objective__dtime =       thrust_acc_mag
+        elif min_type == 'energyfuel':
+            doptimal_control_objective__dtime = (1 - alpha) * thrust_acc_mag + alpha * 1/2 * thrust_acc_mag**2
         else: # assume 'energy'
             doptimal_control_objective__dtime = 1/2 * thrust_acc_mag**2
     
@@ -204,10 +218,12 @@ def one_body_dynamics__indirect(
         #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
         #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
         if use_thrust_limits:
+            
             thrust_acc_min = thrust_min / mass
             thrust_acc_max = thrust_max / mass
 
         if use_thrust_limits or use_thrust_acc_limits:
+            
             dcovel_mag__dcovel_x       = covel_x * covel_mag_inv
             dcovel_mag__dcovel_y       = covel_y * covel_mag_inv
             dcovel_x__covel_x          = 1.0
@@ -233,7 +249,7 @@ def one_body_dynamics__indirect(
                     dthrust_acc_mag__dcovel_x      = delta_thrust_acc_max2min * dheaviside_approx__dcovel_x
                     dthrust_acc_mag__dcovel_y      = delta_thrust_acc_max2min * dheaviside_approx__dcovel_y
 
-                    # Row 3 and 4
+                    # Row 2 and 3
                     #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
                     #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
                     ddstatedtime__dstate[2,6] = dthrust_acc_mag__dcovel_x * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
@@ -250,6 +266,30 @@ def one_body_dynamics__indirect(
                     ddstatedtime__dstate[2,7] = thrust_acc_mag * dthrust_acc_x_dir__dcovel_y
                     ddstatedtime__dstate[3,6] = thrust_acc_mag * dthrust_acc_y_dir__dcovel_x
                     ddstatedtime__dstate[3,7] = thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
+
+        elif min_type == 'energyfuel':
+
+            if use_thrust_limits or use_thrust_acc_limits:
+
+                thrust_acc_mag_uncon              = (covel_mag - (1 - alpha)) / alpha
+                dthrust_acc_mag_uncon__dcovel_mag = 1.0 / alpha
+                dthrust_acc_mag__dcovel_mag       = derivative__bounded_smooth_func(thrust_acc_mag_uncon, thrust_acc_min, thrust_acc_max, k_steepness) * dthrust_acc_mag_uncon__dcovel_mag
+
+                dthrust_acc_mag__dcovel_x = dthrust_acc_mag__dcovel_mag * dcovel_mag__dcovel_x
+                dthrust_acc_mag__dcovel_y = dthrust_acc_mag__dcovel_mag * dcovel_mag__dcovel_y
+
+                dthrust_acc_x_dir__dcovel_x = -1 * dcovel_x__covel_x * covel_mag_inv + -1 * covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
+                dthrust_acc_x_dir__dcovel_y =                                          -1 * covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
+                dthrust_acc_y_dir__dcovel_y = -1 * dcovel_y__covel_y * covel_mag_inv + -1 * covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
+                dthrust_acc_y_dir__dcovel_x =                                          -1 * covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
+
+                # Row 2 and 3
+                #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
+                #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
+                ddstatedtime__dstate[2,6] = dthrust_acc_mag__dcovel_x * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
+                ddstatedtime__dstate[2,7] = dthrust_acc_mag__dcovel_y * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_y
+                ddstatedtime__dstate[3,6] = dthrust_acc_mag__dcovel_x * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_x
+                ddstatedtime__dstate[3,7] = dthrust_acc_mag__dcovel_y * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
 
         else: # assume 'energy'
 

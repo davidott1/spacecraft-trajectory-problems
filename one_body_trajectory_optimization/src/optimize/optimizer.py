@@ -43,10 +43,10 @@ def optimal_trajectory_solve(
 
     # Intermediate solution: thrust- or thrust-acc-steepness continuation process
     if use_thrust_acc_limits or use_thrust_limits:
-        print("  Thrust- or Thrust-Acc-Steepness Continuation Process")
+        print("  Thrust- or Thrust-Acc Continuation Process: Smooth Inequality Enforcement Using k Steepness")
 
     # Intermediate solution: initialize loop
-    results_k_idx                = {}
+    results_store = {}
     k_idxinitguess_to_idxfinsoln = np.logspace(np.log10(k_idxinitguess), np.log10(k_idxfinsoln), k_idxdivs)
     options_root                 = {
         'maxiter' : 100 * len(decision_state_initguess), # 100 * len(decision_state_initguess)
@@ -54,54 +54,167 @@ def optimal_trajectory_solve(
         'xtol'    : 1.0e-8, # 1e-8
         'gtol'    : 1.0e-8, # 1e-8
     }
-    optimization_parameters['include_jacobian'] = True # should be True
-    if use_thrust_acc_limits:
-        inequality_parameters['use_thrust_acc_smoothing'] = True
-    if use_thrust_limits:
-        inequality_parameters['use_thrust_smoothing'] = True
 
-    # Intermediate solution: loop though k values
-    for idx, k_idx in tqdm(enumerate(k_idxinitguess_to_idxfinsoln), desc="Processing", leave=False, total=len(k_idxinitguess_to_idxfinsoln)):
+    if min_type in ('energy', 'fuel'):
 
-        # Set the k-idx
-        inequality_parameters['k_steepness'] = k_idx
-        
-        # Root solve and compute progress of current root solve
-        soln_root, soln_ivp = \
-            solve_for_root_and_compute_progress(
-                decision_state_initguess    ,
-                optimization_parameters     ,
-                integration_state_parameters,
-                equality_parameters         ,
-                inequality_parameters       ,
-                options_root                ,
-            )
+        optimization_parameters['include_jacobian'] = True # should be True
+        if use_thrust_acc_limits:
+            inequality_parameters['use_thrust_acc_smoothing'] = True
+            inequality_parameters['use_thrust_smoothing'    ] = False
+        if use_thrust_limits:
+            inequality_parameters['use_thrust_acc_smoothing'] = False
+            inequality_parameters['use_thrust_smoothing'    ] = True
 
-        # Record the results of the current step and update the decision state initial guess
-        results_k_idx[k_idx]     = soln_ivp
-        decision_state_initguess = soln_root.x
+        # Intermediate solution: loop though k values
+        for idx, k_idx in tqdm(enumerate(k_idxinitguess_to_idxfinsoln), desc="Processing", leave=False, total=len(k_idxinitguess_to_idxfinsoln)):
 
-        # Print the results of the current step
-        error_mag = np.linalg.norm(soln_root.fun)
-        if min_type == 'energy' and not use_thrust_acc_limits and not use_thrust_limits:
-            if idx==0:
-                tqdm.write(f"       {'Step':>5s} {'Error-Mag':>14s}")
-            tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {error_mag:>14.6e}")
-        else:
-            if idx==0:
-                tqdm.write(f"       {'Step':>5s} {'k':>14s} {'Error-Mag':>14s}")
-            tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
+            # Set the k-idx
+            inequality_parameters['k_steepness'] = k_idx
+            
+            # Root solve and compute progress of current root solve
+            soln_root, soln_ivp = \
+                solve_for_root_and_compute_progress(
+                    decision_state_initguess    ,
+                    optimization_parameters     ,
+                    integration_state_parameters,
+                    equality_parameters         ,
+                    inequality_parameters       ,
+                    options_root                ,
+                )
+
+            # Record the results of the current step and update the decision state initial guess
+            results_store[k_idx]     = soln_ivp
+            decision_state_initguess = soln_root.x
+
+            # Print the results of the current step
+            error_mag = np.linalg.norm(soln_root.fun)
+            if min_type == 'energy' and not use_thrust_acc_limits and not use_thrust_limits:
+                if idx==0:
+                    tqdm.write(f"       {'Step':>5s} {'Error-Mag':>14s}")
+                tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {error_mag:>14.6e}")
+            else:
+                if idx==0:
+                    tqdm.write(f"       {'Step':>5s} {'k':>14s} {'Error-Mag':>14s}")
+                tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
+
+        # Get final solution
+        results_approx_finalsoln = results_store[k_idxinitguess_to_idxfinsoln[-1]]
+
+    elif min_type == 'energyfuel':
+
+        optimization_parameters['include_jacobian'] = True # should be True
+        if use_thrust_acc_limits:
+            inequality_parameters['use_thrust_acc_smoothing'] = True
+            inequality_parameters['use_thrust_smoothing'    ] = False
+        if use_thrust_limits:
+            inequality_parameters['use_thrust_acc_smoothing'] = False
+            inequality_parameters['use_thrust_smoothing'    ] = True
+
+        alphas_1 = np.linspace(1, 0.01, 100) ** 1
+        alphas_2 = np.array([
+            10e-3,  9e-3,  8e-3,  7e-3,  6e-3,  5e-3,  4e-3,  3e-3,  2e-3,
+            19e-4, 18e-4, 17e-4, 16e-4, 15e-4, 14e-4, 13e-4, 12e-4, 11e-4,
+            10e-4,  9e-4,  8e-4,  7e-4,  6e-4,  5e-4,  4e-4,  3e-4,  2e-4,
+            19e-5, 18e-5, 17e-5, 16e-5, 15e-5, 14e-5, 13e-5, 12e-5, 11e-5,
+            10e-5,  9e-5,  8e-5,  7e-5,  6e-5,  5e-5,  4e-5,  3e-5,  2e-5,
+            19e-6, 18e-6, 17e-6, 16e-6, 15e-6, 14e-6, 13e-6, 12e-6, 11e-6,
+            10e-6,  9e-6,  8e-6,  7e-6,  6e-6,  5e-6,  4e-6,  3e-6,  2e-6,
+            19e-7, 18e-7, 17e-7, 16e-7, 15e-7, 14e-7, 13e-7, 12e-7, 11e-7,
+            10e-7,  9e-7,  8e-7,  7e-7,  6e-7,  5e-7,  4e-7,  3e-7,  2e-7,
+            19e-8, 18e-8, 17e-8, 16e-8, 15e-8, 14e-8, 13e-8, 12e-8, 11e-8,
+            10e-8,  9e-8,  8e-8,  7e-8,  6e-8,  5e-8,  4e-8,  3e-8,  2e-8,
+            10e-9
+        ])
+        alphas = np.hstack([alphas_1, alphas_2])
+        alpha = alphas[0]
+        inequality_parameters['alpha'] = alpha
+
+        # Intermediate solution: loop though k values
+        for idx_k, k_idx in tqdm(enumerate(k_idxinitguess_to_idxfinsoln), desc="Processing", leave=False, total=len(k_idxinitguess_to_idxfinsoln)):
+
+            # Set the k-idx
+            inequality_parameters['k_steepness'] = k_idx
+            
+            # Root solve and compute progress of current root solve
+            soln_root, soln_ivp = \
+                solve_for_root_and_compute_progress(
+                    decision_state_initguess    ,
+                    optimization_parameters     ,
+                    integration_state_parameters,
+                    equality_parameters         ,
+                    inequality_parameters       ,
+                    options_root                ,
+                )
+            
+            # Record the results of the current step and update the decision state initial guess
+            results_store[(k_idx, alpha)] = soln_ivp
+            decision_state_initguess   = soln_root.x
+
+            # Print the results of the current step
+            error_mag = np.linalg.norm(soln_root.fun)
+            if min_type == 'energy' and not use_thrust_acc_limits and not use_thrust_limits:
+                if idx_k==0:
+                    tqdm.write(f"       {'Step':>5s} {'Error-Mag':>14s}")
+                tqdm.write(f"     {idx_k+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {error_mag:>14.6e}")
+            else:
+                if idx_k==0:
+                    tqdm.write(f"       {'Step':>5s} {'k':>14s} {'alpha':>14s} {'Error-Mag':>14s}")
+                tqdm.write(f"     {idx_k+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {alpha:>14.6e} {error_mag:>14.6e}")
+
+        # Intermediate solution: loop though alpha values
+        for idx_alpha, alpha in tqdm(enumerate(alphas[1:], start=1), desc="Processing", leave=False, total=len(alphas[1:])):
+
+            inequality_parameters['alpha'] = alpha
+            # inequality_parameters['k_steepness'] = k_idx
+            
+            # Root solve and compute progress of current root solve
+            soln_root, soln_ivp = \
+                solve_for_root_and_compute_progress(
+                    decision_state_initguess    ,
+                    optimization_parameters     ,
+                    integration_state_parameters,
+                    equality_parameters         ,
+                    inequality_parameters       ,
+                    options_root                ,
+                )
+            
+            # Record the results of the current step and update the decision state initial guess
+            results_store[(k_idx, alpha)] = soln_ivp
+            decision_state_initguess   = soln_root.x
+
+            # Print the results of the current step
+            error_mag = np.linalg.norm(soln_root.fun)
+            if min_type == 'energy' and not use_thrust_acc_limits and not use_thrust_limits:
+                if idx_alpha==1:
+                    tqdm.write("\n  Thrust- or Thrust-Acc Continuation Process: Smooth Energy to Fuel Transition Using alpha Weighting")
+                    tqdm.write(f"       {'Step':>5s} {'Error-Mag':>14s}")
+                tqdm.write(f"     {idx_alpha+1:>3d}/{len(alphas):>3d} {error_mag:>14.6e}")
+            else:
+                if idx_alpha==1:
+                    tqdm.write("\n  Thrust- or Thrust-Acc Continuation Process: Smooth Energy to Fuel Transition Using alpha Weighting")
+                    tqdm.write(f"       {'Step':>5s} {'k':>14s} {'alpha':>14s} {'Error-Mag':>14s}")
+                tqdm.write(f"     {idx_alpha+1:>3d}/{len(alphas):>3d} {k_idx:>14.6e} {alpha:>14.6e} {error_mag:>14.6e}")
+
+        # Get final solution
+        results_approx_finalsoln = results_store[(k_idxinitguess_to_idxfinsoln[-1], alphas[-1])]
 
     # Final solution: no thrust or thrust-acc smoothing
     print("\n\nFINAL SOLUTION PROCESS")
     print("  Root-Solve Results")
 
     # Final solution: root solve and compute progress of current root solve
+
+    # Set up
     optimization_parameters['include_jacobian']       = True # should be True
     integration_state_parameters['include_scstm']     = True # should be True
     integration_state_parameters['post_process']      = False # should be False
     inequality_parameters['use_thrust_acc_smoothing'] = False # should be False
     inequality_parameters['use_thrust_smoothing']     = False # should be False
+
+    # Use min type fuel for finalized solution
+    if optimization_parameters['min_type'] == 'energyfuel':
+        optimization_parameters['min_type'] = 'fuel' 
+
     soln_root, soln_ivp = \
         solve_for_root_and_compute_progress(
             decision_state_initguess    ,
@@ -264,7 +377,7 @@ def optimal_trajectory_solve(
         - np.hstack([time_f_mns, state_f_finalsoln, costate_f_finalsoln, ham_f_mns])
 
     # Final solution: approximate (use smoothing)
-    results_approx_finalsoln = results_k_idx[k_idxinitguess_to_idxfinsoln[-1]]
+    # results_approx_finalsoln = results_store[k_idxinitguess_to_idxfinsoln[-1]]
     state_costate_o_approx_finalsoln = results_approx_finalsoln.y[0:8,  0]
     state_costate_f_approx_finalsoln = results_approx_finalsoln.y[0:8, -1]
     if inequality_parameters['use_thrust_limits']:
