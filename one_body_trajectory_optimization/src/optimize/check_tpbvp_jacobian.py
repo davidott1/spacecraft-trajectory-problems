@@ -43,18 +43,18 @@ def pack_decision_state(eq):
         x = np.asarray(x, dtype=float)
         return x.reshape(-1)
     return np.hstack([
-        a1(eq['time'    ]['o']['pls']),
-        a1(eq['pos_vec' ]['o']['pls']),
-        a1(eq['vel_vec' ]['o']['pls']),
+        a1(eq['time'     ]['o']['pls']),
+        a1(eq['pos_vec'  ]['o']['pls']),
+        a1(eq['vel_vec'  ]['o']['pls']),
         a1(eq['copos_vec']['o']['pls']),
         a1(eq['covel_vec']['o']['pls']),
-        a1(eq['ham'     ]['o']['pls']),
-        a1(eq['time'    ]['f']['mns']),
-        a1(eq['pos_vec' ]['f']['mns']),
-        a1(eq['vel_vec' ]['f']['mns']),
+        a1(eq['ham'      ]['o']['pls']),
+        a1(eq['time'     ]['f']['mns']),
+        a1(eq['pos_vec'  ]['f']['mns']),
+        a1(eq['vel_vec'  ]['f']['mns']),
         a1(eq['copos_vec']['f']['mns']),
         a1(eq['covel_vec']['f']['mns']),
-        a1(eq['ham'     ]['f']['mns']),
+        a1(eq['ham'      ]['f']['mns']),
     ])
 
 def make_default_params():
@@ -63,16 +63,16 @@ def make_default_params():
         return {"pls": np.array(pls, dtype=float), "mns": np.array(mns, dtype=float), "mode": mode}
 
     equality_parameters = {
-        "time":      {"o": bnd([0.0], [0.0]), "f": bnd([10.0], [10.0])},
-        "pos_vec":   {"o": bnd([1.0, 0.0], [1.0, 0.0]), "f": bnd([0.0, 1.0], [0.0, 1.0])},
-        "vel_vec":   {"o": bnd([0.0, 1.0], [0.0, 1.0]), "f": bnd([0.0, 0.0], [0.0, 0.0])},
+        "time":      {"o": bnd([0.0], [0.0]), "f": bnd([50.0], [50.0])},
+        "pos_vec":   {"o": bnd([0.0, 0.0], [0.0, 0.0]), "f": bnd([10.0, 10.0], [10.0, 10.0])},
+        "vel_vec":   {"o": bnd([0.0, 0.0], [0.0, 0.0]), "f": bnd([1.0, 0.0], [1.0, 0.0])},
         "copos_vec": {"o": bnd([0.1, 0.2], [0.1, 0.2]), "f": bnd([0.0, 0.0], [0.0, 0.0])},
         "covel_vec": {"o": bnd([0.3, 0.4], [0.3, 0.4]), "f": bnd([0.0, 0.0], [0.0, 0.0])},
         "ham":       {"o": bnd([0.0], [0.0]), "f": bnd([0.0], [0.0])},
     }
 
     optimization_parameters = {
-        "min_type": 'fuel',          # 'energy' or 'fuel'
+        "min_type": 'energyfuel',          # 'energy' or 'fuel' or 'energyfuel'
         "include_jacobian": True,
     }
 
@@ -80,18 +80,21 @@ def make_default_params():
         "mass_o": 1.0,
         "include_scstm": True,
         "post_process": False,
+        "exhaust_velocity": 3e3,
+        "constant_gravity": 0.0,
     }
 
     inequality_parameters = {
         "use_thrust_acc_limits": True,
         "use_thrust_acc_smoothing": True,
         "thrust_acc_min": 0.0,
-        "thrust_acc_max": 4.0e-2,
+        "thrust_acc_max": 5.0e-2,
         "use_thrust_limits": False,
         "use_thrust_smoothing": False,
         "thrust_min": 0.0,
         "thrust_max": 4.0e-2,
         "k_steepness": 100.0,
+        "alpha": 0.9,
     }
 
     return optimization_parameters, integration_state_parameters, equality_parameters, inequality_parameters
