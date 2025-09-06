@@ -197,11 +197,18 @@ def optimal_trajectory_solve(
     print("  Root-Solve Results")
 
     # Final solution: root solve and compute progress of current root solve
+
+    # Set up
     optimization_parameters['include_jacobian']       = True # should be True
     integration_state_parameters['include_scstm']     = True # should be True
     integration_state_parameters['post_process']      = False # should be False
     inequality_parameters['use_thrust_acc_smoothing'] = False # should be False
     inequality_parameters['use_thrust_smoothing']     = False # should be False
+
+    # Use min type fuel for finalized solution
+    if optimization_parameters['min_type'] == 'energyfuel':
+        optimization_parameters['min_type'] = 'fuel' 
+
     soln_root, soln_ivp = \
         solve_for_root_and_compute_progress(
             decision_state_initguess    ,

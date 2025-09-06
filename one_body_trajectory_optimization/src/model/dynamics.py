@@ -268,14 +268,10 @@ def one_body_dynamics__indirect(
                     ddstatedtime__dstate[3,7] = thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
 
         elif min_type == 'energyfuel':
-            # thrust_acc_mag = (covel_mag - (1 - alpha)) / alpha
-            # if switching_func > 0:
 
-            # thrust_acc_mag = (covel_mag - (1 - alpha)) / alpha
-            # thrust_acc_mag = bounded_smooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max, k_steepness)
-            thrust_acc_mag_uncon = (covel_mag - (1 - alpha)) / alpha
+            thrust_acc_mag_uncon              = (covel_mag - (1 - alpha)) / alpha
             dthrust_acc_mag_uncon__dcovel_mag = 1.0 / alpha
-            dthrust_acc_mag__dcovel_mag = derivative__bounded_smooth_func(thrust_acc_mag_uncon, thrust_acc_min, thrust_acc_max, k_steepness) * dthrust_acc_mag_uncon__dcovel_mag
+            dthrust_acc_mag__dcovel_mag       = derivative__bounded_smooth_func(thrust_acc_mag_uncon, thrust_acc_min, thrust_acc_max, k_steepness) * dthrust_acc_mag_uncon__dcovel_mag
 
             dthrust_acc_mag__dcovel_x = dthrust_acc_mag__dcovel_mag * dcovel_mag__dcovel_x
             dthrust_acc_mag__dcovel_y = dthrust_acc_mag__dcovel_mag * dcovel_mag__dcovel_y
@@ -292,16 +288,6 @@ def one_body_dynamics__indirect(
             ddstatedtime__dstate[2,7] = dthrust_acc_mag__dcovel_y * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_y
             ddstatedtime__dstate[3,6] = dthrust_acc_mag__dcovel_x * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_x
             ddstatedtime__dstate[3,7] = dthrust_acc_mag__dcovel_y * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
-
-            # else:
-
-            #     # Row 2 and 3
-            #     #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
-            #     #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
-            #     ddstatedtime__dstate[2,6] = 0.0
-            #     ddstatedtime__dstate[2,7] = 0.0
-            #     ddstatedtime__dstate[3,6] = 0.0
-            #     ddstatedtime__dstate[3,7] = 0.0
 
         else: # assume 'energy'
 
