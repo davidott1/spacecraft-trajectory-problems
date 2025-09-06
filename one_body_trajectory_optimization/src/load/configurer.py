@@ -101,7 +101,7 @@ def _convert_parameters_to_standard_units(
         'ham_f'                 : [           0.0e+0  , None      , float ],
         'mass_o'                : [           1.0e+3  , u.kg      , float ], # type: ignore
         'exhaust_velocity'      : [           3.0e+3  , u.m/u.s   , float ], # type: ignore
-        'constant_gravity'      : [          -9.81    , u.m/u.s**2, float ], # type: ignore
+        'constant_gravity'      : [           0.0e+0  , u.m/u.s**2, float ], # type: ignore
         'use_thrust_acc_limits' : [              False, None      , bool  ],
         'thrust_acc_min'        : [           0.0e+0  , u.m/u.s**2, float ], # type: ignore
         'thrust_acc_max'        : [           1.0e+0  , u.m/u.s**2, float ], # type: ignore
@@ -189,7 +189,7 @@ def _convert_parameters_to_standard_units(
                 parameters_standard_units[param]['unit' ] = str(standard_units['distance']**2/standard_units['time']**4)
 
         # Enforce types
-        if val_type == int and parameters_standard_units[param] is not None:
+        if val_type == int and parameters_standard_units[param]['value'] is not None:
             parameters_standard_units[param]['value'] = int(parameters_standard_units[param]['value'])
 
     return parameters_standard_units

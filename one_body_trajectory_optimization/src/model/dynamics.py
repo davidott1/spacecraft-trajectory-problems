@@ -218,10 +218,12 @@ def one_body_dynamics__indirect(
         #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
         #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
         if use_thrust_limits:
+            
             thrust_acc_min = thrust_min / mass
             thrust_acc_max = thrust_max / mass
 
         if use_thrust_limits or use_thrust_acc_limits:
+            
             dcovel_mag__dcovel_x       = covel_x * covel_mag_inv
             dcovel_mag__dcovel_y       = covel_y * covel_mag_inv
             dcovel_x__covel_x          = 1.0
@@ -247,7 +249,7 @@ def one_body_dynamics__indirect(
                     dthrust_acc_mag__dcovel_x      = delta_thrust_acc_max2min * dheaviside_approx__dcovel_x
                     dthrust_acc_mag__dcovel_y      = delta_thrust_acc_max2min * dheaviside_approx__dcovel_y
 
-                    # Row 3 and 4
+                    # Row 2 and 3
                     #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
                     #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
                     ddstatedtime__dstate[2,6] = dthrust_acc_mag__dcovel_x * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
@@ -266,7 +268,39 @@ def one_body_dynamics__indirect(
                     ddstatedtime__dstate[3,7] = thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
 
         elif min_type == 'energyfuel':
-            ...
+            
+            if use_thrust_limits or use_thrust_acc_limits:
+                
+                # switching_func = covel_mag - (1.0 - alpha)
+                # if switching_func > 0:
+                #     # Thrust on
+                #     thrust_acc_mag = (covel_mag - (1 - alpha)) / alpha
+                #     thrust_acc_mag = covel_mag / alpha - (1 - alpha) / alpha
+                #     thrust_acc_mag = bounded_smooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max, k_steepness)
+                # else:
+                #     # Thrust off
+                #     thrust_acc_mag = 0.0
+
+                dthrust_acc_mag__dcovel_mag = derivative__bounded_smooth_func(covel_mag, thrust_acc_min, thrust_acc_max, k_steepness)
+
+                dthrust_acc_mag__dcovel_x = dthrust_acc_mag__dcovel_mag * dcovel_mag__dcovel_x
+                dthrust_acc_mag__dcovel_y = dthrust_acc_mag__dcovel_mag * dcovel_mag__dcovel_y
+
+                dthrust_acc_x_dir__dcovel_x = -1 * dcovel_x__covel_x * covel_mag_inv + -1 * covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
+                dthrust_acc_x_dir__dcovel_y =                                          -1 * covel_x * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
+                dthrust_acc_y_dir__dcovel_y = -1 * dcovel_y__covel_y * covel_mag_inv + -1 * covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_y
+                dthrust_acc_y_dir__dcovel_x =                                          -1 * covel_y * dcovel_mag_inv__dcovel_mag * dcovel_mag__dcovel_x
+
+                # Row 2 and 3
+                #   d(dvel_x__dtime)/dcovel_x, d(dvel_x__dtime)/dcovel_y
+                #   d(dvel_y__dtime)/dcovel_x, d(dvel_y__dtime)/dcovel_y
+                #   d_state__d_time[2:4,6:8] = thrust_acc_mag * thrust_acc_x_dir
+                ddstatedtime__dstate[2,6] = dthrust_acc_mag__dcovel_x * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_x
+                ddstatedtime__dstate[2,7] = dthrust_acc_mag__dcovel_y * thrust_acc_x_dir + thrust_acc_mag * dthrust_acc_x_dir__dcovel_y
+                ddstatedtime__dstate[3,6] = dthrust_acc_mag__dcovel_x * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_x
+                ddstatedtime__dstate[3,7] = dthrust_acc_mag__dcovel_y * thrust_acc_y_dir + thrust_acc_mag * dthrust_acc_y_dir__dcovel_y
+
+
         else: # assume 'energy'
 
             if use_thrust_limits or use_thrust_acc_limits:
