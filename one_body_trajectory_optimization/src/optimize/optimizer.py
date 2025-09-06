@@ -46,7 +46,7 @@ def optimal_trajectory_solve(
         print("  Thrust- or Thrust-Acc Continuation Process: Smooth Inequality Enforcement Using k Steepness")
 
     # Intermediate solution: initialize loop
-    results_k_idx                = {}
+    results_store = {}
     k_idxinitguess_to_idxfinsoln = np.logspace(np.log10(k_idxinitguess), np.log10(k_idxfinsoln), k_idxdivs)
     options_root                 = {
         'maxiter' : 100 * len(decision_state_initguess), # 100 * len(decision_state_initguess)
@@ -83,7 +83,7 @@ def optimal_trajectory_solve(
                 )
 
             # Record the results of the current step and update the decision state initial guess
-            results_k_idx[k_idx]     = soln_ivp
+            results_store[k_idx]     = soln_ivp
             decision_state_initguess = soln_root.x
 
             # Print the results of the current step
@@ -96,6 +96,9 @@ def optimal_trajectory_solve(
                 if idx==0:
                     tqdm.write(f"       {'Step':>5s} {'k':>14s} {'Error-Mag':>14s}")
                 tqdm.write(f"     {idx+1:>3d}/{len(k_idxinitguess_to_idxfinsoln):>3d} {k_idx:>14.6e} {error_mag:>14.6e}")
+
+        # Get final solution
+        results_approx_finalsoln = results_store[k_idxinitguess_to_idxfinsoln[-1]]
 
     elif min_type == 'energyfuel':
 
@@ -144,8 +147,8 @@ def optimal_trajectory_solve(
                 )
             
             # Record the results of the current step and update the decision state initial guess
-            results_k_idx[k_idx]     = soln_ivp
-            decision_state_initguess = soln_root.x
+            results_store[(k_idx, alpha)] = soln_ivp
+            decision_state_initguess   = soln_root.x
 
             # Print the results of the current step
             error_mag = np.linalg.norm(soln_root.fun)
@@ -176,8 +179,8 @@ def optimal_trajectory_solve(
                 )
             
             # Record the results of the current step and update the decision state initial guess
-            results_k_idx[k_idx]     = soln_ivp
-            decision_state_initguess = soln_root.x
+            results_store[(k_idx, alpha)] = soln_ivp
+            decision_state_initguess   = soln_root.x
 
             # Print the results of the current step
             error_mag = np.linalg.norm(soln_root.fun)
@@ -191,6 +194,9 @@ def optimal_trajectory_solve(
                     tqdm.write("\n  Thrust- or Thrust-Acc Continuation Process: Smooth Energy to Fuel Transition Using alpha Weighting")
                     tqdm.write(f"       {'Step':>5s} {'k':>14s} {'alpha':>14s} {'Error-Mag':>14s}")
                 tqdm.write(f"     {idx_alpha+1:>3d}/{len(alphas):>3d} {k_idx:>14.6e} {alpha:>14.6e} {error_mag:>14.6e}")
+
+        # Get final solution
+        results_approx_finalsoln = results_store[(k_idxinitguess_to_idxfinsoln[-1], alphas[-1])]
 
     # Final solution: no thrust or thrust-acc smoothing
     print("\n\nFINAL SOLUTION PROCESS")
@@ -371,7 +377,7 @@ def optimal_trajectory_solve(
         - np.hstack([time_f_mns, state_f_finalsoln, costate_f_finalsoln, ham_f_mns])
 
     # Final solution: approximate (use smoothing)
-    results_approx_finalsoln = results_k_idx[k_idxinitguess_to_idxfinsoln[-1]]
+    # results_approx_finalsoln = results_store[k_idxinitguess_to_idxfinsoln[-1]]
     state_costate_o_approx_finalsoln = results_approx_finalsoln.y[0:8,  0]
     state_costate_f_approx_finalsoln = results_approx_finalsoln.y[0:8, -1]
     if inequality_parameters['use_thrust_limits']:
