@@ -678,252 +678,151 @@ def tpbvp_objective_and_jacobian(
         # Build error jacobian
         #   d(error_pos_vec_o)/d(decision_state)
         if equality_parameters['pos_vec']['f']['mode'] == 'fixed':
-            d_error_pos_vec_f__d_pos_vec_o   = np.zeros((2,2))
-            d_error_pos_vec_f__d_vel_vec_o   = np.zeros((2,2))
-            d_error_pos_vec_f__d_copos_vec_o = np.zeros((2,2))
-            d_error_pos_vec_f__d_covel_vec_o = np.zeros((2,2))
-            d_error_pos_vec_f__d_time_f      = np.zeros((2,1))
+            if inequality_parameters['use_thrust_limits']:
+                integration_state_f = np.hstack([state_costate_f, mass_f_mns])
+            else:
+                integration_state_f = state_costate_f
+            d_state_costate_f_mns__d_time_f_mns = \
+                one_body_dynamics__indirect(
+                    time_f_mns,
+                    integration_state_f,
+                    include_scstm            = False,
+                    min_type                 = optimization_parameters['min_type'],
+                    use_thrust_acc_limits    = inequality_parameters['use_thrust_acc_limits'],
+                    use_thrust_acc_smoothing = inequality_parameters['use_thrust_acc_smoothing'],
+                    thrust_acc_min           = inequality_parameters['thrust_acc_min'],
+                    thrust_acc_max           = inequality_parameters['thrust_acc_max'],
+                    use_thrust_limits        = inequality_parameters['use_thrust_limits'],
+                    use_thrust_smoothing     = inequality_parameters['use_thrust_smoothing'],
+                    thrust_min               = inequality_parameters['thrust_min'],
+                    thrust_max               = inequality_parameters['thrust_max'],
+                    exhaust_velocity         = integration_state_parameters['exhaust_velocity'],
+                    post_process             = False,
+                    k_steepness              = inequality_parameters['k_steepness'],
+                    alpha                    = inequality_parameters['alpha'],
+                    constant_gravity         = integration_state_parameters['constant_gravity'],
+                )
+            d_state_costate_f_mns__d_time_f_mns = d_state_costate_f_mns__d_time_f_mns[0:8]
+
+            d_error_pos_vec_f__d_pos_vec_o_pls   = -scstm_of[0:2, 0:2]
+            d_error_pos_vec_f__d_vel_vec_o_pls   = -scstm_of[0:2, 2:4]
+            d_error_pos_vec_f__d_copos_vec_o_pls = -scstm_of[0:2, 4:6]
+            d_error_pos_vec_f__d_covel_vec_o_pls = -scstm_of[0:2, 6:8]
+            d_error_pos_vec_f__d_time_f_mns      = -d_state_costate_f_mns__d_time_f_mns[0:2].reshape((2,1))
             d_error_pos_vec_f__d_decision_state = \
                 np.hstack([
-                    d_error_pos_vec_f__d_pos_vec_o,
-                    d_error_pos_vec_f__d_vel_vec_o,
-                    d_error_pos_vec_f__d_copos_vec_o,
-                    d_error_pos_vec_f__d_covel_vec_o,
-                    d_error_pos_vec_f__d_time_f
+                    d_error_pos_vec_f__d_pos_vec_o_pls,
+                    d_error_pos_vec_f__d_vel_vec_o_pls,
+                    d_error_pos_vec_f__d_copos_vec_o_pls,
+                    d_error_pos_vec_f__d_covel_vec_o_pls,
+                    d_error_pos_vec_f__d_time_f_mns
                 ])
             error_jacobian_components.append(d_error_pos_vec_f__d_decision_state)
 
         # Build error jacobian
         #   d(error_vel_vec_f)/d(decision_state)
         if equality_parameters['vel_vec']['f']['mode'] == 'fixed':
-            d_error_vel_vec_f__d_pos_vec_o   = np.zeros((2,2))
-            d_error_vel_vec_f__d_vel_vec_o   = np.zeros((2,2))
-            d_error_vel_vec_f__d_copos_vec_o = np.zeros((2,2))
-            d_error_vel_vec_f__d_covel_vec_o = np.zeros((2,2))
-            d_error_vel_vec_f__d_time_f      = np.zeros((2,1))
+            d_error_vel_vec_f__d_pos_vec_o_pls   = -scstm_of[2:4, 0:2]
+            d_error_vel_vec_f__d_vel_vec_o_pls   = -scstm_of[2:4, 2:4]
+            d_error_vel_vec_f__d_copos_vec_o_pls = -scstm_of[2:4, 4:6]
+            d_error_vel_vec_f__d_covel_vec_o_pls = -scstm_of[2:4, 6:8]
+            d_error_vel_vec_f__d_time_f_mns      = -d_state_costate_f_mns__d_time_f_mns[2:4].reshape((2,1))
             d_error_vel_vec_f__d_decision_state = \
                 np.hstack([
-                    d_error_vel_vec_f__d_pos_vec_o,
-                    d_error_vel_vec_f__d_vel_vec_o,
-                    d_error_vel_vec_f__d_copos_vec_o,
-                    d_error_vel_vec_f__d_covel_vec_o,
-                    d_error_vel_vec_f__d_time_f
+                    d_error_vel_vec_f__d_pos_vec_o_pls,
+                    d_error_vel_vec_f__d_vel_vec_o_pls,
+                    d_error_vel_vec_f__d_copos_vec_o_pls,
+                    d_error_vel_vec_f__d_covel_vec_o_pls,
+                    d_error_vel_vec_f__d_time_f_mns
                 ])
             error_jacobian_components.append(d_error_vel_vec_f__d_decision_state)
 
         # Build error jacobian
         #   d(error_copos_vec_f)/d(decision_state)
         if equality_parameters['copos_vec']['f']['mode'] == 'fixed':
-            d_error_copos_vec_f__d_pos_vec_o   = np.zeros((2,2))
-            d_error_copos_vec_f__d_vel_vec_o   = np.zeros((2,2))
-            d_error_copos_vec_f__d_copos_vec_o = np.zeros((2,2))
-            d_error_copos_vec_f__d_covel_vec_o = np.zeros((2,2))
-            d_error_copos_vec_f__d_time_f      = np.zeros((2,1))
+            d_error_copos_vec_f__d_pos_vec_o_pls   = -scstm_of[4:6, 0:2]
+            d_error_copos_vec_f__d_vel_vec_o_pls   = -scstm_of[4:6, 2:4]
+            d_error_copos_vec_f__d_copos_vec_o_pls = -scstm_of[4:6, 4:6]
+            d_error_copos_vec_f__d_covel_vec_o_pls = -scstm_of[4:6, 6:8]
+            d_error_copos_vec_f__d_time_f_mns      = -d_state_costate_f_mns__d_time_f_mns[4:6].reshape((2,1))
             d_error_copos_vec_f__d_decision_state = \
                 np.hstack([
-                    d_error_copos_vec_f__d_pos_vec_o,
-                    d_error_copos_vec_f__d_vel_vec_o,
-                    d_error_copos_vec_f__d_copos_vec_o,
-                    d_error_copos_vec_f__d_covel_vec_o,
-                    d_error_copos_vec_f__d_time_f
+                    d_error_copos_vec_f__d_pos_vec_o_pls,
+                    d_error_copos_vec_f__d_vel_vec_o_pls,
+                    d_error_copos_vec_f__d_copos_vec_o_pls,
+                    d_error_copos_vec_f__d_covel_vec_o_pls,
+                    d_error_copos_vec_f__d_time_f_mns
                 ])
             error_jacobian_components.append(d_error_copos_vec_f__d_decision_state)
 
         # Build error jacobian
         #   d(error_covel_vec_f)/d(decision_state)
         if equality_parameters['covel_vec']['f']['mode'] == 'fixed':
-            d_error_covel_vec_f__d_pos_vec_o   = np.zeros((2,2))
-            d_error_covel_vec_f__d_vel_vec_o   = np.zeros((2,2))
-            d_error_covel_vec_f__d_copos_vec_o = np.zeros((2,2))
-            d_error_covel_vec_f__d_covel_vec_o = np.zeros((2,2))
-            d_error_covel_vec_f__d_time_f      = np.zeros((2,1))
+            d_error_covel_vec_f__d_pos_vec_o_pls   = -scstm_of[6:8, 0:2]
+            d_error_covel_vec_f__d_vel_vec_o_pls   = -scstm_of[6:8, 2:4]
+            d_error_covel_vec_f__d_copos_vec_o_pls = -scstm_of[6:8, 4:6]
+            d_error_covel_vec_f__d_covel_vec_o_pls = -scstm_of[6:8, 6:8]
+            d_error_covel_vec_f__d_time_f_mns      = -d_state_costate_f_mns__d_time_f_mns[6:8].reshape((2,1))
             d_error_covel_vec_f__d_decision_state = \
                 np.hstack([
-                    d_error_covel_vec_f__d_pos_vec_o,
-                    d_error_covel_vec_f__d_vel_vec_o,
-                    d_error_covel_vec_f__d_copos_vec_o,
-                    d_error_covel_vec_f__d_covel_vec_o,
-                    d_error_covel_vec_f__d_time_f
+                    d_error_covel_vec_f__d_pos_vec_o_pls,
+                    d_error_covel_vec_f__d_vel_vec_o_pls,
+                    d_error_covel_vec_f__d_copos_vec_o_pls,
+                    d_error_covel_vec_f__d_covel_vec_o_pls,
+                    d_error_covel_vec_f__d_time_f_mns
                 ])
             error_jacobian_components.append(d_error_covel_vec_f__d_decision_state)
 
         # Build error jacobian
         #   d(error_time_f)/d(decision_state)
         if equality_parameters['time_f']['mode'] == 'fixed':
-            d_error_time_f__d_pos_vec_o   = np.zeros((2,2))
-            d_error_time_f__d_vel_vec_o   = np.zeros((2,2))
-            d_error_time_f__d_copos_vec_o = np.zeros((2,2))
-            d_error_time_f__d_covel_vec_o = np.zeros((2,2))
-            d_error_time_f__d_time_f      = np.zeros((2,1))
+            d_error_time_f__d_pos_vec_o_pls   = np.zeros((2,2))
+            d_error_time_f__d_vel_vec_o_pls   = np.zeros((2,2))
+            d_error_time_f__d_copos_vec_o_pls = np.zeros((2,2))
+            d_error_time_f__d_covel_vec_o_pls = np.zeros((2,2))
+            d_error_time_f__d_time_f_mns      = -1.0
             d_error_time_f__d_decision_state = \
                 np.hstack([
-                    d_error_time_f__d_pos_vec_o,
-                    d_error_time_f__d_vel_vec_o,
-                    d_error_time_f__d_copos_vec_o,
-                    d_error_time_f__d_covel_vec_o,
-                    d_error_time_f__d_time_f
+                    d_error_time_f__d_pos_vec_o_pls,
+                    d_error_time_f__d_vel_vec_o_pls,
+                    d_error_time_f__d_copos_vec_o_pls,
+                    d_error_time_f__d_covel_vec_o_pls,
+                    d_error_time_f__d_time_f_mns
                 ])
             error_jacobian_components.append(d_error_time_f__d_decision_state)
 
         # Build error jacobian
         #   d(error_ham_f)/d(decision_state)
         if equality_parameters['ham_f']['mode'] == 'fixed':
-            d_error_ham_f__d_pos_vec_o   = np.zeros((2,2))
-            d_error_ham_f__d_vel_vec_o   = np.zeros((2,2))
-            d_error_ham_f__d_copos_vec_o = np.zeros((2,2))
-            d_error_ham_f__d_covel_vec_o = np.zeros((2,2))
-            d_error_ham_f__d_time_f      = np.zeros((2,1))
+            d_ham_f_mns__d_state_costate_f_mns = \
+                np.hstack([
+                    -d_state_costate_f_mns__d_time_f_mns[4:6], # -d(copos)/dt
+                    -d_state_costate_f_mns__d_time_f_mns[6:8], # -d(covel)/dt
+                     d_state_costate_f_mns__d_time_f_mns[0:2], #  d(  pos)/dt
+                     d_state_costate_f_mns__d_time_f_mns[2:4]  #  d(  vel)/dt
+                ])
+            
+            d_ham_f_mns__d_state_costate_o   = d_ham_f_mns__d_state_costate_f_mns @ scstm_of
+            d_error_ham_f__d_pos_vec_o_pls   = -1.0 * d_ham_f_mns__d_state_costate_o[0:2].reshape((1,2))
+            d_error_ham_f__d_vel_vec_o_pls   = -1.0 * d_ham_f_mns__d_state_costate_o[2:4].reshape((1,2))
+            d_error_ham_f__d_copos_vec_o_pls = -1.0 * d_ham_f_mns__d_state_costate_o[4:6].reshape((1,2))
+            d_error_ham_f__d_covel_vec_o_pls = -1.0 * d_ham_f_mns__d_state_costate_o[6:8].reshape((1,2))
+
+            d_ham_f_mns__d_time_f_mns   = d_ham_f_mns__d_state_costate_f_mns @ d_state_costate_f_mns__d_time_f_mns
+            d_error_ham_f__d_time_f_mns = -1.0 * d_ham_f_mns__d_time_f_mns.reshape((1,1))
+
             d_error_ham_f__d_decision_state = \
                 np.hstack([
-                    d_error_ham_f__d_pos_vec_o,
-                    d_error_ham_f__d_vel_vec_o,
-                    d_error_ham_f__d_copos_vec_o,
-                    d_error_ham_f__d_covel_vec_o,
-                    d_error_ham_f__d_time_f
+                    d_error_ham_f__d_pos_vec_o_pls,
+                    d_error_ham_f__d_vel_vec_o_pls,
+                    d_error_ham_f__d_copos_vec_o_pls,
+                    d_error_ham_f__d_covel_vec_o_pls,
+                    d_error_ham_f__d_time_f_mns
                 ])
             error_jacobian_components.append(d_error_ham_f__d_decision_state)
 
         # Combine error jacobian components
         error_jacobian = np.vstack(error_jacobian_components)
-
-        ########
-
-        # # Build RHS state with mass if thrust limits are active
-        # if inequality_parameters['use_thrust_limits']:
-        #     mass_o = integration_state_parameters['mass_o']
-        #     integration_state_o = np.hstack([state_costate_o, mass_o])
-        # else:
-        #     integration_state_o = state_costate_o
-
-        # # d(error_state_costate_f)/d(time_o_pls) = -d(state_costate_f)/d(time_o_pls) = scstm_of * (d(state_o)/dt)
-        # d_state_costate_o__d_t = \
-        #     one_body_dynamics__indirect(
-        #         time_o_pls,
-        #         integration_state_o,
-        #         include_scstm=False,
-        #         min_type=optimization_parameters['min_type'],
-        #         use_thrust_acc_limits=inequality_parameters['use_thrust_acc_limits'],
-        #         use_thrust_acc_smoothing=inequality_parameters['use_thrust_acc_smoothing'],
-        #         thrust_acc_min=inequality_parameters['thrust_acc_min'],
-        #         thrust_acc_max=inequality_parameters['thrust_acc_max'],
-        #         use_thrust_limits=inequality_parameters['use_thrust_limits'],
-        #         use_thrust_smoothing=inequality_parameters['use_thrust_smoothing'],
-        #         thrust_min=inequality_parameters['thrust_min'],
-        #         thrust_max=inequality_parameters['thrust_max'],
-        #         exhaust_velocity=integration_state_parameters['exhaust_velocity'],
-        #         post_process=False,
-        #         k_steepness=inequality_parameters['k_steepness'],
-        #         constant_gravity=integration_state_parameters['constant_gravity'],
-        #     )
-        # d_state_costate_o__d_t = d_state_costate_o__d_t[0:8]
-        # d_state_costate_f_mns__d_time_o_pls = -1 * scstm_of @ d_state_costate_o__d_t
-        
-        # # # d(error_pos_vec_f)/d(time_o_pls)
-        # # # d(error_vel_vec_f)/d(time_o_pls)
-        # # # d(error_copos_vec_f)/d(time_o_pls)
-        # # # d(error_covel_vec_f)/d(time_o_pls)
-        # # error_jacobian[11:13, 0] = -1 * d_state_costate_f_mns__d_time_o_pls[0:2]
-        # # error_jacobian[13:15, 0] = -1 * d_state_costate_f_mns__d_time_o_pls[2:4]
-        # # error_jacobian[15:17, 0] = -1 * d_state_costate_f_mns__d_time_o_pls[4:6]
-        # # error_jacobian[17:19, 0] = -1 * d_state_costate_f_mns__d_time_o_pls[6:8]
-
-        # if inequality_parameters['use_thrust_limits']:
-        #     integration_state_f = np.hstack([state_costate_f, mass_f_mns])
-        # else:
-        #     integration_state_f = state_costate_f
-        # d_state_costate_f_mns__d_t = \
-        #     one_body_dynamics__indirect(
-        #         time_f_mns,
-        #         integration_state_f,
-        #         include_scstm=False,
-        #         min_type=optimization_parameters['min_type'],
-        #         use_thrust_acc_limits=inequality_parameters['use_thrust_acc_limits'],
-        #         use_thrust_acc_smoothing=inequality_parameters['use_thrust_acc_smoothing'],
-        #         thrust_acc_min=inequality_parameters['thrust_acc_min'],
-        #         thrust_acc_max=inequality_parameters['thrust_acc_max'],
-        #         use_thrust_limits=inequality_parameters['use_thrust_limits'],
-        #         use_thrust_smoothing=inequality_parameters['use_thrust_smoothing'],
-        #         thrust_min=inequality_parameters['thrust_min'],
-        #         thrust_max=inequality_parameters['thrust_max'],
-        #         exhaust_velocity=integration_state_parameters['exhaust_velocity'],
-        #         post_process=False,
-        #         k_steepness=inequality_parameters['k_steepness'],
-        #         constant_gravity=integration_state_parameters['constant_gravity'],
-        #     )
-        # d_state_costate_f_mns__d_t = d_state_costate_f_mns__d_t[0:8]
-        # d_ham_f_mns__d_state_costate_f = \
-        #     np.hstack([
-        #         -d_state_costate_f_mns__d_t[4:6], # -d(copos)/dt
-        #         -d_state_costate_f_mns__d_t[6:8], # -d(covel)/dt
-        #          d_state_costate_f_mns__d_t[0:2], #  d(  pos)/dt
-        #          d_state_costate_f_mns__d_t[2:4]  #  d(  vel)/dt
-        #     ])
-        
-        # # d(error_ham_f)/d(time_o_pls) = - d(ham_f_mns)/d(state_costate_f) d(state_costate_f)/d(state_costate_o) d(state_costate_o)/d(time_o_pls)
-        # # d_ham_f_mns__d_time_o_pls = d_ham_f_mns__d_state_costate_f @ d_state_costate_f_mns__d_time_o_pls
-        # # error_jacobian[19, 0] = -1.0 * d_ham_f_mns__d_time_o_pls
-
-        # # d(error_time_f)/d(time_f_mns) = d(time_f_pls - time_f_mns)/d(time_f_mns)
-        # error_jacobian[10, 10] = -1.0
-
-        # # d(error_f)/d(time_f_mns) = -d(state_f)/d(time_f_mns) = -d(state_f)/dt
-        # d_state_costate_f_mns__d_time_f_mns = d_state_costate_f_mns__d_t
-        # # d(error_pos_vec_f)/d(time_f_mns)
-        # error_jacobian[11:13, 10] = -1 * d_state_costate_f_mns__d_time_f_mns[0:2]
-        # # d(error_vel_vec_f)/d(time_f_mns)
-        # error_jacobian[13:15, 10] = -1 * d_state_costate_f_mns__d_time_f_mns[2:4]
-        # # d(error_copos_vec_f)/d(time_f_mns)
-        # error_jacobian[15:17, 10] = -1 * d_state_costate_f_mns__d_time_f_mns[4:6]
-        # # d(error_covel_vec_f)/d(time_f_mns)
-        # error_jacobian[17:19, 10] = -1 * d_state_costate_f_mns__d_time_f_mns[6:8]
-
-        # # d(error_f)/d(time_f_mns) = -f(x_f) already set for state/costate blocks
-        # d_state_costate_f_mns__d_time_f_mns = d_state_costate_f_mns__d_t
-        # # d(error_ham_f)/d(time_f_mns) = - dH_f/dx_f · f(x_f)
-        # d_ham_f_mns__d_time_f_mns = d_ham_f_mns__d_state_costate_f @ d_state_costate_f_mns__d_time_f_mns
-        # error_jacobian[19, 10] = -1.0 * d_ham_f_mns__d_time_f_mns
-
-        # # d(error_pos_vec_o)/d(pos_vec_o_pls) = d(pos_vec_o_pls - pos_vec_o_mns)/d(pos_vec_o_pls) = I
-        # error_jacobian[1:3, 1:3] = np.identity(2)
-        # # d(error_vel_vec_o)/d(vel_vec_o_pls) = d(vel_vec_o_pls - vel_vec_o_mns)/d(vel_vec_o_pls) = I
-        # error_jacobian[3:5, 3:5] = np.identity(2)
-        # # d(error_copos_vec_o)/d(copos_vec_o_pls) = d(copos_vec_o_pls - copos_vec_o_mns)/d(copos_vec_o_pls) = I
-        # error_jacobian[5:7, 5:7] = np.identity(2)
-        # # d(error_covel_vec_o)/d(covel_vec_o_pls) = d(covel_vec_o_pls - covel_vec_o_mns)/d(covel_vec_o_pls) = I
-        # error_jacobian[7:9, 7:9] = np.identity(2)
-
-        # # Add d(error_ham_o)/d(state_costate_o) and d(error_ham_o)/d(time_o_pls)
-        # d_ham_o_pls__d_state_costate_o = np.hstack([
-        #     -d_state_costate_o__d_t[4:6], # -d(copos)/dt at t0
-        #     -d_state_costate_o__d_t[6:8], # -d(covel)/dt at t0
-        #      d_state_costate_o__d_t[0:2], #  d(pos)/dt at t0
-        #      d_state_costate_o__d_t[2:4]  #  d(vel)/dt at t0
-        # ])
-        # error_jacobian[9, 1:9] = d_ham_o_pls__d_state_costate_o
-        # # d_ham_o_pls__d_time_o_pls = d_ham_o_pls__d_state_costate_o @ d_state_costate_o__d_t
-        # # error_jacobian[9, 0] = d_ham_o_pls__d_time_o_pls
-
-        # # d(error_pos_vec_f)/d(state_costate_o) = -d(pos_vec_f_mns)/d(state_costate_o) = -scstm_of[0:2, 0:8]
-        # error_jacobian[11:13, 1:9] = -scstm_of[0:2, 0:8]
-        # # d(error_vel_vec_f)/d(state_costate_o) = -d(vel_vec_f_mns)/d(state_costate_o) = -scstm_of[2:4, 0:8]
-        # error_jacobian[13:15, 1:9] = -scstm_of[2:4, 0:8]
-        # # d(error_copos_vec_f)/d(state_costate_o) = -d(copos_vec_f_mns)/d(state_costate_o) = -scstm_of[4:6, 0:8]
-        # error_jacobian[15:17, 1:9] = -scstm_of[4:6, 0:8]
-        # # d(error_covel_vec_f)/d(state_costate_o) = -d(covel_vec_f_mns)/d(state_costate_o) = -scstm_of[6:8, 0:8]
-        # error_jacobian[17:19, 1:9] = -scstm_of[6:8, 0:8]
-
-        # # d(error_ham_f)/d(state_costate_o) = -d(ham_f_mns)/d(state_costate_o) = -d(ham_f_mns)/d(state_costate_f) * d(state_costate_f)/d(state_costate_o)
-        # d_ham_f_mns__d_state_costate_o = d_ham_f_mns__d_state_costate_f @ scstm_of
-        # error_jacobian[19, 1:9]        = -1 * d_ham_f_mns__d_state_costate_o
-
-        # # Zero out jacobian rows for free variables, as their error is always zero
-        # idx = 0
-        # for bnd in ordered_boundaries:
-        #     for var in ordered_variables:
-        #         num_elements = np.size(error_full[var][bnd])
-        #         if equality_parameters[var][bnd]['mode'] == 'free':
-        #             error_jacobian[idx:idx+num_elements, :] = 0.0
-        #         idx += num_elements
     
     # Return
     if include_jacobian:

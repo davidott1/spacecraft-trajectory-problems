@@ -87,18 +87,15 @@ def _convert_parameters_to_standard_units(
     ) -> dict:
     parameters_with_units_defaults = {
         'min_type'              : [           'energy', None      , str   ],
-        'time_o'                : [           0.0e+0  , u.s       , float ],
+        'time_f'                : [           1.0e+1  , u.s       , float ],
         'pos_vec_o'             : [ [ 0.0e+0, 0.0e+0 ], u.m       , float ], # type: ignore
         'vel_vec_o'             : [ [ 0.0e+0, 0.0e+0 ], u.m/u.s   , float ], # type: ignore
         'copos_vec_o'           : [ [ 0.0e+0, 0.0e+0 ], None      , float ], # type: ignore
         'covel_vec_o'           : [ [ 0.0e+0, 0.0e+0 ], None      , float ], # type: ignore
-        'ham_o'                 : [           0.0e+0  , None      , float ],
-        'time_f'                : [           1.0e+1  , u.s       , float ],
         'pos_vec_f'             : [ [ 1.0e+1, 1.0e+1 ], u.m       , float ], # type: ignore
         'vel_vec_f'             : [ [ 1.0e+0, 1.0e+0 ], u.m/u.s   , float ], # type: ignore
         'copos_vec_f'           : [ [ 0.0e+0, 0.0e+0 ], None      , float ], # type: ignore
         'covel_vec_f'           : [ [ 0.0e+0, 0.0e+0 ], None      , float ], # type: ignore
-        'ham_f'                 : [           0.0e+0  , None      , float ],
         'mass_o'                : [           1.0e+3  , u.kg      , float ], # type: ignore
         'exhaust_velocity'      : [           3.0e+3  , u.m/u.s   , float ], # type: ignore
         'constant_gravity'      : [           0.0e+0  , u.m/u.s**2, float ], # type: ignore
@@ -118,17 +115,13 @@ def _convert_parameters_to_standard_units(
     if parameters_with_units_defaults['min_type'][0] == 'fuel':
         parameters_with_units_defaults['copos_vec_o'][1] = 1.0  /u.s
         parameters_with_units_defaults['covel_vec_o'][1] = u.one
-        parameters_with_units_defaults['ham_o'      ][1] = u.m  /u.s**2 # type: ignore
         parameters_with_units_defaults['copos_vec_f'][1] = 1.0  /u.s
         parameters_with_units_defaults['covel_vec_f'][1] = u.one
-        parameters_with_units_defaults['ham_f'      ][1] = u.m  /u.s**2 # type: ignore
     else: # assume min_type == 'energy'
-        parameters_with_units_defaults['copos_vec_o'][1] = u.m   /u.s**3 # type: ignore
-        parameters_with_units_defaults['covel_vec_o'][1] = u.m   /u.s**2 # type: ignore
-        parameters_with_units_defaults['ham_o'      ][1] = u.m**2/u.s**4 # type: ignore
-        parameters_with_units_defaults['copos_vec_f'][1] = u.m   /u.s**3 # type: ignore
-        parameters_with_units_defaults['covel_vec_f'][1] = u.m   /u.s**2 # type: ignore
-        parameters_with_units_defaults['ham_f'      ][1] = u.m**2/u.s**4 # type: ignore
+        parameters_with_units_defaults['copos_vec_o'][1] = u.m/u.s**3 # type: ignore
+        parameters_with_units_defaults['covel_vec_o'][1] = u.m/u.s**2 # type: ignore
+        parameters_with_units_defaults['copos_vec_f'][1] = u.m/u.s**3 # type: ignore
+        parameters_with_units_defaults['covel_vec_f'][1] = u.m/u.s**2 # type: ignore
 
     # Build the parameter-standard-units dictionary by applying defaults and converting units
     parameters_standard_units = {}
