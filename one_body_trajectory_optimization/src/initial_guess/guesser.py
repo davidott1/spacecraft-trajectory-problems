@@ -60,7 +60,7 @@ def generate_guess(
     print(f"    {', '.join(free_vars)}")
     print(f"  Knowns (fixed): {fixed_vars_len}")
     print(f"    {', '.join(fixed_vars)}")
-    print(f"  Known State: {', '.join([str(t_or_f) for t_or_f in equality_parameters['known_states']])}")
+    # print(f"  Known State: {', '.join([str(t_or_f) for t_or_f in equality_parameters['known_states']])}")
 
     # Set initial guess for fixed variables
     if pos_vec_o_mode == 'fixed':

@@ -250,13 +250,13 @@ def optimal_trajectory_solve(
     inequality_parameters['use_thrust_smoothing']     = False # should be False
 
     decision_state_initguess = soln_root.x
-    time_o_pls      = decision_state_initguess[0]
-    time_f_mns      = decision_state_initguess[10]
-    time_span       = np.array([time_o_pls, time_f_mns])
-    pos_vec_o_pls   = decision_state_initguess[1:3]
-    vel_vec_o_pls   = decision_state_initguess[3:5]
-    copos_vec_o_pls = decision_state_initguess[5:7]
-    covel_vec_o_pls = decision_state_initguess[7:9]
+    time_o_pls      = 0.0
+    time_f_mns      = decision_state_initguess[8]
+    time_span       = np.array([ time_o_pls, time_f_mns ])
+    pos_vec_o_pls   = decision_state_initguess[0:2]
+    vel_vec_o_pls   = decision_state_initguess[2:4]
+    copos_vec_o_pls = decision_state_initguess[4:6]
+    covel_vec_o_pls = decision_state_initguess[6:8]
     thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _, _, _, _ = \
         control_thrust_acceleration(
             min_type                 = optimization_parameters['min_type'],

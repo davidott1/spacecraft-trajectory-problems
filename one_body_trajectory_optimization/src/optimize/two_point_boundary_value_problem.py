@@ -244,13 +244,14 @@ def solve_for_root_and_compute_progress(
         )
 
     # Unpack decision-state initial guess and update the state-costate
+    #   decision_state = [  pos_vec_o  vel_vec_o  copos_vec_o  covel_vec_o  time_f  ]
     decision_state_initguess = soln_root.x
-    time_span                = np.array([decision_state_initguess[0], decision_state_initguess[10]])
+    time_span                = np.array([0.0, decision_state_initguess[8]])
     pos_vec_o_pls            = decision_state_initguess[1:3]
     vel_vec_o_pls            = decision_state_initguess[3:5]
     copos_vec_o_pls          = decision_state_initguess[5:7]
     covel_vec_o_pls          = decision_state_initguess[7:9]
-    state_costate_o          = np.hstack([pos_vec_o_pls, vel_vec_o_pls, copos_vec_o_pls, covel_vec_o_pls])
+    state_costate_o          = np.hstack([ pos_vec_o_pls, vel_vec_o_pls, copos_vec_o_pls, covel_vec_o_pls ])
 
     # Solve initial value problem
     soln_ivp = \
@@ -736,7 +737,7 @@ def tpbvp_objective_and_jacobian(
                     d_error_vel_vec_f__d_time_f_mns
                 ])
             error_jacobian_components.append(d_error_vel_vec_f__d_decision_state)
-
+        
         # Build error jacobian
         #   d(error_copos_vec_f)/d(decision_state)
         if equality_parameters['copos_vec']['f']['mode'] == 'fixed':
@@ -775,25 +776,18 @@ def tpbvp_objective_and_jacobian(
 
         # Build error jacobian
         #   d(error_time_f)/d(decision_state)
-        if equality_parameters['time_f']['mode'] == 'fixed':
-            d_error_time_f__d_pos_vec_o_pls   = np.zeros((2,2))
-            d_error_time_f__d_vel_vec_o_pls   = np.zeros((2,2))
-            d_error_time_f__d_copos_vec_o_pls = np.zeros((2,2))
-            d_error_time_f__d_covel_vec_o_pls = np.zeros((2,2))
-            d_error_time_f__d_time_f_mns      = -1.0
-            d_error_time_f__d_decision_state = \
-                np.hstack([
-                    d_error_time_f__d_pos_vec_o_pls,
-                    d_error_time_f__d_vel_vec_o_pls,
-                    d_error_time_f__d_copos_vec_o_pls,
-                    d_error_time_f__d_covel_vec_o_pls,
-                    d_error_time_f__d_time_f_mns
-                ])
+        if equality_parameters['time']['f']['mode'] == 'fixed':
+            d_error_time_f__d_pos_vec_o_pls   = np.zeros((1,2))
+            d_error_time_f__d_vel_vec_o_pls   = np.zeros((1,2))
+            d_error_time_f__d_copos_vec_o_pls = np.zeros((1,2))
+            d_error_time_f__d_covel_vec_o_pls = np.zeros((1,2))
+            d_error_time_f__d_time_f_mns      = np.array([[-1.0]])
+            d_error_time_f__d_decision_state  = np.hstack([d_error_time_f__d_pos_vec_o_pls,d_error_time_f__d_vel_vec_o_pls,d_error_time_f__d_copos_vec_o_pls,d_error_time_f__d_covel_vec_o_pls,d_error_time_f__d_time_f_mns])
             error_jacobian_components.append(d_error_time_f__d_decision_state)
 
         # Build error jacobian
         #   d(error_ham_f)/d(decision_state)
-        if equality_parameters['ham_f']['mode'] == 'fixed':
+        if equality_parameters['ham']['f']['mode'] == 'fixed':
             d_ham_f_mns__d_state_costate_f_mns = \
                 np.hstack([
                     -d_state_costate_f_mns__d_time_f_mns[4:6], # -d(copos)/dt

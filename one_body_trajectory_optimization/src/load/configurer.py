@@ -290,7 +290,7 @@ def configure_validate_input(
         )
     
     # Time or hamiltonian: free vs. fixed
-    if all_parameters_standard_units['time_f']['mode'] == 'free':
+    if input_files_params['input_parameters']['time_f']['mode'] == 'free':
         ham_f_mode = 'fixed'
         ham_f_mns  = 0.0
         ham_f_pls  = 0.0
@@ -328,7 +328,6 @@ def configure_validate_input(
         'post_process'     : False                                                     ,
         'include_scstm'    : False                                                     ,
     }
-    breakpoint()
     equality_parameters: Dict[str, Any]  = {
         'time': {
             'o': {
@@ -415,19 +414,6 @@ def configure_validate_input(
             }
         }
     }
-    
-    # # Generate known_states list based on known/unknown (fixed/free) modes
-    # ordered_variables  = ['time', 'pos_vec', 'vel_vec', 'copos_vec', 'covel_vec', 'ham']
-    # ordered_boundaries = ['o', 'f']
-    # known_states = []
-    # for boundary in ordered_boundaries:
-    #     for variable in ordered_variables:
-    #         var_bnd = equality_parameters[variable][boundary]
-    #         is_known = var_bnd['mode'] == 'fixed'
-    #         # Use np.size to handle both scalars and numpy arrays
-    #         num_elements = np.size(var_bnd['mns'])
-    #         known_states.extend([is_known] * num_elements)
-    # equality_parameters['known_states'] = known_states
     inequality_parameters = {
         'use_thrust_acc_limits'    : all_parameters_standard_units['use_thrust_acc_limits']['value'],
         'use_thrust_acc_smoothing' : False                                                          ,
