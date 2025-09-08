@@ -347,6 +347,14 @@ where
 ```
 
 ```math
+\Gamma = \frac{\lambda_v - (1 - \alpha)}{\alpha}
+```
+
+```math
+\alpha \Gamma - ( \lambda_v - (1 - \alpha ) ) = 0
+```
+
+```math
 H = (1 - \alpha) \left( \vec{\Gamma}^\top \vec{\Gamma} \right)^{1/2} + \frac{1}{2} \alpha \left( \vec{\Gamma}^\top \vec{\Gamma} \right) + ... + \vec{\lambda}_v^\top ( g \hat{y} + \vec{\Gamma} )
 ```
 
