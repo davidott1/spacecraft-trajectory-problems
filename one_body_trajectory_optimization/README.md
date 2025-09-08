@@ -227,10 +227,15 @@ For minimization of of fuel and energy, $L = \Gamma$ and $\frac{1}{2} \vec{\Gamm
 H = \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top (g \hat{y} + \vec{\Gamma})
   = \Gamma + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} (g + \Gamma_y)
 ```
-and for energy minimization
+for energy minimization
 ```math
 H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top (g \hat{y} + \vec{\Gamma})
   = \frac{1}{2} \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} (g + \Gamma_y)
+```
+and for energyfuel minimization
+```math
+H = (1 - \alpha) \Gamma + \frac{1}{2} \alpha \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top (g \hat{y} + \vec{\Gamma})
+  = (1 - \alpha) \left( \Gamma_x^2 + \Gamma_y^2 \right)^(1/2) + \frac{1}{2} \alpha \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} (g + \Gamma_y)
 ```
 
 #### Necessary Conditions for Optimality
@@ -335,7 +340,13 @@ where
 
 ###### Minimum Energy to Fuel
 
-xxx
+```math
+\frac{dH}{d\vec{\Gamma}} = \vec{0}^\top \to \vec{\Gamma} + \vec{\lambda}_v = \vec{0} \to \vec{\Gamma}_{\text{energy}*} = -\vec{\lambda}_v
+```
+
+```math
+(1 - \alpha) \left( \Gamma_x^2 + \Gamma_y^2 \right)^(1/2) + \frac{1}{2} \alpha \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} (g + \Gamma_y)
+```
 
 #### Equality Constraints: Flight Time, Initial Position and Velocity, Final Position and Velocity
 
