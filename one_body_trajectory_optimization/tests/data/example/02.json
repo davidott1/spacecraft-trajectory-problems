@@ -1,13 +1,13 @@
 {
-    "min_type"              : { "value":            "energy" , "unit": "None"                            },
-    "time_span"             : { "value": [  0.0e+0, 16.0e+1 ], "unit": "s"    , "fixed_or_free": "fixed" },
-    "pos_vec_o"             : { "value": [  0.0e+0,  0.0e+0 ], "unit": "m"    , "fixed_or_free": "fixed" },
-    "vel_vec_o"             : { "value": [ -1.0e+1, -1.0e+1 ], "unit": "m/s"  , "fixed_or_free": "fixed" },
-    "pos_vec_f"             : { "value": [ 16.0e+1, 16.0e+1 ], "unit": "m"    , "fixed_or_free": "fixed" },
-    "vel_vec_f"             : { "value": [ -1.0e+1,  1.0e+0 ], "unit": "m/s"  , "fixed_or_free": "fixed" },
-    "mass_o"                : { "value":             1.0e+3  , "unit": "kg"                              },
-    "use_thrust_acc_limits" : { "value":               true  , "unit": "None"                            },
-    "thrust_acc_min"        : { "value":             2.0e-1  , "unit": "m/s^2"                           },
-    "thrust_acc_max"        : { "value":             4.0e-1  , "unit": "m/s^2"                           },
-    "init_guess_steps"      : { "value":               2000  , "unit": "None"                            }
+    "min_type"              : { "value":            "energy" , "unit": "None"                   },
+    "time_f"                : { "value":             1.6e+2  , "unit": "s"    , "mode": "fixed" },
+    "pos_vec_o"             : { "value": [  0.0e+0,  0.0e+0 ], "unit": "m"    , "mode": "fixed" },
+    "vel_vec_o"             : { "value": [ -1.0e+1, -1.0e+1 ], "unit": "m/s"  , "mode": "fixed" },
+    "pos_vec_f"             : { "value": [ 16.0e+1, 16.0e+1 ], "unit": "m"    , "mode": "fixed" },
+    "vel_vec_f"             : { "value": [ -1.0e+1,  1.0e+0 ], "unit": "m/s"  , "mode": "fixed" },
+    "mass_o"                : { "value":             1.0e+3  , "unit": "kg"                     },
+    "use_thrust_acc_limits" : { "value":               true  , "unit": "None"                   },
+    "thrust_acc_min"        : { "value":             2.0e-1  , "unit": "m/s^2"                  },
+    "thrust_acc_max"        : { "value":             4.0e-1  , "unit": "m/s^2"                  },
+    "init_guess_steps"      : { "value":               2000  , "unit": "None"                   }
 }
