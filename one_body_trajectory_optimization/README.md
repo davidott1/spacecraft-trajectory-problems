@@ -371,7 +371,7 @@ The inequality conditions are variables as well. Thrust as a force and or thrust
 In practice, for fuel-minimization problems, thrust-acceleration is smoothly applied using a hyperbolic tangenent function $\tanh$. As input, the switching function $S$ is scaled with factor $k$ to better approximate the optimal bang-bang thrust:
 ```math
 \Gamma_{\text{fuel}} = 
-\Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k S) \right) \ \ \ k = 1 \to \infty
+\Gamma_\min + (\Gamma_\max - \Gamma_\min) \left( \frac{1}{2} + \frac{1}{2} \tanh(k S) \right) \ \ \ k \to \infty
 ```
 
 Similarly, for energy-minization problems, thrust-acceleration, or thrust-force mapped to thrust acceleration, is smoothly constrained with a smoothing min and max function, $\text{smin}$ or $\text{smax}$:
