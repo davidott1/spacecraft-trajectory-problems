@@ -123,6 +123,54 @@ python main.py input/example/1.08_energy_uncon_timefree.json
 ```
 ![Example Trajectory Plot](./images/example_1.08_energy_uncon_timefree_optimal_trajectory.png)
 
+### Example 2.01: `input/example/2.01_fuel_thrustaccmax_falcon9.json`
+```
+python main.py input/example/2.01_fuel_thrustaccmax_falcon9.json
+```
+![Example Trajectory Plot](./images/example_2.01_fuel_thrustaccmax_falcon9_optimal_trajectory.png)
+
+### Example 2.02: `input/example/2.02_energy_thrustmax_falcon9.json`
+```
+python main.py input/example/2.02_energy_thrustmax_falcon9.json
+```
+![Example Trajectory Plot](./images/example_2.02_energy_thrustmax_falcon9_optimal_trajectory.png)
+
+### Example 3.01: `input/example/3.01_energy_uncon_timefree.json`
+```
+python main.py input/example/3.01_energy_uncon_timefree.json
+```
+![Example Trajectory Plot](./images/example_3.01_energy_uncon_timefree_optimal_trajectory.png)
+
+### Example 3.02: `input/example/3.02_energy_uncon.json`
+```
+python main.py input/example/3.02_energy_uncon.json
+```
+![Example Trajectory Plot](./images/example_3.02_energy_uncon_optimal_trajectory.png)
+
+### Example 4.01: `input/example/4.01_fuel_thrustaccmax.json`
+```
+python main.py input/example/4.01_fuel_thrustaccmax.json
+```
+![Example Trajectory Plot](./images/example_4.01_fuel_thrustaccmax_optimal_trajectory.png)
+
+### Example 5.01: `input/example/5.01_fuel_thrustaccmax.json`
+```
+python main.py input/example/5.01_fuel_thrustaccmax.json
+```
+![Example Trajectory Plot](./images/example_5.01_fuel_thrustaccmax_optimal_trajectory.png)
+
+### Example 5.02: `input/example/5.02_fuel_thrustmax.json`
+```
+python main.py input/example/5.02_fuel_thrustmax.json
+```
+![Example Trajectory Plot](./images/example_5.02_fuel_thrustmax_optimal_trajectory.png)
+
+### Example 5.03: `input/example/5.03_fuel_thrustmax.json`
+```
+python main.py input/example/5.03_fuel_thrustmax.json
+```
+![Example Trajectory Plot](./images/example_5.03_fuel_thrustmax_optimal_trajectory.png)
+
 ---
 ## Optimal Control Problem 
 
