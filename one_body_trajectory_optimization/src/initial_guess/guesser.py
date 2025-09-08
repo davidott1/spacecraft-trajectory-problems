@@ -98,7 +98,7 @@ def generate_guess(
             error_mag_min      = error_mag_idx
             if idx==0:
                 tqdm.write("    Minimum Error         Step")
-            tqdm.write(f"    {error_mag_min:>13.6e}  {idx_min:>5d}/{init_guess_steps:>4d}")
+            tqdm.write(f"    {error_mag_min:>13.6e}  {idx_min:>5d}/{init_guess_steps:>5d}")
             decision_state_min = decision_state_idx
 
     # Pack up and print solution
