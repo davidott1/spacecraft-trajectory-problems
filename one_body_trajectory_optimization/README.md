@@ -37,9 +37,9 @@ one_body_trajectory_optimization/                                : root folder
 │   └── utility/                                                 : utility functions
 │       └── bounding_functions.py                                : functions for bounding thrust and thrust acceleration
 ├── tests/                                                       : collection of tests
-│   ├── data/                                                    : test data files
-│   │   ├── 01.json                                              : test case 1 data
-│   │   └── 02.json                                              : test case 2 data
+│   ├── data/                                                    : test data and example files
+│   │   ├── 01.json                                              : test example 1.01
+│   │   └── 02.json                                              : test example 1.02
 │   └── test_examples.py                                         : tests for the examples
 ├── untracked/                                                   : untracked files for convenience
 ├── .gitignore                                                   : contains files and folders to ignore by git
