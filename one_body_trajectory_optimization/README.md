@@ -5,41 +5,49 @@ This project simulates the optimal trajectory of a free-body. The spacecraft dyn
 ## Project Structure
 
 ```
-one_body_trajectory_optimization/
-├── input/
-│   └── example/
-│       ├── 01_minenergy_uncon.json
-│       ├── 02_minenergy_thrustaccmax.json
-│       ├── 03_minenergy_thrustmax.json
-│       ├── 04_minfuel_thrustaccmax.json
-│       ├── 05_minfuel_thrustmax.json
-│       ├── 06_minenergy_uncon_timefree.json
-│       └── 07_minfuel_thrustmax_timefree.json
-├── output/
-│   └── example/
-├── src/
-│   ├── data/
-│   ├── initial_guess/
-│   │   └── guesser.py
-│   ├── load/
-│   │   ├── configurer.py
-│   │   ├── parser.py
-│   │   ├── processor.py
-│   │   └── reader.py
-│   ├── model/
-│   │   └── dynamics.py
-│   ├── optimize/
-│   │   └── optimizer.py
-│   ├── plot/
-│   │   └── final_results.py
-│   └── utility/
-│       └── bounding_functions.py
-├── tests/                        : collection of tests
-├── untracked/                    : untracked files for convenience
-├── .gitignore                    : contains files and folders to ignore by git
-├── main.py                       : main driver
-├── README.md                     : documentation
-└── requirements.txt              : required external packages
+one_body_trajectory_optimization/                                : root folder
+├── images/                                                      : output folder images from examples
+│   ├── example_1.01_energy_thrustaccmax_optimal_trajectory.png  : example 1.01 .png file
+│   ├── example_1.02_energy_thrustmax_optimal_trajectory.png     : example 1.02 .png file
+│   └── ...                                                      : more example .png files
+├── input/                                                       : input folder for .json files for simulation
+│   └── example/                                                 : input folder for example .json files
+│       ├── 1.01_energy_thrustaccmax.json                        : example 1.01 .json file
+│       ├── 1.02_energy_thrustmax.json                           : example 1.02 .json file
+│       └── ...                                                  : more example .json files
+├── output/                                                      : output folder for files from simulation
+│   ├── test_example/                                            : output folder for files from test examples
+│   └── ... output files ...                                     : output files from simulation
+├── src/                                                         : source code
+│   ├── data/                                                    : data schemas
+│   │   └── schema.py                                            : defines the data schema for inputs
+│   ├── initial_guess/                                           : initial guess generation
+│   │   └── guesser.py                                           : generates initial guess for the optimizer
+│   ├── load/                                                    : modules for loading and processing data
+│   │   ├── configurer.py                                        : configures simulation settings
+│   │   ├── parser.py                                            : parses input files
+│   │   ├── processor.py                                         : processes parsed data
+│   │   └── reader.py                                            : reads input files
+│   ├── model/                                                   : folder for physical models
+│   │   └── dynamics.py                                          : dynamical equations of motion
+│   ├── optimize/                                                : folder for optimization algorithm
+│   │   └── optimizer.py                                         : optimization algorithm
+│   ├── plot/                                                    : plotting functions
+│   │   └── final_results.py                                     : plots final trajectory and results
+│   └── utility/                                                 : utility functions
+│       └── bounding_functions.py                                : functions for bounding thrust and thrust acceleration
+├── tests/                                                       : collection of tests
+│   ├── data/                                                    : test data files
+│   │   ├── 01.json                                              : test case 1 data
+│   │   └── 02.json                                              : test case 2 data
+│   └── test_examples.py                                         : tests for the examples
+├── untracked/                                                   : untracked files for convenience
+├── .gitignore                                                   : contains files and folders to ignore by git
+├── main.py                                                      : main driver
+├── pyproject.toml                                               : project metadata and build configuration
+├── pytest.ini                                                   : configuration for pytest
+├── README.md                                                    : documentation
+└── requirements.txt                                             : required external packages
 ```
 
 ## Installation
