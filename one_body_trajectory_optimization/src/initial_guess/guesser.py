@@ -38,30 +38,6 @@ def generate_guess(
 
     time_f_mode      = equality_parameters[     'time']['f']['mode']
 
-    # Print free and fixed variables
-    free_vars      = []
-    fixed_vars     = []
-    free_vars_len  = 0
-    fixed_vars_len = 0
-    for var_name, var_data in equality_parameters.items():
-        if isinstance(var_data, list):
-            continue
-        for boundary_type, boundary_data in var_data.items():
-            var_len = np.size(boundary_data['pls'])
-            full_var_name = f"{var_name}_{boundary_type}"
-            if boundary_data['mode'] == 'free':
-                free_vars.append(full_var_name)
-                free_vars_len += var_len
-            else:
-                fixed_vars.append(full_var_name)
-                fixed_vars_len += var_len
-
-    print(f"  Unknowns (free): {free_vars_len}")
-    print(f"    {', '.join(free_vars)}")
-    print(f"  Knowns (fixed): {fixed_vars_len}")
-    print(f"    {', '.join(fixed_vars)}")
-    # print(f"  Known State: {', '.join([str(t_or_f) for t_or_f in equality_parameters['known_states']])}")
-
     # Set initial guess for fixed variables
     if pos_vec_o_mode == 'fixed':
         pos_vec_o_pls = pos_vec_o_mns

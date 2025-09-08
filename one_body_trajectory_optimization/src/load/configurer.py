@@ -289,6 +289,31 @@ def configure_validate_input(
             all_parameters_variable_units,
         )
     
+    # Determine if variable is free or fixed
+    pos_vec_o_params = input_files_params['input_parameters'].get('pos_vec_o')
+    pos_vec_o_mode = 'free' if pos_vec_o_params is None else pos_vec_o_params.get('mode', 'fixed')
+
+    pos_vec_f_params = input_files_params['input_parameters'].get('pos_vec_f')
+    pos_vec_f_mode = 'free' if pos_vec_f_params is None else pos_vec_f_params.get('mode', 'fixed')
+    
+    vel_vec_o_params = input_files_params['input_parameters'].get('vel_vec_o')
+    vel_vec_o_mode = 'free' if vel_vec_o_params is None else vel_vec_o_params.get('mode', 'fixed')
+
+    vel_vec_f_params = input_files_params['input_parameters'].get('vel_vec_f')
+    vel_vec_f_mode = 'free' if vel_vec_f_params is None else vel_vec_f_params.get('mode', 'fixed')
+    
+    copos_vec_o_params = input_files_params['input_parameters'].get('copos_vec_o')
+    copos_vec_o_mode = 'free' if copos_vec_o_params is None else copos_vec_o_params.get('mode', 'fixed')
+
+    copos_vec_f_params = input_files_params['input_parameters'].get('copos_vec_f')
+    copos_vec_f_mode = 'free' if copos_vec_f_params is None else copos_vec_f_params.get('mode', 'fixed')
+    
+    covel_vec_o_params = input_files_params['input_parameters'].get('covel_vec_o')
+    covel_vec_o_mode = 'free' if covel_vec_o_params is None else covel_vec_o_params.get('mode', 'fixed')
+
+    covel_vec_f_params = input_files_params['input_parameters'].get('covel_vec_f')
+    covel_vec_f_mode = 'free' if covel_vec_f_params is None else covel_vec_f_params.get('mode', 'fixed')
+
     # Time or hamiltonian: free vs. fixed
     if input_files_params['input_parameters']['time_f']['mode'] == 'free':
         ham_f_mode = 'fixed'
@@ -345,57 +370,57 @@ def configure_validate_input(
         },
         'pos_vec': {
             'o': {
-                'mode' : input_files_params['input_parameters']['pos_vec_o']['mode'],
-                'unit' : all_parameters_standard_units['pos_vec_o']['unit' ]        ,
-                'mns'  : all_parameters_standard_units['pos_vec_o']['value']        ,
+                'mode' : pos_vec_o_mode                                     ,
+                'unit' : all_parameters_standard_units['pos_vec_o']['unit' ],
+                'mns'  : all_parameters_standard_units['pos_vec_o']['value'],
                 'pls'  : all_parameters_standard_units['pos_vec_o']['value']
             },
             'f': {
-                'mode' : input_files_params['input_parameters']['pos_vec_f']['mode'],
-                'unit' : all_parameters_standard_units['pos_vec_f']['unit' ]        ,
-                'mns'  : all_parameters_standard_units['pos_vec_f']['value']        ,
+                'mode' : pos_vec_f_mode                                     ,
+                'unit' : all_parameters_standard_units['pos_vec_f']['unit' ],
+                'mns'  : all_parameters_standard_units['pos_vec_f']['value'],
                 'pls'  : all_parameters_standard_units['pos_vec_f']['value']
             }
         },
         'vel_vec': {
             'o': {
-                'mode' : input_files_params['input_parameters']['vel_vec_o']['mode'],
-                'unit' : all_parameters_standard_units['vel_vec_o']['unit' ]        ,
-                'mns'  : all_parameters_standard_units['vel_vec_o']['value']        ,
+                'mode' : vel_vec_o_mode                                     ,
+                'unit' : all_parameters_standard_units['vel_vec_o']['unit' ],
+                'mns'  : all_parameters_standard_units['vel_vec_o']['value'],
                 'pls'  : all_parameters_standard_units['vel_vec_o']['value']
             },
             'f': {
-                'mode' : input_files_params['input_parameters']['vel_vec_f']['mode'],
-                'unit' : all_parameters_standard_units['vel_vec_f']['unit' ]        ,
-                'mns'  : all_parameters_standard_units['vel_vec_f']['value']        ,
+                'mode' : vel_vec_f_mode                                     ,
+                'unit' : all_parameters_standard_units['vel_vec_f']['unit' ],
+                'mns'  : all_parameters_standard_units['vel_vec_f']['value'],
                 'pls'  : all_parameters_standard_units['vel_vec_f']['value']
             }
         },
         'copos_vec': {
             'o': {
-                'mode' : input_files_params['input_parameters']['copos_vec_o']['mode'],
-                'unit' : all_parameters_standard_units['copos_vec_o']['unit' ]        ,
-                'mns'  : all_parameters_standard_units['copos_vec_o']['value']        ,
+                'mode' : copos_vec_o_mode                                     ,
+                'unit' : all_parameters_standard_units['copos_vec_o']['unit' ],
+                'mns'  : all_parameters_standard_units['copos_vec_o']['value'],
                 'pls'  : all_parameters_standard_units['copos_vec_o']['value']
             },
             'f': {
-                'mode' : input_files_params['input_parameters']['copos_vec_f']['mode'],
-                'unit' : all_parameters_standard_units['copos_vec_f']['unit' ]        ,
-                'mns'  : all_parameters_standard_units['copos_vec_f']['value']        ,
+                'mode' : copos_vec_f_mode                                     ,
+                'unit' : all_parameters_standard_units['copos_vec_f']['unit' ],
+                'mns'  : all_parameters_standard_units['copos_vec_f']['value'],
                 'pls'  : all_parameters_standard_units['copos_vec_f']['value']
             }
         },
         'covel_vec': {
             'o': {
-                'mode' : input_files_params['input_parameters']['covel_vec_o']['mode'],
-                'unit' : all_parameters_standard_units['covel_vec_o']['unit' ]        ,
-                'mns'  : all_parameters_standard_units['covel_vec_o']['value']        ,
+                'mode' : covel_vec_o_mode                                     ,
+                'unit' : all_parameters_standard_units['covel_vec_o']['unit' ],
+                'mns'  : all_parameters_standard_units['covel_vec_o']['value'],
                 'pls'  : all_parameters_standard_units['covel_vec_o']['value']
             },
             'f': {
-                'mode' : input_files_params['input_parameters']['covel_vec_f']['mode'],
-                'unit' : all_parameters_standard_units['covel_vec_f']['unit' ]        ,
-                'mns'  : all_parameters_standard_units['covel_vec_f']['value']        ,
+                'mode' : covel_vec_f_mode                                     ,
+                'unit' : all_parameters_standard_units['covel_vec_f']['unit' ],
+                'mns'  : all_parameters_standard_units['covel_vec_f']['value'],
                 'pls'  : all_parameters_standard_units['covel_vec_f']['value']
             }
         },
