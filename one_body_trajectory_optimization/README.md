@@ -78,6 +78,7 @@ astropy==6.0.1
 matplotlib==3.9.4
 numpy==1.26.4
 pytest==8.3.2
+tqdm==4.66.1
 scipy==1.13.1
 ```
 
