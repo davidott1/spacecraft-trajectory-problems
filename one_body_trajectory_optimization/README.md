@@ -105,6 +105,24 @@ python main.py input/example/1.05_energyfuel_thrustaccmax.json
 ```
 ![Example Trajectory Plot](./images/example_1.05_energyfuel_thrustaccmax_optimal_trajectory.png)
 
+### Example 1.06: `input/example/1.06_energyfuel_thrustmax.json`
+```
+python main.py input/example/1.06_energyfuel_thrustmax.json
+```
+![Example Trajectory Plot](./images/example_1.06_energyfuel_thrustmax_optimal_trajectory.png)
+
+### Example 1.07: `input/example/1.07_energyfuel_thrustmax_gravity.json`
+```
+python main.py input/example/1.07_energyfuel_thrustmax_gravity.json
+```
+![Example Trajectory Plot](./images/example_1.07_energyfuel_thrustmax_gravity_optimal_trajectory.png)
+
+### Example 1.08: `input/example/1.08_energy_uncon_timefree.json`
+```
+python main.py input/example/1.08_energy_uncon_timefree.json
+```
+![Example Trajectory Plot](./images/example_1.08_energy_uncon_timefree_optimal_trajectory.png)
+
 ---
 ## Optimal Control Problem 
 
