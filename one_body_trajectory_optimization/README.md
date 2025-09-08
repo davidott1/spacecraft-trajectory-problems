@@ -347,7 +347,7 @@ where
 ```
 
 ```math
-(1 - \alpha) \left( \Gamma_x^2 + \Gamma_y^2 \right)^(1/2) + \frac{1}{2} \alpha \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} (g + \Gamma_y)
+H = (1 - \alpha) \left( \vec{\Gamma}^\top \vec{\Gamma} \right)^{1/2} + \frac{1}{2} \alpha \left( \vec{\Gamma}^\top \vec{\Gamma} \right) + \vec{\lambda}_v^\top ( g \hat{y} + \vec{\Gamma} )
 ```
 
 #### Equality Constraints: Flight Time, Initial Position and Velocity, Final Position and Velocity
