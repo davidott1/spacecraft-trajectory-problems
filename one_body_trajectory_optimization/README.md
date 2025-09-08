@@ -234,8 +234,10 @@ H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r^\top \vec{v} + 
 ```
 and for energyfuel minimization
 ```math
-H = (1 - \alpha) \Gamma + \frac{1}{2} \alpha \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top (g \hat{y} + \vec{\Gamma})
-  = (1 - \alpha) \left( \Gamma_x^2 + \Gamma_y^2 \right)^(1/2) + \frac{1}{2} \alpha \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} (g + \Gamma_y)
+\begin{align}
+H & = & (1 - \alpha) \Gamma + \frac{1}{2} \alpha \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top (g \hat{y} + \vec{\Gamma}) \\
+  & = & (1 - \alpha) \left( \Gamma_x^2 + \Gamma_y^2 \right)^{1/2} + \frac{1}{2} \alpha \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} (g + \Gamma_y)
+\end{align}
 ```
 
 #### Necessary Conditions for Optimality
