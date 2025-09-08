@@ -59,10 +59,7 @@ Execute the following general command
 ```
 python main.py <input_filepath> [<output_folderpath>]
 ```
-or more specifically
-```
-python main.py input/example/01.json output/example
-```
+See section Examples for more details.
 
 ## Dependencies
 
@@ -78,40 +75,101 @@ scipy==1.13.1
 
 ## Examples
 
-### Example 01: `input/example/01_minenergy_uncon.json`
+### Example 1.01: `input/example/1.01_energy_thrustaccmax.json`
 ```
-python main.py input/example/01_minenergy_uncon.json output/example
+python main.py input/example/1.01_energy_thrustaccmax.json
 ```
+![Example Trajectory Plot](./images/example_1.01_energy_thrustaccmax_optimal_trajectory.png)
 
-### Example 02: `input/example/02_minenergy_thrustaccmax.json`
+### Example 1.02: `input/example/1.02_energy_thrustmax.json`
 ```
-python main.py input/example/02.json output/example
+python main.py input/example/1.02_energy_thrustmax.json
 ```
+![Example Trajectory Plot](./images/example_1.02_energy_thrustmax_optimal_trajectory.png)
 
-### Example 03: `input/example/03_minenergy_thrustmax.json`
+### Example 1.03: `input/example/1.03_fuel_thrustaccmax.json`
 ```
-python main.py input/example/03.json output/example
+python main.py input/example/1.03_fuel_thrustaccmax.json
 ```
+![Example Trajectory Plot](./images/example_1.03_fuel_thrustaccmax_optimal_trajectory.png)
 
-### Example 04: `input/example/04_minfuel_thrustaccmax.json`
+### Example 1.04: `input/example/1.04_fuel_thrustmax.json`
 ```
-python main.py input/example/04.json output/example
+python main.py input/example/1.04_fuel_thrustmax.json
 ```
+![Example Trajectory Plot](./images/example_1.04_fuel_thrustmax_optimal_trajectory.png)
 
-### Example 05: `input/example/05_minfuel_thrustmax.json`
+### Example 1.05: `input/example/1.05_energyfuel_thrustaccmax.json`
 ```
-python main.py input/example/05.json output/example
+python main.py input/example/1.05_energyfuel_thrustaccmax.json
 ```
+![Example Trajectory Plot](./images/example_1.05_energyfuel_thrustaccmax_optimal_trajectory.png)
 
-### Example 06: `input/example/06_minenergy_uncon_timefree.json`
+### Example 1.06: `input/example/1.06_energyfuel_thrustmax.json`
 ```
-python main.py input/example/06.json output/example
+python main.py input/example/1.06_energyfuel_thrustmax.json
 ```
+![Example Trajectory Plot](./images/example_1.06_energyfuel_thrustmax_optimal_trajectory.png)
 
-### Example 07: `input/example/07_minfuel_thrustmax_timefree.json`
+### Example 1.07: `input/example/1.07_energyfuel_thrustmax_gravity.json`
 ```
-python main.py input/example/07.json output/example
+python main.py input/example/1.07_energyfuel_thrustmax_gravity.json
 ```
+![Example Trajectory Plot](./images/example_1.07_energyfuel_thrustmax_gravity_optimal_trajectory.png)
+
+### Example 1.08: `input/example/1.08_energy_uncon_timefree.json`
+```
+python main.py input/example/1.08_energy_uncon_timefree.json
+```
+![Example Trajectory Plot](./images/example_1.08_energy_uncon_timefree_optimal_trajectory.png)
+
+### Example 2.01: `input/example/2.01_fuel_thrustaccmax_falcon9.json`
+```
+python main.py input/example/2.01_fuel_thrustaccmax_falcon9.json
+```
+![Example Trajectory Plot](./images/example_2.01_fuel_thrustaccmax_falcon9_optimal_trajectory.png)
+
+### Example 2.02: `input/example/2.02_energy_thrustmax_falcon9.json`
+```
+python main.py input/example/2.02_energy_thrustmax_falcon9.json
+```
+![Example Trajectory Plot](./images/example_2.02_energy_thrustmax_falcon9_optimal_trajectory.png)
+
+### Example 3.01: `input/example/3.01_energy_uncon_timefree.json`
+```
+python main.py input/example/3.01_energy_uncon_timefree.json
+```
+![Example Trajectory Plot](./images/example_3.01_energy_uncon_timefree_optimal_trajectory.png)
+
+### Example 3.02: `input/example/3.02_energy_uncon.json`
+```
+python main.py input/example/3.02_energy_uncon.json
+```
+![Example Trajectory Plot](./images/example_3.02_energy_uncon_optimal_trajectory.png)
+
+### Example 4.01: `input/example/4.01_fuel_thrustaccmax.json`
+```
+python main.py input/example/4.01_fuel_thrustaccmax.json
+```
+![Example Trajectory Plot](./images/example_4.01_fuel_thrustaccmax_optimal_trajectory.png)
+
+### Example 5.01: `input/example/5.01_fuel_thrustaccmax.json`
+```
+python main.py input/example/5.01_fuel_thrustaccmax.json
+```
+![Example Trajectory Plot](./images/example_5.01_fuel_thrustaccmax_optimal_trajectory.png)
+
+### Example 5.02: `input/example/5.02_fuel_thrustmax.json`
+```
+python main.py input/example/5.02_fuel_thrustmax.json
+```
+![Example Trajectory Plot](./images/example_5.02_fuel_thrustmax_optimal_trajectory.png)
+
+### Example 5.03: `input/example/5.03_fuel_thrustmax.json`
+```
+python main.py input/example/5.03_fuel_thrustmax.json
+```
+![Example Trajectory Plot](./images/example_5.03_fuel_thrustmax_optimal_trajectory.png)
 
 ---
 ## Optimal Control Problem 

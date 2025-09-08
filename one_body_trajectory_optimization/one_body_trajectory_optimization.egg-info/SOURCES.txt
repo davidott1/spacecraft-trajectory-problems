@@ -1,0 +1,8 @@
+README.md
+main.py
+pyproject.toml
+one_body_trajectory_optimization.egg-info/PKG-INFO
+one_body_trajectory_optimization.egg-info/SOURCES.txt
+one_body_trajectory_optimization.egg-info/dependency_links.txt
+one_body_trajectory_optimization.egg-info/top_level.txt
+tests/test_examples.py

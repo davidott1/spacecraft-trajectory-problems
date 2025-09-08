@@ -4,10 +4,6 @@ import os
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-# Add the project root to the Python path to allow imports from src
-# This assumes tests are run from the project root directory 'one_body_trajectory_optimization'
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from main import main
 
 @pytest.mark.parametrize("example_num", ["01", "02"])
