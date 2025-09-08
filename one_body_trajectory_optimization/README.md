@@ -402,7 +402,7 @@ b = \text{max}(k a_1, k a_2)
 
 For energyfuel-minimization problems, the $\alpha$ weighting parameter modifies the bounded thrust acceleration as
 ```math
-\Gamma_{\text{energyfuel}} = \text{smin} \left( \text{smax}( \frac{\lambda_v - (1 - \alpha)}{\alpha}, \Gamma_{\text{min}}, k), \Gamma_{\text{max}},k \right)
+\Gamma_{\text{energyfuel}} = \text{smin} \left( \text{smax}\left( \frac{\lambda_v - (1 - \alpha)}{\alpha}, \Gamma_{\text{min}}, k \right), \Gamma_{\text{max}},k \right)
 ```
 
 ---
