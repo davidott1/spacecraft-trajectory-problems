@@ -59,10 +59,7 @@ Execute the following general command
 ```
 python main.py <input_filepath> [<output_folderpath>]
 ```
-or more specifically
-```
-python main.py input/example/01.json output/example
-```
+See section Examples for more details.
 
 ## Dependencies
 
@@ -78,11 +75,19 @@ scipy==1.13.1
 
 ## Examples
 
-### Example 01: `input/example/1.01_energy_thrustaccmax.json`
+### Example 1.01: `input/example/1.01_energy_thrustaccmax.json`
 ```
-python main.py input/example/1.01_energy_thrustaccmax.json output/example
+python main.py input/example/1.01_energy_thrustaccmax.json
 ```
 ![Example Trajectory Plot](./images/example_1.01_energy_thrustaccmax_optimal_trajectory.png)
+
+### Example 1.02: `input/example/1.02_energy_thrustmax.json`
+```
+python main.py input/example/1.02_energy_thrustmax.json
+```
+![Example Trajectory Plot](./images/example_1.02_energy_thrustmax_optimal_trajectory.png)
+
+one_body_trajectory_optimization/
 
 ---
 ## Optimal Control Problem 
