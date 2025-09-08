@@ -78,39 +78,9 @@ scipy==1.13.1
 
 ## Examples
 
-### Example 01: `input/example/01_minenergy_uncon.json`
+### Example 01: `input/example/1.01_energy_thrustaccmax.json`
 ```
-python main.py input/example/01_minenergy_uncon.json output/example
-```
-
-### Example 02: `input/example/02_minenergy_thrustaccmax.json`
-```
-python main.py input/example/02.json output/example
-```
-
-### Example 03: `input/example/03_minenergy_thrustmax.json`
-```
-python main.py input/example/03.json output/example
-```
-
-### Example 04: `input/example/04_minfuel_thrustaccmax.json`
-```
-python main.py input/example/04.json output/example
-```
-
-### Example 05: `input/example/05_minfuel_thrustmax.json`
-```
-python main.py input/example/05.json output/example
-```
-
-### Example 06: `input/example/06_minenergy_uncon_timefree.json`
-```
-python main.py input/example/06.json output/example
-```
-
-### Example 07: `input/example/07_minfuel_thrustmax_timefree.json`
-```
-python main.py input/example/07.json output/example
+python main.py input/example/1.01_energy_thrustaccmax.json output/example
 ```
 
 ---
