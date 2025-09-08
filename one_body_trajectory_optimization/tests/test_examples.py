@@ -6,7 +6,7 @@ from pathlib import Path
 
 from main import main
 
-@pytest.mark.parametrize("example_num", ["01", "02"])
+@pytest.mark.parametrize("example_num", ["1.01_energy_thrustaccmax", "1.02_energy_thrustmax"])
 def test_run_example(monkeypatch, example_num):
     """
     Tests running the main script with an example input.

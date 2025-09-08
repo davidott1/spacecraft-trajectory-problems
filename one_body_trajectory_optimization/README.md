@@ -333,6 +333,10 @@ where
 \end{array}
 ```
 
+###### Minimum Energy to Fuel
+
+xxx
+
 #### Equality Constraints: Flight Time, Initial Position and Velocity, Final Position and Velocity
 
 The equality conditions or boundary conditions are variable.
@@ -394,6 +398,11 @@ where
 and 
 ```math
 b = \text{max}(k a_1, k a_2)
+```
+
+For energyfuel-minimization problems, the $\alpha$ weighting parameter modifies the bounded thrust acceleration as
+```math
+\Gamma_{\text{energyfuel}} = \text{smin} \left( \text{smax}( \frac{\lambda_v - (1 - \alpha)}{\alpha}, \Gamma_{\text{min}}, k), \Gamma_{\text{max}},k \right)
 ```
 
 ---
