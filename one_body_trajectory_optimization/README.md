@@ -82,6 +82,7 @@ scipy==1.13.1
 ```
 python main.py input/example/1.01_energy_thrustaccmax.json output/example
 ```
+![Example Trajectory Plot](./images/example_1.01_energy_thrustaccmax_optimal_trajectory.png)
 
 ---
 ## Optimal Control Problem 
