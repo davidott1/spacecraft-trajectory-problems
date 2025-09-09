@@ -355,7 +355,15 @@ where
 ```
 
 ```math
-H = (1 - \alpha) \left( \vec{\Gamma}^\top \vec{\Gamma} \right)^{1/2} + \frac{1}{2} \alpha \left( \vec{\Gamma}^\top \vec{\Gamma} \right) + ... + \vec{\lambda}_v^\top ( g \hat{y} + \vec{\Gamma} )
+H = (1 - \alpha) \Gamma + \frac{1}{2} \alpha \Gamma^{2} + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top ( g \hat{y} + \vec{\Gamma} )
+```
+
+```math
+H = (1 - \alpha) \left( \vec{\Gamma}^\top \vec{\Gamma} \right)^{1/2} + \frac{1}{2} \alpha \left( \vec{\Gamma}^\top \vec{\Gamma} \right) + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top ( g \hat{y} + \vec{\Gamma} )
+```
+
+```math
+\vec{0} = (1 - \alpha) \left( \vec{\Gamma}^\top \vec{\Gamma} \right)^{-1/2} \vec{\Gamma} + \alpha \vec{\Gamma} + \vec{\lambda}_v
 ```
 
 #### Equality Constraints: Flight Time, Initial Position and Velocity, Final Position and Velocity
