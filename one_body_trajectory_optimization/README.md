@@ -343,7 +343,19 @@ where
 ###### Minimum Energy to Fuel
 
 ```math
-\frac{dH}{d\vec{\Gamma}} = \vec{0}^\top \to (1 - \alpha) \left( \vec{\Gamma}^\top \vec{\Gamma} \right)^{-1/2} \vec{\Gamma} + \alpha \vec{\Gamma} + \vec{\lambda}_v = \vec{0} \to \vec{\Gamma}_{\text{energy}*} = -\vec{\lambda}_v
+\begin{align}
+\frac{dH}{d\vec{\Gamma}} & = & \vec{0}^\top \\
+(1 - \alpha) \left( \vec{\Gamma}^\top \vec{\Gamma} \right)^{-1/2} \vec{\Gamma} + \alpha \vec{\Gamma} + \vec{\lambda}_v & = & \vec{0} \\
+(1 - \alpha) \frac{\vec{\Gamma}}{\Gamma} + \alpha \vec{\Gamma} & = & -\vec{\lambda}_v \\
+\left( \frac{1 - \alpha}{\Gamma} + \alpha \right) \vec{\Gamma} & = & -\vec{\lambda}_v
+\end{align}
+```
+
+```math
+\begin{align}
+|| \left( \frac{1 - \alpha}{\Gamma} + \alpha \right) \vec{\Gamma} || & = & || -\vec{\lambda}_v || \\
+\left( \frac{1 - \alpha}{\Gamma} + \alpha \right) \Gamma & = & \lambda_v
+\end{align}
 ```
 
 ```math
@@ -351,19 +363,14 @@ where
 ```
 
 ```math
-\alpha \Gamma - ( \lambda_v - (1 - \alpha ) ) = 0
+\begin{align}
+\left( 1 - \alpha + \alpha \Gamma \right) \frac{\vec{\Gamma}}{\Gamma} & = & -\vec{\lambda}_v \\
+\lambda_v \frac{\vec{\Gamma}}{\Gamma} & = & -\vec{\lambda}_v
+\end{align}
 ```
 
 ```math
-H = (1 - \alpha) \Gamma + \frac{1}{2} \alpha \Gamma^{2} + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top ( g \hat{y} + \vec{\Gamma} )
-```
-
-```math
-H = (1 - \alpha) \left( \vec{\Gamma}^\top \vec{\Gamma} \right)^{1/2} + \frac{1}{2} \alpha \left( \vec{\Gamma}^\top \vec{\Gamma} \right) + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top ( g \hat{y} + \vec{\Gamma} )
-```
-
-```math
-\vec{0} = (1 - \alpha) \left( \vec{\Gamma}^\top \vec{\Gamma} \right)^{-1/2} \vec{\Gamma} + \alpha \vec{\Gamma} + \vec{\lambda}_v
+\frac{\vec{\Gamma}}{\Gamma} & = & -\frac{\vec{\lambda}_v}{\lambda_v}
 ```
 
 #### Equality Constraints: Flight Time, Initial Position and Velocity, Final Position and Velocity
