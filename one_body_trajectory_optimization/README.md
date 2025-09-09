@@ -189,12 +189,14 @@ python main.py input/example/5.03_fuel_thrustmax.json
 | :- | :- | :- | :- | :- | :- |
 | Objective | $J$ | fuel | $J = \int \ L \ dt = \int_{t_o}^{t_f} \ \Gamma \ dt$ | | |
 | | | energy | $J = \int \ L \ dt = \int_{t_o}^{t_f} \tfrac{1}{2} \Gamma^2 \ dt$ | | |
+| | | energyfuel | $J = \int \ L \ dt = \int_{t_o}^{t_f} (1 - \alpha) \Gamma + \tfrac{1}{2} \alpha \Gamma^2 \ dt$ | | |
 | Timespan | $t$ | | $t \in [t_o \ \ \ t_f]$ | | |
 | State | $\vec{x}(t)$ | | $\vec{x} = [ \vec{r}^\top \ \ \ \vec{v}^\top ]^\top$ | | |
 | Co-State | $\vec{\lambda}(t)$ | | $\vec{\lambda} = [ \vec{\lambda}_r^\top \ \ \ \vec{\lambda}_v^\top ]^\top$ | | |
 | Control | $\vec{u}(t)$ | fuel | $\vec{u} = \vec{\Gamma} = \Gamma \hat{\Gamma}$ | $\Gamma = \Gamma_{\text{fuel}}$ | $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$ |
 | | | energy | $\vec{u} = \vec{\Gamma} = \Gamma \hat{\Gamma}$ | $\Gamma = \Gamma_{\text{energy}}$ | $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$ |
-| Dynamics | $\vec{f}(t,\vec{x},\vec{u})$ | | $\vec{f} = [ \vec{v}^\top \ \ \ \vec{\Gamma}^\top ]^\top$ | | |
+| | | energyfuel | $\vec{u} = \vec{\Gamma} = \Gamma \hat{\Gamma}$ | $\Gamma = \Gamma_{\text{energyfuel}}$ | $\hat{\Gamma} = -\vec{\lambda}_v / \lambda_v$ |
+| Dynamics | $\vec{f}(t,\vec{x},\vec{u})$ | | $\vec{f} = [ \vec{v}^\top \ \ \ g_c \hat{y}^\top + \vec{\Gamma}^\top ]^\top$ | | |
 | Co-Dynamics | $\vec{g}(t,\vec{x},\vec{u})$ | | $\vec{g} = [ \vec{0}^\top \ \ \ -\vec{\lambda}_r^\top ]^\top$ | | |
 | Equality Constraints | | | $t_o=t_{os}$ | $\vec{r}(t_o)={\vec r}_{os}$ | $\vec{v}(t_o)={\vec v}_{os}$ |
 | | | | $t_f=t_{fs}$ | $\vec{r}(t_f)={\vec r}_{fs}$ | $\vec{v}(t_f)={\vec v}_{fs}$ |
