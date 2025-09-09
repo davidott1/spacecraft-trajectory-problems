@@ -364,12 +364,11 @@ where
 \Gamma = \frac{\lambda_v - (1 - \alpha)}{\alpha}
 ```
 
-<!-- ```math
+```math
 \begin{align}
 \left( \frac{1 - \alpha}{\Gamma} + \alpha \right) \vec{\Gamma} & = & -\vec{\lambda}_v \\
-\left( 1 - \alpha + \alpha \Gamma \right) \frac{\vec{\Gamma}}{\Gamma} & = & -\vec{\lambda}_v 
 \end{align}
-``` -->
+```
 
 ```math
 \begin{align}
