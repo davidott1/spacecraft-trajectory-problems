@@ -361,7 +361,7 @@ where
 ```
 
 ```math
-\Gamma_{\text{energyfuel}} = \frac{\lambda_v - (1 - \alpha)}{\alpha}
+\Gamma_{\text{energyfuel}*} = \frac{\lambda_v - (1 - \alpha)}{\alpha}
 ```
 
 ```math
@@ -379,7 +379,7 @@ where
 ```
 
 ```math
-\hat{\Gamma}_{\text{energyfuel}} = -\frac{\vec{\lambda}_v}{\lambda_v}
+\hat{\Gamma}_{\text{energyfuel}*} = -\frac{\vec{\lambda}_v}{\lambda_v}
 ```
 
 #### Equality Constraints: Flight Time, Initial Position and Velocity, Final Position and Velocity
