@@ -372,8 +372,10 @@ where
 ```
 
 ```math
+\begin{align}
 \lambda_v \frac{\vec{\Gamma}}{\Gamma} & = & -\vec{\lambda}_v \\
 \lambda_v \hat{\Gamma} & = & -\vec{\lambda}_v
+\end{align}
 ```
 
 ```math
