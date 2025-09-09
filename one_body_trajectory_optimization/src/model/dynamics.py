@@ -3,13 +3,13 @@ from src.utility.bounding_functions import bounded_smooth_func, bounded_nonsmoot
 
 
 def control_thrust_acceleration(
-        min_type, 
-        covel_x, covel_y,
+        min_type                                                                       , 
+        covel_x, covel_y                                                               ,
         use_thrust_acc_limits, use_thrust_acc_smoothing, thrust_acc_min, thrust_acc_max,
-        use_thrust_limits, use_thrust_smoothing, thrust_min, thrust_max,
-        k_steepness,
-        mass  : float      = 1.0            ,
-        alpha : np.float64 = np.float64(1.0),
+        use_thrust_limits, use_thrust_smoothing, thrust_min, thrust_max                ,
+        k_steepness                                                                    ,
+        mass  : float      = 1.0                                                       ,
+        alpha : np.float64 = np.float64(1.0)                                           ,
     ):
     """
     Control: thrust_acceleration_vector = thrust_acceleration_magnitude * thrust_acceleration_direction
@@ -34,13 +34,8 @@ def control_thrust_acceleration(
             thrust_acc_mag = np.where(switching_func > 0.0, thrust_acc_max, thrust_acc_min)
     elif min_type == 'energyfuel':
         switching_func = covel_mag - (1.0 - alpha)
-        if switching_func > 0:
-            # Thrust on
-            thrust_acc_mag = (covel_mag - (1 - alpha)) / alpha
-            thrust_acc_mag = bounded_smooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max, k_steepness)
-        else:
-            # Thrust off
-            thrust_acc_mag = 0.0
+        thrust_acc_mag = (covel_mag - (1 - alpha)) / alpha
+        thrust_acc_mag = bounded_smooth_func(thrust_acc_mag, thrust_acc_min, thrust_acc_max, k_steepness)
     else: # assume 'energy'
         switching_func = np.zeros_like(covel_mag)
         thrust_acc_mag = covel_mag

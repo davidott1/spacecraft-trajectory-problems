@@ -38,8 +38,8 @@ one_body_trajectory_optimization/                                : root folder
 │       └── bounding_functions.py                                : functions for bounding thrust and thrust acceleration
 ├── tests/                                                       : collection of tests
 │   ├── data/                                                    : test data and example files
-│   │   ├── 01.json                                              : test example 1.01
-│   │   └── 02.json                                              : test example 1.02
+│   │   ├── 1.01_energy_thrustaccmax.json                        : test example 1.01
+│   │   └── 1.02_energy_thrustmax.json                           : test example 1.02
 │   └── test_examples.py                                         : tests for the examples
 ├── untracked/                                                   : untracked files for convenience
 ├── .gitignore                                                   : contains files and folders to ignore by git
@@ -227,10 +227,17 @@ For minimization of of fuel and energy, $L = \Gamma$ and $\frac{1}{2} \vec{\Gamm
 H = \Gamma + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top (g \hat{y} + \vec{\Gamma})
   = \Gamma + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} (g + \Gamma_y)
 ```
-and for energy minimization
+for energy minimization
 ```math
 H = \frac{1}{2} \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top (g \hat{y} + \vec{\Gamma})
   = \frac{1}{2} \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} (g + \Gamma_y)
+```
+and for energyfuel minimization
+```math
+\begin{align}
+H & = & (1 - \alpha) \Gamma + \frac{1}{2} \alpha \vec{\Gamma}^\top \vec{\Gamma} + \vec{\lambda}_r^\top \vec{v} + \vec{\lambda}_v^\top (g \hat{y} + \vec{\Gamma}) \\
+  & = & (1 - \alpha) \left( \Gamma_x^2 + \Gamma_y^2 \right)^{1/2} + \frac{1}{2} \alpha \left( \Gamma_x^2 + \Gamma_y^2 \right) + \lambda_{r_x} v_x + \lambda_{r_y} v_y + \lambda_{v_x} \Gamma_x + \lambda_{v_y} (g + \Gamma_y)
+\end{align}
 ```
 
 #### Necessary Conditions for Optimality
@@ -333,6 +340,55 @@ where
 \end{array}
 ```
 
+###### Minimum Energy to Fuel
+For the energy to fuel homotopy, the control law derivative is a hybrid formulation between both the energy and fuel solutions. The first derivative yields the expression
+```math
+\frac{dH}{d\vec{\Gamma}} = \vec{0}^\top \to \ \ \
+(1 - \alpha) \left( \vec{\Gamma}^\top \vec{\Gamma} \right)^{-1/2} \vec{\Gamma} + \alpha \vec{\Gamma} + \vec{\lambda}_v = \vec{0}
+```
+Rearrange and simplify to get
+```math
+\begin{align}
+(1 - \alpha) \frac{\vec{\Gamma}}{\Gamma} + \alpha \vec{\Gamma} & = & -\vec{\lambda}_v \\
+\left( \frac{1 - \alpha}{\Gamma} + \alpha \right) \vec{\Gamma} & = & -\vec{\lambda}_v
+\end{align}
+```
+
+For thrust-acceleration magnitude, take the 2-norm
+```math
+\begin{align}
+\| \left( \frac{1 - \alpha}{\Gamma} + \alpha \right) \vec{\Gamma} \| & = & \| -\vec{\lambda}_v \| \\
+\left( \frac{1 - \alpha}{\Gamma} + \alpha \right) \Gamma & = & \lambda_v
+\end{align}
+```
+and the magnitude is
+```math
+\Gamma_{\text{energyfuel}*} = \frac{\lambda_v - (1 - \alpha)}{\alpha}
+```
+
+To get thrust-acceleration direction, start with a previous expression and rearrange
+```math
+\begin{align}
+\left( \frac{1 - \alpha}{\Gamma} + \alpha \right) \vec{\Gamma} & = & -\vec{\lambda}_v \\
+\left( 1 - \alpha + \alpha \Gamma \right) \frac{ \vec{\Gamma} }{\Gamma} & = & -\vec{\lambda}_v 
+\end{align}
+```
+Substitute for the coefficient $1 - \alpha + \alpha \Gamma$ and the thrust-acceleration unit direction $\vec{\Gamma}/\Gamma$:
+```math
+\begin{align}
+\lambda_v \frac{\vec{\Gamma}}{\Gamma} & = & -\vec{\lambda}_v \\
+\lambda_v \hat{\Gamma} & = & -\vec{\lambda}_v
+\end{align}
+```
+Thus, thrust-acceleration direction is
+```math
+\hat{\Gamma}_{\text{energyfuel}*} = -\frac{\vec{\lambda}_v}{\lambda_v}
+```
+The control law for the minimization of energyfuel is determined:
+```math
+\vec{\Gamma}_{\text{energyfuel}*} = \Gamma_{\text{energyfuel}*} \hat{\Gamma}_{\text{energyfuel}*}
+```
+
 #### Equality Constraints: Flight Time, Initial Position and Velocity, Final Position and Velocity
 
 The equality conditions or boundary conditions are variable.
@@ -394,6 +450,11 @@ where
 and 
 ```math
 b = \text{max}(k a_1, k a_2)
+```
+
+For energyfuel-minimization problems, the $\alpha$ weighting parameter modifies the bounded thrust acceleration as
+```math
+\Gamma_{\text{energyfuel}} = \text{smin} \left( \text{smax}\left( \frac{\lambda_v - (1 - \alpha)}{\alpha}, \Gamma_{\text{min}}, k \right), \Gamma_{\text{max}},k \right)
 ```
 
 ---

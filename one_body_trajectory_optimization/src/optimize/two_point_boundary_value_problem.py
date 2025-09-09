@@ -278,11 +278,20 @@ def compute_hamiltonian(
         thrust_acc_y,
         acc_x       ,
         acc_y       ,
+        alpha = 0   ,
     ):
     if min_type == 'fuel':
-        # ham = 1/2 (Gamma_vec^T Gamma_vec)^(1/2) + lambda_pos_vec^T vel_vec + lambda_vel_vec^T Gamma_vec
+        # ham = (Gamma_vec^T Gamma_vec)^(1/2) + lambda_pos_vec^T vel_vec + lambda_vel_vec^T Gamma_vec
         return (
             (thrust_acc_x**2 + thrust_acc_y**2)**(1/2)
+            + copos_x * vel_x + copos_y * vel_y
+            + covel_x * acc_x + covel_y * acc_y
+        )
+    elif min_type == 'energyfuel':
+        # ham = (1 - alpha) (Gamma_vec^T Gamma_vec)^(1/2) + alpha 1/2 (Gamma_vec^T Gamma_vec)^(1/2) + lambda_pos_vec^T vel_vec + lambda_vel_vec^T Gamma_vec
+        return (
+            (1 - alpha) * (thrust_acc_x**2 + thrust_acc_y**2)**(1/2)
+            + alpha * (thrust_acc_x**2 + thrust_acc_y**2)
             + copos_x * vel_x + copos_y * vel_y
             + covel_x * acc_x + covel_y * acc_y
         )
@@ -342,6 +351,8 @@ def tpbvp_objective_and_jacobian(
         equality_parameters[      'ham']['f']['pls']
     )
 
+    constant_gravity = integration_state_parameters['constant_gravity']
+
     # Time span
     time_span = np.array([time_o_pls, time_f_mns])
 
@@ -375,128 +386,68 @@ def tpbvp_objective_and_jacobian(
         mass_f_mns = 1.0 # dummy value
     
     # Compute the hamiltonian at the initial and final time
-    if optimization_parameters['min_type'] == 'fuel':
-        thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _, _, _, _ = \
-            control_thrust_acceleration(
-                min_type                 = optimization_parameters['min_type'],
-                covel_x                  = covel_vec_o_pls[0],
-                covel_y                  = covel_vec_o_pls[1],
-                use_thrust_acc_limits    = inequality_parameters['use_thrust_acc_limits'],
-                use_thrust_acc_smoothing = inequality_parameters['use_thrust_acc_smoothing'],
-                thrust_acc_min           = inequality_parameters['thrust_acc_min'],
-                thrust_acc_max           = inequality_parameters['thrust_acc_max'],
-                use_thrust_limits        = inequality_parameters['use_thrust_limits'],
-                use_thrust_smoothing     = inequality_parameters['use_thrust_smoothing'],
-                thrust_min               = inequality_parameters['thrust_min'],
-                thrust_max               = inequality_parameters['thrust_max'],
-                k_steepness              = inequality_parameters['k_steepness'],
-                mass                     = integration_state_parameters['mass_o'],
-            )
-        ham_o_pls = \
-            compute_hamiltonian(
-                min_type     = optimization_parameters['min_type'],
-                vel_x        = vel_vec_o_pls[0]   ,
-                vel_y        = vel_vec_o_pls[1]   ,
-                copos_x      = copos_vec_o_pls[0] ,
-                copos_y      = copos_vec_o_pls[1] ,
-                covel_x      = covel_vec_o_pls[0] ,
-                covel_y      = covel_vec_o_pls[1] ,
-                thrust_acc_x = thrust_acc_x_o_pls,
-                thrust_acc_y = thrust_acc_y_o_pls,
-                acc_x        = thrust_acc_x_o_pls,
-                acc_y        = thrust_acc_y_o_pls,
-            )
-        thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _, _, _, _ = \
-            control_thrust_acceleration(
-                min_type                 = optimization_parameters['min_type'],
-                covel_x                  = covel_vec_f_mns[0],
-                covel_y                  = covel_vec_f_mns[1],
-                use_thrust_acc_limits    = inequality_parameters['use_thrust_acc_limits'],
-                use_thrust_acc_smoothing = inequality_parameters['use_thrust_acc_smoothing'],
-                thrust_acc_min           = inequality_parameters['thrust_acc_min'],
-                thrust_acc_max           = inequality_parameters['thrust_acc_max'],
-                use_thrust_limits        = inequality_parameters['use_thrust_limits'],
-                use_thrust_smoothing     = inequality_parameters['use_thrust_smoothing'],
-                thrust_min               = inequality_parameters['thrust_min'],
-                thrust_max               = inequality_parameters['thrust_max'],
-                k_steepness              = inequality_parameters['k_steepness'],
-                mass                     = mass_f_mns,
-            )
-        ham_f_mns = \
-            compute_hamiltonian(
-                min_type     = optimization_parameters['min_type'],
-                vel_x        = vel_vec_f_mns[0]   ,
-                vel_y        = vel_vec_f_mns[1]   ,
-                copos_x      = copos_vec_f_mns[0] ,
-                copos_y      = copos_vec_f_mns[1] ,
-                covel_x      = covel_vec_f_mns[0] ,
-                covel_y      = covel_vec_f_mns[1] ,
-                thrust_acc_x = thrust_acc_x_f_mns,
-                thrust_acc_y = thrust_acc_y_f_mns,
-                acc_x        = thrust_acc_x_f_mns,
-                acc_y        = thrust_acc_y_f_mns,
-            )
-    else: # optimization_parameters['min_type'] == 'energy':
-        thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _, _, _, _ = \
-            control_thrust_acceleration(
-                min_type                 = optimization_parameters['min_type'],
-                covel_x                  = covel_vec_o_pls[0],
-                covel_y                  = covel_vec_o_pls[1],
-                use_thrust_acc_limits    = inequality_parameters['use_thrust_acc_limits'],
-                use_thrust_acc_smoothing = inequality_parameters['use_thrust_acc_smoothing'],
-                thrust_acc_min           = inequality_parameters['thrust_acc_min'],
-                thrust_acc_max           = inequality_parameters['thrust_acc_max'],
-                use_thrust_limits        = inequality_parameters['use_thrust_limits'],
-                use_thrust_smoothing     = inequality_parameters['use_thrust_smoothing'],
-                thrust_min               = inequality_parameters['thrust_min'],
-                thrust_max               = inequality_parameters['thrust_max'],
-                k_steepness              = inequality_parameters['k_steepness'],
-                mass                     = integration_state_parameters['mass_o'],
-            )
-        ham_o_pls = \
-            compute_hamiltonian(
-                min_type     = optimization_parameters['min_type'],
-                vel_x        = vel_vec_o_pls[0]   ,
-                vel_y        = vel_vec_o_pls[1]   ,
-                copos_x      = copos_vec_o_pls[0] ,
-                copos_y      = copos_vec_o_pls[1] ,
-                covel_x      = covel_vec_o_pls[0] ,
-                covel_y      = covel_vec_o_pls[1] ,
-                thrust_acc_x = thrust_acc_x_o_pls,
-                thrust_acc_y = thrust_acc_y_o_pls,
-                acc_x        = thrust_acc_x_o_pls,
-                acc_y        = thrust_acc_y_o_pls,
-            )
-        thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _, _, _, _ = \
-            control_thrust_acceleration(
-                min_type                 = optimization_parameters['min_type'],
-                covel_x                  = covel_vec_f_mns[0],
-                covel_y                  = covel_vec_f_mns[1],
-                use_thrust_acc_limits    = inequality_parameters['use_thrust_acc_limits'],
-                use_thrust_acc_smoothing = inequality_parameters['use_thrust_acc_smoothing'],
-                thrust_acc_min           = inequality_parameters['thrust_acc_min'],
-                thrust_acc_max           = inequality_parameters['thrust_acc_max'],
-                use_thrust_limits        = inequality_parameters['use_thrust_limits'],
-                use_thrust_smoothing     = inequality_parameters['use_thrust_smoothing'],
-                thrust_min               = inequality_parameters['thrust_min'],
-                thrust_max               = inequality_parameters['thrust_max'],
-                k_steepness              = inequality_parameters['k_steepness'],
-                mass                     = mass_f_mns,
-            )
-        ham_f_mns = \
-            compute_hamiltonian(
-                min_type     = optimization_parameters['min_type'],
-                vel_x        = vel_vec_f_mns[0]   ,
-                vel_y        = vel_vec_f_mns[1]   ,
-                copos_x      = copos_vec_f_mns[0] ,
-                copos_y      = copos_vec_f_mns[1] ,
-                covel_x      = covel_vec_f_mns[0] ,
-                covel_y      = covel_vec_f_mns[1] ,
-                thrust_acc_x = thrust_acc_x_f_mns,
-                thrust_acc_y = thrust_acc_y_f_mns,
-                acc_x        = thrust_acc_x_f_mns,
-                acc_y        = thrust_acc_y_f_mns,
-            )
+    thrust_acc_x_o_pls, thrust_acc_y_o_pls, _, _, _, _, _, _ = \
+        control_thrust_acceleration(
+            min_type                 = optimization_parameters['min_type'],
+            covel_x                  = covel_vec_o_pls[0],
+            covel_y                  = covel_vec_o_pls[1],
+            use_thrust_acc_limits    = inequality_parameters['use_thrust_acc_limits'],
+            use_thrust_acc_smoothing = inequality_parameters['use_thrust_acc_smoothing'],
+            thrust_acc_min           = inequality_parameters['thrust_acc_min'],
+            thrust_acc_max           = inequality_parameters['thrust_acc_max'],
+            use_thrust_limits        = inequality_parameters['use_thrust_limits'],
+            use_thrust_smoothing     = inequality_parameters['use_thrust_smoothing'],
+            thrust_min               = inequality_parameters['thrust_min'],
+            thrust_max               = inequality_parameters['thrust_max'],
+            k_steepness              = inequality_parameters['k_steepness'],
+            mass                     = integration_state_parameters['mass_o'],
+        )
+    ham_o_pls = \
+        compute_hamiltonian(
+            min_type     = optimization_parameters['min_type']  ,
+            vel_x        = vel_vec_o_pls[0]                     ,
+            vel_y        = vel_vec_o_pls[1]                     ,
+            copos_x      = copos_vec_o_pls[0]                   ,
+            copos_y      = copos_vec_o_pls[1]                   ,
+            covel_x      = covel_vec_o_pls[0]                   ,
+            covel_y      = covel_vec_o_pls[1]                   ,
+            thrust_acc_x = thrust_acc_x_o_pls                   ,
+            thrust_acc_y = thrust_acc_y_o_pls                   ,
+            acc_x        = thrust_acc_x_o_pls                   ,
+            acc_y        = constant_gravity + thrust_acc_y_o_pls,
+            alpha        = inequality_parameters['alpha']       ,
+        )
+    thrust_acc_x_f_mns, thrust_acc_y_f_mns, _, _, _, _, _, _ = \
+        control_thrust_acceleration(
+            min_type                 = optimization_parameters['min_type'],
+            covel_x                  = covel_vec_f_mns[0],
+            covel_y                  = covel_vec_f_mns[1],
+            use_thrust_acc_limits    = inequality_parameters['use_thrust_acc_limits'],
+            use_thrust_acc_smoothing = inequality_parameters['use_thrust_acc_smoothing'],
+            thrust_acc_min           = inequality_parameters['thrust_acc_min'],
+            thrust_acc_max           = inequality_parameters['thrust_acc_max'],
+            use_thrust_limits        = inequality_parameters['use_thrust_limits'],
+            use_thrust_smoothing     = inequality_parameters['use_thrust_smoothing'],
+            thrust_min               = inequality_parameters['thrust_min'],
+            thrust_max               = inequality_parameters['thrust_max'],
+            k_steepness              = inequality_parameters['k_steepness'],
+            mass                     = mass_f_mns,
+        )
+    ham_f_mns = \
+        compute_hamiltonian(
+            min_type     = optimization_parameters['min_type']  ,
+            vel_x        = vel_vec_f_mns[0]                     ,
+            vel_y        = vel_vec_f_mns[1]                     ,
+            copos_x      = copos_vec_f_mns[0]                   ,
+            copos_y      = copos_vec_f_mns[1]                   ,
+            covel_x      = covel_vec_f_mns[0]                   ,
+            covel_y      = covel_vec_f_mns[1]                   ,
+            thrust_acc_x = thrust_acc_x_f_mns                   ,
+            thrust_acc_y = thrust_acc_y_f_mns                   ,
+            acc_x        = thrust_acc_x_f_mns                   ,
+            acc_y        = constant_gravity + thrust_acc_y_f_mns,
+            alpha        = inequality_parameters['alpha']       ,
+        )
     
     # Calculate the error vector and error vector Jacobian
     #   error = [ delta [time_o, pos_vec_o, vel_vec_o, copos_vec_o, covel_vel_o, ham_o] ]
@@ -519,7 +470,7 @@ def tpbvp_objective_and_jacobian(
     if equality_parameters['ham'      ]['f']['mode'] == 'free': ham_f_pls       = ham_f_mns
 
     # Time error
-    error_time_o = time_o_pls - time_o_mns
+    error_time_o = time_o_pls - time_o_mns # not needed
     error_time_f = time_f_pls - time_f_mns
 
     # Position, velocity, co-position, co-velocity error
@@ -535,36 +486,8 @@ def tpbvp_objective_and_jacobian(
     error_covel_vec_f = covel_vec_f_pls - covel_vec_f_mns
 
     # Hamiltonian error
-    error_ham_o = ham_o_pls - ham_o_mns
+    error_ham_o = ham_o_pls - ham_o_mns # not needed
     error_ham_f = ham_f_pls - ham_f_mns
-
-    # Full error vector
-    error_full = {
-        'time' : {
-            'o': error_time_o,
-            'f': error_time_f 
-        },
-        'pos_vec' : {
-            'o': error_pos_vec_o,
-            'f': error_pos_vec_f
-        },
-        'vel_vec' : {
-            'o': error_vel_vec_o,
-            'f': error_vel_vec_f
-        },
-        'copos_vec' : {
-            'o': error_copos_vec_o,
-            'f': error_copos_vec_f
-        },
-        'covel_vec' : {
-            'o': error_covel_vec_o,
-            'f': error_covel_vec_f
-        },
-        'ham' : {
-            'o': error_ham_o,
-            'f': error_ham_f
-        }
-    }
 
     # Error vector
     #   error = [  error_pos_vec_o  error_vel_vec_o  error_copos_vec_o  error_covel_vel_o
