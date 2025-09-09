@@ -211,7 +211,7 @@ The optimal control problem is solved using an indirect method. The objective $J
 \begin{array}{llll}
 & \text{fuel}   : & J & = & \int \ L \ dt = \int_{t_o}^{t_f} \              \Gamma   \ dt \\
 & \text{energy} : & J & = & \int \ L \ dt = \int_{t_o}^{t_f} \ \tfrac{1}{2} \Gamma^2 \ dt \\
-& \text{energy} : & J & = & \int \ L \ dt = \int_{t_o}^{t_f} \ (1 - \alpha) \Gamma + \tfrac{1}{2} \alpha \Gamma^2 \ dt
+& \text{energyfuel} : & J & = & \int \ L \ dt = \int_{t_o}^{t_f} \ (1 - \alpha) \Gamma + \tfrac{1}{2} \alpha \Gamma^2 \ dt
 \end{array}
 ```
 The state of the one body is representead in a Cartesian xy-system with respect to an inertial frame
