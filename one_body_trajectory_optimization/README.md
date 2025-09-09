@@ -370,7 +370,7 @@ where
 ```
 
 ```math
-\frac{\vec{\Gamma}}{\Gamma} & = & -\frac{\vec{\lambda}_v}{\lambda_v}
+\frac{\vec{\Gamma}}{\Gamma} = -\frac{\vec{\lambda}_v}{\lambda_v}
 ```
 
 #### Equality Constraints: Flight Time, Initial Position and Velocity, Final Position and Velocity
