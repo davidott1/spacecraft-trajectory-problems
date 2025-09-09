@@ -367,13 +367,17 @@ where
 ```math
 \begin{align}
 \left( \frac{1 - \alpha}{\Gamma} + \alpha \right) \vec{\Gamma} & = & -\vec{\lambda}_v \\
-\left( 1 - \alpha + \alpha \Gamma \right) \frac{\vec{\Gamma}}{\Gamma} & = & -\vec{\lambda}_v \\
-\lambda_v \frac{\vec{\Gamma}}{\Gamma} & = & -\vec{\lambda}_v
+\left( 1 - \alpha + \alpha \Gamma \right) \frac{\vec{\Gamma}}{\Gamma} & = & -\vec{\lambda}_v 
 \end{align}
 ```
 
 ```math
-\frac{\vec{\Gamma}}{\Gamma} = -\frac{\vec{\lambda}_v}{\lambda_v}
+\lambda_v \frac{\vec{\Gamma}}{\Gamma} & = & -\vec{\lambda}_v \\
+\lambda_v \hat{\Gamma} & = & -\vec{\lambda}_v
+```
+
+```math
+\hat{\Gamma} = -\frac{\vec{\lambda}_v}{\lambda_v}
 ```
 
 #### Equality Constraints: Flight Time, Initial Position and Velocity, Final Position and Velocity
