@@ -343,7 +343,7 @@ where
 ###### Minimum Energy to Fuel
 
 ```math
-\frac{dH}{d\vec{\Gamma}} = \vec{0}^\top \to
+\frac{dH}{d\vec{\Gamma}} = \vec{0}^\top \to \ \ \
 (1 - \alpha) \left( \vec{\Gamma}^\top \vec{\Gamma} \right)^{-1/2} \vec{\Gamma} + \alpha \vec{\Gamma} + \vec{\lambda}_v = \vec{0} \\
 ```
 ```math
@@ -355,7 +355,7 @@ where
 
 ```math
 \begin{align}
-|| \left( \frac{1 - \alpha}{\Gamma} + \alpha \right) \vec{\Gamma} || & = & || -\vec{\lambda}_v || \\
+\| \left( \frac{1 - \alpha}{\Gamma} + \alpha \right) \vec{\Gamma} \| & = & \| -\vec{\lambda}_v \| \\
 \left( \frac{1 - \alpha}{\Gamma} + \alpha \right) \Gamma & = & \lambda_v
 \end{align}
 ```
