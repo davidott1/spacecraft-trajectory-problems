@@ -382,6 +382,10 @@ where
 \hat{\Gamma}_{\text{energyfuel}*} = -\frac{\vec{\lambda}_v}{\lambda_v}
 ```
 
+```math
+\vec{\Gamma}_{\text{energyfuel}*} = \Gamma_{\text{energyfuel}*} \hat{\Gamma}_{\text{energyfuel}*}
+```
+
 #### Equality Constraints: Flight Time, Initial Position and Velocity, Final Position and Velocity
 
 The equality conditions or boundary conditions are variable.
