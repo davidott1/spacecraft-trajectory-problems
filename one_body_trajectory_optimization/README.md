@@ -341,12 +341,12 @@ where
 ```
 
 ###### Minimum Energy to Fuel
-
+For the energy to fuel homotopy, the control law derivative is a hybrid formulation between both the energy and fuel solutions. The first derivative yields the expression
 ```math
 \frac{dH}{d\vec{\Gamma}} = \vec{0}^\top \to \ \ \
 (1 - \alpha) \left( \vec{\Gamma}^\top \vec{\Gamma} \right)^{-1/2} \vec{\Gamma} + \alpha \vec{\Gamma} + \vec{\lambda}_v = \vec{0}
 ```
-
+Rearrange and simplify to get
 ```math
 \begin{align}
 (1 - \alpha) \frac{\vec{\Gamma}}{\Gamma} + \alpha \vec{\Gamma} & = & -\vec{\lambda}_v \\
@@ -354,35 +354,37 @@ where
 \end{align}
 ```
 
+For thrust-acceleration magnitude, take the 2-norm
 ```math
 \begin{align}
 \| \left( \frac{1 - \alpha}{\Gamma} + \alpha \right) \vec{\Gamma} \| & = & \| -\vec{\lambda}_v \| \\
 \left( \frac{1 - \alpha}{\Gamma} + \alpha \right) \Gamma & = & \lambda_v
 \end{align}
 ```
-
+and the magnitude is
 ```math
 \Gamma_{\text{energyfuel}*} = \frac{\lambda_v - (1 - \alpha)}{\alpha}
 ```
 
+To get thrust-acceleration direction, start with a previous expression and rearrange
 ```math
 \begin{align}
 \left( \frac{1 - \alpha}{\Gamma} + \alpha \right) \vec{\Gamma} & = & -\vec{\lambda}_v \\
 \left( 1 - \alpha + \alpha \Gamma \right) \frac{ \vec{\Gamma} }{\Gamma} & = & -\vec{\lambda}_v 
 \end{align}
 ```
-
+Substitute for the coefficient $1 - \alpha + \alpha \Gamma$ and the thrust-acceleration unit direction $\vec{\Gamma}/\Gamma$:
 ```math
 \begin{align}
 \lambda_v \frac{\vec{\Gamma}}{\Gamma} & = & -\vec{\lambda}_v \\
 \lambda_v \hat{\Gamma} & = & -\vec{\lambda}_v
 \end{align}
 ```
-
+Thus, thrust-acceleration direction is
 ```math
 \hat{\Gamma}_{\text{energyfuel}*} = -\frac{\vec{\lambda}_v}{\lambda_v}
 ```
-
+The control law for the minimization of energyfuel is determined:
 ```math
 \vec{\Gamma}_{\text{energyfuel}*} = \Gamma_{\text{energyfuel}*} \hat{\Gamma}_{\text{energyfuel}*}
 ```
