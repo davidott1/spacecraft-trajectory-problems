@@ -344,8 +344,9 @@ where
 
 ```math
 \frac{dH}{d\vec{\Gamma}} = \vec{0}^\top \to \ \ \
-(1 - \alpha) \left( \vec{\Gamma}^\top \vec{\Gamma} \right)^{-1/2} \vec{\Gamma} + \alpha \vec{\Gamma} + \vec{\lambda}_v = \vec{0} \\
+(1 - \alpha) \left( \vec{\Gamma}^\top \vec{\Gamma} \right)^{-1/2} \vec{\Gamma} + \alpha \vec{\Gamma} + \vec{\lambda}_v = \vec{0}
 ```
+
 ```math
 \begin{align}
 (1 - \alpha) \frac{\vec{\Gamma}}{\Gamma} + \alpha \vec{\Gamma} & = & -\vec{\lambda}_v \\
