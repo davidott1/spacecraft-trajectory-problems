@@ -1,6 +1,13 @@
 # Imports
 import numpy as np
 
+class SimulatePathAndMeasurements:
+    def __init__(self):
+        pass
+    def run(self):
+        pass
+
+
 def main():
     
     # Start thrust estimation program
@@ -9,19 +16,20 @@ def main():
     print(       "==========================")
 
     # Simulate path and measurements
-    print("\nSIMULATING PATH AND MEASUREMENTS")
+    print("\nSIMULATE PATH AND MEASUREMENTS")
+
 
     # Run sequential filter
-    print("\nRUNNING SEQUENTIAL FILTER")
+    print("\nRUN SEQUENTIAL FILTER")
 
     # Run smoother
-    print("\nRUNNING SMOOTHER")
+    print("\nRUN SMOOTHER")
 
     # Approximate thrust profile
-    print("\nAPPROXIMATING THRUST PROFILE")
+    print("\nAPPROXIMATE THRUST PROFILE")
 
     # End thrust estimation program
-    print("\nTHRUST ESTIMATION PROGRAM COMPLETED")
+    print("\nTHRUST ESTIMATION PROGRAM COMPLETE")
     return True
 
 if __name__ == '__main__':
