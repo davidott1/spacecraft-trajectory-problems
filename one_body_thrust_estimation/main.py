@@ -10,6 +10,7 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Optional
 from scipy.integrate import solve_ivp
+from scipy.optimize import fsolve
 
 @dataclass
 class Trajectory:
@@ -187,6 +188,28 @@ class SimulatePathAndMeasurements:
 
         return dstate__dtime
 
+    def shooting_function(self, thrust_mag_array, params):
+        time_o = params.get('time_o', 0.0)
+        time_f = params.get('time_f', 10.0)
+        pos_o = params.get('pos_o', 0.0)
+        vel_o = params.get('vel_o', 0.0)
+        initial_state = np.array([pos_o, vel_o])
+        thrust_mag = thrust_mag_array[0]
+        params['thrust_acc_mag_01'] = thrust_mag
+        params['thrust_acc_mag_23'] = thrust_mag
+        solution = solve_ivp(
+            fun=lambda time, state: self.dynamics(time, state, params),
+            t_span=(time_o, time_f),
+            y0=initial_state,
+            t_eval=self.body.time,
+            method='RK45',
+            rtol=1e-12,
+            atol=1e-12,
+        )
+        pos_f = solution.y[0, -1]
+        position_error = pos_f - 1.0 # target position
+        return position_error
+
     def create_path(self):
         # Time parameters
         time_o = 0.0
@@ -213,37 +236,66 @@ class SimulatePathAndMeasurements:
         # Initialize propagation
         pos_o = 0.0  # m
         vel_o = 0.0  # m/s
-        initial_state = np.array([pos_o, vel_o])
-        
-        # Parameters for dynamics function
+        state_o = np.array([pos_o, vel_o])
+
+        # Initial guess for thrust magnitude
+        thrust_mag_guess = 0.2
         params = {
+            'pos_o': pos_o,
+            'vel_o': vel_o,
             'delta_time_01': delta_time_01,
             'delta_time_12': delta_time_12,
             'delta_time_23': delta_time_23,
-            'thrust_acc_mag_01': thrust_acc_mag,
+            'thrust_acc_mag_01': thrust_mag_guess,
             'thrust_acc_dir_01': 1.0,
             'thrust_acc_mag_12': 0.0,
             'thrust_acc_dir_12': 0.0,
-            'thrust_acc_mag_23': thrust_acc_mag,
+            'thrust_acc_mag_23': thrust_mag_guess,
             'thrust_acc_dir_23': -1.0,
         }
-
-        # Propagate body
-        solution = solve_ivp(
-            fun=lambda time, state: self.dynamics(time, state, params),
+        
+        # Solve for thrust magnitude that achieves target final conditions
+        result = fsolve(
+            self.shooting_function,
+            thrust_mag_guess,
+            args=(params,),
+            xtol=1e-12,
+        )
+        optimal_thrust_mag = result[0]
+        
+        # Generate final trajectory with optimal thrust
+        params_final = {
+            'delta_time_01': delta_time_01,
+            'delta_time_12': delta_time_12,
+            'delta_time_23': delta_time_23,
+            'thrust_acc_mag_01': optimal_thrust_mag,
+            'thrust_acc_dir_01': 1.0,
+            'thrust_acc_mag_12': 0.0,
+            'thrust_acc_dir_12': 0.0,
+            'thrust_acc_mag_23': optimal_thrust_mag,
+            'thrust_acc_dir_23': -1.0,
+        }
+        
+        solution_final = solve_ivp(
+            fun=lambda time, state: self.dynamics(time, state, params_final),
             t_span=(time_o, time_f),
-            y0=initial_state,
+            y0=state_o,
             t_eval=self.body.time,
             method='RK45',
+            rtol=1e-12,
+            atol=1e-12,
         )
-        self.body.position = solution.y[0]
-        self.body.velocity = solution.y[1]
         
-        # Scale position from 0 to 1 meter
-        self.body.position = self.body.position / np.max(self.body.position)
+        # Store results
+        self.body.position = solution_final.y[0]
+        self.body.velocity = solution_final.y[1]
 
-        print(f"Path created: {self.body.n_steps} time steps from {self.body.time[0]:.2f} to {self.body.time[-1]:.2f} seconds")
-        print(f"Position range: {np.min(self.body.position):.3f} to {np.max(self.body.position):.3f} meters")
+        # Print summary
+        print( "  Path")
+        print(f"    Time             : {self.body.time[0]:7.1e} s to {self.body.time[-1]:7.1e} s, {self.body.n_steps} steps")
+        print(f"    Position         : {self.body.position[0]:7.1e} m to {self.body.position[-1]:7.1e} m")
+        print(f"    Velocity         : {self.body.velocity[0]:7.1e} m/s to {self.body.velocity[-1]:7.1e} m/s")
+        print(f"    Thrust Magnitude : {optimal_thrust_mag:7.1e} m/s²")
 
     def create_measurements(self):
         pass
@@ -252,9 +304,9 @@ class SimulatePathAndMeasurements:
 def main():
     
     # Start thrust estimation program
-    print(2*"\n"+"==========================")
+    print(2*"\n"+"=========================")
     print(       "THRUST ESTIMATION PROGRAM")
-    print(       "==========================")
+    print(       "=========================")
 
     # Simulate path and measurements
     print("\nSIMULATE PATH AND MEASUREMENTS")
