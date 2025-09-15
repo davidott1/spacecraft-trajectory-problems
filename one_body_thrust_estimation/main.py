@@ -1,7 +1,15 @@
+"""
+One-body thrust estimation problem main program.
+
+Example usage:
+    python main.py
+"""
+
 # Imports
 import numpy as np
 from dataclasses import dataclass
 from typing import Optional
+from scipy.integrate import solve_ivp
 
 @dataclass
 class Trajectory:
@@ -141,15 +149,49 @@ class Trajectory:
 
 
 class SimulatePathAndMeasurements:
-    def __init__(self):
-        self.body = Trajectory()
+    def __init__(
+            self,
+            n_steps: int,
+        ):
+        self.body = Trajectory(n_steps=n_steps)
+
+    def dynamics(
+            self,
+            time,
+            state,
+            params,
+        ):
+        delta_time_01 = params.get('delta_time_01', 0.0)
+        delta_time_12 = params.get('delta_time_12', 0.0)
+        delta_time_23 = params.get('delta_time_23', 0.0)
+        pos = state[0]
+        vel = state[1]
+
+        acc = 0.0
+
+        if time <= delta_time_01:
+            thrust_acc_mag = params.get('thrust_acc_mag_01', 0.0)
+            thrust_acc_dir = params.get('thrust_acc_dir_01', 0.0)
+        elif time <= delta_time_01 + delta_time_12:
+            thrust_acc_mag = params.get('thrust_acc_mag_12', 0.0)
+            thrust_acc_dir = params.get('thrust_acc_dir_12', 0.0)
+        else:
+            thrust_acc_mag = params.get('thrust_acc_mag_23', 0.0)
+            thrust_acc_dir = params.get('thrust_acc_dir_23', 0.0)
+        thrust_acc = thrust_acc_mag * thrust_acc_dir
+
+        dpos__dtime = vel
+        dvel__dtime = acc + thrust_acc
+
+        dstate__dtime = np.array([dpos__dtime, dvel__dtime])
+
+        return dstate__dtime
 
     def create_path(self):
         # Time parameters
-        n_steps = 100
         time_o = 0.0
         time_f = 10.0
-        self.body.time = np.linspace(time_o, time_f, n_steps)
+        self.body.time = np.linspace(time_o, time_f, self.body.n_steps)
 
         # Thrust acceleration parameters (on-off-on)
         thrust_acc_mag = 0.2  # m/s^2
@@ -158,24 +200,49 @@ class SimulatePathAndMeasurements:
         delta_time_23 = time_f - time_o - delta_time_01 - delta_time_12  # s, thrust-acc on, unused
         
         # Create thrust profile
-        breakpoint()
+        acceleration = np.zeros(self.body.n_steps)
         for i, t in enumerate(self.body.time):
             if t <= delta_time_01:
-                self.body.acceleration[i] = thrust_acc_mag  # thrust on
+                acceleration[i] = thrust_acc_mag  # thrust on
             elif t <= delta_time_01 + delta_time_12:
-                self.body.acceleration[i] = 0.0  # thrust off
+                acceleration[i] = 0.0  # thrust off
             else:
-                self.body.acceleration[i] = -thrust_acc_mag  # thrust on
+                acceleration[i] = -thrust_acc_mag  # thrust on
+        self.body.thrust_acceleration = acceleration
         
-        # Integrate to get velocity and position
-        for i in range(1, n_steps):
-            self.body.velocity[i] = self.body.velocity[i-1] + self.body.acceleration[i-1] * dt
-            self.body.position[i] = self.body.position[i-1] + self.body.velocity[i-1] * dt
+        # Initialize propagation
+        pos_o = 0.0  # m
+        vel_o = 0.0  # m/s
+        initial_state = np.array([pos_o, vel_o])
         
-        # Scale position to go from 0 to 1 meter
+        # Parameters for dynamics function
+        params = {
+            'delta_time_01': delta_time_01,
+            'delta_time_12': delta_time_12,
+            'delta_time_23': delta_time_23,
+            'thrust_acc_mag_01': thrust_acc_mag,
+            'thrust_acc_dir_01': 1.0,
+            'thrust_acc_mag_12': 0.0,
+            'thrust_acc_dir_12': 0.0,
+            'thrust_acc_mag_23': thrust_acc_mag,
+            'thrust_acc_dir_23': -1.0,
+        }
+
+        # Propagate body
+        solution = solve_ivp(
+            fun=lambda time, state: self.dynamics(time, state, params),
+            t_span=(time_o, time_f),
+            y0=initial_state,
+            t_eval=self.body.time,
+            method='RK45',
+        )
+        self.body.position = solution.y[0]
+        self.body.velocity = solution.y[1]
+        
+        # Scale position from 0 to 1 meter
         self.body.position = self.body.position / np.max(self.body.position)
 
-        print(f"Path created: {self.body.n_steps} time steps from 0 to {self.body.duration}s")
+        print(f"Path created: {self.body.n_steps} time steps from {self.body.time[0]:.2f} to {self.body.time[-1]:.2f} seconds")
         print(f"Position range: {np.min(self.body.position):.3f} to {np.max(self.body.position):.3f} meters")
 
     def create_measurements(self):
@@ -191,7 +258,7 @@ def main():
 
     # Simulate path and measurements
     print("\nSIMULATE PATH AND MEASUREMENTS")
-    simulator = SimulatePathAndMeasurements()
+    simulator = SimulatePathAndMeasurements(n_steps=100)
     simulator.create_path()
     simulator.create_measurements()
 
