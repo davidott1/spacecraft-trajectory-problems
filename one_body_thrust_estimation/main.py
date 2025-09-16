@@ -136,15 +136,6 @@ class SimulatePathAndMeasurements:
         delta_time_01 = 2.0  # s, thrust-acc on
         delta_time_12 = 6.0  # s, thrust-acc off
         delta_time_23 = time_f - time_o - delta_time_01 - delta_time_12  # s, thrust-acc on, unused
-        
-        # Create thrust profile
-        for i, t in enumerate(self.body.trajectory.time):
-            if t <= delta_time_01:
-                self.body.trajectory.thrust_acceleration[i] = thrust_acc_mag  # thrust on
-            elif t <= delta_time_01 + delta_time_12:
-                self.body.trajectory.thrust_acceleration[i] = 0.0  # thrust off
-            else:
-                self.body.trajectory.thrust_acceleration[i] = -thrust_acc_mag  # thrust on
 
         # Initialize propagation
         pos_o = 0.0  # m
@@ -207,13 +198,20 @@ class SimulatePathAndMeasurements:
         # Store results
         self.body.trajectory.position = solution_final.y[0]
         self.body.trajectory.velocity = solution_final.y[1]
+        for i, t in enumerate(self.body.trajectory.time):
+            if t <= delta_time_01:
+                self.body.trajectory.thrust_acceleration[i] = optimal_thrust_mag  # thrust on
+            elif t <= delta_time_01 + delta_time_12:
+                self.body.trajectory.thrust_acceleration[i] = 0.0  # thrust off
+            else:
+                self.body.trajectory.thrust_acceleration[i] = -optimal_thrust_mag  # thrust on
 
         # Print summary
-        print( "  Path")
+        print( "  Trajectory")
         print(f"    Time             : {    self.body.trajectory.time[0]:8.1e} s    to {    self.body.trajectory.time[-1]:8.1e} s   {self.body.trajectory.n_steps} steps")
         print(f"    Position         : {self.body.trajectory.position[0]:8.1e} m    to {self.body.trajectory.position[-1]:8.1e} m")
         print(f"    Velocity         : {self.body.trajectory.velocity[0]:8.1e} m/s  to {self.body.trajectory.velocity[-1]:8.1e} m/s")
-        print(f"    Thrust Magnitude : {   optimal_thrust_mag:8.1e} m/s²")
+        print(f"    Thrust Acc Mag   : {   optimal_thrust_mag:8.1e} m/s²")
 
     def create_measurements(self):
         self.body.measurements.time = np.linspace(self.body.trajectory.time[0], self.body.trajectory.time[-1], self.body.measurements.n_meas)
@@ -224,18 +222,63 @@ class SimulatePathAndMeasurements:
 
         # Randomly thin measurements
         indices = np.sort(np.random.choice(self.body.trajectory.n_steps, int(0.1*self.body.measurements.n_meas), replace=False))
-        self.body.measurements.time = self.body.measurements.time[indices]
-        self.body.measurements.range = self.body.measurements.range[indices]
+        self.body.measurements.time       = self.body.measurements.time[indices]
+        self.body.measurements.range      = self.body.measurements.range[indices]
         self.body.measurements.range_rate = self.body.measurements.range_rate[indices]
 
         # Print summary
         print( "  Measurements")
         print( "    Range")
-        print(f"      Value        : {self.body.measurements.range[0]:8.1e} m    to {self.body.measurements.range[-1]:8.1e} m")
-        print(f"      Std Dev      : {self.body.measurements.range[0]:8.1e} m    to {self.body.measurements.range[-1]:8.1e} m")
+        print(f"      Value          : {self.body.measurements.range[0]:8.1e} m    to {self.body.measurements.range[-1]:8.1e} m")
+        print(f"      Std Dev        : {self.body.measurements.range[0]:8.1e} m    to {self.body.measurements.range[-1]:8.1e} m")
         print(f"    Range Rate")
-        print(f"      Value        : {self.body.measurements.range_rate[0]:8.1e} m/s  to {self.body.measurements.range_rate[-1]:8.1e} m/s")
-        print(f"      Std Dev      : {self.body.measurements.range_rate[0]:8.1e} m/s  to {self.body.measurements.range_rate[-1]:8.1e} m/s")
+        print(f"      Value          : {self.body.measurements.range_rate[0]:8.1e} m/s  to {self.body.measurements.range_rate[-1]:8.1e} m/s")
+        print(f"      Std Dev        : {self.body.measurements.range_rate[0]:8.1e} m/s  to {self.body.measurements.range_rate[-1]:8.1e} m/s")
+
+class ThrustEstimator:
+    def __init__(self, simulator):
+        self.simulator = simulator
+        self.approx_thrust_acceleration_true = np.zeros(self.simulator.body.trajectory.n_steps)
+
+    def _get_approx_thrust_acceleration_true(self):
+        for idx in range(self.simulator.body.trajectory.n_steps-1):
+            delta_vel = self.simulator.body.trajectory.velocity[idx+1] - self.simulator.body.trajectory.velocity[idx]
+            delta_time = self.simulator.body.trajectory.time[idx+1] - self.simulator.body.trajectory.time[idx]
+            self.approx_thrust_acceleration_true[idx] = delta_vel / delta_time
+
+    def estimate_thrust(self):
+        self._get_approx_thrust_acceleration_true()
+
+
+class PlotResults:
+    def __init__(self, simulator, thrust_estimator):
+        self.simulator = simulator
+        self.thrust_estimator = thrust_estimator
+
+    def plot_all(self):
+        fig, axs = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+
+        axs[0].plot(self.simulator.body.trajectory.time, self.simulator.body.trajectory.position, label='Position [m]', color=mcolors.TABLEAU_COLORS['tab:blue'], linewidth=4)
+        axs[0].plot(self.simulator.body.measurements.time, self.simulator.body.measurements.range, 'o', label='Range Measurements [m]', color=mcolors.TABLEAU_COLORS['tab:blue'], markersize=4, alpha=0.5)
+        axs[0].set_ylabel('Position [m]')
+        axs[0].tick_params(axis='x', length=0)
+        axs[0].grid()
+
+        axs[1].plot(self.simulator.body.trajectory.time, self.simulator.body.trajectory.velocity, label='Velocity [m/s]', color=mcolors.TABLEAU_COLORS['tab:orange'], linewidth=4)
+        axs[1].plot(self.simulator.body.measurements.time, self.simulator.body.measurements.range_rate, 'o', label='Range Rate Measurements [m/s]', color=mcolors.TABLEAU_COLORS['tab:orange'], markersize=4, alpha=0.5)
+        axs[1].set_ylabel('Velocity [m/s]')
+        axs[1].tick_params(axis='x', length=0)
+        axs[1].grid()
+
+        axs[2].plot(self.simulator.body.trajectory.time, self.simulator.body.trajectory.thrust_acceleration, label='Thrust Acceleration [m/s²]', color=mcolors.TABLEAU_COLORS['tab:green'], linewidth=4)
+        axs[2].plot(self.simulator.body.trajectory.time[:-1], self.thrust_estimator.approx_thrust_acceleration_true[:-1], '-', label='Approx Thrust Acceleration [m/s²]', color=mcolors.TABLEAU_COLORS['tab:green'], linewidth=12, alpha=0.5)
+
+        axs[2].set_xlabel('Time [s]')
+        axs[2].set_ylabel('Thrust Acceleration [m/s²]')
+        axs[2].grid()
+        
+        plt.tight_layout(rect=(0.0, 0.03, 1.0, 0.95))
+        plt.show()
 
 def main():
     
@@ -252,38 +295,21 @@ def main():
     
     # Run sequential filter
     print("\nRUN SEQUENTIAL FILTER")
+    print("  (Not implemented)")
 
     # Run smoother
     print("\nRUN SMOOTHER")
+    print("  (Not implemented)")
 
     # Approximate thrust profile
     print("\nAPPROXIMATE THRUST PROFILE")
+    thrust_estimator = ThrustEstimator(simulator)
+    thrust_estimator.estimate_thrust()
 
     # Plot results
     print("\nPLOT RESULTS") 
-    
-    fig, axs = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
-    fig.suptitle('Trajectory and Thrust Profile', fontsize=16)
-
-    axs[0].plot(simulator.body.trajectory.time, simulator.body.trajectory.position, label='Position [m]', color=mcolors.TABLEAU_COLORS['tab:blue'], linewidth=4)
-    axs[0].plot(simulator.body.measurements.time, simulator.body.measurements.range, 'o', label='Range Measurements [m]', color=mcolors.TABLEAU_COLORS['tab:blue'], markersize=4, alpha=0.5)
-    axs[0].set_ylabel('Position [m]')
-    axs[0].tick_params(axis='x', length=0)
-    axs[0].grid()
-
-    axs[1].plot(simulator.body.trajectory.time, simulator.body.trajectory.velocity, label='Velocity [m/s]', color=mcolors.TABLEAU_COLORS['tab:orange'], linewidth=4)
-    axs[1].plot(simulator.body.measurements.time, simulator.body.measurements.range_rate, 'o', label='Range Rate Measurements [m/s]', color=mcolors.TABLEAU_COLORS['tab:orange'], markersize=4, alpha=0.5)
-    axs[1].set_ylabel('Velocity [m/s]')
-    axs[1].tick_params(axis='x', length=0)
-    axs[1].grid()
-
-    axs[2].plot(simulator.body.trajectory.time, simulator.body.trajectory.thrust_acceleration, label='Thrust Acceleration [m/s²]', color=mcolors.TABLEAU_COLORS['tab:green'], linewidth=4)
-    axs[2].set_xlabel('Time [s]')
-    axs[2].set_ylabel('Thrust Acceleration [m/s²]')
-    axs[2].grid()
-    
-    plt.tight_layout(rect=(0.0, 0.03, 1.0, 0.95))
-    plt.show()
+    plotter = PlotResults(simulator, thrust_estimator)
+    plotter.plot_all()
 
     # End thrust estimation program
     print("\nTHRUST ESTIMATION PROGRAM COMPLETE")
