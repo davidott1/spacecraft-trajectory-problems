@@ -16,6 +16,11 @@ np.random.seed(42)
 N_STEPS = 1000
 N_MEAS = 1000
 
+MEASUREMENT_RANGE_NOISE_STD = 5 / 100  # m
+MEASUREMENT_RANGE_RATE_NOISE_STD = 1 / 100  # m/s
+
+PROCESS_NOISE_STD = 0.1  # m/s^2
+
 @dataclass
 class Trajectory:
     n_steps: int = 0 # number of time steps
@@ -215,8 +220,8 @@ class SimulatePathAndMeasurements:
 
     def create_measurements(self):
         self.body.measurements.time = np.linspace(self.body.trajectory.time[0], self.body.trajectory.time[-1], self.body.measurements.n_meas)
-        measurement_range_noise_std = 5 / 100  # m
-        measurement_range_rate_noise_std = 1 / 100  # m/s
+        measurement_range_noise_std = MEASUREMENT_RANGE_NOISE_STD  # m
+        measurement_range_rate_noise_std = MEASUREMENT_RANGE_RATE_NOISE_STD  # m/s
         self.body.measurements.range      = self.body.trajectory.position + np.random.normal(0, measurement_range_noise_std     , self.body.trajectory.n_steps)
         self.body.measurements.range_rate = self.body.trajectory.velocity + np.random.normal(0, measurement_range_rate_noise_std, self.body.trajectory.n_steps)
 
@@ -247,28 +252,88 @@ class ThrustEstimator:
             self.approx_thrust_acceleration_true[idx] = delta_vel / delta_time
 
     def estimate_thrust(self):
+        print("  Approximate thrust acceleration using finite difference of true velocity")
         self._get_approx_thrust_acceleration_true()
 
+class SequentialFilter:
+    def __init__(self, simulator):
+        self.simulator = simulator
+        self.state_est_hat = np.array([0.0, 0.0]) # initial state estimate [pos, vel] [m, m/s]
+        self.P = np.eye(2) # initial covariance estimate [m^2, (m/s)^2]
+        self.process_noise_std = PROCESS_NOISE_STD # std dev of process noise (unmodeled acceleration) [m/s^2]
+
+        # Store results
+        self.time = []
+        self.pos  = []
+        self.vel  = []
+
+    def run(self):
+        print("  Run Sequential Filter")
+        measurements = self.simulator.body.measurements
+    
+        # Use first measurement to initialize state
+        self.x_hat = np.array([measurements.range[0], measurements.range_rate[0]])
+        self.time.append(measurements.time[0])
+        self.pos.append(self.x_hat[0])
+        self.vel.append(self.x_hat[1])
+
+        measurement_range_noise_std      = MEASUREMENT_RANGE_NOISE_STD
+        measurement_range_rate_noise_std = MEASUREMENT_RANGE_RATE_NOISE_STD
+        R = np.diag([measurement_range_noise_std**2, measurement_range_rate_noise_std**2]) # measurement noise covariance
+        H = np.array([[1.0, 0.0], [0.0, 1.0]]) # measurement matrix
+
+        for k in range(1, len(measurements.time)):
+            # Prediction
+            dt = measurements.time[k] - measurements.time[k-1] # time step
+            F = np.array([[1, dt], [0, 1]]) # variational state transition matrix
+            
+            G = np.array([[0.5 * dt**2], [dt]]) # process noise gain matrix
+            Q = G @ G.T * self.process_noise_std**2 # process noise covariance
+
+            x_hat_minus = F @ self.x_hat
+            P_minus = F @ self.P @ F.T + Q
+
+            # Update
+            z = np.array([measurements.range[k], measurements.range_rate[k]]) # measurement vector
+            y = z - H @ x_hat_minus # measurement residual
+            S = H @ P_minus @ H.T + R # innovation covariance
+            K = P_minus @ H.T @ np.linalg.inv(S) # Kalman gain
+
+            self.x_hat = x_hat_minus + K @ y
+            self.P = (np.eye(2) - K @ H) @ P_minus
+
+            # Store results
+            self.time.append(measurements.time[k])
+            self.pos.append(self.x_hat[0])
+            self.vel.append(self.x_hat[1])
 
 class PlotResults:
-    def __init__(self, simulator, thrust_estimator):
+    def __init__(self, simulator, thrust_estimator, sequential_filter=None):
         self.simulator = simulator
         self.thrust_estimator = thrust_estimator
+        self.sequential_filter = sequential_filter
 
     def plot_all(self):
+        print("  Plot trajectory, measurements, and thrust acceleration")
         fig, axs = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
 
         axs[0].plot(self.simulator.body.trajectory.time, self.simulator.body.trajectory.position, label='Position [m]', color=mcolors.TABLEAU_COLORS['tab:blue'], linewidth=4)
         axs[0].plot(self.simulator.body.measurements.time, self.simulator.body.measurements.range, 'o', label='Range Measurements [m]', color=mcolors.TABLEAU_COLORS['tab:blue'], markersize=4, alpha=0.5)
+        if self.sequential_filter and self.sequential_filter.time:
+            axs[0].plot(self.sequential_filter.time, self.sequential_filter.pos, '--', label='Filtered Position [m]', color='red', linewidth=2)
         axs[0].set_ylabel('Position [m]')
         axs[0].tick_params(axis='x', length=0)
         axs[0].grid()
+        axs[0].legend()
 
         axs[1].plot(self.simulator.body.trajectory.time, self.simulator.body.trajectory.velocity, label='Velocity [m/s]', color=mcolors.TABLEAU_COLORS['tab:orange'], linewidth=4)
         axs[1].plot(self.simulator.body.measurements.time, self.simulator.body.measurements.range_rate, 'o', label='Range Rate Measurements [m/s]', color=mcolors.TABLEAU_COLORS['tab:orange'], markersize=4, alpha=0.5)
+        if self.sequential_filter and self.sequential_filter.time:
+            axs[1].plot(self.sequential_filter.time, self.sequential_filter.vel, '--', label='Filtered Velocity [m/s]', color='red', linewidth=2)
         axs[1].set_ylabel('Velocity [m/s]')
         axs[1].tick_params(axis='x', length=0)
         axs[1].grid()
+        axs[1].legend()
 
         axs[2].plot(self.simulator.body.trajectory.time, self.simulator.body.trajectory.thrust_acceleration, label='Thrust Acceleration [m/s²]', color=mcolors.TABLEAU_COLORS['tab:green'], linewidth=4)
         axs[2].plot(self.simulator.body.trajectory.time[:-1], self.thrust_estimator.approx_thrust_acceleration_true[:-1], '-', label='Approx Thrust Acceleration [m/s²]', color=mcolors.TABLEAU_COLORS['tab:green'], linewidth=12, alpha=0.5)
@@ -276,6 +341,7 @@ class PlotResults:
         axs[2].set_xlabel('Time [s]')
         axs[2].set_ylabel('Thrust Acceleration [m/s²]')
         axs[2].grid()
+        axs[2].legend()
         
         plt.tight_layout(rect=(0.0, 0.03, 1.0, 0.95))
         plt.show()
@@ -294,11 +360,12 @@ def main():
     simulator.create_measurements()
     
     # Run sequential filter
-    print("\nRUN SEQUENTIAL FILTER")
-    print("  (Not implemented)")
+    print("\nSEQUENTIAL FILTER")
+    sequential_filter = SequentialFilter(simulator)
+    sequential_filter.run()
 
     # Run smoother
-    print("\nRUN SMOOTHER")
+    print("\nSMOOTHER")
     print("  (Not implemented)")
 
     # Approximate thrust profile
@@ -308,11 +375,11 @@ def main():
 
     # Plot results
     print("\nPLOT RESULTS") 
-    plotter = PlotResults(simulator, thrust_estimator)
+    plotter = PlotResults(simulator, thrust_estimator, sequential_filter)
     plotter.plot_all()
 
     # End thrust estimation program
-    print("\nTHRUST ESTIMATION PROGRAM COMPLETE")
+    print("\nTHRUST ESTIMATION PROGRAM COMPLETE\n\n")
     return True
 
 if __name__ == '__main__':
