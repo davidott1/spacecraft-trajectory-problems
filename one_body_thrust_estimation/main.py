@@ -16,10 +16,11 @@ np.random.seed(42)
 N_STEPS = 1000
 N_MEAS = 1000
 
-MEASUREMENT_RANGE_NOISE_STD = 5 / 100  # m
-MEASUREMENT_RANGE_RATE_NOISE_STD = 1 / 100  # m/s
+PCT_THIN = 0.5
 
-PROCESS_NOISE_STD = 0.1  # m/s^2
+MEASUREMENT_RANGE_NOISE_STD      = 0.050  # m
+MEASUREMENT_RANGE_RATE_NOISE_STD = 0.001  # m/s
+PROCESS_NOISE_STD                = 0.010  # m/s^2
 
 @dataclass
 class Trajectory:
@@ -226,7 +227,7 @@ class SimulatePathAndMeasurements:
         self.body.measurements.range_rate = self.body.trajectory.velocity + np.random.normal(0, measurement_range_rate_noise_std, self.body.trajectory.n_steps)
 
         # Randomly thin measurements
-        indices = np.sort(np.random.choice(self.body.trajectory.n_steps, int(0.1*self.body.measurements.n_meas), replace=False))
+        indices = np.sort(np.random.choice(self.body.trajectory.n_steps, int(PCT_THIN*self.body.measurements.n_meas), replace=False))
         self.body.measurements.time       = self.body.measurements.time[indices]
         self.body.measurements.range      = self.body.measurements.range[indices]
         self.body.measurements.range_rate = self.body.measurements.range_rate[indices]
@@ -287,6 +288,7 @@ class SequentialFilter:
             
             G = np.array([[0.5 * dt**2], [dt]]) # process noise gain matrix
             Q = G @ G.T * self.process_noise_std**2 # process noise covariance
+            # Q = np.zeros((2, 2))
 
             x_hat_minus = F @ self.x_hat
             P_minus = F @ self.P @ F.T + Q
@@ -356,8 +358,8 @@ class ThrustEstimator:
         self.sequential_filter = sequential_filter
         self.smoother = smoother
         self.approx_thrust_acceleration_true = np.zeros(self.simulator.body.trajectory.n_steps)
-        self.approx_thrust_acceleration_filter = np.zeros(int(0.1*self.simulator.body.measurements.n_meas))
-        self.approx_thrust_acceleration_smoother = np.zeros(int(0.1*self.simulator.body.measurements.n_meas))
+        self.approx_thrust_acceleration_filter = np.zeros(int(PCT_THIN*self.simulator.body.measurements.n_meas))
+        self.approx_thrust_acceleration_smoother = np.zeros(int(PCT_THIN*self.simulator.body.measurements.n_meas))
 
     def _get_approx_thrust_acceleration_true(self):
         for idx in range(self.simulator.body.trajectory.n_steps-1):
@@ -366,13 +368,13 @@ class ThrustEstimator:
             self.approx_thrust_acceleration_true[idx] = delta_vel / delta_time
 
     def _get_approx_thrust_acceleration_filter(self):
-        for idx in range(int(0.1*self.simulator.body.measurements.n_meas)-1):
+        for idx in range(int(PCT_THIN*self.simulator.body.measurements.n_meas)-1):
             delta_vel = self.sequential_filter.vel[idx+1] - self.sequential_filter.vel[idx]
             delta_time = self.simulator.body.measurements.time[idx+1] - self.simulator.body.measurements.time[idx]
             self.approx_thrust_acceleration_filter[idx] = delta_vel / delta_time
 
     def _get_approx_thrust_acceleration_smoother(self):
-        for idx in range(int(0.1*self.simulator.body.measurements.n_meas)-1):
+        for idx in range(int(PCT_THIN*self.simulator.body.measurements.n_meas)-1):
             delta_vel = self.smoother.vel[idx+1] - self.smoother.vel[idx]
             delta_time = self.smoother.time[idx+1] - self.smoother.time[idx]
             self.approx_thrust_acceleration_smoother[idx] = delta_vel / delta_time
