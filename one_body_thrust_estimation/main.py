@@ -5,156 +5,67 @@ Example usage:
     python main.py
 """
 
-# Imports
 import numpy as np
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 from scipy.integrate import solve_ivp
 from scipy.optimize import fsolve
 
+np.random.seed(42)
+
 @dataclass
 class Trajectory:
     n_steps: int = 0 # number of time steps
-    _time: Optional[np.ndarray] = None # time array [s]
-    _position: Optional[np.ndarray] = None # position array [m]
-    _velocity: Optional[np.ndarray] = None # velocity array [m/s]
-    _acceleration: Optional[np.ndarray] = None # acceleration array [m/s^2]
-    _thrust_acceleration: Optional[np.ndarray] = None # thrust acceleration array [m/s^2]
-
-    def _validate_and_update(self, new_array, field_name):
-        """Validate new array and update n_steps if needed"""
-        if new_array is not None:
-            new_length = len(new_array)
-            
-            # Get lengths of existing arrays
-            existing_arrays = {}
-            if self._time is not None and field_name != 'time':
-                existing_arrays['time'] = len(self._time)
-            if self._position is not None and field_name != 'position':
-                existing_arrays['position'] = len(self._position)
-            if self._velocity is not None and field_name != 'velocity':
-                existing_arrays['velocity'] = len(self._velocity)
-            if self._acceleration is not None and field_name != 'acceleration':
-                existing_arrays['acceleration'] = len(self._acceleration)
-            if self._thrust_acceleration is not None and field_name != 'thrust_acceleration':
-                existing_arrays['thrust_acceleration'] = len(self._thrust_acceleration)
-            
-            # Check consistency with existing arrays
-            if existing_arrays:
-                existing_lengths = list(existing_arrays.values())
-                if not all(length == new_length for length in existing_lengths):
-                    raise ValueError(f"Array length mismatch: {field_name} has length {new_length}, "
-                                   f"but existing arrays have lengths {existing_arrays}")
-            
-            # Update n_steps
-            self.n_steps = new_length
-
-    @property
-    def time(self):
-        return self._time
-    
-    @time.setter
-    def time(self, value):
-        self._validate_and_update(value, 'time')
-        self._time = value
-
-    @property
-    def position(self):
-        return self._position
-    
-    @position.setter
-    def position(self, value):
-        self._validate_and_update(value, 'position')
-        self._position = value
-
-    @property
-    def velocity(self):
-        return self._velocity
-    
-    @velocity.setter
-    def velocity(self, value):
-        self._validate_and_update(value, 'velocity')
-        self._velocity = value
-
-    @property
-    def acceleration(self):
-        return self._acceleration
-    
-    @acceleration.setter
-    def acceleration(self, value):
-        self._validate_and_update(value, 'acceleration')
-        self._acceleration = value
-
-    @property
-    def thrust_acceleration(self):
-        return self._thrust_acceleration
-    
-    @thrust_acceleration.setter
-    def thrust_acceleration(self, value):
-        self._validate_and_update(value, 'thrust_acceleration')
-        self._thrust_acceleration = value
+    time: np.ndarray = field(default_factory=lambda: np.array([])) # time array [s]
+    position: np.ndarray = field(default_factory=lambda: np.array([])) # position array [m]
+    velocity: np.ndarray = field(default_factory=lambda: np.array([])) # velocity array [m/s]
+    acceleration: np.ndarray = field(default_factory=lambda: np.array([])) # acceleration array [m/s^2]
+    thrust_acceleration: np.ndarray = field(default_factory=lambda: np.array([])) # thrust acceleration array [m/s^2]
 
     def __post_init__(self):
-        # Collect all provided arrays and their lengths
-        provided_arrays = {}
-        if self._time is not None:
-            provided_arrays['time'] = len(self._time)
-        if self._position is not None:
-            provided_arrays['position'] = len(self._position)
-        if self._velocity is not None:
-            provided_arrays['velocity'] = len(self._velocity)
-        if self._acceleration is not None:
-            provided_arrays['acceleration'] = len(self._acceleration)
-        if self._thrust_acceleration is not None:
-            provided_arrays['thrust_acceleration'] = len(self._thrust_acceleration)
-        
-        # Check consistency
-        if provided_arrays:
-            array_lengths = list(provided_arrays.values())
-            # Check all provided arrays have the same length
-            if not all(length == array_lengths[0] for length in array_lengths):
-                raise ValueError(f"Inconsistent array lengths: {provided_arrays}")
-            
-            # Check if n_steps matches first provided array length if n_steps > 0. 
-            # Already guaranteed all lengths are equal.
-            if self.n_steps > 0 and self.n_steps != array_lengths[0]:
-                raise ValueError(f"n_steps ({self.n_steps}) doesn't match array length ({array_lengths[0]})")
-            
-            # Update n_steps to match provided arrays
-            self.n_steps = array_lengths[0]
-        
-        # Initialize only None arrays
         if self.n_steps > 0:
-            if self._time is None:
-                self._time = np.zeros(self.n_steps)
-            if self._position is None:
-                self._position = np.zeros(self.n_steps)
-            if self._velocity is None:
-                self._velocity = np.zeros(self.n_steps)
-            if self._acceleration is None:
-                self._acceleration = np.zeros(self.n_steps)
-            if self._thrust_acceleration is None:
-                self._thrust_acceleration = np.zeros(self.n_steps)
-        else:
-            # Handle zero case - only set None arrays to empty
-            if self._time is None:
-                self._time = np.array([])
-            if self._position is None:
-                self._position = np.array([])
-            if self._velocity is None:
-                self._velocity = np.array([])
-            if self._acceleration is None:
-                self._acceleration = np.array([])
-            if self._thrust_acceleration is None:
-                self._thrust_acceleration = np.array([])
+            if len(self.time) == 0:
+                self.time = np.zeros(self.n_steps)
+            if len(self.position) == 0:
+                self.position = np.zeros(self.n_steps)
+            if len(self.velocity) == 0:
+                self.velocity = np.zeros(self.n_steps)
+            if len(self.acceleration) == 0:
+                self.acceleration = np.zeros(self.n_steps)
+            if len(self.thrust_acceleration) == 0:
+                self.thrust_acceleration = np.zeros(self.n_steps)
 
+@dataclass
+class Measurements:
+    n_meas: int = 0 # number of measurements
+    time: np.ndarray = field(default_factory=lambda: np.array([])) # time array [s]
+    range: np.ndarray = field(default_factory=lambda: np.array([])) # range array [m]
+    range_rate: np.ndarray = field(default_factory=lambda: np.array([])) # range rate array [m/s]
+
+    def __post_init__(self):
+        if self.n_meas > 0:
+            if len(self.time) == 0:
+                self.time = np.zeros(self.n_meas)
+            if len(self.range) == 0:
+                self.range = np.zeros(self.n_meas)
+            if len(self.range_rate) == 0:
+                self.range_rate = np.zeros(self.n_meas)
+
+@dataclass
+class Body:
+    trajectory: Trajectory
+    measurements: Measurements
 
 class SimulatePathAndMeasurements:
     def __init__(
             self,
             n_steps: int,
+            n_meas: int,
         ):
-        self.body = Trajectory(n_steps=n_steps)
+        self.body = Body(
+            trajectory=Trajectory(n_steps=n_steps),
+            measurements=Measurements(n_meas=n_meas)
+        )
 
     def dynamics(
             self,
@@ -190,7 +101,7 @@ class SimulatePathAndMeasurements:
 
     def shooting_function(self, thrust_mag_array, params):
         time_o = params.get('time_o', 0.0)
-        time_f = params.get('time_f', 10.0)
+        time_f = params.get('time_f', 0.0)
         pos_o = params.get('pos_o', 0.0)
         vel_o = params.get('vel_o', 0.0)
         initial_state = np.array([pos_o, vel_o])
@@ -201,7 +112,7 @@ class SimulatePathAndMeasurements:
             fun=lambda time, state: self.dynamics(time, state, params),
             t_span=(time_o, time_f),
             y0=initial_state,
-            t_eval=self.body.time,
+            t_eval=self.body.trajectory.time,
             method='RK45',
             rtol=1e-12,
             atol=1e-12,
@@ -211,10 +122,11 @@ class SimulatePathAndMeasurements:
         return position_error
 
     def create_path(self):
+
         # Time parameters
         time_o = 0.0
         time_f = 10.0
-        self.body.time = np.linspace(time_o, time_f, self.body.n_steps)
+        self.body.trajectory.time = np.linspace(time_o, time_f, self.body.trajectory.n_steps)
 
         # Thrust acceleration parameters (on-off-on)
         thrust_acc_mag = 0.2  # m/s^2
@@ -223,16 +135,14 @@ class SimulatePathAndMeasurements:
         delta_time_23 = time_f - time_o - delta_time_01 - delta_time_12  # s, thrust-acc on, unused
         
         # Create thrust profile
-        acceleration = np.zeros(self.body.n_steps)
-        for i, t in enumerate(self.body.time):
+        for i, t in enumerate(self.body.trajectory.time):
             if t <= delta_time_01:
-                acceleration[i] = thrust_acc_mag  # thrust on
+                self.body.trajectory.thrust_acceleration[i] = thrust_acc_mag  # thrust on
             elif t <= delta_time_01 + delta_time_12:
-                acceleration[i] = 0.0  # thrust off
+                self.body.trajectory.thrust_acceleration[i] = 0.0  # thrust off
             else:
-                acceleration[i] = -thrust_acc_mag  # thrust on
-        self.body.thrust_acceleration = acceleration
-        
+                self.body.trajectory.thrust_acceleration[i] = -thrust_acc_mag  # thrust on
+
         # Initialize propagation
         pos_o = 0.0  # m
         vel_o = 0.0  # m/s
@@ -243,6 +153,8 @@ class SimulatePathAndMeasurements:
         params = {
             'pos_o': pos_o,
             'vel_o': vel_o,
+            'time_o': time_o,
+            'time_f': time_f,
             'delta_time_01': delta_time_01,
             'delta_time_12': delta_time_12,
             'delta_time_23': delta_time_23,
@@ -265,6 +177,10 @@ class SimulatePathAndMeasurements:
         
         # Generate final trajectory with optimal thrust
         params_final = {
+            'pos_o': pos_o,
+            'vel_o': vel_o,
+            'time_o': time_o,
+            'time_f': time_f,
             'delta_time_01': delta_time_01,
             'delta_time_12': delta_time_12,
             'delta_time_23': delta_time_23,
@@ -275,31 +191,42 @@ class SimulatePathAndMeasurements:
             'thrust_acc_mag_23': optimal_thrust_mag,
             'thrust_acc_dir_23': -1.0,
         }
-        
         solution_final = solve_ivp(
             fun=lambda time, state: self.dynamics(time, state, params_final),
             t_span=(time_o, time_f),
             y0=state_o,
-            t_eval=self.body.time,
+            t_eval=self.body.trajectory.time,
             method='RK45',
             rtol=1e-12,
             atol=1e-12,
         )
         
         # Store results
-        self.body.position = solution_final.y[0]
-        self.body.velocity = solution_final.y[1]
+        self.body.trajectory.position = solution_final.y[0]
+        self.body.trajectory.velocity = solution_final.y[1]
 
         # Print summary
         print( "  Path")
-        print(f"    Time             : {self.body.time[0]:7.1e} s to {self.body.time[-1]:7.1e} s, {self.body.n_steps} steps")
-        print(f"    Position         : {self.body.position[0]:7.1e} m to {self.body.position[-1]:7.1e} m")
-        print(f"    Velocity         : {self.body.velocity[0]:7.1e} m/s to {self.body.velocity[-1]:7.1e} m/s")
-        print(f"    Thrust Magnitude : {optimal_thrust_mag:7.1e} m/s²")
+        print(f"    Time             : {    self.body.trajectory.time[0]:8.1e} s    to {    self.body.trajectory.time[-1]:8.1e} s   {self.body.trajectory.n_steps} steps")
+        print(f"    Position         : {self.body.trajectory.position[0]:8.1e} m    to {self.body.trajectory.position[-1]:8.1e} m")
+        print(f"    Velocity         : {self.body.trajectory.velocity[0]:8.1e} m/s  to {self.body.trajectory.velocity[-1]:8.1e} m/s")
+        print(f"    Thrust Magnitude : {   optimal_thrust_mag:8.1e} m/s²")
 
     def create_measurements(self):
-        pass
+        # For simplicity, use position measurements with noise
+        measurement_range_noise_std = 5 / 100  # m
+        measurement_range_rate_noise_std = 5 / 100  # m/s
+        self.body.measurements.range      = self.body.trajectory.position + np.random.normal(0, measurement_range_noise_std     , self.body.trajectory.n_steps)
+        self.body.measurements.range_rate = self.body.trajectory.velocity + np.random.normal(0, measurement_range_rate_noise_std, self.body.trajectory.n_steps)
 
+        # Print summary
+        print( "  Measurements")
+        print( "    Range")
+        print(f"      Value        : {self.body.measurements.range[0]:8.1e} m    to {self.body.measurements.range[-1]:8.1e} m")
+        print(f"      Std Dev      : {self.body.measurements.range[0]:8.1e} m    to {self.body.measurements.range[-1]:8.1e} m")
+        print(f"    Range Rate")
+        print(f"      Value        : {self.body.measurements.range_rate[0]:8.1e} m/s  to {self.body.measurements.range_rate[-1]:8.1e} m/s")
+        print(f"      Std Dev      : {self.body.measurements.range_rate[0]:8.1e} m/s  to {self.body.measurements.range_rate[-1]:8.1e} m/s")
 
 def main():
     
@@ -310,7 +237,7 @@ def main():
 
     # Simulate path and measurements
     print("\nSIMULATE PATH AND MEASUREMENTS")
-    simulator = SimulatePathAndMeasurements(n_steps=100)
+    simulator = SimulatePathAndMeasurements(n_steps=100, n_meas=100)
     simulator.create_path()
     simulator.create_measurements()
 
