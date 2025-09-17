@@ -430,6 +430,22 @@ class ThrustProfileOptimizer:
         
         return profile
 
+    def generate_smooth_thrust_profile(self, delta_time_01, delta_time_12, time_points):
+        """Generate a smooth thrust profile using tanh for smooth transitions."""
+        k = 50  # Steepness factor for tanh, determines how sharp the transition is
+        
+        # Transition from +A to 0 at t1
+        term1 = (self.thrust_magnitude / 2) * (1 - np.tanh(k * (time_points - delta_time_01)))
+        
+        # Transition from 0 to -A at t2
+        t2 = delta_time_01 + delta_time_12
+        term2 = (-self.thrust_magnitude / 2) * (1 + np.tanh(k * (time_points - t2)))
+        
+        # The initial state is +A, so we start with that and subtract the transitions
+        profile = self.thrust_magnitude + (term1 - self.thrust_magnitude) + term2
+        
+        return profile
+
     def objective_function(self, delta_time_01, delta_time_12):
         """Compute squared error between thrust profile and smoother acceleration."""
         # Check bounds
@@ -437,11 +453,27 @@ class ThrustProfileOptimizer:
             return float('inf')  # Invalid configuration
         
         # Generate thrust profile at smoother time points
-        model_thrust = self.generate_thrust_profile(delta_time_01, delta_time_12, self.smoother.time)
+        model_thrust = self.generate_smooth_thrust_profile(delta_time_01, delta_time_12, self.smoother.time)
         
         # Compute squared error
         squared_error = np.sum((model_thrust - self.smoother.acc) ** 2)
+
+        # Add a small penalty for being out of bounds to guide the optimizer
+        if delta_time_01 + delta_time_12 > self.total_time:
+            squared_error += 1e6 * (delta_time_01 + delta_time_12 - self.total_time)**2
+
         return squared_error
+
+    def residuals_function(self, params):
+        """Compute residuals for least-squares optimization."""
+        delta_time_01, delta_time_12 = params
+        
+        # Generate thrust profile at smoother time points
+        model_thrust = self.generate_thrust_profile(delta_time_01, delta_time_12, self.smoother.time)
+        
+        # Compute residuals
+        residuals = model_thrust - self.smoother.acc
+        return residuals
 
     def objective_function_for_minimize(self, params):
         """Wrapper for scipy.optimize.minimize compatibility."""
@@ -512,8 +544,8 @@ class ThrustProfileOptimizer:
         
         return best_dt01, best_dt12, best_error
 
-    def refine_with_minimize(self, initial_guess):
-        """Refine the solution using Nelder-Mead optimization."""
+    def _refine_with_nelder_mead(self, initial_guess):
+        """Refine the solution using Nelder-Mead optimization. (UNUSED)"""
         from scipy.optimize import minimize
         
         dt01_initial, dt12_initial = initial_guess
@@ -524,15 +556,16 @@ class ThrustProfileOptimizer:
         # Define penalized objective function used by methods that don't support constraints
         def penalized_objective(params):
             dt01, dt12 = params
+            
             # Apply soft bounds
             dt01 = max(0, min(dt01, self.total_time))
             dt12 = max(0, min(dt12, self.total_time))
             
             error = self.objective_function(dt01, dt12)
-            # Add penalty if constraint is violated
-            if dt01 + dt12 > self.total_time:
-                penalty = 1e6 * ((dt01 + dt12) - self.total_time)**2
-                return error + penalty
+            # # Add penalty if constraint is violated
+            # if dt01 + dt12 > self.total_time:
+            #     penalty = 1e6 * ((dt01 + dt12) - self.total_time)**2
+            #     return error + penalty
             return error
         
         # Run Nelder-Mead optimization
@@ -540,7 +573,7 @@ class ThrustProfileOptimizer:
             result = minimize(
                 penalized_objective,
                 [dt01_initial, dt12_initial],
-                method='Nelder-Mead',
+                method='Powell', # 'Nelder-Mead' 'Powell'
                 options={
                     'maxiter': 5000,
                     'xatol': 1e-12,
@@ -566,6 +599,159 @@ class ThrustProfileOptimizer:
             print(f"    Nelder-Mead error: {str(e)}")
             return dt01_initial, dt12_initial, self.objective_function(dt01_initial, dt12_initial)
 
+    def _refine_with_lm(self, initial_guess):
+        """Refine the solution using Levenberg-Marquardt optimization. (UNUSED)"""
+        from scipy.optimize import least_squares
+        
+        dt01_initial, dt12_initial = initial_guess
+        
+        print(f"  Refining solution with Levenberg-Marquardt (LM) optimization...")
+        print(f"    Initial guess: dt01={dt01_initial:.4f}, dt12={dt12_initial:.4f}")
+        
+        # Define bounds for the variables
+        bounds = ([0, 0], [self.total_time, self.total_time])
+        
+        # Average time step between measurements, used for finite difference step
+        avg_dt = np.mean(np.diff(self.smoother.time))
+
+        # Run Levenberg-Marquardt optimization
+        try:
+            result = least_squares(
+                self.residuals_function,
+                [dt01_initial, dt12_initial],
+                method='lm',
+                xtol=1e-12,
+                ftol=1e-12,
+                gtol=1e-12,
+                max_nfev=5000,
+                diff_step=10.0*avg_dt,  # Use a larger step for finite differencing
+            )
+            if result.success:
+                dt01, dt12 = result.x
+                
+                # Enforce constraints after optimization
+                if dt01 + dt12 > self.total_time:
+                    # A simple strategy if constraint is violated: scale down
+                    scale = self.total_time / (dt01 + dt12)
+                    dt01 *= scale
+                    dt12 *= scale
+                
+                dt01 = max(0, dt01)
+                dt12 = max(0, dt12)
+
+                error = self.objective_function(dt01, dt12)
+                
+                print(f"    LM result: dt01={dt01:.4f}, dt12={dt12:.4f}, error={error:.6f}, iterations={result.nfev}")
+                return dt01, dt12, error
+            else:
+                print(f"    LM optimization failed: {result.message}")
+                return dt01_initial, dt12_initial, self.objective_function(dt01_initial, dt12_initial)
+        except Exception as e:
+            print(f"    LM error: {str(e)}")
+            return dt01_initial, dt12_initial, self.objective_function(dt01_initial, dt12_initial)
+
+    def _refine_with_differential_evolution(self, initial_guess):
+        """Refine the solution using differential evolution. (UNUSED)"""
+        from scipy.optimize import differential_evolution, LinearConstraint
+
+        print(f"  Refining solution with Differential Evolution...")
+        
+        # Bounds for the variables [dt01, dt12]
+        bounds = [(0, self.total_time), (0, self.total_time)]
+
+        # Constraint: dt01 + dt12 <= total_time
+        constraint = LinearConstraint([1, 1], -np.inf, self.total_time)
+
+        try:
+            result = differential_evolution(
+                self.objective_function_for_minimize,
+                bounds,
+                constraints=(constraint),
+                seed=42,
+                disp=True,
+                polish=True,
+            )
+
+            if result.success:
+                dt01, dt12 = result.x
+                error = result.fun
+                print(f"    Differential Evolution result: dt01={dt01:.4f}, dt12={dt12:.4f}, error={error:.6f}, iterations={result.nfev}")
+                return dt01, dt12, error
+            else:
+                print(f"    Differential Evolution optimization failed: {result.message}")
+                return initial_guess[0], initial_guess[1], self.objective_function(initial_guess[0], initial_guess[1])
+        except Exception as e:
+            print(f"    Differential Evolution error: {str(e)}")
+            return initial_guess[0], initial_guess[1], self.objective_function(initial_guess[0], initial_guess[1])
+
+    def _refine_with_cobyla(self, initial_guess):
+        """Refine the solution using scipy.optimize.minimize with COBYLA. (UNUSED)"""
+        from scipy.optimize import minimize
+
+        dt01_initial, dt12_initial = initial_guess
+        print(f"  Refining solution with minimize(method='COBYLA')...")
+        print(f"    Initial guess: dt01={dt01_initial:.4f}, dt12={dt12_initial:.4f}")
+
+        # Define constraints for COBYLA. 'ineq' means c(x) >= 0.
+        constraints = [
+            {'type': 'ineq', 'fun': lambda x: x[0]},  # dt01 >= 0
+            {'type': 'ineq', 'fun': lambda x: x[1]},  # dt12 >= 0
+            {'type': 'ineq', 'fun': lambda x: self.total_time - x[0] - x[1]}  # dt01 + dt12 <= total_time
+        ]
+
+        try:
+            result = minimize(
+                self.objective_function_for_minimize,
+                [dt01_initial, dt12_initial],
+                method='COBYLA',
+                constraints=constraints,
+                options={'disp': True, 'maxiter': 5000, 'rhobeg': 0.1}
+            )
+
+            if result.success:
+                dt01, dt12 = result.x
+                error = result.fun
+                print(f"    COBYLA result: dt01={dt01:.4f}, dt12={dt12:.4f}, error={error:.6f}, iterations={result.nfev}")
+                return dt01, dt12, error
+            else:
+                print(f"    COBYLA optimization failed: {result.message}")
+                return dt01_initial, dt12_initial, self.objective_function(dt01_initial, dt12_initial)
+        except Exception as e:
+            print(f"    COBYLA error: {str(e)}")
+            return dt01_initial, dt12_initial, self.objective_function(dt01_initial, dt12_initial)
+
+    def refine_with_minimize(self, initial_guess, initial_error):
+        """Refine the solution using scipy.optimize.minimize with Powell."""
+        from scipy.optimize import minimize
+
+        dt01_initial, dt12_initial = initial_guess
+        print(f"  Refining solution with minimize(method='Powell')...")
+        print(f"    Initial guess: dt01={dt01_initial:.4f}, dt12={dt12_initial:.4f}, error={initial_error:.6f}")
+
+        # Define bounds for Powell
+        bounds = [(0, self.total_time), (0, self.total_time)]
+
+        try:
+            result = minimize(
+                self.objective_function_for_minimize,
+                [dt01_initial, dt12_initial],
+                method='Powell',
+                bounds=bounds,
+                options={'disp': True, 'maxiter': 5000, 'xtol': 1e-6, 'ftol': 1e-6}
+            )
+            breakpoint()
+            if result.success:
+                dt01, dt12 = result.x
+                error = result.fun
+                print(f"    Powell result: dt01={dt01:.4f}, dt12={dt12:.4f}, error={error:.6f}, iterations={result.nit}")
+                return dt01, dt12, error
+            else:
+                print(f"    Powell optimization failed: {result.message}")
+                return dt01_initial, dt12_initial, self.objective_function(dt01_initial, dt12_initial)
+        except Exception as e:
+            print(f"    Powell error: {str(e)}")
+            return dt01_initial, dt12_initial, self.objective_function(dt01_initial, dt12_initial)
+
     def optimize(self):
         """Find optimal switching times using two-step approach:
            1. Grid search for robust initial guess
@@ -576,10 +762,11 @@ class ThrustProfileOptimizer:
         # Step 1: Grid search for initial guess
         print("  STEP 1: Grid search for initial guess")
         best_dt01, best_dt12, best_error = self.grid_search()
+        best_dt01, best_dt12 = 3,3
         
         # Step 2: Refine with minimize
-        print("\n  STEP 2: Refine with minimize")
-        refined_dt01, refined_dt12, refined_error = self.refine_with_minimize([best_dt01, best_dt12])
+        print("\n  STEP 2: Refine with Powell optimizer")
+        refined_dt01, refined_dt12, refined_error = self.refine_with_minimize([best_dt01, best_dt12], best_error)
         
         # Use the best result (grid search or refined)
         if refined_error < best_error:
@@ -591,7 +778,7 @@ class ThrustProfileOptimizer:
             self.delta_time_01 = best_dt01
             self.delta_time_12 = best_dt12
             final_error = best_error
-            print("  Using grid search solution (better than refined)")
+            print("  Using grid search solution (Powell did not improve)")
         
         self.delta_time_23 = self.total_time - self.delta_time_01 - self.delta_time_12
         
@@ -616,49 +803,6 @@ class ThrustProfileOptimizer:
             'error': final_error
         }
 
-
-# Update main() function to include the thrust profile optimization
-def main():
-    
-    # Start thrust estimation program
-    print(2*"\n"+"=========================")
-    print(       "THRUST ESTIMATION PROGRAM")
-    print(       "=========================")
-
-    # Simulate path and measurements
-    print("\nSIMULATE PATH AND MEASUREMENTS")
-    simulator = SimulatePathAndMeasurements(n_steps=N_STEPS, n_meas=N_MEAS)
-    simulator.create_path()
-    simulator.create_measurements()
-    
-    # Run sequential filter
-    print("\nSEQUENTIAL FILTER")
-    sequential_filter = SequentialFilter(simulator)
-    sequential_filter.run()
-
-    # Run smoother
-    print("\nSMOOTHER")
-    smoother = Smoother(sequential_filter)
-    smoother.run()
-
-    # Approximate thrust profile
-    print("\nAPPROXIMATE THRUST PROFILE")
-    thrust_estimator = ThrustEstimator(simulator, sequential_filter, smoother)
-    thrust_estimator.estimate_thrust()
-    
-    # Optimize thrust profile
-    print("\nOPTIMIZE THRUST PROFILE")
-    optimizer = ThrustProfileOptimizer(smoother, thrust_magnitude=0.0625)
-    optimal_params = optimizer.optimize()
-
-    # Plot results
-    print("\nPLOT RESULTS") 
-    plotter = PlotResults(simulator, thrust_estimator, sequential_filter, smoother, optimizer)
-    plotter.plot_all()
-
-    # End thrust estimation program
-    print("\nTHRUST ESTIMATION PROGRAM COMPLETE\n\n")
-    return True
 
 # Update PlotResults class to include the optimizer
 class PlotResults:
