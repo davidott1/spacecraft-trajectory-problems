@@ -249,16 +249,17 @@ class SimulatePathAndMeasurements:
 class SequentialFilter:
     def __init__(self, simulator):
         self.simulator = simulator
-        # Extend state to include acceleration [pos, vel, acc]
-        self.state_est_hat = np.array([0.0, 0.0, 0.0]) # initial state estimate [pos, vel, acc] [m, m/s, m/s^2]
-        self.P = np.eye(3) # initial covariance estimate [m^2, (m/s)^2, (m/s^2)^2]
-        self.process_noise_std = PROCESS_NOISE_STD # std dev of process noise (unmodeled jerk) [m/s^3]
+        # Extend state to include acceleration and jerk [pos, vel, acc, jerk]
+        self.state_est_hat = np.array([0.0, 0.0, 0.0, 0.0]) # initial state estimate [pos, vel, acc, jerk]
+        self.P = np.eye(4) # initial covariance estimate
+        self.process_noise_std = PROCESS_NOISE_STD # std dev of process noise (unmodeled snap) [m/s^4]
 
         # Store results
         self.time = []
         self.pos  = []
         self.vel  = []
-        self.acc  = []  # Add acceleration storage
+        self.acc  = []
+        self.jerk = []  # Add jerk storage
         self.x_hat_history = []
         self.P_history = []
         self.x_hat_minus_history = []
@@ -270,39 +271,41 @@ class SequentialFilter:
         measurements = self.simulator.body.measurements
     
         # Use first measurement to initialize state
-        # Estimate initial acceleration as 0
-        self.x_hat = np.array([measurements.range[0], measurements.range_rate[0], 0.0])
+        # Estimate initial acceleration and jerk as 0
+        self.x_hat = np.array([measurements.range[0], measurements.range_rate[0], 0.0, 0.0])
         self.time.append(measurements.time[0])
         self.pos.append(self.x_hat[0])
         self.vel.append(self.x_hat[1])
         self.acc.append(self.x_hat[2])
+        self.jerk.append(self.x_hat[3])
         self.x_hat_history.append(self.x_hat)
         self.P_history.append(self.P)
 
         # No prediction for first step, so add placeholders
         self.x_hat_minus_history.append(self.x_hat)
         self.P_minus_history.append(self.P)
-        self.F_history.append(np.eye(3))
+        self.F_history.append(np.eye(4))
 
         measurement_range_noise_std      = MEASUREMENT_RANGE_NOISE_STD
         measurement_range_rate_noise_std = MEASUREMENT_RANGE_RATE_NOISE_STD
         R = np.diag([measurement_range_noise_std**2, measurement_range_rate_noise_std**2]) # measurement noise covariance
-        # Update H to map from 3D state to 2D measurements
-        H = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]) # measurement matrix
+        # Update H to map from 4D state to 2D measurements
+        H = np.array([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]]) # measurement matrix
 
         for k in range(1, len(measurements.time)):
 
             # Prediction
             dt = measurements.time[k] - measurements.time[k-1] # time step
-            # Update F for constant acceleration model
+            # Update F for constant jerk model
             F = np.array([
-                [1.0, dt, 0.5*dt**2],
-                [0.0, 1.0, dt],
-                [0.0, 0.0, 1.0]
+                [1.0, dt, 0.5*dt**2, (1/6)*dt**3],
+                [0.0, 1.0, dt,      0.5*dt**2],
+                [0.0, 0.0, 1.0,     dt],
+                [0.0, 0.0, 0.0,     1.0]
             ]) # state transition matrix
             
-            # Process noise affects acceleration directly (jerk model)
-            G = np.array([[0.5*dt**3], [dt**2], [dt]]) # process noise gain matrix
+            # Process noise affects jerk directly (snap model)
+            G = np.array([[(1/6)*dt**3], [0.5*dt**2], [dt], [1.0]]) # process noise gain matrix
             Q = G @ G.T * self.process_noise_std**2 # process noise covariance
 
             x_hat_minus = F @ self.x_hat
@@ -315,13 +318,14 @@ class SequentialFilter:
             K = P_minus @ H.T @ np.linalg.inv(S) # gain
 
             self.x_hat = x_hat_minus + K @ y # updated state estimate
-            self.P = (np.eye(3) - K @ H) @ P_minus # updated covariance estimate
+            self.P = (np.eye(4) - K @ H) @ P_minus # updated covariance estimate
 
             # Store results
             self.time.append(measurements.time[k])
             self.pos.append(self.x_hat[0])
             self.vel.append(self.x_hat[1])
-            self.acc.append(self.x_hat[2])  # Store acceleration estimate
+            self.acc.append(self.x_hat[2])
+            self.jerk.append(self.x_hat[3])
             self.x_hat_history.append(self.x_hat)
             self.P_history.append(self.P)
             self.x_hat_minus_history.append(x_hat_minus)
@@ -338,7 +342,8 @@ class Smoother:
         self.time = []
         self.pos = []
         self.vel = []
-        self.acc = []  # Add acceleration storage
+        self.acc = []
+        self.jerk = []  # Add jerk storage
 
     def run(self):
         print("  Run Smoother (RTS)")
@@ -364,7 +369,8 @@ class Smoother:
         self.time = self.filter.time
         self.pos = [x[0] for x in x_hat_s]
         self.vel = [x[1] for x in x_hat_s]
-        self.acc = [x[2] for x in x_hat_s]  # Extract acceleration estimates
+        self.acc = [x[2] for x in x_hat_s]
+        self.jerk = [x[3] for x in x_hat_s]  # Extract jerk estimates
 
 
 class ThrustEstimator:
@@ -739,7 +745,7 @@ class ThrustProfileOptimizer:
                 bounds=bounds,
                 options={'disp': True, 'maxiter': 5000, 'xtol': 1e-6, 'ftol': 1e-6}
             )
-            breakpoint()
+
             if result.success:
                 dt01, dt12 = result.x
                 error = result.fun
@@ -762,7 +768,6 @@ class ThrustProfileOptimizer:
         # Step 1: Grid search for initial guess
         print("  STEP 1: Grid search for initial guess")
         best_dt01, best_dt12, best_error = self.grid_search()
-        best_dt01, best_dt12 = 3,3
         
         # Step 2: Refine with minimize
         print("\n  STEP 2: Refine with Powell optimizer")
@@ -822,7 +827,7 @@ class PlotResults:
 
     def plot_all(self):
         print("  Plot trajectory, measurements, and thrust acceleration")
-        fig, axs = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+        fig, axs = plt.subplots(4, 1, figsize=(10, 10), sharex=True)
 
         # Position plot
         axs[0].plot(self.simulator.body.trajectory.time, self.simulator.body.trajectory.position, label='Position [m]', color=mcolors.TABLEAU_COLORS['tab:blue'], linewidth=4)
@@ -857,14 +862,21 @@ class PlotResults:
                      '-', label='Optimized Thrust Profile [m/s²]', color='black', linewidth=2)
             
             # Add vertical lines at the switching times
-            if hasattr(self.optimizer, 'delta_time_01'):
+            if hasattr(self.optimizer, 'delta_time_01') and self.optimizer.delta_time_01 is not None:
                 axs[2].axvline(x=self.optimizer.delta_time_01, color='black', linestyle='--', alpha=0.5)
                 axs[2].axvline(x=self.optimizer.delta_time_01 + self.optimizer.delta_time_12, color='black', linestyle='--', alpha=0.5)
         
-        axs[2].set_xlabel('Time [s]')
         axs[2].set_ylabel('Acceleration [m/s²]')
+        axs[2].tick_params(axis='x', length=0)
         axs[2].grid()
         axs[2].legend()
+
+        # Jerk plot
+        axs[3].plot(self.smoother.time, self.smoother.jerk, '-.', label='Smoothed Jerk [m/s³]', color='cyan', linewidth=2)
+        axs[3].set_xlabel('Time [s]')
+        axs[3].set_ylabel('Jerk [m/s³]')
+        axs[3].grid()
+        axs[3].legend()
         
         plt.tight_layout(rect=(0.0, 0.03, 1.0, 0.95))
         plt.show()
