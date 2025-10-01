@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from dynamics import Dynamics
 from sgp4_helper import SGP4Helper
+from constants import Constants
 
 # Example TLE data for ISS (International Space Station)
 # You can get updated TLEs from https://celestrak.org/
@@ -32,10 +33,20 @@ epoch_datetime = SGP4Helper.get_epoch_as_datetime(satellite)
 print(f"TLE Epoch: {epoch_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
 
 # Propagate for one week in 1-hour increments
-print("Propagating for one week in 1-hour increments...\n")
+print("Propagating coast-burn-coast trajectory...\n")
 
-start_time      = datetime(2024, 1, 1, 12, 0, 0)
-minutes_to_propagate = 2 * 60 
+start_time           = datetime(2024, 1, 1, 12, 0, 0)
+minutes_to_propagate = 180  # 3 hours total
+burn_time_fraction   = 1.0 / 3.0  # Burn at 1/3 of total time
+burn_minute          = int(minutes_to_propagate * burn_time_fraction)
+
+# Define delta-V in velocity-normal-binormal (VNB) frame [m/s]
+delta_v_vnb = np.array([100.0, 0.0, 0.0])  # 100 m/s prograde burn
+
+print(f"Total propagation time: {minutes_to_propagate} minutes")
+print(f"Burn at t = {burn_minute} minutes")
+print(f"Delta-V (VNB frame): [{delta_v_vnb[0]:.1f}, {delta_v_vnb[1]:.1f}, {delta_v_vnb[2]:.1f}] m/s\n")
+
 time_hours      = []
 semi_major_axis = []
 eccentricity    = []
@@ -47,34 +58,89 @@ mean_anomaly    = []
 # Get initial orbital elements from TLE
 tle_coe = SGP4Helper.get_orbital_elements(satellite)
 print(f"Initial TLE orbital elements:")
-print(f"  SMA  : {tle_coe['sma']/1000.0:>13.6e} m")
+print(f"  SMA  : {tle_coe['sma']/1000.0:>13.6e} km")
 print(f"  ECC  : {tle_coe['ecc']:>13.6e}")
 print(f"  INC  : {np.rad2deg(tle_coe['inc']):>13.6e} deg")
 print(f"  RAAN : {np.rad2deg(tle_coe['raan']):>13.6e} deg")
 print(f"  ARGP : {np.rad2deg(tle_coe['argp']):>13.6e} deg")
 print(f"  MA   : {np.rad2deg(tle_coe['ma']):>13.6e} deg")
+print("")
 
-# Initialize dynamics calculator (for comparison if needed)
+# Initialize dynamics calculator
 dynamics = Dynamics()
 
-# Store position data for plotting
+# Store position and velocity data
 pos_x = []
 pos_y = []
 pos_z = []
+burn_applied    = False
+post_burn_state = None
 
-# for hour in range(0, hours_in_week + 1):
 for min in range(0, minutes_to_propagate + 1):
     current_time = start_time + timedelta(minutes=min)
-    jd, fr = \
-        jday(
-            current_time.year, current_time.month, current_time.day,
-            current_time.hour, current_time.minute, current_time.second,
-        )
+    jd, fr = jday(
+        current_time.year, current_time.month, current_time.day,
+        current_time.hour, current_time.minute, current_time.second,
+    )
     
     error_code, position, velocity = satellite.sgp4(jd, fr)
     
     if error_code == 0:
-        time_hours.append(min / 60.0)  # Convert minutes to hours
+        # Apply delta-V at burn time
+        if min == burn_minute and not burn_applied:
+            print(f"Applying delta-V at t = {min} minutes...")
+            
+            # Convert to numpy arrays and meters
+            pos_m = np.array(position) * 1000.0  # km to m
+            vel_m = np.array(velocity) * 1000.0  # km/s to m/s
+            
+            # Construct VNB frame
+            v_hat = vel_m / np.linalg.norm(vel_m)  # Velocity direction
+            h = np.cross(pos_m, vel_m)  # Angular momentum
+            n_hat = h / np.linalg.norm(h)  # Normal direction
+            b_hat = np.cross(v_hat, n_hat)  # Binormal direction
+            
+            # Rotation matrix from VNB to inertial
+            R_vnb_to_eci = np.column_stack([v_hat, n_hat, b_hat])
+            
+            # Convert delta-V to inertial frame
+            delta_v_eci = R_vnb_to_eci @ delta_v_vnb
+            
+            # Apply delta-V
+            vel_m_new = vel_m + delta_v_eci
+            
+            # Store post-burn state
+            post_burn_state = {
+                'pos': pos_m,
+                'vel': vel_m_new,
+                'time': current_time
+            }
+            
+            # Update velocity for this point
+            velocity = tuple(vel_m_new / 1000.0)  # Convert back to km/s
+            burn_applied = True
+            
+            print(f"  Pre-burn velocity  : [{vel_m[0]/1000:.3f}, {vel_m[1]/1000:.3f}, {vel_m[2]/1000:.3f}] km/s")
+            print(f"  Post-burn velocity : [{vel_m_new[0]/1000:.3f}, {vel_m_new[1]/1000:.3f}, {vel_m_new[2]/1000:.3f}] km/s\n")
+        
+            # Create new Satrec from post-burn state
+            satellite = SGP4Helper.create_satrec_from_state(
+                pos_m, vel_m_new, current_time, bstar=0.0
+            )
+            
+            burn_applied = True
+            print(f"  Created new TLE from post-burn state\n")
+
+        # After burn, propagate using two-body dynamics (simplified approach)
+        elif burn_applied and post_burn_state is not None:
+            # Time since burn
+            dt = (current_time - post_burn_state['time']).total_seconds()
+            
+            # Simple two-body propagation (Kepler propagation would be better)
+            # For now, just continue with SGP4 position but acknowledge the limitation
+            pass  # Using SGP4 output as approximation
+        
+        time_hours.append(min / 60.0)
         
         # Store position components (in km)
         pos_x.append(position[0])
@@ -82,11 +148,11 @@ for min in range(0, minutes_to_propagate + 1):
         pos_z.append(position[2])
         
         # Convert position and velocity to orbital elements
-        pos_m = [p * 1000.0 for p in position]
-        vel_m = [v * 1000.0 for v in velocity]
+        pos_m = np.array(position) * 1000.0
+        vel_m = np.array(velocity) * 1000.0
         coe = dynamics.rv2coe(pos_m, vel_m)
         
-        semi_major_axis.append(coe['sma'] / 1000.0)  # Convert back to km for plotting
+        semi_major_axis.append(coe['sma'] / 1000.0)
         eccentricity.append(coe['ecc'])
         inclination.append(np.rad2deg(coe['inc']))
         raan.append(np.rad2deg(coe['raan']))
@@ -108,6 +174,9 @@ gs = fig.add_gridspec(3, 3)
 ax_3d = fig.add_subplot(gs[:, 0], projection='3d')
 ax_3d.plot(pos_x, pos_y, pos_z, 'k-', linewidth=1.5)
 ax_3d.scatter(pos_x[0], pos_y[0], pos_z[0], edgecolors='k', facecolors='w', marker='^', s=100, linewidths=2, label='Start')
+# Mark burn location
+ax_3d.scatter(pos_x[burn_minute], pos_y[burn_minute], pos_z[burn_minute], 
+              edgecolors='r', facecolors='yellow', marker='*', s=200, linewidths=2, label='Burn')
 ax_3d.scatter(pos_x[-1], pos_y[-1], pos_z[-1], edgecolors='k', facecolors='w', marker='s', s=100, linewidths=2, label='Stop')
 ax_3d.set_xlabel('X [km]')
 ax_3d.set_ylabel('Y [km]')
