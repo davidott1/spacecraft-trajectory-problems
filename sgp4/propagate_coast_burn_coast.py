@@ -99,7 +99,7 @@ time_days = time_hours / 24.0
 
 # Create plots with 3D trajectory
 fig = plt.figure(figsize=(18, 10))
-fig.suptitle('Trajectory and Orbital Elements Evolution', fontsize=16)
+fig.suptitle('Coast-Burn-Coast Trajectory and Orbital Elements Evolution', fontsize=16)
 
 # Create 3x3 grid
 gs = fig.add_gridspec(3, 3)
@@ -151,7 +151,7 @@ ax_ma.set_xlabel('Time (days)')
 ax_ma.grid(True, alpha=0.3)
 
 plt.tight_layout()
-output_file = Path.cwd() / 'orbital_elements.png'
+output_file = Path.cwd() / 'coast_burn_coast.png'
 plt.savefig(output_file, dpi=150)
 plt.show()
 
