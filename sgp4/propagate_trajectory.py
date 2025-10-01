@@ -2,6 +2,7 @@ from sgp4.api import Satrec, jday
 from datetime import datetime, timedelta
 import numpy as np
 import matplotlib.pyplot as plt
+from pathlib import Path
 from dynamics import Dynamics
 from sgp4_helper import SGP4Helper
 
@@ -106,10 +107,8 @@ gs = fig.add_gridspec(3, 3)
 # Left column: 3D trajectory (spans all 3 rows)
 ax_3d = fig.add_subplot(gs[:, 0], projection='3d')
 ax_3d.plot(pos_x, pos_y, pos_z, 'k-', linewidth=1.5)
-# Add start marker (triangle up)
-ax_3d.scatter(pos_x[0], pos_y[0], pos_z[0], c='g', marker='^', s=100, label='Start')
-# Add stop marker (square)
-ax_3d.scatter(pos_x[-1], pos_y[-1], pos_z[-1], c='r', marker='s', s=100, label='Stop')
+ax_3d.scatter(pos_x[0], pos_y[0], pos_z[0], edgecolors='k', facecolors='w', marker='^', s=100, linewidths=2, label='Start')
+ax_3d.scatter(pos_x[-1], pos_y[-1], pos_z[-1], edgecolors='k', facecolors='w', marker='s', s=100, linewidths=2, label='Stop')
 ax_3d.set_xlabel('X (km)')
 ax_3d.set_ylabel('Y (km)')
 ax_3d.set_zlabel('Z (km)')
@@ -119,41 +118,42 @@ ax_3d.grid(True, alpha=0.3)
 
 # Middle column: First 3 orbital elements
 ax_sma = fig.add_subplot(gs[0, 1])
-ax_sma.plot(time_days, semi_major_axis, 'b-', linewidth=1.5)
+ax_sma.plot(time_days, semi_major_axis, 'k-', linewidth=1.5)
 ax_sma.set_ylabel('Semi-major Axis (km)')
 ax_sma.grid(True, alpha=0.3)
 
 ax_ecc = fig.add_subplot(gs[1, 1], sharex=ax_sma)
-ax_ecc.plot(time_days, eccentricity, 'r-', linewidth=1.5)
+ax_ecc.plot(time_days, eccentricity, 'k-', linewidth=1.5)
 ax_ecc.set_ylabel('Eccentricity')
 ax_ecc.grid(True, alpha=0.3)
 
 ax_inc = fig.add_subplot(gs[2, 1], sharex=ax_sma)
-ax_inc.plot(time_days, inclination, 'g-', linewidth=1.5)
+ax_inc.plot(time_days, inclination, 'k-', linewidth=1.5)
 ax_inc.set_ylabel('Inclination (deg)')
 ax_inc.set_xlabel('Time (days)')
 ax_inc.grid(True, alpha=0.3)
 
 # Right column: Last 3 orbital elements
 ax_raan = fig.add_subplot(gs[0, 2], sharex=ax_sma)
-ax_raan.plot(time_days, raan, 'm-', linewidth=1.5)
+ax_raan.plot(time_days, raan, 'k-', linewidth=1.5)
 ax_raan.set_ylabel('RAAN (deg)')
 ax_raan.grid(True, alpha=0.3)
 
 ax_argp = fig.add_subplot(gs[1, 2], sharex=ax_sma)
-ax_argp.plot(time_days, arg_perigee, 'c-', linewidth=1.5)
+ax_argp.plot(time_days, arg_perigee, 'k-', linewidth=1.5)
 ax_argp.set_ylabel('Arg. of Perigee (deg)')
 ax_argp.grid(True, alpha=0.3)
 
 ax_ma = fig.add_subplot(gs[2, 2], sharex=ax_sma)
-ax_ma.plot(time_days, mean_anomaly, 'y-', linewidth=1.5)
+ax_ma.plot(time_days, mean_anomaly, 'k-', linewidth=1.5)
 ax_ma.set_ylabel('Mean Anomaly (deg)')
 ax_ma.set_xlabel('Time (days)')
 ax_ma.grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig('/Users/davidottesen/github/spacecraft-trajectory-problems/sgp4/orbital_elements.png', dpi=150)
+output_file = Path.cwd() / 'orbital_elements.png'
+plt.savefig(output_file, dpi=150)
 plt.show()
 
 print(f"Propagation complete. Plotted {len(time_hours)} data points.")
-print(f"Plot saved to orbital_elements.png")
+print(f"Plot saved to {output_file}")
