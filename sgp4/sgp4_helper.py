@@ -112,12 +112,81 @@ class SGP4Helper:
         epoch_days = (epoch_datetime - jan1).total_seconds() / Constants.SEC_PER_DAY + 1.0
         
         # FIX: Compute epoch as days since 1949-12-31 00:00 UT (required by sgp4init).
-        # Previous implementation used: epoch_year + epoch_days / 365.25 (incorrect for sgp4init).
         jd, fr = jday(epoch_datetime.year, epoch_datetime.month, epoch_datetime.day,
                       epoch_datetime.hour, epoch_datetime.minute,
                       epoch_datetime.second + epoch_datetime.microsecond * 1e-6)
         epoch_days_since_1949 = (jd + fr) - 2433281.5  # 1949-12-31 00:00 UT JD = 2433281.5
 
+        satrec = Satrec()
+        satrec.sgp4init(
+            WGS72,             # gravity model
+            'i',               # improved mode
+            99999,             # dummy sat number
+            epoch_days_since_1949,  # epoch (days since 1949-12-31)
+            bstar,             # bstar drag
+            0.0,               # ndot
+            0.0,               # nddot
+            ecc,               # ecco
+            argp,              # argpo
+            inc,               # inclo
+            ma,                # mo
+            n_rad_per_min,     # no_kozai
+            raan,              # nodeo
+        )
+        return satrec
+
+    @staticmethod
+    def create_satrec_from_state2(pos, vel, epoch_datetime, bstar=0.0):
+        """
+        Create a Satrec object from position and velocity vectors.
+        
+        Converts osculating elements to mean elements using J2 corrections.
+        
+        Args:
+            pos: Position vector [m] (3D numpy array)
+            vel: Velocity vector [m/s] (3D numpy array)
+            epoch_datetime: Epoch time as datetime object
+            bstar: Drag term (default 0.0)
+            
+        Returns:
+            Satrec: New satellite object initialized from mean state
+        """
+        import numpy as np
+        from sgp4.api import Satrec, jday
+        
+        # Get osculating elements
+        dynamics = Dynamics()
+        osc_coe = dynamics.rv2coe(pos, vel)
+        
+        # Convert to mean elements
+        mean_coe = SGP4Helper.osculating_to_mean_elements(osc_coe, simplified=True)
+        
+        # Extract mean elements (in radians)
+        ecc  = mean_coe['ecc']
+        inc  = mean_coe['inc']
+        raan = mean_coe['raan']
+        argp = mean_coe['argp']
+        ma   = mean_coe['ma']
+        
+        # Calculate mean motion from semi-major axis
+        sma = mean_coe['sma']
+        n_rad_per_sec = np.sqrt(Constants.MU_EARTH / sma**3)
+        n_rad_per_min = n_rad_per_sec * Constants.SEC_PER_MIN
+        
+        # Convert epoch to SGP4 format
+        year = epoch_datetime.year
+        epoch_year = year % 100  # Two-digit year
+        
+        # Calculate day of year with fractional part
+        jan1 = datetime(year, 1, 1)
+        epoch_days = (epoch_datetime - jan1).total_seconds() / Constants.SEC_PER_DAY + 1.0
+        
+        # Compute epoch as days since 1949-12-31 00:00 UT
+        jd, fr = jday(epoch_datetime.year, epoch_datetime.month, epoch_datetime.day,
+                      epoch_datetime.hour, epoch_datetime.minute,
+                      epoch_datetime.second + epoch_datetime.microsecond * 1e-6)
+        epoch_days_since_1949 = (jd + fr) - 2433281.5
+        
         satrec = Satrec()
         satrec.sgp4init(
             WGS72,             # gravity model
