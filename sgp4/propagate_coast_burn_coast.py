@@ -64,8 +64,13 @@ burn_minutes_2 = list(range(burn_2_start, burn_2_end + 1))
 
 burn_minutes = burn_minutes_1 + burn_minutes_2
 
-# Define delta-V in velocity-normal-binormal (VNB) frame [m/s]
-delta_v_vnb = np.array([1.0e0, 0.0, 0.0])  # 10 m/s prograde burn
+# Define constant thrust instead of constant delta-V
+constant_thrust = 15.0  # Newtons (constant)
+delta_time = 60.0  # seconds per burn step
+
+# Exhaust velocity and initial mass (needed for mass calculation)
+v_exhaust = 3000.0  # m/s
+mass_initial = 1000.0  # kg
 
 print(f"Total propagation time: {minutes_to_propagate} minutes")
 print(f"\nFirst burn period ({len(burn_minutes_1)} maneuvers):")
@@ -75,7 +80,10 @@ print(f"\nCoast phase: {burn_minutes_1[-1]} to {burn_minutes_2[0]} minutes")
 print(f"\nSecond burn period ({len(burn_minutes_2)} maneuvers):")
 for i, bm in enumerate(burn_minutes_2, len(burn_minutes_1) + 1):
     print(f"  Burn {i} at t = {bm} minutes")
-print(f"\nDelta-V (VNB frame): [{delta_v_vnb[0]:.1f}, {delta_v_vnb[1]:.1f}, {delta_v_vnb[2]:.1f}] m/s\n")
+print(f"\nConstant thrust: {constant_thrust:.1f} N")
+print(f"Delta-time per burn: {delta_time:.1f} seconds")
+print(f"Initial mass: {mass_initial:.1f} kg")
+print(f"Exhaust velocity: {v_exhaust:.1f} m/s\n")
 
 time_hours      = []
 semi_major_axis = []
@@ -107,6 +115,7 @@ burn_count = 0
 burn_locations = []
 burn_data = []  # Store position and velocity at each burn
 delta_v_history = []  # Store delta-v at each time step
+current_mass = mass_initial  # Track current mass
 
 for min in range(0, minutes_to_propagate + 1):
     current_time = start_time + timedelta(minutes=min)
@@ -126,6 +135,12 @@ for min in range(0, minutes_to_propagate + 1):
             # Convert to numpy arrays and meters
             pos_m = np.array(position) * 1000.0  # km to m
             vel_m = np.array(velocity) * 1000.0  # km/s to m/s
+            
+            # Calculate delta-V from constant thrust: ΔV = F * Δt / m
+            delta_v_magnitude = (constant_thrust * delta_time) / current_mass  # m/s
+            
+            # Delta-V only in velocity direction (VNB: V component only)
+            delta_v_vnb = np.array([delta_v_magnitude, 0.0, 0.0])
             
             # Store burn data for visualization
             vel_dir = vel_m / np.linalg.norm(vel_m)
@@ -149,16 +164,19 @@ for min in range(0, minutes_to_propagate + 1):
             # Apply delta-V
             vel_m_new = vel_m + delta_v_eci
             
+            # Update mass using rocket equation: m_new = m_old * exp(-ΔV/Ve)
+            current_mass = current_mass * np.exp(-delta_v_magnitude / v_exhaust)
+            
             # Store delta-v in VNB frame and magnitude
-            delta_v_mag = np.linalg.norm(delta_v_vnb)
             delta_v_history.append({
                 'v': delta_v_vnb[0],
                 'n': delta_v_vnb[1],
                 'b': delta_v_vnb[2],
-                'mag': delta_v_mag,
+                'mag': delta_v_magnitude,
                 'x': delta_v_eci[0],
                 'y': delta_v_eci[1],
-                'z': delta_v_eci[2]
+                'z': delta_v_eci[2],
+                'mass': current_mass
             })
             
             # Update velocity for this point
@@ -185,7 +203,8 @@ for min in range(0, minutes_to_propagate + 1):
                 'mag': 0.0,
                 'x': 0.0,
                 'y': 0.0,
-                'z': 0.0
+                'z': 0.0,
+                'mass': current_mass
             })
         
         time_hours.append(min / 60.0)
@@ -242,30 +261,19 @@ delta_v_mag = np.array([dv['mag'] for dv in delta_v_history])
 delta_v_x = np.array([dv['x'] for dv in delta_v_history])
 delta_v_y = np.array([dv['y'] for dv in delta_v_history])
 delta_v_z = np.array([dv['z'] for dv in delta_v_history])
+mass = np.array([dv['mass'] for dv in delta_v_history])
 
 # Calculate acceleration (delta-V / 60 seconds)
-accel_x = delta_v_x / 60.0  # m/s^2
-accel_y = delta_v_y / 60.0  # m/s^2
-accel_z = delta_v_z / 60.0  # m/s^2
+accel_x = delta_v_x / delta_time  # m/s^2
+accel_y = delta_v_y / delta_time  # m/s^2
+accel_z = delta_v_z / delta_time  # m/s^2
 accel_mag = np.sqrt(accel_x**2 + accel_y**2 + accel_z**2)
 
-# Calculate mass using rocket equation: m = m0 * exp(-ΔV/Ve)
-# Exhaust velocity and initial mass
-v_exhaust = 3000.0  # m/s
-mass_initial = 1000.0  # kg
-
-# Calculate cumulative delta-V
-cumulative_dv = np.cumsum(delta_v_mag)  # m/s
-
-# Calculate mass at each time step
-mass = mass_initial * np.exp(-cumulative_dv / v_exhaust)
-
 # Calculate thrust: F = m * a = m * (ΔV / Δt)
-# where Δt = 60 seconds per our acceleration calculation
-thrust = mass * (delta_v_mag / 60.0)  # Newtons
-thrust_x = mass * (delta_v_x / 60.0)  # Newtons
-thrust_y = mass * (delta_v_y / 60.0)  # Newtons
-thrust_z = mass * (delta_v_z / 60.0)  # Newtons
+thrust = mass * (delta_v_mag / delta_time)  # Newtons (should be constant at 15 N during burns)
+thrust_x = mass * (delta_v_x / delta_time)  # Newtons
+thrust_y = mass * (delta_v_y / delta_time)  # Newtons
+thrust_z = mass * (delta_v_z / delta_time)  # Newtons
 
 # Create plots with 3D trajectory
 fig = plt.figure(figsize=(16, 8))
@@ -463,4 +471,5 @@ print(f"Propagation complete. Plotted {len(time_hours)} data points.")
 print(f"Plot saved to {output_file}")
 print(f"Delta-V plot saved to {output_file2}")
 print(f"Final mass: {mass[-1]:.2f} kg (propellant used: {mass_initial - mass[-1]:.2f} kg)")
-print(f"Peak thrust: {np.max(thrust):.2f} N")
+print(f"Peak thrust: {np.max(thrust):.2f} N (should be constant at {constant_thrust:.2f} N during burns)")
+print(f"Total delta-V: {np.sum(delta_v_mag):.2f} m/s")
