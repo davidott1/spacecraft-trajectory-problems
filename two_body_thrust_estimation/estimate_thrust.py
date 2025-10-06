@@ -562,7 +562,7 @@ for i in range(len(pos_x_arr)):
     
     jerk_thrust_x[i] = thrust_jerk[0]
     jerk_thrust_y[i] = thrust_jerk[1]
-    jerk_thrust_z[i] = thrust_jerk[2];
+    jerk_thrust_z[i] = thrust_jerk[2]
     
     # Total jerk
     total_jerk = gravity_jerk + thrust_jerk
@@ -917,21 +917,24 @@ fig5.savefig(output_file5, dpi=150)
 # Implement Extended Kalman Filter for state estimation
 print("\n=== Running Extended Kalman Filter ===")
 
-# EKF State: [x, y, z, vx, vy, vz] in km and km/s
-state_dim = 6
+# EKF State: [x, y, z, vx, vy, vz, ax, ay, az] in km, km/s, and km/s^2
+state_dim = 9
 meas_dim = 6  # measuring position and velocity
 
 # Initialize state with true initial conditions
 x_est = np.zeros((len(time_days), state_dim))
 x_est[0, 0:3] = np.array([pos_x_arr[0], pos_y_arr[0], pos_z_arr[0]])  # km
 x_est[0, 3:6] = np.array([vel_x_arr[0], vel_y_arr[0], vel_z_arr[0]])  # km/s
+x_est[0, 6:9] = np.array([total_accel_x[0]/1000.0, total_accel_y[0]/1000.0, total_accel_z[0]/1000.0])  # km/s^2
 
 # Initialize covariance matrix (small initial uncertainty)
 P = np.eye(state_dim) * 1e-6
+P[6:9, 6:9] = np.eye(3) * 1e-12  # Smaller uncertainty for acceleration
 
 # Process noise covariance (accounts for model uncertainty)
 dt_sec = 60.0  # seconds between measurements
-Q = np.eye(state_dim) * 1e-10  # Very small process noise
+Q = np.eye(state_dim) * 1e-10
+Q[6:9, 6:9] = np.eye(3) * 1e-8  # Higher process noise for acceleration (thrust changes)
 
 # Measurement noise covariance
 R = np.zeros((meas_dim, meas_dim))
@@ -940,7 +943,10 @@ R[3:6, 3:6] = (sigma_vel**2) * np.eye(3)  # Velocity variance (km^2/s^2)
 
 print(f"Initial state: pos = [{x_est[0,0]:.3f}, {x_est[0,1]:.3f}, {x_est[0,2]:.3f}] km")
 print(f"               vel = [{x_est[0,3]:.6f}, {x_est[0,4]:.6f}, {x_est[0,5]:.6f}] km/s")
-print(f"Process noise Q diagonal: {Q[0,0]:.2e}")
+print(f"               acc = [{x_est[0,6]*1e6:.3f}, {x_est[0,7]*1e6:.3f}, {x_est[0,8]*1e6:.3f}] mm/s^2")
+print(f"Process noise Q diagonal (pos): {Q[0,0]:.2e}")
+print(f"Process noise Q diagonal (vel): {Q[3,3]:.2e}")
+print(f"Process noise Q diagonal (acc): {Q[6,6]:.2e}")
 print(f"Measurement noise R (pos): {R[0,0]:.2e} km^2 ({np.sqrt(R[0,0])*1000:.1f} m)")
 print(f"Measurement noise R (vel): {R[3,3]:.2e} km^2/s^2 ({np.sqrt(R[3,3])*1000:.1f} m/s)")
 
@@ -950,35 +956,40 @@ for k in range(1, len(time_days)):
     x_prev = x_est[k-1, :]
     
     # === PREDICTION STEP ===
-    # State transition using two-body dynamics
+    # State transition using two-body dynamics + constant acceleration model
     pos_m = x_prev[0:3] * 1000.0  # km to m
     vel_m = x_prev[3:6] * 1000.0  # km/s to m/s
+    accel_m = x_prev[6:9] * 1000.0  # km/s^2 to m/s^2
     
     r_mag = np.linalg.norm(pos_m)
     
     # Two-body gravity acceleration
     accel_gravity = -(Constants.MU_EARTH / r_mag**3) * pos_m  # m/s^2
     
-    # Simple Euler integration (could use RK4 for better accuracy)
-    pos_new = pos_m + vel_m * dt_sec  # m
-    vel_new = vel_m + accel_gravity * dt_sec  # m/s
+    # Simple Euler integration with previous acceleration estimate
+    pos_new = pos_m + vel_m * dt_sec + 0.5 * accel_m * dt_sec**2  # m
+    vel_new = vel_m + accel_m * dt_sec  # m/s
+    accel_new = accel_gravity  # Predict gravity-only (thrust will be corrected by measurements)
     
     # Predicted state
     x_pred = np.zeros(state_dim)
     x_pred[0:3] = pos_new / 1000.0  # m to km
     x_pred[3:6] = vel_new / 1000.0  # m/s to km/s
+    x_pred[6:9] = accel_new / 1000.0  # m/s^2 to km/s^2
     
     # State transition Jacobian F
     F = np.eye(state_dim)
     F[0:3, 3:6] = np.eye(3) * dt_sec  # Position changes with velocity
+    F[0:3, 6:9] = np.eye(3) * 0.5 * dt_sec**2  # Position changes with acceleration
+    F[3:6, 6:9] = np.eye(3) * dt_sec  # Velocity changes with acceleration
     
-    # Gravity gradient for velocity changes
+    # Gravity gradient for acceleration changes
     mu = Constants.MU_EARTH / 1e9  # Convert to km^3/s^2
     r_km = np.linalg.norm(x_prev[0:3])
     
     # ∂a/∂r = -μ/r³ * I + 3μ/r⁵ * r*r^T
     gravity_jacobian = (-mu / r_km**3) * np.eye(3) + (3 * mu / r_km**5) * np.outer(x_prev[0:3], x_prev[0:3])
-    F[3:6, 0:3] = gravity_jacobian * dt_sec
+    F[6:9, 0:3] = gravity_jacobian
     
     # Predict covariance
     P_pred = F @ P @ F.T + Q
@@ -989,8 +1000,10 @@ for k in range(1, len(time_days)):
     z[0:3] = measurements_pos[k, :]
     z[3:6] = measurements_vel[k, :]
     
-    # Measurement matrix (direct observation)
-    H = np.eye(meas_dim, state_dim)
+    # Measurement matrix (direct observation of pos and vel only)
+    H = np.zeros((meas_dim, state_dim))
+    H[0:3, 0:3] = np.eye(3)
+    H[3:6, 3:6] = np.eye(3)
     
     # Innovation
     y = z - H @ x_pred
@@ -1015,12 +1028,21 @@ est_vel_x = x_est[:, 3]
 est_vel_y = x_est[:, 4]
 est_vel_z = x_est[:, 5]
 
+# Extract estimated acceleration
+est_accel_x = x_est[:, 6] * 1000.0  # km/s^2 to m/s^2
+est_accel_y = x_est[:, 7] * 1000.0
+est_accel_z = x_est[:, 8] * 1000.0
+est_accel_mag = np.sqrt(est_accel_x**2 + est_accel_y**2 + est_accel_z**2)
+
 # Calculate estimation errors
 est_pos_errors = x_est[:, 0:3] - np.column_stack([pos_x_arr, pos_y_arr, pos_z_arr])
 est_pos_error_mag = np.linalg.norm(est_pos_errors, axis=1)
 
 est_vel_errors = x_est[:, 3:6] - np.column_stack([vel_x_arr, vel_y_arr, vel_z_arr])
 est_vel_error_mag = np.linalg.norm(est_vel_errors, axis=1)
+
+est_accel_errors = np.column_stack([est_accel_x, est_accel_y, est_accel_z]) - np.column_stack([total_accel_x, total_accel_y, total_accel_z])
+est_accel_error_mag = np.linalg.norm(est_accel_errors, axis=1)
 
 print(f"\n=== EKF Results ===")
 print(f"Mean position estimation error: {np.mean(est_pos_error_mag)*1000:.2f} m")
@@ -1029,9 +1051,13 @@ print(f"Max position estimation error: {np.max(est_pos_error_mag)*1000:.2f} m")
 print(f"Mean velocity estimation error: {np.mean(est_vel_error_mag)*1000:.2f} m/s")
 print(f"Std velocity estimation error: {np.std(est_vel_error_mag)*1000:.2f} m/s")
 print(f"Max velocity estimation error: {np.max(est_vel_error_mag)*1000:.2f} m/s")
+print(f"Mean acceleration estimation error: {np.mean(est_accel_error_mag)*1000:.2f} mm/s^2")
+print(f"Std acceleration estimation error: {np.std(est_accel_error_mag)*1000:.2f} mm/s^2")
+print(f"Max acceleration estimation error: {np.max(est_accel_error_mag)*1000:.2f} mm/s^2")
 
+# Create sixth figure for estimated position, velocity, and acceleration
 fig6 = plt.figure(figsize=(16, 8))
-fig6.suptitle('EKF: True vs Measured vs Estimated Position and Velocity (ECI)', fontsize=16)
+fig6.suptitle('EKF: True vs Measured vs Estimated Position, Velocity, and Acceleration (ECI)', fontsize=16)
 
 # Create 6x1 grid for stacked plots
 gs6 = fig6.add_gridspec(6, 1)
@@ -1060,7 +1086,7 @@ ax_pos6.set_title(f'Position: True vs Measured vs EKF Estimated (σ = {sigma_pos
 
 # Position error magnitude (measurement)
 ax_pos_err6 = fig6.add_subplot(gs6[1, 0], sharex=ax_pos6)
-ax_pos_err6.plot(time_days, pos_error_mag * 1000, 'k-', linewidth=1.5, label='Meas Error Mag', alpha=0.8)
+ax_pos_err6.plot(time_days, pos_error_mag * 1000, 'k-', linewidth=1.5, label='Meas Error Magnitude', alpha=0.8)
 ax_pos_err6.axhline(y=sigma_pos*1000, color='r', linestyle='--', linewidth=2, label=f'1σ = {sigma_pos*1000:.1f} m')
 ax_pos_err6.axhline(y=3*sigma_pos*1000, color='orange', linestyle='--', linewidth=2, label=f'3σ = {3*sigma_pos*1000:.1f} m')
 if burn_1_end < len(time_days):
@@ -1112,25 +1138,9 @@ ax_vel6.grid(True, alpha=0.3)
 ax_vel6.legend(loc='best', fontsize=8, ncol=3)
 ax_vel6.set_title(f'Velocity: True vs Measured vs EKF Estimated (σ = {sigma_vel*1000:.1f} m/s)')
 
-# Velocity measurement error magnitude
-ax_vel_meas_err6 = fig6.add_subplot(gs6[4, 0], sharex=ax_pos6)
-ax_vel_meas_err6.plot(time_days, vel_error_mag * 1000, 'k-', linewidth=1.5, label='Meas Error Mag', alpha=0.8)
-ax_vel_meas_err6.axhline(y=sigma_vel*1000, color='r', linestyle='--', linewidth=2, label=f'1σ = {sigma_vel*1000:.1f} m/s')
-ax_vel_meas_err6.axhline(y=3*sigma_vel*1000, color='orange', linestyle='--', linewidth=2, label=f'3σ = {3*sigma_vel*1000:.1f} m/s')
-if burn_1_end < len(time_days):
-    ax_vel_meas_err6.axvspan(time_days[burn_1_start], time_days[burn_1_end], 
-                             color='purple', alpha=0.2, label='Thrust On')
-if burn_2_end < len(time_days):
-    ax_vel_meas_err6.axvspan(time_days[burn_2_start], time_days[burn_2_end], 
-                             color='purple', alpha=0.2)
-ax_vel_meas_err6.set_ylabel('Meas Error (m/s)')
-ax_vel_meas_err6.grid(True, alpha=0.3)
-ax_vel_meas_err6.legend(loc='best', fontsize=10)
-ax_vel_meas_err6.set_title('Velocity Measurement Error Magnitude')
-
-# Velocity estimation error magnitude
-ax_vel_err6 = fig6.add_subplot(gs6[5, 0], sharex=ax_pos6)
-ax_vel_err6.plot(time_days, est_vel_error_mag * 1000, 'b-', linewidth=1.5, label='EKF Error Mag', alpha=0.8)
+# Velocity error magnitude
+ax_vel_err6 = fig6.add_subplot(gs6[4, 0], sharex=ax_pos6)
+ax_vel_err6.plot(time_days, vel_error_mag * 1000, 'b-', linewidth=1.5, label='EKF Error Mag', alpha=0.8)
 ax_vel_err6.axhline(y=sigma_vel*1000, color='r', linestyle='--', linewidth=2, label=f'1σ = {sigma_vel*1000:.1f} m/s')
 ax_vel_err6.axhline(y=3*sigma_vel*1000, color='orange', linestyle='--', linewidth=2, label=f'3σ = {3*sigma_vel*1000:.1f} m/s')
 if burn_1_end < len(time_days):
@@ -1149,6 +1159,132 @@ plt.tight_layout()
 output_file6 = Path.cwd() / 'coast_burn_coast_estimation.png'
 fig6.savefig(output_file6, dpi=150)
 
+# Create seventh figure for true acceleration components
+fig7 = plt.figure(figsize=(16, 8))
+fig7.suptitle('True Acceleration Components (ECI)', fontsize=16)
+
+# Create 5x1 grid for stacked plots
+gs7 = fig7.add_gridspec(3, 1)
+
+# Calculate magnitudes
+gravity_accel_mag = np.sqrt(gravity_accel_x**2 + gravity_accel_y**2 + gravity_accel_z**2)
+thrust_accel_mag = np.sqrt(accel_x**2 + accel_y**2 + accel_z**2)
+
+# True thrust acceleration
+ax_thrust_accel = fig7.add_subplot(gs7[0, 0])
+ax_thrust_accel.plot(time_days, accel_x * 1000, 'r-', linewidth=1.5, label='X', alpha=0.8)
+ax_thrust_accel.plot(time_days, accel_y * 1000, 'g-', linewidth=1.5, label='Y', alpha=0.8)
+ax_thrust_accel.plot(time_days, accel_z * 1000, 'b-', linewidth=1.5, label='Z', alpha=0.8)
+ax_thrust_accel.plot(time_days, thrust_accel_mag * 1000, 'k-', linewidth=2.0, label='Magnitude', alpha=0.9)
+if burn_1_end < len(time_days):
+    ax_thrust_accel.axvspan(time_days[burn_1_start], time_days[burn_1_end], 
+                            color='purple', alpha=0.2, label='Thrust On')
+if burn_2_end < len(time_days):
+    ax_thrust_accel.axvspan(time_days[burn_2_start], time_days[burn_2_end], 
+                            color='purple', alpha=0.2)
+ax_thrust_accel.set_ylabel('Thrust Accel (mm/s²)')
+ax_thrust_accel.set_xlabel('Time (days)')
+ax_thrust_accel.grid(True, alpha=0.3)
+ax_thrust_accel.legend(loc='best', fontsize=10)
+ax_thrust_accel.set_title('True Thrust Acceleration (X=red, Y=green, Z=blue, Mag=black)')
+
+# Estimated total acceleration from EKF
+ax_est_accel = fig7.add_subplot(gs7[1, 0], sharex=ax_thrust_accel)
+ax_est_accel.plot(time_days, est_accel_x * 1000, 'r--', linewidth=1.5, label='EKF X', alpha=0.8)
+ax_est_accel.plot(time_days, est_accel_y * 1000, 'g--', linewidth=1.5, label='EKF Y', alpha=0.8)
+ax_est_accel.plot(time_days, est_accel_z * 1000, 'b--', linewidth=1.5, label='EKF Z', alpha=0.8)
+ax_est_accel.plot(time_days, est_accel_mag * 1000, 'k--', linewidth=2.0, label='EKF Magnitude', alpha=0.9)
+if burn_1_end < len(time_days):
+    ax_est_accel.axvspan(time_days[burn_1_start], time_days[burn_1_end], 
+                         color='purple', alpha=0.2, label='Thrust On')
+if burn_2_end < len(time_days):
+    ax_est_accel.axvspan(time_days[burn_2_start], time_days[burn_2_end], 
+                         color='purple', alpha=0.2)
+ax_est_accel.set_ylabel('EKF Accel (mm/s²)')
+ax_est_accel.set_xlabel('Time (days)')
+ax_est_accel.grid(True, alpha=0.3)
+ax_est_accel.legend(loc='best', fontsize=10)
+ax_est_accel.set_title('EKF Estimated Total Acceleration (X=red, Y=green, Z=blue, Mag=black)')
+
+# Calculate approximate natural acceleration from SGP4 dynamics
+# approx_natural_accel = (vel(t+dt) - vel_estimated) / dt
+approx_natural_accel_x = np.zeros(len(pos_x_arr))
+approx_natural_accel_y = np.zeros(len(pos_y_arr))
+approx_natural_accel_z = np.zeros(len(pos_z_arr))
+
+for i in range(len(pos_x_arr) - 1):
+    # Get current estimated position and velocity from EKF
+    pos_est = np.array([est_pos_x[i], est_pos_y[i], est_pos_z[i]]) * 1000.0  # km to m
+    vel_est = np.array([est_vel_x[i], est_vel_y[i], est_vel_z[i]]) * 1000.0  # km/s to m/s
+    
+    # Current time
+    current_time_step = start_time + timedelta(minutes=i)
+    
+    # Create temporary SGP4 object from current estimated state
+    temp_satellite = SGP4Helper.create_satrec_from_state2(
+        pos_est, vel_est, current_time_step, bstar=0.0
+    )
+    
+    # Propagate 60 seconds forward using natural dynamics only
+    future_time = current_time_step + timedelta(seconds=dt_sec)
+    jd_future, fr_future = jday(
+        future_time.year, future_time.month, future_time.day,
+        future_time.hour, future_time.minute, future_time.second
+    )
+    
+    error_code, pos_next, vel_next_tuple = temp_satellite.sgp4(jd_future, fr_future)
+    
+    if error_code == 0:
+        # vel_next from SGP4 natural dynamics propagation
+        vel_next = np.array(vel_next_tuple) * 1000.0  # km/s to m/s
+        
+        # Approximate natural acceleration
+        approx_accel = (vel_next - vel_est) / dt_sec  # m/s^2
+        approx_natural_accel_x[i] = approx_accel[0]
+        approx_natural_accel_y[i] = approx_accel[1]
+        approx_natural_accel_z[i] = approx_accel[2]
+    else:
+        # If propagation fails, use gravity-only model as fallback
+        r_mag = np.linalg.norm(pos_est)
+        gravity_accel = -(Constants.MU_EARTH / r_mag**3) * pos_est
+        approx_natural_accel_x[i] = gravity_accel[0]
+        approx_natural_accel_y[i] = gravity_accel[1]
+        approx_natural_accel_z[i] = gravity_accel[2]
+
+# Estimated thrust acceleration = estimated_total - approx_natural
+est_thrust_accel_x = est_accel_x - approx_natural_accel_x
+est_thrust_accel_y = est_accel_y - approx_natural_accel_y
+est_thrust_accel_z = est_accel_z - approx_natural_accel_z
+est_thrust_accel_mag = np.sqrt(est_thrust_accel_x**2 + est_thrust_accel_y**2 + est_thrust_accel_z**2)
+
+# Delta acceleration: true thrust - estimated thrust
+delta_accel_x = accel_x - est_thrust_accel_x
+delta_accel_y = accel_y - est_thrust_accel_y
+delta_accel_z = accel_z - est_thrust_accel_z
+delta_accel_mag = np.sqrt(delta_accel_x**2 + delta_accel_y**2 + delta_accel_z**2)
+
+# Fifth subplot: Delta acceleration
+ax_delta_accel = fig7.add_subplot(gs7[2, 0], sharex=ax_thrust_accel)
+ax_delta_accel.plot(time_days, delta_accel_x * 1000, 'r-', linewidth=1.5, label='X', alpha=0.8)
+ax_delta_accel.plot(time_days, delta_accel_y * 1000, 'g-', linewidth=1.5, label='Y', alpha=0.8)
+ax_delta_accel.plot(time_days, delta_accel_z * 1000, 'b-', linewidth=1.5, label='Z', alpha=0.8)
+ax_delta_accel.plot(time_days, delta_accel_mag * 1000, 'k-', linewidth=2.0, label='Magnitude', alpha=0.9)
+if burn_1_end < len(time_days):
+    ax_delta_accel.axvspan(time_days[burn_1_start], time_days[burn_1_end], 
+                           color='purple', alpha=0.2, label='Thrust On')
+if burn_2_end < len(time_days):
+    ax_delta_accel.axvspan(time_days[burn_2_start], time_days[burn_2_end], 
+                           color='purple', alpha=0.2)
+ax_delta_accel.set_ylabel('Delta Accel (mm/s²)')
+ax_delta_accel.set_xlabel('Time (days)')
+ax_delta_accel.grid(True, alpha=0.3)
+ax_delta_accel.legend(loc='best', fontsize=10)
+ax_delta_accel.set_title('Delta Acceleration: True Thrust - Estimated Thrust (X=red, Y=green, Z=blue, Mag=black)')
+
+plt.tight_layout()
+output_file7 = Path.cwd() / 'coast_burn_coast_true_accel.png'
+fig7.savefig(output_file7, dpi=150)
+
 plt.show()
 
 print(f"Propagation complete. Plotted {len(time_hours)} data points.")
@@ -1158,6 +1294,7 @@ print(f"Position plot saved to {output_file3}")
 print(f"Jerk FD plot saved to {output_file4}")
 print(f"Measurements plot saved to {output_file5}")
 print(f"Estimation plot saved to {output_file6}")
+print(f"True acceleration plot saved to {output_file7}")
 print(f"Final mass: {mass[-1]:.2f} kg (propellant used: {mass_initial - mass[-1]:.2f} kg)")
 print(f"Peak thrust: {np.max(thrust):.2f} N (should be constant at {constant_thrust:.2f} N during burns)")
 print(f"Total delta-V: {np.sum(delta_v_mag):.2f} m/s")
