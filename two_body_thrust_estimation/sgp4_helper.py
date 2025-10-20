@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
-from sgp4.api import Satrec
+from sgp4.api import Satrec, jday
+import numpy as np
 from constants import Constants
 from dynamics import Dynamics
 from sgp4.api import WGS72OLD, WGS72, WGS84
@@ -83,8 +84,6 @@ class SGP4Helper:
         Returns:
             Satrec: New satellite object initialized from state
         """
-        import numpy as np
-        from sgp4.api import Satrec, jday
         
         # Get osculating elements (treating as mean - approximation!)
         dynamics = Dynamics()
