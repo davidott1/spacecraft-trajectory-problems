@@ -1,83 +1,59 @@
 import numpy as np
 from scipy.integrate import solve_ivp
-from constants import Converter
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from constants import Converter, TIMEVALUES
 from model.dynamics import TwoBodyDynamics, PHYSICALCONSTANTS, EquationsOfMotion
-
+from plot.trajectory import plot_3d_trajectories, plot_pos_vel_time_series
 
 def propagate_orbit(
-    initial_state: np.ndarray,
-    propagation_time: float,
-    dynamics: TwoBodyDynamics,
-    method: str = 'DOP853',
-    rtol: float = 1e-12,
-    atol: float = 1e-12
+    initial_state    : np.ndarray,
+    time_o           : float,
+    time_f           : float,
+    dynamics         : TwoBodyDynamics,
+    method           : str = 'DOP853',
+    rtol             : float = 1e-12,
+    atol             : float = 1e-12
 ) -> dict:
     """
     Propagate an orbit from initial cartesian state.
-    
-    Args:
-        initial_state: Initial state [x, y, z, vx, vy, vz] in inertial frame [m, m/s]
-        propagation_time: Time to propagate [s]
-        dynamics: TwoBodyDynamics object with gravitational parameters
-        method: Integration method (default: 'DOP853' - 8th order Runge-Kutta)
-        rtol: Relative tolerance for integrator
-        atol: Absolute tolerance for integrator
-        
-    Returns:
-        Dictionary containing:
-            - 'success': Boolean indicating success
-            - 'message': Status message
-            - 'time': Time array [s]
-            - 'state': State history [6 x n] array
-            - 'final_state': Final state vector [6]
     """
     # Time span for integration
-    t_span = (0.0, propagation_time)
-    
-    # Solve the initial value problem
+    time_span = (time_o, time_f)
+
+    # Solve initial value problem
     solution = solve_ivp(
-        fun=EquationsOfMotion(dynamics).state_time_derivative,
-        t_span=t_span,
-        y0=initial_state,
-        method=method,
-        args=(dynamics,),
-        rtol=rtol,
-        atol=atol,
-        dense_output=True
+        fun          = EquationsOfMotion(dynamics).state_time_derivative,
+        t_span       = time_span,
+        y0           = initial_state,
+        method       = method,
+        rtol         = rtol,
+        atol         = atol,
+        dense_output = True,
     )
     
     return {
-        'success': solution.success,
-        'message': solution.message,
-        'time': solution.t,
-        'state': solution.y,
-        'final_state': solution.y[:, -1]
+        'success'     : solution.success,
+        'message'     : solution.message,
+        'time'        : solution.t,
+        'state'       : solution.y,
+        'final_state' : solution.y[:, -1]
     }
-
 
 def main():
     """
     Main function to set up and propagate a spacecraft orbit for one day.
     """
-    # Define propagation time: 1 day in seconds
-    ONE_DAY = 1 * 24 * 60 * 60  # [s]
-    
-    # Set up dynamics model for Earth with J2 perturbation
-    earth_dynamics = TwoBodyDynamics(
-        gp     = PHYSICALCONSTANTS.EARTH.GP,
-        time_o = 0.0,
-        j_2    = PHYSICALCONSTANTS.EARTH.J_2,
-        j_3    = PHYSICALCONSTANTS.EARTH.J_3,
-        j_4    = PHYSICALCONSTANTS.EARTH.J_4,
-        pos_ref= PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR
-    )
-    
-    # Define initial cartesian state in inertial frame
+    #### INPUT ####
+
+    # Time
+    time_o = 0.0                          # initial time [s]
+    time_f = time_o + TIMEVALUES.ONE_DAY  # final time [s]
+
+    # Initial state
     altitude  = 500e3  # [m]
     pos_mag_o = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR + altitude
     vel_mag_o = np.sqrt(PHYSICALCONSTANTS.EARTH.GP / pos_mag_o)
-
-    # Initial state
     initial_state = np.array([
         pos_mag_o, # x [m]
         0.0,       # y [m]
@@ -86,12 +62,24 @@ def main():
         vel_mag_o, # vy [m/s]
         0.0        # vz [m/s]
     ])
+    #### INPUT ####
+    
+    # Set up dynamics model for Earth with J2 perturbation
+    earth_dynamics = TwoBodyDynamics(
+        gp      = PHYSICALCONSTANTS.EARTH.GP,
+        time_o  = time_o,
+        j_2     = PHYSICALCONSTANTS.EARTH.J_2,
+        j_3     = PHYSICALCONSTANTS.EARTH.J_3,
+        j_4     = PHYSICALCONSTANTS.EARTH.J_4,
+        pos_ref = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR
+    )
     
     # Propagate the orbit
     result = propagate_orbit(
         initial_state    = initial_state,
-        propagation_time = ONE_DAY,
-        dynamics         = earth_dynamics
+        time_o           = time_o,
+        time_f           = time_f,
+        dynamics         = earth_dynamics,
     )
     
     # Display results
@@ -118,6 +106,12 @@ def main():
         print(f"\n  Initial speed:  {v_initial:.3f} m/s")
         print(f"  Final speed:    {v_final:.3f} m/s")
         print(f"  Difference:     {v_final - v_initial:.3f} m/s")
+        
+        # Create plots
+        print("\nGenerating plots...")
+        plot_3d_trajectories(result)
+        plot_pos_vel_time_series(result)
+        plt.show()
     else:
         print(f"\nPropagation failed!")
         print(f"Status: {result['message']}")
