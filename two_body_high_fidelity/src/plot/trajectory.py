@@ -3,6 +3,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
 from plot.utility import get_equal_limits
+from constants import CONVERTER
 
 def plot_3d_trajectories(
     result: dict,
@@ -51,13 +52,13 @@ def plot_3d_trajectories(
     return fig
 
 
-def plot_pos_vel_time_series(
+def plot_time_series(
     result: dict,
 ):
     """
     Plot position and velocity components vs time in a 2x1 grid.
     """
-    fig, ax = plt.subplots(2, 1, figsize=(10, 6))
+    fig = plt.figure(figsize=(10,6))
     
     # Extract data
     time = result['time']
@@ -69,24 +70,80 @@ def plot_pos_vel_time_series(
     pos_mag = np.sqrt(pos_x**2 + pos_y**2 + pos_z**2)
     vel_mag = np.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
     
-    # Plot position vs time
-    ax[0].plot(time, pos_x, 'r-', label='X', linewidth=1.5)
-    ax[0].plot(time, pos_y, 'g-', label='Y', linewidth=1.5)
-    ax[0].plot(time, pos_z, 'b-', label='Z', linewidth=1.5)
-    ax[0].plot(time, pos_mag, 'k--', label='Magnitude', linewidth=2)
-    ax[0].set_xticklabels([])
-    ax[0].set_ylabel('Position [m]')
-    ax[0].legend()
-    ax[0].grid(True)
+    # Plot position vs time (spans rows 0-2, column 0)
+    ax_pos = plt.subplot2grid((6, 2), (0, 0), rowspan=3)
+    ax_pos.plot(time, pos_x, 'r-', label='X', linewidth=1.5)
+    ax_pos.plot(time, pos_y, 'g-', label='Y', linewidth=1.5)
+    ax_pos.plot(time, pos_z, 'b-', label='Z', linewidth=1.5)
+    ax_pos.plot(time, pos_mag, 'k--', label='Magnitude', linewidth=2)
+    ax_pos.set_xticklabels([])
+    ax_pos.set_ylabel('Position\n[m]')
+    ax_pos.legend()
+    ax_pos.grid(True)
+    ax_pos.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
 
-    # Plot velocity vs time
-    ax[1].plot(time, vel_x, 'r-', label='X', linewidth=1.5)
-    ax[1].plot(time, vel_y, 'g-', label='Y', linewidth=1.5)
-    ax[1].plot(time, vel_z, 'b-', label='Z', linewidth=1.5)
-    ax[1].plot(time, vel_mag, 'k--', label='Magnitude', linewidth=2)
-    ax[1].set_xlabel('Time [s]')
-    ax[1].set_ylabel('Velocity [m/s]')
-    ax[1].grid(True)
+    # Plot velocity vs time (spans rows 3-5, column 0)
+    ax_vel = plt.subplot2grid((6, 2), (3, 0), rowspan=3)
+    ax_vel.plot(time, vel_x, 'r-', label='X', linewidth=1.5)
+    ax_vel.plot(time, vel_y, 'g-', label='Y', linewidth=1.5)
+    ax_vel.plot(time, vel_z, 'b-', label='Z', linewidth=1.5)
+    ax_vel.plot(time, vel_mag, 'k--', label='Magnitude', linewidth=2)
+    ax_vel.set_xlabel('Time\n[s]')
+    ax_vel.set_ylabel('Velocity\n[m/s]')
+    ax_vel.legend()
+    ax_vel.grid(True)
+    ax_vel.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+    # Plot sma vs time (row 0, column 1)
+    ax_sma = plt.subplot2grid((6, 2), (0, 1))
+    ax_sma.plot(time, result['coe']['sma'], 'b-', linewidth=1.5)
+    ax_sma.set_xticklabels([])
+    ax_sma.set_ylabel('Semi-Major Axis\n[m]')
+    ax_sma.grid(True)
+    ax_sma.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+    # Plot ecc vs time (row 1, column 1)
+    ax_ecc = plt.subplot2grid((6, 2), (1, 1))
+    ax_ecc.plot(time, result['coe']['ecc'], 'b-', linewidth=1.5)
+    ax_ecc.set_xticklabels([])
+    ax_ecc.set_ylabel('Eccentricity\n[-]')
+    ax_ecc.grid(True)
+    ax_ecc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+    # Plot inc vs time (row 2, column 1)
+    ax_inc = plt.subplot2grid((6, 2), (2, 1))
+    ax_inc.plot(time, result['coe']['inc'] * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
+    ax_inc.set_xticklabels([])
+    ax_inc.set_ylabel('Inclination\n[deg]')
+    ax_inc.grid(True)
+    ax_inc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+    # Plot raan vs time (row 3, column 1)
+    ax_raan = plt.subplot2grid((6, 2), (3, 1))
+    ax_raan.plot(time, result['coe']['raan'] * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
+    ax_raan.set_xticklabels([])
+    ax_raan.set_ylabel('RAAN\n[deg]')
+    ax_raan.grid(True)
+    ax_raan.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+    # Plot argp vs time (row 4, column 1)
+    ax_argp = plt.subplot2grid((6, 2), (4, 1))
+    ax_argp.plot(time, result['coe']['argp'] * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
+    ax_argp.set_xticklabels([])
+    ax_argp.set_ylabel('Argument of Perigee\n[deg]')
+    ax_argp.grid(True)
+    ax_argp.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+    # Plot ta, ea, ma vs time (row 5, column 1)
+    ax_anom = plt.subplot2grid((6, 2), (5, 1))
+    ax_anom.plot(time, result['coe']['ta'] * CONVERTER.RAD2DEG, 'r-', label='TA', linewidth=1.5)
+    ax_anom.plot(time, result['coe']['ea'] * CONVERTER.RAD2DEG, 'g-', label='EA', linewidth=1.5)
+    ax_anom.plot(time, result['coe']['ma'] * CONVERTER.RAD2DEG, 'b-', label='MA', linewidth=1.5)
+    ax_anom.set_xlabel('Time\n[s]')
+    ax_anom.set_ylabel('Anomaly\n[deg]')
+    ax_anom.legend()
+    ax_anom.grid(True)
+    ax_anom.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
 
     plt.tight_layout()
     return fig
