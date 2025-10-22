@@ -2,10 +2,12 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+
 from constants import CONVERTER, TIMEVALUES
 from model.dynamics import TwoBodyDynamics, PHYSICALCONSTANTS, EquationsOfMotion
 from plot.trajectory import plot_3d_trajectories, plot_time_series
 from model.coordinate_system_converter import CoordinateSystemConverter
+from initialization import initial_guess
 
 def propagate_orbit(
     initial_state       : np.ndarray,
@@ -73,22 +75,22 @@ def main():
 
     # Time
     time_o = 0.0                          # initial time [s]
-    time_f = time_o + TIMEVALUES.ONE_DAY  # final time [s]
+    time_f = time_o + 10 * TIMEVALUES.ONE_DAY  # final time [s]
 
     # Initial state
-    altitude  = 500e3  # [m]
-    pos_mag_o = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR + altitude
-    vel_mag_o = np.sqrt(PHYSICALCONSTANTS.EARTH.GP / pos_mag_o)
-    initial_state = np.array([
-        pos_mag_o, # x [m]
-        0.0,       # y [m]
-        0.0,       # z [m]
-        0.0,       # vx [m/s]
-        vel_mag_o, # vy [m/s]
-        0.0        # vz [m/s]
-    ])
-    
+    igs = 'circular'               # initial guess selection
+    alt = 500e3                    # altitude [m]
+    inc = 45.0 * CONVERTER.DEG2RAD # inclination [rad]
+
     #### INPUT ####
+
+    # Initial state
+    #   initial_guess_selection : 'circular'
+    initial_state = initial_guess.get_initial_state(
+        initial_guess_selection = igs,
+        altitude                = alt,
+        inclination             = inc,
+    )
     
     # Set up dynamics model for Earth with J2 perturbation
     earth_dynamics = TwoBodyDynamics(

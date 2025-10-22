@@ -21,8 +21,8 @@ def plot_3d_trajectories(
     # Plot 3D position trajectory
     ax1 = fig.add_subplot(121, projection='3d')
     ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=1)
-    ax1.scatter([pos_x[0]], [pos_y[0]], [pos_z[0]], c='b', s=100, marker='>', label='Start')
-    ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], c='b', s=100, marker='s', label='End')
+    ax1.scatter([pos_x[0]], [pos_y[0]], [pos_z[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, label='Start') # type: ignore
+    ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, label='End') # type: ignore
     ax1.set_xlabel('Pos-X [m]')
     ax1.set_ylabel('Pos-Y [m]')
     ax1.set_zlabel('Pos-Z [m]') # type: ignore
@@ -36,8 +36,8 @@ def plot_3d_trajectories(
     # Plot 3D velocity trajectory
     ax2 = fig.add_subplot(122, projection='3d')
     ax2.plot(vel_x, vel_y, vel_z, 'r-', linewidth=1)
-    ax2.scatter([vel_x[0]], [vel_y[0]], [vel_z[0]], c='r', s=100, marker='>', label='Start')
-    ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], c='r', s=100, marker='s', label='End')
+    ax2.scatter([vel_x[0]], [vel_y[0]], [vel_z[0]], s=100, marker='>', facecolors='white', edgecolors='r', linewidths=2, label='Start') # type: ignore
+    ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], s=100, marker='s', facecolors='white', edgecolors='r', linewidths=2, label='End') # type: ignore
     ax2.set_xlabel('Vel-X [m/s]')
     ax2.set_ylabel('Vel-Y [m/s]')
     ax2.set_zlabel('Vel-Z [m/s]') # type: ignore
@@ -75,7 +75,7 @@ def plot_time_series(
     ax_pos.plot(time, pos_x, 'r-', label='X', linewidth=1.5)
     ax_pos.plot(time, pos_y, 'g-', label='Y', linewidth=1.5)
     ax_pos.plot(time, pos_z, 'b-', label='Z', linewidth=1.5)
-    ax_pos.plot(time, pos_mag, 'k--', label='Magnitude', linewidth=2)
+    ax_pos.plot(time, pos_mag, 'k-', label='Magnitude', linewidth=2)
     ax_pos.set_xticklabels([])
     ax_pos.set_ylabel('Position\n[m]')
     ax_pos.legend()
@@ -83,11 +83,11 @@ def plot_time_series(
     ax_pos.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
 
     # Plot velocity vs time (spans rows 3-5, column 0)
-    ax_vel = plt.subplot2grid((6, 2), (3, 0), rowspan=3)
+    ax_vel = plt.subplot2grid((6, 2), (3, 0), rowspan=3, sharex=ax_pos)
     ax_vel.plot(time, vel_x, 'r-', label='X', linewidth=1.5)
     ax_vel.plot(time, vel_y, 'g-', label='Y', linewidth=1.5)
     ax_vel.plot(time, vel_z, 'b-', label='Z', linewidth=1.5)
-    ax_vel.plot(time, vel_mag, 'k--', label='Magnitude', linewidth=2)
+    ax_vel.plot(time, vel_mag, 'k-', label='Magnitude', linewidth=2)
     ax_vel.set_xlabel('Time\n[s]')
     ax_vel.set_ylabel('Velocity\n[m/s]')
     ax_vel.legend()
@@ -95,7 +95,7 @@ def plot_time_series(
     ax_vel.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
 
     # Plot sma vs time (row 0, column 1)
-    ax_sma = plt.subplot2grid((6, 2), (0, 1))
+    ax_sma = plt.subplot2grid((6, 2), (0, 1), sharex=ax_pos)
     ax_sma.plot(time, result['coe']['sma'], 'b-', linewidth=1.5)
     ax_sma.set_xticklabels([])
     ax_sma.set_ylabel('Semi-Major Axis\n[m]')
@@ -103,7 +103,7 @@ def plot_time_series(
     ax_sma.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
 
     # Plot ecc vs time (row 1, column 1)
-    ax_ecc = plt.subplot2grid((6, 2), (1, 1))
+    ax_ecc = plt.subplot2grid((6, 2), (1, 1), sharex=ax_pos)
     ax_ecc.plot(time, result['coe']['ecc'], 'b-', linewidth=1.5)
     ax_ecc.set_xticklabels([])
     ax_ecc.set_ylabel('Eccentricity\n[-]')
@@ -111,7 +111,7 @@ def plot_time_series(
     ax_ecc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
 
     # Plot inc vs time (row 2, column 1)
-    ax_inc = plt.subplot2grid((6, 2), (2, 1))
+    ax_inc = plt.subplot2grid((6, 2), (2, 1), sharex=ax_pos)
     ax_inc.plot(time, result['coe']['inc'] * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
     ax_inc.set_xticklabels([])
     ax_inc.set_ylabel('Inclination\n[deg]')
@@ -119,7 +119,7 @@ def plot_time_series(
     ax_inc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
 
     # Plot raan vs time (row 3, column 1)
-    ax_raan = plt.subplot2grid((6, 2), (3, 1))
+    ax_raan = plt.subplot2grid((6, 2), (3, 1), sharex=ax_pos)
     ax_raan.plot(time, result['coe']['raan'] * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
     ax_raan.set_xticklabels([])
     ax_raan.set_ylabel('RAAN\n[deg]')
@@ -127,7 +127,7 @@ def plot_time_series(
     ax_raan.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
 
     # Plot argp vs time (row 4, column 1)
-    ax_argp = plt.subplot2grid((6, 2), (4, 1))
+    ax_argp = plt.subplot2grid((6, 2), (4, 1), sharex=ax_pos)
     ax_argp.plot(time, result['coe']['argp'] * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
     ax_argp.set_xticklabels([])
     ax_argp.set_ylabel('Argument of Perigee\n[deg]')
@@ -135,7 +135,7 @@ def plot_time_series(
     ax_argp.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
 
     # Plot ta, ea, ma vs time (row 5, column 1)
-    ax_anom = plt.subplot2grid((6, 2), (5, 1))
+    ax_anom = plt.subplot2grid((6, 2), (5, 1), sharex=ax_pos)
     ax_anom.plot(time, result['coe']['ta'] * CONVERTER.RAD2DEG, 'r-', label='TA', linewidth=1.5)
     ax_anom.plot(time, result['coe']['ea'] * CONVERTER.RAD2DEG, 'g-', label='EA', linewidth=1.5)
     ax_anom.plot(time, result['coe']['ma'] * CONVERTER.RAD2DEG, 'b-', label='MA', linewidth=1.5)
@@ -144,6 +144,12 @@ def plot_time_series(
     ax_anom.legend()
     ax_anom.grid(True)
     ax_anom.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+    # Align y-axis labels for right column
+    fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_argp, ax_anom])
+    
+    # Align y-axis labels for left column
+    fig.align_ylabels([ax_pos, ax_vel])
 
     plt.tight_layout()
     return fig
