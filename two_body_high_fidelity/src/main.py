@@ -83,6 +83,11 @@ def main():
     ecc = 0.1                      # eccentricity [-]
     inc = 45.0 * CONVERTER.DEG2RAD # inclination [rad]
 
+    # Spacecraft parameters for drag
+    cd   = 2.2    # Drag coefficient (typical satellite)
+    area = 10.0   # Cross-sectional area [m²]
+    mass = 1000.0 # Spacecraft mass [kg]
+
     #### INPUT ####
 
     # Initial state
@@ -100,7 +105,10 @@ def main():
         j_2     = PHYSICALCONSTANTS.EARTH.J_2,
         j_3     = PHYSICALCONSTANTS.EARTH.J_3,
         j_4     = PHYSICALCONSTANTS.EARTH.J_4,
-        pos_ref = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR
+        pos_ref = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR,
+        cd      = cd,
+        area    = area,
+        mass    = mass,
     )
     
     # Propagate the orbit
