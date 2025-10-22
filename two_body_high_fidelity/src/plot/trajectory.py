@@ -11,7 +11,7 @@ def plot_3d_trajectories(
     """
     Plot 3D position and velocity trajectories in a 1x2 grid.
     """
-    fig = plt.figure(figsize=(10, 6))
+    fig = plt.figure(figsize=(18,10))
     
     # Extract state vectors
     states = result['state']
@@ -58,7 +58,7 @@ def plot_time_series(
     """
     Plot position and velocity components vs time in a 2x1 grid.
     """
-    fig = plt.figure(figsize=(10,6))
+    fig = plt.figure(figsize=(18,10))
     
     # Extract data
     time = result['time']
@@ -151,5 +151,5 @@ def plot_time_series(
     # Align y-axis labels for left column
     fig.align_ylabels([ax_pos, ax_vel])
 
-    plt.tight_layout()
+    plt.subplots_adjust(hspace=0.17, wspace=0.2)
     return fig

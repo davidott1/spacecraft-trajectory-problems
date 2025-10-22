@@ -79,6 +79,8 @@ class CoordinateSystemConverter:
             
             # Eccentric anomaly
             ea = 2 * np.arctan(np.sqrt((1 - ecc_mag) / (1 + ecc_mag)) * np.tan(ta / 2))
+            if ea < 0:
+                ea = ea + 2 * np.pi
             
             # Mean anomaly
             ma = ea - ecc_mag * np.sin(ea)

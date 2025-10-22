@@ -78,8 +78,9 @@ def main():
     time_f = time_o + 10 * TIMEVALUES.ONE_DAY  # final time [s]
 
     # Initial state
-    igs = 'circular'               # initial guess selection
+    igs = 'elliptical'             # initial guess selection: circular elliptical
     alt = 500e3                    # altitude [m]
+    ecc = 0.1                      # eccentricity [-]
     inc = 45.0 * CONVERTER.DEG2RAD # inclination [rad]
 
     #### INPUT ####
@@ -88,8 +89,8 @@ def main():
     #   initial_guess_selection : 'circular'
     initial_state = initial_guess.get_initial_state(
         initial_guess_selection = igs,
-        altitude                = alt,
-        inclination             = inc,
+        alt                     = alt,
+        inc                     = inc,
     )
     
     # Set up dynamics model for Earth with J2 perturbation
