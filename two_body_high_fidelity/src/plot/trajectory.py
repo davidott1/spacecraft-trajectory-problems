@@ -269,41 +269,63 @@ def plot_time_series_error(
         interpolator = interp1d(time_cmp, coe_cmp[key], kind='cubic', fill_value='extrapolate')
         coe_cmp_interp[key] = interpolator(time_ref)
     
-    # Calculate errors
+    # Calculate errors in inertial frame
     state_ref = result_ref['state']
-    pos_error = state_ref[0:3, :] - state_cmp_interp[0:3, :]
-    vel_error = state_ref[3:6, :] - state_cmp_interp[3:6, :]
+    pos_error_inertial = state_ref[0:3, :] - state_cmp_interp[0:3, :]
+    vel_error_inertial = state_ref[3:6, :] - state_cmp_interp[3:6, :]
     
-    pos_error_mag = np.linalg.norm(pos_error, axis=0)
-    vel_error_mag = np.linalg.norm(vel_error, axis=0)
+    # Transform errors to RIC frame (using reference trajectory)
+    pos_error_ric = np.zeros((3, len(time_ref)))
+    vel_error_ric = np.zeros((3, len(time_ref)))
+    
+    for i in range(len(time_ref)):
+        # Reference position and velocity
+        r_ref = state_ref[0:3, i]
+        v_ref = state_ref[3:6, i]
+        
+        # Compute RIC frame unit vectors
+        r_hat = r_ref / np.linalg.norm(r_ref)  # Radial
+        h_vec = np.cross(r_ref, v_ref)
+        h_hat = h_vec / np.linalg.norm(h_vec)  # Normal (cross-track)
+        i_hat = np.cross(h_hat, r_hat)         # In-track
+        
+        # Rotation matrix from inertial to RIC
+        R_inertial_to_ric = np.array([r_hat, i_hat, h_hat])
+        
+        # Transform errors
+        pos_error_ric[:, i] = R_inertial_to_ric @ pos_error_inertial[:, i]
+        vel_error_ric[:, i] = R_inertial_to_ric @ vel_error_inertial[:, i]
+    
+    pos_error_mag = np.linalg.norm(pos_error_ric, axis=0)
+    vel_error_mag = np.linalg.norm(vel_error_ric, axis=0)
     
     coe_ref = result_ref['coe']
     
-    # Plot position error (spans rows 0-2, column 0)
+    # Plot position error in RIC frame (spans rows 0-2, column 0)
     ax_pos = plt.subplot2grid((6, 2), (0, 0), rowspan=3)
-    ax_pos.plot(time_ref, pos_error[0, :], 'r-', label='X', linewidth=1.5)
-    ax_pos.plot(time_ref, pos_error[1, :], 'g-', label='Y', linewidth=1.5)
-    ax_pos.plot(time_ref, pos_error[2, :], 'b-', label='Z', linewidth=1.5)
+    ax_pos.plot(time_ref, pos_error_ric[0, :], 'r-', label='Radial', linewidth=1.5)
+    ax_pos.plot(time_ref, pos_error_ric[1, :], 'g-', label='In-track', linewidth=1.5)
+    ax_pos.plot(time_ref, pos_error_ric[2, :], 'b-', label='Cross-track', linewidth=1.5)
     ax_pos.plot(time_ref, pos_error_mag, 'k-', label='Magnitude', linewidth=2)
     ax_pos.tick_params(labelbottom=False)
-    ax_pos.set_ylabel('Position Error\n[m]')
+    ax_pos.set_ylabel('Position Error (RIC)\n[m]')
     ax_pos.legend()
     ax_pos.grid(True)
     ax_pos.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
     
-    # Plot velocity error (spans rows 3-5, column 0)
+    # Plot velocity error in RIC frame (spans rows 3-5, column 0)
     ax_vel = plt.subplot2grid((6, 2), (3, 0), rowspan=3, sharex=ax_pos)
-    ax_vel.plot(time_ref, vel_error[0, :], 'r-', label='X', linewidth=1.5)
-    ax_vel.plot(time_ref, vel_error[1, :], 'g-', label='Y', linewidth=1.5)
-    ax_vel.plot(time_ref, vel_error[2, :], 'b-', label='Z', linewidth=1.5)
+    ax_vel.plot(time_ref, vel_error_ric[0, :], 'r-', label='Radial', linewidth=1.5)
+    ax_vel.plot(time_ref, vel_error_ric[1, :], 'g-', label='In-track', linewidth=1.5)
+    ax_vel.plot(time_ref, vel_error_ric[2, :], 'b-', label='Cross-track', linewidth=1.5)
     ax_vel.plot(time_ref, vel_error_mag, 'k-', label='Magnitude', linewidth=2)
     ax_vel.set_xlabel('Time\n[s]')
-    ax_vel.set_ylabel('Velocity Error\n[m/s]')
+    ax_vel.set_ylabel('Velocity Error (RIC)\n[m/s]')
     ax_vel.legend()
     ax_vel.grid(True)
     ax_vel.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
     
-    # Plot SMA error
+    # Plot sma error (row 0, column 1)
     ax_sma = plt.subplot2grid((6, 2), (0, 1), sharex=ax_pos)
     ax_sma.plot(time_ref, coe_ref['sma'] - coe_cmp_interp['sma'], 'b-', linewidth=1.5)
     ax_sma.tick_params(labelbottom=False)
@@ -311,7 +333,7 @@ def plot_time_series_error(
     ax_sma.grid(True)
     ax_sma.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
     
-    # Plot eccentricity error
+    # Plot eccentricity error (row 1, column 1)
     ax_ecc = plt.subplot2grid((6, 2), (1, 1), sharex=ax_pos)
     ax_ecc.plot(time_ref, coe_ref['ecc'] - coe_cmp_interp['ecc'], 'b-', linewidth=1.5)
     ax_ecc.tick_params(labelbottom=False)
@@ -319,7 +341,7 @@ def plot_time_series_error(
     ax_ecc.grid(True)
     ax_ecc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
     
-    # Plot inclination error
+    # Plot inclination error (row 2, column 1)
     ax_inc = plt.subplot2grid((6, 2), (2, 1), sharex=ax_pos)
     ax_inc.plot(time_ref, (coe_ref['inc'] - coe_cmp_interp['inc']) * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
     ax_inc.tick_params(labelbottom=False)
@@ -327,7 +349,7 @@ def plot_time_series_error(
     ax_inc.grid(True)
     ax_inc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
     
-    # Plot RAAN error
+    # Plot RAAN error (row 3, column 1)
     ax_raan = plt.subplot2grid((6, 2), (3, 1), sharex=ax_pos)
     ax_raan.plot(time_ref, (coe_ref['raan'] - coe_cmp_interp['raan']) * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
     ax_raan.tick_params(labelbottom=False)
@@ -335,7 +357,7 @@ def plot_time_series_error(
     ax_raan.grid(True)
     ax_raan.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
     
-    # Plot argument of perigee error
+    # Plot argument of perigee error (row 4, column 1)
     ax_argp = plt.subplot2grid((6, 2), (4, 1), sharex=ax_pos)
     ax_argp.plot(time_ref, (coe_ref['argp'] - coe_cmp_interp['argp']) * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
     ax_argp.tick_params(labelbottom=False)
@@ -343,7 +365,7 @@ def plot_time_series_error(
     ax_argp.grid(True)
     ax_argp.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
     
-    # Plot mean anomaly error
+    # Plot mean anomaly error (row 5, column 1)
     ax_ma = plt.subplot2grid((6, 2), (5, 1), sharex=ax_pos)
     ax_ma.plot(time_ref, (coe_ref['ma'] - coe_cmp_interp['ma']) * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
     ax_ma.set_xlabel('Time\n[s]')
