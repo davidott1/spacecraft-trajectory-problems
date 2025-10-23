@@ -1,4 +1,6 @@
 import numpy as np
+from model.dynamics import PHYSICALCONSTANTS
+
 
 class CoordinateSystemConverter:
     def __init__(self, gp: float):
@@ -54,23 +56,23 @@ class CoordinateSystemConverter:
         node_mag = np.linalg.norm(node_vec)
 
         # RAAN
-        if node_mag > 1e-10:
+        if node_mag - 1e-10 * self.gp > 0:
             raan = np.arccos(np.clip(node_vec[0] / node_mag, -1, 1))
-            if node_vec[1] < 0:
+            if node_vec[1] + 1e-10 * self.gp < 0:
                 raan = 2 * np.pi - raan
         else:
             raan = 0
         
         # Argument of perigee
-        if node_mag > 1e-10 and ecc_mag > 1e-10:
-            argp = np.arccos(np.clip(np.dot(node_vec, ecc_vec) / (node_mag * ecc_mag), -1, 1))
+        if node_mag - 1e-10 * self.gp > 0 and ecc_mag + 1e-10 > 0:
+            argp = np.arccos(np.clip(np.dot(node_vec/node_mag, ecc_vec/ecc_mag), -1, 1))
             if ecc_vec[2] < 0:
                 argp = 2 * np.pi - argp
         else:
             argp = 0
         
         # True anomaly
-        if ecc_mag > 1e-10:
+        if ecc_mag - 1e-10 > 0:
             cos_ta = np.dot(ecc_vec, pos) / (ecc_mag * pos_mag)
             cos_ta = np.clip(cos_ta, -1, 1)
             ta     = np.arccos(cos_ta)

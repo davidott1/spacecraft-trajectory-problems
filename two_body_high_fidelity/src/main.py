@@ -14,10 +14,10 @@ def propagate_orbit(
     time_o              : float,
     time_f              : float,
     dynamics            : TwoBodyDynamics,
-    method              : str = 'DOP853',
+    method              : str  = 'DOP853', # DOP853 RK45
     rtol                : float = 1e-12,
     atol                : float = 1e-12,
-    get_coe_time_series : bool = False,
+    get_coe_time_series : bool  = False,
 ) -> dict:
     """
     Propagate an orbit from initial cartesian state.
@@ -77,13 +77,13 @@ def main():
     time_o = 0.0                          # initial time [s]
     time_f = time_o + 10 * TIMEVALUES.ONE_DAY  # final time [s]
 
-    # Initial state
+    # Spacecrft initial state
     igs = 'elliptical'             # initial guess selection: circular elliptical
     alt = 500e3                    # altitude [m]
-    ecc = 0.1                      # eccentricity [-]
-    inc = 45.0 * CONVERTER.DEG2RAD # inclination [rad]
+    ecc = 0.2                      # eccentricity [-]
+    inc = 95.0 * CONVERTER.DEG2RAD # inclination [rad]
 
-    # Spacecraft parameters for drag
+    # Spacecraft drag parameters
     cd   = 2.2    # Drag coefficient (typical satellite)
     area = 10.0   # Cross-sectional area [m²]
     mass = 1000.0 # Spacecraft mass [kg]
@@ -96,10 +96,11 @@ def main():
         initial_guess_selection = igs,
         alt                     = alt,
         inc                     = inc,
+        ecc                     = ecc,
     )
     
     # Set up dynamics model for Earth with J2 perturbation
-    earth_dynamics = TwoBodyDynamics(
+    two_body_dynamics = TwoBodyDynamics(
         gp      = PHYSICALCONSTANTS.EARTH.GP,
         time_o  = time_o,
         j_2     = PHYSICALCONSTANTS.EARTH.J_2,
@@ -116,7 +117,7 @@ def main():
         initial_state       = initial_state,
         time_o              = time_o,
         time_f              = time_f,
-        dynamics            = earth_dynamics,
+        dynamics            = two_body_dynamics,
         get_coe_time_series = True,
     )
 
@@ -126,25 +127,6 @@ def main():
         print(f"Status: {result['message']}")
         print(f"Number of time steps: {len(result['time'])}")
         
-        final_state = result['final_state']
-        print(f"\nFinal State (Inertial Frame):")
-        print(f"  Position: [{final_state[0]:.3f}, {final_state[1]:.3f}, {final_state[2]:.3f}] m")
-        print(f"  Velocity: [{final_state[3]:.3f}, {final_state[4]:.3f}, {final_state[5]:.3f}] m/s")
-        
-        # Compute orbital parameters
-        r_initial = np.linalg.norm(initial_state[0:3])
-        r_final   = np.linalg.norm(final_state[0:3])
-        v_initial = np.linalg.norm(initial_state[3:6])
-        v_final   = np.linalg.norm(final_state[3:6])
-        
-        print(f"\nOrbital Magnitude Comparison:")
-        print(f"  Initial radius: {r_initial:.3f} m")
-        print(f"  Final radius:   {r_final:.3f} m")
-        print(f"  Difference:     {r_final - r_initial:.3f} m")
-        print(f"\n  Initial speed:  {v_initial:.3f} m/s")
-        print(f"  Final speed:    {v_final:.3f} m/s")
-        print(f"  Difference:     {v_final - v_initial:.3f} m/s")
-        
         # Create plots
         print("\nGenerating plots...")
         plot_3d_trajectories(result)
@@ -153,8 +135,6 @@ def main():
     else:
         print(f"\nPropagation failed!")
         print(f"Status: {result['message']}")
-    
-    print("=" * 60)
     
     return result
 

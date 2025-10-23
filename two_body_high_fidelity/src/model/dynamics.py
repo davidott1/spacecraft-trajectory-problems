@@ -10,7 +10,7 @@ class PHYSICALCONSTANTS:
             EQUATOR = 6378137.0  # Earth's WGS84 equatorial radius [m]
             POLAR   = 6356752.3  # Earth's WGS84 polar radius [m]
 
-        GP  = 3.986004418e14     # Earth's gravitational parameter [m³/s²]
+        GP = 3.986004418e14      # Earth's gravitational parameter [m³/s²]
 
         # Spherical harmonic coefficients
         J_2 = 1.08263e-3         # Earth's J2 coefficient [-]
@@ -178,7 +178,7 @@ class TwoBodyDynamics:
         Atmospheric drag acceleration using exponential atmosphere model.
         
         Input:
-            state_vec: state vector [pos, vel] in inertial frame
+            state_vec: state vector in inertial frame [pos, vel] [m, m/s]
         
         Output:
             acc_vec: drag acceleration vector [m/s²]
@@ -187,8 +187,8 @@ class TwoBodyDynamics:
         vel_vec = state_vec[3:6]
         
         # Position magnitude
-        pos_mag  = np.linalg.norm(pos_vec)
-        alt      = pos_mag - PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR
+        pos_mag = np.linalg.norm(pos_vec)
+        alt     = pos_mag - PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR
         
         # Atmospheric density at current altitude
         rho = self.atmospheric_density(float(alt))

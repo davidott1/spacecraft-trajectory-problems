@@ -4,6 +4,7 @@ import numpy as np
 
 from plot.utility import get_equal_limits
 from constants import CONVERTER
+from model.dynamics import PHYSICALCONSTANTS
 
 def plot_3d_trajectories(
     result: dict,
@@ -20,6 +21,17 @@ def plot_3d_trajectories(
     
     # Plot 3D position trajectory
     ax1 = fig.add_subplot(121, projection='3d')
+    
+    # Add Earth ellipsoid
+    u = np.linspace(0, 2 * np.pi, 50)
+    v = np.linspace(0, np.pi, 50)
+    r_eq = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR
+    r_pol = PHYSICALCONSTANTS.EARTH.RADIUS.POLAR
+    x_earth = r_eq * np.outer(np.cos(u), np.sin(v))
+    y_earth = r_eq * np.outer(np.sin(u), np.sin(v))
+    z_earth = r_pol * np.outer(np.ones(np.size(u)), np.cos(v))
+    ax1.plot_surface(x_earth, y_earth, z_earth, color='lightblue', alpha=0.3, edgecolor='none') # type: ignore
+    
     ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=1)
     ax1.scatter([pos_x[0]], [pos_y[0]], [pos_z[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, label='Start') # type: ignore
     ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, label='End') # type: ignore
@@ -128,7 +140,8 @@ def plot_time_series(
 
     # Plot argp vs time (row 4, column 1)
     ax_argp = plt.subplot2grid((6, 2), (4, 1), sharex=ax_pos)
-    ax_argp.plot(time, result['coe']['argp'] * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
+    argp_unwrapped = np.unwrap(result['coe']['argp']) * CONVERTER.RAD2DEG
+    ax_argp.plot(time, argp_unwrapped, 'b-', linewidth=1.5)
     ax_argp.set_xticklabels([])
     ax_argp.set_ylabel('Argument of Perigee\n[deg]')
     ax_argp.grid(True)
