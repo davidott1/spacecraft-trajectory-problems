@@ -196,10 +196,10 @@ def plot_3d_error(
         interpolator = interp1d(time_cmp, state_cmp[i, :], kind='cubic', fill_value='extrapolate')
         state_cmp_interp[i, :] = interpolator(time_ref)
     
-    # Calculate errors
+    # Calculate errors (comparison - reference)
     state_ref = result_ref['state']
-    pos_error = state_ref[0:3, :] - state_cmp_interp[0:3, :]
-    vel_error = state_ref[3:6, :] - state_cmp_interp[3:6, :]
+    pos_error = state_cmp_interp[0:3, :] - state_ref[0:3, :]
+    vel_error = state_cmp_interp[3:6, :] - state_ref[3:6, :]
     
     # Plot 3D position error
     ax1 = fig.add_subplot(121, projection='3d')
@@ -269,10 +269,10 @@ def plot_time_series_error(
         interpolator = interp1d(time_cmp, coe_cmp[key], kind='cubic', fill_value='extrapolate')
         coe_cmp_interp[key] = interpolator(time_ref)
     
-    # Calculate errors in inertial frame
+    # Calculate errors in inertial frame (comparison - reference)
     state_ref = result_ref['state']
-    pos_error_inertial = state_ref[0:3, :] - state_cmp_interp[0:3, :]
-    vel_error_inertial = state_ref[3:6, :] - state_cmp_interp[3:6, :]
+    pos_error_inertial = state_cmp_interp[0:3, :] - state_ref[0:3, :]
+    vel_error_inertial = state_cmp_interp[3:6, :] - state_ref[3:6, :]
     
     # Transform errors to RIC frame (using reference trajectory)
     pos_error_ric = np.zeros((3, len(time_ref)))
@@ -325,9 +325,9 @@ def plot_time_series_error(
     ax_vel.grid(True)
     ax_vel.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
     
-    # Plot sma error (row 0, column 1)
+    # Plot SMA error (row 0, column 1)
     ax_sma = plt.subplot2grid((6, 2), (0, 1), sharex=ax_pos)
-    ax_sma.plot(time_ref, coe_ref['sma'] - coe_cmp_interp['sma'], 'b-', linewidth=1.5)
+    ax_sma.plot(time_ref, coe_cmp_interp['sma'] - coe_ref['sma'], 'b-', linewidth=1.5)
     ax_sma.tick_params(labelbottom=False)
     ax_sma.set_ylabel('SMA Error\n[m]')
     ax_sma.grid(True)
@@ -335,7 +335,7 @@ def plot_time_series_error(
     
     # Plot eccentricity error (row 1, column 1)
     ax_ecc = plt.subplot2grid((6, 2), (1, 1), sharex=ax_pos)
-    ax_ecc.plot(time_ref, coe_ref['ecc'] - coe_cmp_interp['ecc'], 'b-', linewidth=1.5)
+    ax_ecc.plot(time_ref, coe_cmp_interp['ecc'] - coe_ref['ecc'], 'b-', linewidth=1.5)
     ax_ecc.tick_params(labelbottom=False)
     ax_ecc.set_ylabel('Eccentricity Error\n[-]')
     ax_ecc.grid(True)
@@ -343,7 +343,7 @@ def plot_time_series_error(
     
     # Plot inclination error (row 2, column 1)
     ax_inc = plt.subplot2grid((6, 2), (2, 1), sharex=ax_pos)
-    ax_inc.plot(time_ref, (coe_ref['inc'] - coe_cmp_interp['inc']) * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
+    ax_inc.plot(time_ref, (coe_cmp_interp['inc'] - coe_ref['inc']) * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
     ax_inc.tick_params(labelbottom=False)
     ax_inc.set_ylabel('Inclination Error\n[deg]')
     ax_inc.grid(True)
@@ -351,7 +351,7 @@ def plot_time_series_error(
     
     # Plot RAAN error (row 3, column 1)
     ax_raan = plt.subplot2grid((6, 2), (3, 1), sharex=ax_pos)
-    ax_raan.plot(time_ref, (coe_ref['raan'] - coe_cmp_interp['raan']) * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
+    ax_raan.plot(time_ref, (coe_cmp_interp['raan'] - coe_ref['raan']) * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
     ax_raan.tick_params(labelbottom=False)
     ax_raan.set_ylabel('RAAN Error\n[deg]')
     ax_raan.grid(True)
@@ -359,7 +359,7 @@ def plot_time_series_error(
     
     # Plot argument of perigee error (row 4, column 1)
     ax_argp = plt.subplot2grid((6, 2), (4, 1), sharex=ax_pos)
-    ax_argp.plot(time_ref, (coe_ref['argp'] - coe_cmp_interp['argp']) * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
+    ax_argp.plot(time_ref, (coe_cmp_interp['argp'] - coe_ref['argp']) * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
     ax_argp.tick_params(labelbottom=False)
     ax_argp.set_ylabel('ArgP Error\n[deg]')
     ax_argp.grid(True)
@@ -367,7 +367,7 @@ def plot_time_series_error(
     
     # Plot mean anomaly error (row 5, column 1)
     ax_ma = plt.subplot2grid((6, 2), (5, 1), sharex=ax_pos)
-    ax_ma.plot(time_ref, (coe_ref['ma'] - coe_cmp_interp['ma']) * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
+    ax_ma.plot(time_ref, (coe_cmp_interp['ma'] - coe_ref['ma']) * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
     ax_ma.set_xlabel('Time\n[s]')
     ax_ma.set_ylabel('Mean Anomaly Error\n[deg]')
     ax_ma.grid(True)

@@ -102,3 +102,112 @@ class CoordinateSystemConverter:
             'ta'   : ta,
             'ea'   : ea
         }
+    
+    def coe2rv(self, coe: dict) -> tuple:
+        """
+        Convert classical orbital elements to position and velocity vectors.
+        
+        Input:
+            coe: Dictionary containing:
+                - sma  : semi-major axis [m]
+                - ecc  : eccentricity [-]
+                - inc  : inclination [rad]
+                - raan : RAAN [rad]
+                - argp : argument of perigee [rad]
+                - ta   : true anomaly [rad] (or use 'ma' for mean anomaly)
+        
+        Output:
+            pos: position vector [m] (3D numpy array)
+            vel: velocity vector [m/s] (3D numpy array)
+        """
+        sma = coe['sma']
+        ecc = coe['ecc']
+        inc = coe['inc']
+        raan = coe['raan']
+        argp = coe['argp']
+        
+        # Convert mean anomaly to true anomaly if needed
+        if 'ta' in coe:
+            ta = coe['ta']
+        elif 'ma' in coe:
+            # Solve Kepler's equation: M = E - e*sin(E)
+            ma = coe['ma']
+            ea = self._solve_kepler(ma, ecc)
+            # Convert eccentric anomaly to true anomaly
+            ta = 2 * np.arctan2(
+                np.sqrt(1 + ecc) * np.sin(ea / 2),
+                np.sqrt(1 - ecc) * np.cos(ea / 2)
+            )
+        else:
+            raise ValueError("Must provide either 'ta' or 'ma' in coe dict")
+        
+        # Orbital plane (perifocal) coordinates
+        p = sma * (1 - ecc**2)  # Semi-latus rectum
+        r_mag = p / (1 + ecc * np.cos(ta))
+        
+        # Position in perifocal frame
+        r_pqw = np.array([
+            r_mag * np.cos(ta),
+            r_mag * np.sin(ta),
+            0.0
+        ])
+        
+        # Velocity in perifocal frame
+        v_pqw = np.array([
+            -np.sqrt(self.gp / p) * np.sin(ta),
+            np.sqrt(self.gp / p) * (ecc + np.cos(ta)),
+            0.0
+        ])
+        
+        # Rotation matrix from perifocal to inertial (3-1-3 Euler angles)
+        cos_raan = np.cos(raan)
+        sin_raan = np.sin(raan)
+        cos_inc = np.cos(inc)
+        sin_inc = np.sin(inc)
+        cos_argp = np.cos(argp)
+        sin_argp = np.sin(argp)
+        
+        R = np.array([
+            [cos_raan * cos_argp - sin_raan * sin_argp * cos_inc,
+             -cos_raan * sin_argp - sin_raan * cos_argp * cos_inc,
+             sin_raan * sin_inc],
+            [sin_raan * cos_argp + cos_raan * sin_argp * cos_inc,
+             -sin_raan * sin_argp + cos_raan * cos_argp * cos_inc,
+             -cos_raan * sin_inc],
+            [sin_argp * sin_inc,
+             cos_argp * sin_inc,
+             cos_inc]
+        ])
+        
+        # Transform to inertial frame
+        pos = R @ r_pqw
+        vel = R @ v_pqw
+        
+        return pos, vel
+    
+    def _solve_kepler(self, ma: float, ecc: float, tol: float = 1e-10) -> float:
+        """
+        Solve Kepler's equation M = E - e*sin(E) for eccentric anomaly E.
+        
+        Input:
+            ma: mean anomaly [rad]
+            ecc: eccentricity [-]
+            tol: convergence tolerance
+        
+        Output:
+            ea: eccentric anomaly [rad]
+        """
+        # Initial guess
+        ea = ma if ecc < 0.8 else np.pi
+        
+        # Newton-Raphson iteration
+        for _ in range(50):
+            f = ea - ecc * np.sin(ea) - ma
+            fp = 1 - ecc * np.cos(ea)
+            ea_new = ea - f / fp
+            
+            if abs(ea_new - ea) < tol:
+                return ea_new
+            ea = ea_new
+        
+        return ea  # Return best estimate if not converged

@@ -10,12 +10,27 @@ class PHYSICALCONSTANTS:
             EQUATOR = 6378137.0  # Earth's WGS84 equatorial radius [m]
             POLAR   = 6356752.3  # Earth's WGS84 polar radius [m]
 
-        GP = 3.986004418e14      # Earth's gravitational parameter [m³/s²]
+        GP = 3.986004418e14     # Earth's gravitational parameter [m³/s²]
 
-        # Spherical harmonic coefficients
-        J_2 = 1.08263e-3         # Earth's J2 coefficient [-]
-        J_3 = -2.532153e-6       # Earth's J3 coefficient [-]
-        J_4 = -1.61962159137e-6  # Earth's J4 coefficient [-]
+        # SGP4 uses WGS-72 constants (not WGS-84)
+        # Standard WGS-84 values:
+        # J_2 = 1.08263e-3
+        # J_3 = -2.532153e-6
+        # J_4 = -1.61962159137e-6
+        
+        # SGP4/WGS-72 values for better agreement:
+        J_2_WGS84 = 1.08263e-3         # WGS-84 J2 coefficient
+        J_3_WGS84 = -2.532153e-6       # WGS-84 J3 coefficient
+        J_4_WGS84 = -1.61962159137e-6  # WGS-84 J4 coefficient
+        
+        J_2_WGS72 = 1.082616e-3        # WGS-72 J2 (SGP4 uses this)
+        J_3_WGS72 = -2.53881e-6        # WGS-72 J3 (SGP4 uses this)
+        J_4_WGS72 = -1.65597e-6        # WGS-72 J4 (SGP4 uses this)
+        
+        # Use WGS-72 for SGP4 comparison
+        J_2 = J_2_WGS72
+        J_3 = J_3_WGS72
+        J_4 = J_4_WGS72
         
         # Rotation rate
         OMEGA = 7.2921150e-5     # Earth's rotation rate [rad/s]

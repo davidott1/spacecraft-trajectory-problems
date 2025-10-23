@@ -88,12 +88,14 @@ def main():
     cd   = 0.0          # drag coefficient [-] (set to 0 for comparison)
     area = 0.0          # cross-sectional area [m^2]
     mass = 0.0          # spacecraft mass [kg]
+    
+    disable_drag_sgp4 = True  # Set B* to zero in SGP4 for fair comparison
 
     #### END INPUT ####
 
     # Spacecraft initial state
     if use_tle:
-        initial_state = get_tle_initial_state(tle_line1, tle_line2)
+        initial_state = get_tle_initial_state(tle_line1, tle_line2, disable_drag=disable_drag_sgp4)
     else:
         igs = 'elliptical'             # initial guess selection: circular elliptical
         alt = 500e3                    # altitude [m]
@@ -112,8 +114,8 @@ def main():
         gp      = PHYSICALCONSTANTS.EARTH.GP,
         time_o  = time_o,
         j_2     = PHYSICALCONSTANTS.EARTH.J_2,
-        j_3     = PHYSICALCONSTANTS.EARTH.J_3,
-        j_4     = PHYSICALCONSTANTS.EARTH.J_4,
+        j_3     = 0.0,  # Disable J3 for SGP4 comparison
+        j_4     = 0.0,  # Disable J4 for SGP4 comparison
         pos_ref = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR,
         cd      = cd,
         area    = area,
@@ -133,11 +135,13 @@ def main():
     if use_tle:
         print("\nPropagating TLE with SGP4...")
         result_tle = propagate_tle(
-            tle_line1  = tle_line1,
-            tle_line2  = tle_line2,
-            time_o     = time_o,
-            time_f     = time_f,
-            num_points = 1000,
+            tle_line1    = tle_line1,
+            tle_line2    = tle_line2,
+            time_o       = time_o,
+            time_f       = time_f,
+            num_points   = 1000,
+            disable_drag = disable_drag_sgp4,
+            to_j2000     = True,  # Transform TEME to J2000
         )
         
         if result_tle['success']:
