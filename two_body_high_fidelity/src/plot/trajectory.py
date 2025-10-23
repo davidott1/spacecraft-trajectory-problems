@@ -88,7 +88,7 @@ def plot_time_series(
     ax_pos.plot(time, pos_y, 'g-', label='Y', linewidth=1.5)
     ax_pos.plot(time, pos_z, 'b-', label='Z', linewidth=1.5)
     ax_pos.plot(time, pos_mag, 'k-', label='Magnitude', linewidth=2)
-    ax_pos.set_xticklabels([])
+    ax_pos.tick_params(labelbottom=False)
     ax_pos.set_ylabel('Position\n[m]')
     ax_pos.legend()
     ax_pos.grid(True)
@@ -109,7 +109,7 @@ def plot_time_series(
     # Plot sma vs time (row 0, column 1)
     ax_sma = plt.subplot2grid((6, 2), (0, 1), sharex=ax_pos)
     ax_sma.plot(time, result['coe']['sma'], 'b-', linewidth=1.5)
-    ax_sma.set_xticklabels([])
+    ax_sma.tick_params(labelbottom=False)
     ax_sma.set_ylabel('Semi-Major Axis\n[m]')
     ax_sma.grid(True)
     ax_sma.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
@@ -117,7 +117,7 @@ def plot_time_series(
     # Plot ecc vs time (row 1, column 1)
     ax_ecc = plt.subplot2grid((6, 2), (1, 1), sharex=ax_pos)
     ax_ecc.plot(time, result['coe']['ecc'], 'b-', linewidth=1.5)
-    ax_ecc.set_xticklabels([])
+    ax_ecc.tick_params(labelbottom=False)
     ax_ecc.set_ylabel('Eccentricity\n[-]')
     ax_ecc.grid(True)
     ax_ecc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
@@ -125,7 +125,7 @@ def plot_time_series(
     # Plot inc vs time (row 2, column 1)
     ax_inc = plt.subplot2grid((6, 2), (2, 1), sharex=ax_pos)
     ax_inc.plot(time, result['coe']['inc'] * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
-    ax_inc.set_xticklabels([])
+    ax_inc.tick_params(labelbottom=False)
     ax_inc.set_ylabel('Inclination\n[deg]')
     ax_inc.grid(True)
     ax_inc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
@@ -133,7 +133,7 @@ def plot_time_series(
     # Plot raan vs time (row 3, column 1)
     ax_raan = plt.subplot2grid((6, 2), (3, 1), sharex=ax_pos)
     ax_raan.plot(time, result['coe']['raan'] * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
-    ax_raan.set_xticklabels([])
+    ax_raan.tick_params(labelbottom=False)
     ax_raan.set_ylabel('RAAN\n[deg]')
     ax_raan.grid(True)
     ax_raan.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
@@ -142,7 +142,7 @@ def plot_time_series(
     ax_argp = plt.subplot2grid((6, 2), (4, 1), sharex=ax_pos)
     argp_unwrapped = np.unwrap(result['coe']['argp']) * CONVERTER.RAD2DEG
     ax_argp.plot(time, argp_unwrapped, 'b-', linewidth=1.5)
-    ax_argp.set_xticklabels([])
+    ax_argp.tick_params(labelbottom=False)
     ax_argp.set_ylabel('Argument of Perigee\n[deg]')
     ax_argp.grid(True)
     ax_argp.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
@@ -164,5 +164,197 @@ def plot_time_series(
     # Align y-axis labels for left column
     fig.align_ylabels([ax_pos, ax_vel])
 
+    plt.subplots_adjust(hspace=0.17, wspace=0.2)
+    return fig
+
+
+def plot_3d_error(
+    result_ref: dict,
+    result_cmp: dict,
+    title: str = "Position and Velocity Error",
+):
+    """
+    Plot 3D position and velocity error trajectories in a 1x2 grid.
+    
+    Input:
+        result_ref: Reference result (e.g., SGP4)
+        result_cmp: Comparison result (e.g., high-fidelity)
+        title: Plot title
+    """
+    fig = plt.figure(figsize=(18,10))
+    
+    # Interpolate comparison result to reference time points
+    from scipy.interpolate import interp1d
+    
+    time_ref = result_ref['time']
+    time_cmp = result_cmp['time']
+    state_cmp = result_cmp['state']
+    
+    # Interpolate each state component
+    state_cmp_interp = np.zeros((6, len(time_ref)))
+    for i in range(6):
+        interpolator = interp1d(time_cmp, state_cmp[i, :], kind='cubic', fill_value='extrapolate')
+        state_cmp_interp[i, :] = interpolator(time_ref)
+    
+    # Calculate errors
+    state_ref = result_ref['state']
+    pos_error = state_ref[0:3, :] - state_cmp_interp[0:3, :]
+    vel_error = state_ref[3:6, :] - state_cmp_interp[3:6, :]
+    
+    # Plot 3D position error
+    ax1 = fig.add_subplot(121, projection='3d')
+    ax1.plot(pos_error[0, :], pos_error[1, :], pos_error[2, :], 'b-', linewidth=1)
+    ax1.scatter([pos_error[0, 0]], [pos_error[1, 0]], [pos_error[2, 0]], 
+                s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, label='Start') # type: ignore
+    ax1.scatter([pos_error[0, -1]], [pos_error[1, -1]], [pos_error[2, -1]], 
+                s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, label='End') # type: ignore
+    ax1.set_xlabel('Error X [m]')
+    ax1.set_ylabel('Error Y [m]')
+    ax1.set_zlabel('Error Z [m]') # type: ignore
+    ax1.set_title('Position Error')
+    ax1.grid(True)
+    ax1.legend()
+    
+    # Plot 3D velocity error
+    ax2 = fig.add_subplot(122, projection='3d')
+    ax2.plot(vel_error[0, :], vel_error[1, :], vel_error[2, :], 'r-', linewidth=1)
+    ax2.scatter([vel_error[0, 0]], [vel_error[1, 0]], [vel_error[2, 0]], 
+                s=100, marker='>', facecolors='white', edgecolors='r', linewidths=2, label='Start') # type: ignore
+    ax2.scatter([vel_error[0, -1]], [vel_error[1, -1]], [vel_error[2, -1]], 
+                s=100, marker='s', facecolors='white', edgecolors='r', linewidths=2, label='End') # type: ignore
+    ax2.set_xlabel('Error Vx [m/s]')
+    ax2.set_ylabel('Error Vy [m/s]')
+    ax2.set_zlabel('Error Vz [m/s]') # type: ignore
+    ax2.set_title('Velocity Error')
+    ax2.grid(True)
+    ax2.legend()
+    
+    fig.suptitle(title, fontsize=16)
+    plt.tight_layout()
+    return fig
+
+
+def plot_time_series_error(
+    result_ref: dict,
+    result_cmp: dict,
+    title: str = "Time Series Error",
+):
+    """
+    Plot position, velocity, and COE errors vs time.
+    
+    Input:
+        result_ref: Reference result (e.g., SGP4)
+        result_cmp: Comparison result (e.g., high-fidelity)
+        title: Plot title
+    """
+    fig = plt.figure(figsize=(18,10))
+    
+    # Interpolate comparison result to reference time points
+    from scipy.interpolate import interp1d
+    
+    time_ref = result_ref['time']
+    time_cmp = result_cmp['time']
+    state_cmp = result_cmp['state']
+    coe_cmp = result_cmp['coe']
+    
+    # Interpolate state
+    state_cmp_interp = np.zeros((6, len(time_ref)))
+    for i in range(6):
+        interpolator = interp1d(time_cmp, state_cmp[i, :], kind='cubic', fill_value='extrapolate')
+        state_cmp_interp[i, :] = interpolator(time_ref)
+    
+    # Interpolate COEs
+    coe_cmp_interp = {}
+    for key in coe_cmp.keys():
+        interpolator = interp1d(time_cmp, coe_cmp[key], kind='cubic', fill_value='extrapolate')
+        coe_cmp_interp[key] = interpolator(time_ref)
+    
+    # Calculate errors
+    state_ref = result_ref['state']
+    pos_error = state_ref[0:3, :] - state_cmp_interp[0:3, :]
+    vel_error = state_ref[3:6, :] - state_cmp_interp[3:6, :]
+    
+    pos_error_mag = np.linalg.norm(pos_error, axis=0)
+    vel_error_mag = np.linalg.norm(vel_error, axis=0)
+    
+    coe_ref = result_ref['coe']
+    
+    # Plot position error (spans rows 0-2, column 0)
+    ax_pos = plt.subplot2grid((6, 2), (0, 0), rowspan=3)
+    ax_pos.plot(time_ref, pos_error[0, :], 'r-', label='X', linewidth=1.5)
+    ax_pos.plot(time_ref, pos_error[1, :], 'g-', label='Y', linewidth=1.5)
+    ax_pos.plot(time_ref, pos_error[2, :], 'b-', label='Z', linewidth=1.5)
+    ax_pos.plot(time_ref, pos_error_mag, 'k-', label='Magnitude', linewidth=2)
+    ax_pos.tick_params(labelbottom=False)
+    ax_pos.set_ylabel('Position Error\n[m]')
+    ax_pos.legend()
+    ax_pos.grid(True)
+    ax_pos.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+    
+    # Plot velocity error (spans rows 3-5, column 0)
+    ax_vel = plt.subplot2grid((6, 2), (3, 0), rowspan=3, sharex=ax_pos)
+    ax_vel.plot(time_ref, vel_error[0, :], 'r-', label='X', linewidth=1.5)
+    ax_vel.plot(time_ref, vel_error[1, :], 'g-', label='Y', linewidth=1.5)
+    ax_vel.plot(time_ref, vel_error[2, :], 'b-', label='Z', linewidth=1.5)
+    ax_vel.plot(time_ref, vel_error_mag, 'k-', label='Magnitude', linewidth=2)
+    ax_vel.set_xlabel('Time\n[s]')
+    ax_vel.set_ylabel('Velocity Error\n[m/s]')
+    ax_vel.legend()
+    ax_vel.grid(True)
+    ax_vel.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+    
+    # Plot SMA error
+    ax_sma = plt.subplot2grid((6, 2), (0, 1), sharex=ax_pos)
+    ax_sma.plot(time_ref, coe_ref['sma'] - coe_cmp_interp['sma'], 'b-', linewidth=1.5)
+    ax_sma.tick_params(labelbottom=False)
+    ax_sma.set_ylabel('SMA Error\n[m]')
+    ax_sma.grid(True)
+    ax_sma.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+    
+    # Plot eccentricity error
+    ax_ecc = plt.subplot2grid((6, 2), (1, 1), sharex=ax_pos)
+    ax_ecc.plot(time_ref, coe_ref['ecc'] - coe_cmp_interp['ecc'], 'b-', linewidth=1.5)
+    ax_ecc.tick_params(labelbottom=False)
+    ax_ecc.set_ylabel('Eccentricity Error\n[-]')
+    ax_ecc.grid(True)
+    ax_ecc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+    
+    # Plot inclination error
+    ax_inc = plt.subplot2grid((6, 2), (2, 1), sharex=ax_pos)
+    ax_inc.plot(time_ref, (coe_ref['inc'] - coe_cmp_interp['inc']) * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
+    ax_inc.tick_params(labelbottom=False)
+    ax_inc.set_ylabel('Inclination Error\n[deg]')
+    ax_inc.grid(True)
+    ax_inc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+    
+    # Plot RAAN error
+    ax_raan = plt.subplot2grid((6, 2), (3, 1), sharex=ax_pos)
+    ax_raan.plot(time_ref, (coe_ref['raan'] - coe_cmp_interp['raan']) * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
+    ax_raan.tick_params(labelbottom=False)
+    ax_raan.set_ylabel('RAAN Error\n[deg]')
+    ax_raan.grid(True)
+    ax_raan.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+    
+    # Plot argument of perigee error
+    ax_argp = plt.subplot2grid((6, 2), (4, 1), sharex=ax_pos)
+    ax_argp.plot(time_ref, (coe_ref['argp'] - coe_cmp_interp['argp']) * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
+    ax_argp.tick_params(labelbottom=False)
+    ax_argp.set_ylabel('ArgP Error\n[deg]')
+    ax_argp.grid(True)
+    ax_argp.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+    
+    # Plot mean anomaly error
+    ax_ma = plt.subplot2grid((6, 2), (5, 1), sharex=ax_pos)
+    ax_ma.plot(time_ref, (coe_ref['ma'] - coe_cmp_interp['ma']) * CONVERTER.RAD2DEG, 'b-', linewidth=1.5)
+    ax_ma.set_xlabel('Time\n[s]')
+    ax_ma.set_ylabel('Mean Anomaly Error\n[deg]')
+    ax_ma.grid(True)
+    ax_ma.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+    
+    # Align y-axis labels
+    fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_argp, ax_ma])
+    fig.align_ylabels([ax_pos, ax_vel])
+    
+    fig.suptitle(title, fontsize=16)
     plt.subplots_adjust(hspace=0.17, wspace=0.2)
     return fig

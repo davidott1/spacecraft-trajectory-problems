@@ -5,9 +5,10 @@ from mpl_toolkits.mplot3d import Axes3D
 
 from constants import CONVERTER, TIMEVALUES
 from model.dynamics import TwoBodyDynamics, PHYSICALCONSTANTS, EquationsOfMotion
-from plot.trajectory import plot_3d_trajectories, plot_time_series
+from plot.trajectory import plot_3d_trajectories, plot_time_series, plot_3d_error, plot_time_series_error
 from model.coordinate_system_converter import CoordinateSystemConverter
 from initialization import initial_guess
+from tle_propagator import propagate_tle, get_tle_initial_state
 
 def propagate_orbit(
     initial_state       : np.ndarray,
@@ -74,31 +75,38 @@ def main():
     #### INPUT ####
 
     # Time
-    time_o = 0.0                          # initial time [s]
-    time_f = time_o + 10 * TIMEVALUES.ONE_DAY  # final time [s]
+    time_o = 0.0                               # initial time [s]
+    time_f = time_o + 1 * TIMEVALUES.ONE_DAY   # final time [s]
 
-    # Spacecrft initial state
-    igs = 'elliptical'             # initial guess selection: circular elliptical
-    alt = 500e3                    # altitude [m]
-    ecc = 0.2                      # eccentricity [-]
-    inc = 95.0 * CONVERTER.DEG2RAD # inclination [rad]
-
-    # Spacecraft drag parameters
-    cd   = 2.2    # Drag coefficient (typical satellite)
-    area = 10.0   # Cross-sectional area [m²]
-    mass = 1000.0 # Spacecraft mass [kg]
-
-    #### INPUT ####
-
-    # Initial state
-    #   initial_guess_selection : 'circular'
-    initial_state = initial_guess.get_initial_state(
-        initial_guess_selection = igs,
-        alt                     = alt,
-        inc                     = inc,
-        ecc                     = ecc,
-    )
+    # Example TLE: NOAA-20 (~824 km altitude, sun-synchronous)
+    tle_line1 = "1 43013U 17073A   24001.50000000  .00000000  00000-0  00000-0 0  9991"
+    tle_line2 = "2 43013  98.7400 124.0000 0001234  90.0000 270.1234 14.19554887000000"
     
+    use_tle = True  # Set to True to use TLE initial conditions
+
+    # Spacecraft properties
+    cd   = 0.0          # drag coefficient [-] (set to 0 for comparison)
+    area = 0.0          # cross-sectional area [m^2]
+    mass = 0.0          # spacecraft mass [kg]
+
+    #### END INPUT ####
+
+    # Spacecraft initial state
+    if use_tle:
+        initial_state = get_tle_initial_state(tle_line1, tle_line2)
+    else:
+        igs = 'elliptical'             # initial guess selection: circular elliptical
+        alt = 500e3                    # altitude [m]
+        ecc = 0.2                      # eccentricity [-]
+        inc = 95.0 * CONVERTER.DEG2RAD # inclination [rad]
+        
+        initial_state = initial_guess.get_initial_state(
+            initial_guess_selection = igs,
+            alt                     = alt,
+            inc                     = inc,
+            ecc                     = ecc,
+        )
+
     # Set up dynamics model for Earth with J2 perturbation
     two_body_dynamics = TwoBodyDynamics(
         gp      = PHYSICALCONSTANTS.EARTH.GP,
@@ -121,16 +129,53 @@ def main():
         get_coe_time_series = True,
     )
 
+    # Propagate TLE with SGP4
+    if use_tle:
+        print("\nPropagating TLE with SGP4...")
+        result_tle = propagate_tle(
+            tle_line1  = tle_line1,
+            tle_line2  = tle_line2,
+            time_o     = time_o,
+            time_f     = time_f,
+            num_points = 1000,
+        )
+        
+        if result_tle['success']:
+            print(f"SGP4 propagation successful!")
+        else:
+            print(f"SGP4 propagation failed: {result_tle['message']}")
+
     # Display results
     if result['success']:
-        print(f"\nPropagation successful!")
+        print(f"\nHigh-fidelity propagation successful!")
         print(f"Status: {result['message']}")
         print(f"Number of time steps: {len(result['time'])}")
         
         # Create plots
         print("\nGenerating plots...")
-        plot_3d_trajectories(result)
-        plot_time_series(result)
+        
+        # High-fidelity plots
+        fig1 = plot_3d_trajectories(result)
+        fig1.suptitle('High-Fidelity Propagation', fontsize=16)
+        
+        fig2 = plot_time_series(result)
+        fig2.suptitle('High-Fidelity Propagation - Time Series', fontsize=16)
+        
+        # TLE/SGP4 plots
+        if use_tle and result_tle['success']:
+            fig3 = plot_3d_trajectories(result_tle)
+            fig3.suptitle('SGP4 Propagation', fontsize=16)
+            
+            fig4 = plot_time_series(result_tle)
+            fig4.suptitle('SGP4 Propagation - Time Series', fontsize=16)
+            
+            # Error plots (SGP4 as reference)
+            fig5 = plot_3d_error(result_tle, result, 
+                                 title='Error: SGP4 vs High-Fidelity')
+            
+            fig6 = plot_time_series_error(result_tle, result,
+                                          title='Time Series Error: SGP4 vs High-Fidelity')
+        
         plt.show()
     else:
         print(f"\nPropagation failed!")
