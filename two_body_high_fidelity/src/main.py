@@ -95,7 +95,22 @@ def main():
 
     # Spacecraft initial state
     if use_tle:
-        initial_state = get_tle_initial_state(tle_line1, tle_line2, disable_drag=disable_drag_sgp4)
+        # Propagate TLE for 10 minutes to get a new initial state
+        time_offset = 0 * 60.0  # 10 minutes in seconds
+        print(f"\nPropagating TLE for {time_offset/60.0} minutes to get new initial state...")
+        
+        state_at_offset = propagate_tle(
+            tle_line1=tle_line1, tle_line2=tle_line2,
+            time_o=time_offset, time_f=time_offset, num_points=1,
+            disable_drag=disable_drag_sgp4, to_j2000=True
+        )
+        if not state_at_offset['success']:
+            raise RuntimeError(f"Failed to get state at {time_offset}s: {state_at_offset['message']}")
+        
+        initial_state = state_at_offset['state'][:, 0]
+        time_o = time_offset  # Update the start time for high-fidelity propagation
+        
+        print(f"New initial state obtained for t = {time_o}s.")
     else:
         igs = 'elliptical'             # initial guess selection: circular elliptical
         alt = 500e3                    # altitude [m]
