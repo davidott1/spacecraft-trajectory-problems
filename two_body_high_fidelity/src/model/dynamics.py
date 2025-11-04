@@ -1,4 +1,5 @@
 import numpy as np
+from model.third_body import ThirdBodyPerturbations
 
 
 class PHYSICALCONSTANTS:
@@ -19,11 +20,11 @@ class PHYSICALCONSTANTS:
         # J_4 = -1.61962159137e-6
         
         # SGP4/WGS-72 values for better agreement:
-        J_2_WGS84 = 1.08263e-3         # WGS-84 J2 coefficient
+        J_2_WGS84 =  1.08263e-3        # WGS-84 J2 coefficient
         J_3_WGS84 = -2.532153e-6       # WGS-84 J3 coefficient
         J_4_WGS84 = -1.61962159137e-6  # WGS-84 J4 coefficient
         
-        J_2_WGS72 = 1.082616e-3        # WGS-72 J2 (SGP4 uses this)
+        J_2_WGS72 =  1.082616e-3       # WGS-72 J2 (SGP4 uses this)
         J_3_WGS72 = -2.53881e-6        # WGS-72 J3 (SGP4 uses this)
         J_4_WGS72 = -1.65597e-6        # WGS-72 J4 (SGP4 uses this)
         
@@ -51,6 +52,10 @@ class PHYSICALCONSTANTS:
 
 
 class TwoBodyDynamics:
+    """
+    Two-body dynamics with perturbations
+    """
+    
     def __init__(
         self,
         gp          : float,
@@ -61,8 +66,45 @@ class TwoBodyDynamics:
         pos_ref     : float = 0.0,
         cd          : float = 0.0,  # Drag coefficient
         area        : float = 0.0,  # Cross-sectional area [m²]
-        mass        : float = 0.0,  # Spacecraft mass [kg]
+        mass        : float = 1.0,  # Spacecraft mass [kg]
+        # NEW: Third-body perturbations
+        enable_third_body: bool = False,
+        third_body_use_spice: bool = True,
+        third_body_bodies: list = None,
+        spice_kernel_dir: str = None,
     ):
+        """
+        Initialize dynamics model
+        
+        Parameters:
+        -----------
+        gp : float
+            Gravitational parameter of the central body [m³/s²]
+        time_o : float, optional
+            Initial time [s]
+        j_2 : float, optional
+            J2 coefficient (Earth's oblateness)
+        j_3 : float, optional
+            J3 coefficient (Earth's asymmetry)
+        j_4 : float, optional
+            J4 coefficient (Earth's asymmetry)
+        pos_ref : float, optional
+            Reference position for acceleration calculations [m]
+        cd : float, optional
+            Drag coefficient
+        area : float, optional
+            Cross-sectional area [m²]
+        mass : float, optional
+            Spacecraft mass [kg]
+        enable_third_body : bool
+            Enable Sun/Moon gravitational perturbations
+        third_body_use_spice : bool
+            Use SPICE ephemerides (True) or analytical approximations (False)
+        third_body_bodies : list of str
+            Which bodies to include (default: ['SUN', 'MOON'])
+        spice_kernel_dir : str
+            Path to SPICE kernel directory (optional)
+        """
         self.gp      = gp
         self.time_o  = time_o
         self.j_2     = j_2
@@ -72,6 +114,18 @@ class TwoBodyDynamics:
         self.cd      = cd
         self.area    = area
         self.mass    = mass
+        
+        # Third-body perturbations
+        self.enable_third_body = enable_third_body
+        self.third_body_bodies = third_body_bodies if third_body_bodies else ['SUN', 'MOON']
+        
+        if self.enable_third_body:
+            self.third_body = ThirdBodyPerturbations(
+                use_spice=third_body_use_spice,
+                spice_kernel_dir=spice_kernel_dir
+            )
+        else:
+            self.third_body = None
 
     def acceleration(
         self,
@@ -87,6 +141,20 @@ class TwoBodyDynamics:
         
         if self.cd > 0 and self.area > 0 and self.mass > 0:
             acc_vec += self.acc_drag(state_vec)
+
+        # Third-body perturbations (Sun/Moon)
+        if self.enable_third_body:
+            # Ephemeris time is seconds from J2000 epoch
+            et_seconds = self.time_o + time
+            
+            accel_third_body_km = self.third_body.compute_acceleration(
+                r_sat=pos_vec / 1000.0,
+                et_seconds=et_seconds,
+                bodies=self.third_body_bodies
+            )
+            
+            # Convert km/s^2 to m/s^2
+            acc_vec += accel_third_body_km * 1000.0
 
         return acc_vec
 

@@ -9,6 +9,7 @@ from plot.trajectory import plot_3d_trajectories, plot_time_series, plot_3d_erro
 from model.coordinate_system_converter import CoordinateSystemConverter
 from initialization import initial_guess
 from tle_propagator import propagate_tle, get_tle_initial_state
+from typing import Optional
 
 def propagate_orbit(
     initial_state       : np.ndarray,
@@ -19,9 +20,16 @@ def propagate_orbit(
     rtol                : float = 1e-12,
     atol                : float = 1e-12,
     get_coe_time_series : bool  = False,
+    num_points          : Optional[int] = None,
 ) -> dict:
     """
     Propagate an orbit from initial cartesian state.
+    
+    Parameters:
+    -----------
+    num_points : int, optional
+        Number of output points. If None, uses adaptive timesteps from solver.
+        If specified, solution is evaluated at uniformly spaced times.
     """
     # Time span for integration
     time_span = (time_o, time_f)
@@ -36,6 +44,13 @@ def propagate_orbit(
         atol         = atol,
         dense_output = True,
     )
+    
+    # If num_points is specified, evaluate solution at uniform time grid
+    if num_points is not None:
+        t_eval = np.linspace(time_o, time_f, num_points)
+        y_eval = solution.sol(t_eval)
+        solution.t = t_eval
+        solution.y = y_eval
     
     # Convert all states to classical orbital elements
     num_steps = solution.y.shape[1]
@@ -71,6 +86,22 @@ def propagate_orbit(
 def main():
     """
     Main function to set up and propagate a spacecraft orbit for one day.
+    
+    SGP4 vs SDP4 (Deep Space) Selection:
+    ------------------------------------
+    The SGP4 library automatically selects between SGP4 and SDP4 (deep space) 
+    propagators based on the orbital period:
+    
+    - SGP4: Used for orbits with period < 225 minutes (orbital radius < ~6.6 R_E or ~42,164 km)
+    - SDP4: Used for orbits with period >= 225 minutes (typically GEO and higher)
+    
+    For circular orbits:
+    - LEO  (~500 km):   Period ~95 min  -> SGP4
+    - MEO  (~20,000 km): Period ~718 min -> SDP4  
+    - GEO  (~35,786 km): Period ~1436 min -> SDP4
+    
+    The transition happens at approximately 6.6 Earth radii from Earth's center,
+    which corresponds to an altitude of about 10,000-10,200 km.
     """
     #### INPUT ####
 
@@ -78,12 +109,40 @@ def main():
     time_o = 0.0                               # initial time [s]
     time_f = time_o + 1 * TIMEVALUES.ONE_DAY   # final time [s]
 
-    # Example TLE: NOAA-20 (~824 km altitude, sun-synchronous)
-    # tle_line1 = "1 43013U 17073A   24001.50000000  .00000000  00000-0  00000-0 0  9991"
-    # tle_line2 = "2 43013  98.7400 124.0000 0001234  90.0000 270.1234 14.19554887000000"
-
-    tle_line1 = "1 43013U 17073A   24204.50704861  .00000201  00000+0  20499-4 0  9993"
-    tle_line2 = "2 43013  98.7119 296.0139 0001458  83.3997 276.7258 14.19554887355539"
+    # Example TLEs:
+    
+    # LEO: NOAA-20 (~824 km altitude, sun-synchronous)
+    tle_line1_leo = "1 43013U 17073A   24204.50704861  .00000201  00000+0  20499-4 0  9993"
+    tle_line2_leo = "2 43013  98.7119 296.0139 0001458  83.3997 276.7258 14.19554887355539"
+    
+    # MEO: GPS satellite NAVSTAR 76 (~20,200 km altitude, Period ~718 min)
+    tle_line1_meo = "1 41019U 15062A   24204.50000000 -.00000023  00000+0  00000+0 0  9992"
+    tle_line2_meo = "2 41019  54.9887 201.2345 0004321  45.6789 314.4321  2.00564756 65432"
+    
+    # GEO: GOES-16 (~35,786 km altitude, geostationary, Period ~1436 min)
+    tle_line1_geo = "1 41866U 16071A   24204.50000000 -.00000266  00000+0  00000+0 0  9999"
+    tle_line2_geo = "2 41866   0.0392 267.8642 0000631 189.5432 313.2156  1.00271798 28956"
+    
+    # Select which TLE to use
+    tle_selection = 'geo'  # Options: 'leo', 'meo', 'geo'
+    
+    if tle_selection == 'leo':
+        tle_line1 = tle_line1_leo
+        tle_line2 = tle_line2_leo
+        enable_third_body = False  # Not significant for LEO
+        print("\n>>> Using LEO TLE (NOAA-20, ~824 km) - SGP4 propagator <<<")
+    elif tle_selection == 'meo':
+        tle_line1 = tle_line1_meo
+        tle_line2 = tle_line2_meo
+        enable_third_body = True  # Important for MEO
+        print("\n>>> Using MEO TLE (GPS NAVSTAR 76, ~20,200 km) - SDP4 propagator <<<")
+    elif tle_selection == 'geo':
+        tle_line1 = tle_line1_geo
+        tle_line2 = tle_line2_geo
+        enable_third_body = True  # Critical for GEO
+        print("\n>>> Using GEO TLE (GOES-16, ~35,786 km) - SDP4 propagator <<<")
+    else:
+        raise ValueError(f"Invalid tle_selection: {tle_selection}")
     
     use_tle = True  # Set to True to use TLE initial conditions
 
@@ -92,7 +151,7 @@ def main():
     area = 10.0         # cross-sectional area [m^2]
     mass = 2294.0       # spacecraft mass [kg] (e.g., NOAA-20)
     
-    disable_drag_sgp4 = False  # Enable drag in SGP4 for comparison
+    disable_drag_sgp4 = False  # enable drag in SGP4 for comparison
 
     #### END INPUT ####
 
@@ -107,11 +166,11 @@ def main():
             # e.g., ' 12345-3' -> 0.12345 * 10^-3. The sign is often a space.
             # The given TLE has '00000-0', which means 0.0.
             # A more robust parsing is needed.
-            sign = 1 if bstar_str[0] in ' +' else -1
-            base_str = bstar_str[1:6]
+            sign         = 1 if bstar_str[0] in ' +' else -1
+            base_str     = bstar_str[1:6]
             exponent_str = bstar_str[6:8].replace('-', '-').strip()
             
-            base = sign * float(f"0.{base_str}")
+            base     = sign * float(f"0.{base_str}")
             exponent = int(exponent_str)
             
             bstar = base * (10**exponent) # B* drag term [1/earth_radii]
@@ -126,7 +185,7 @@ def main():
             cd_area_over_mass = 2 * bstar / earth_radii_to_m / rho_0 # m^2/kg
             
             # Set cd and area to 1.0 and calculate mass to match the ratio
-            cd = cd_area_over_mass
+            cd   = cd_area_over_mass
             area = 1.0
             mass = 1.0
             
@@ -135,7 +194,7 @@ def main():
             print(f"  Using Cd={cd}, A={area} m^2, m={mass:.2f} kg for high-fidelity model.")
 
         # Propagate TLE for 10 minutes to get a new initial state
-        time_offset = 0 * 60.0  # 10 minutes in seconds
+        time_offset = 10 * 60.0  # seconds
         print(f"\nPropagating TLE for {time_offset/60.0} minutes to get new initial state...")
         
         state_at_offset = propagate_tle(
@@ -163,17 +222,20 @@ def main():
             ecc                     = ecc,
         )
 
-    # Set up dynamics model for Earth with perturbation
+    # Set up dynamics model for Earth with perturbations
     two_body_dynamics = TwoBodyDynamics(
-        gp      = PHYSICALCONSTANTS.EARTH.GP,
-        time_o  = time_o,
-        j_2     = PHYSICALCONSTANTS.EARTH.J_2,
-        j_3     = PHYSICALCONSTANTS.EARTH.J_3,  # Disable J3 for SGP4 comparison
-        j_4     = PHYSICALCONSTANTS.EARTH.J_4,  # Disable J4 for SGP4 comparison
-        pos_ref = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR,
-        cd      = cd,
-        area    = area,
-        mass    = mass,
+        gp                   = PHYSICALCONSTANTS.EARTH.GP,
+        time_o               = time_o,
+        j_2                  = PHYSICALCONSTANTS.EARTH.J_2,
+        j_3                  = 0.0*PHYSICALCONSTANTS.EARTH.J_3,
+        j_4                  = 0.0*PHYSICALCONSTANTS.EARTH.J_4,
+        pos_ref              = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR,
+        cd                   = cd,
+        area                 = area,
+        mass                 = mass,
+        enable_third_body    = enable_third_body,
+        third_body_use_spice = True,
+        third_body_bodies    = ['SUN', 'MOON'],
     )
     
     # Propagate the orbit
