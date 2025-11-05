@@ -9,21 +9,30 @@ from model.coordinate_system_converter import CoordinateSystemConverter
 from model.dynamics import PHYSICALCONSTANTS
 
 
-def teme_to_j2000(teme_pos_vec, teme_vel_vec, jd_ut1):
+def teme_to_j2000(teme_pos_vec, teme_vel_vec, jd_utc, debug=False):
     """
     Convert TEME (True Equator Mean Equinox) to J2000/GCRS using astropy.
     
     Input:
         teme_pos_vec: position in TEME frame [km]
         teme_vel_vec: velocity in TEME frame [km/s]
-        jd_ut1: Julian date (UT1)
+        jd_utc: Julian date in UTC scale (from SGP4)
+        debug: if True, print diagnostic information
     
     Output:
         j2000_pos_vec: position in J2000/GCRS frame [km]
         j2000_vel_vec: velocity in J2000/GCRS frame [km/s]
     """
-    # Create astropy Time object
-    t = Time(jd_ut1, format='jd', scale='ut1')
+    # Create astropy Time object from UTC (SGP4 uses UTC)
+    t = Time(jd_utc, format='jd', scale='utc')
+    
+    if debug:
+        print(f"\nTEME→J2000 Conversion Debug:")
+        print(f"  Input time (UTC JD): {jd_utc:.6f}")
+        print(f"  Input time (TT JD): {t.tt.jd:.6f}")
+        print(f"  Delta-T (TT-UTC): {(t.tt.jd - t.utc.jd)*86400:.3f} seconds")
+        print(f"  Input position (TEME): {teme_pos_vec} km")
+        print(f"  Input velocity (TEME): {teme_vel_vec} km/s")
     
     # Create CartesianRepresentation with velocity differential
     cart_rep = CartesianRepresentation(
@@ -54,6 +63,12 @@ def teme_to_j2000(teme_pos_vec, teme_vel_vec, jd_ut1):
         gcrs_coord.velocity.d_y.to(u.km / u.s).value, # type: ignore
         gcrs_coord.velocity.d_z.to(u.km / u.s).value  # type: ignore
     ])
+    
+    if debug:
+        print(f"  Output position (GCRS): {j2000_pos_vec} km")
+        print(f"  Output velocity (GCRS): {j2000_vel_vec} km/s")
+        diff_pos = np.linalg.norm(j2000_pos_vec - np.array(teme_pos_vec))
+        print(f"  Position change magnitude: {diff_pos:.3f} km")
     
     return j2000_pos_vec, j2000_vel_vec
 
@@ -183,7 +198,7 @@ def propagate_tle(
         
         # Transform TEME to J2000/GCRS
         if to_j2000:
-            j2000_pos_vec, j2000_vel_vec = teme_to_j2000(teme_pos_vec, v_teme, jd + fr)
+            j2000_pos_vec, j2000_vel_vec = teme_to_j2000(teme_pos_vec, v_teme, jd + fr, debug=(i==0))
         
         # Convert from km to m and km/s to m/s
         j2000_pos_vec = np.array(j2000_pos_vec) * 1000.0  # km -> m
@@ -212,6 +227,7 @@ def get_tle_initial_state(
     tle_line1 : str,
     tle_line2 : str,
     disable_drag : bool = False,
+    to_j2000 : bool = True,
 ) -> np.ndarray:
     """
     Extract initial position and velocity from TLE at epoch.
@@ -220,6 +236,7 @@ def get_tle_initial_state(
         tle_line1: First line of TLE
         tle_line2: Second line of TLE
         disable_drag: If True, set B* drag term to zero
+        to_j2000: If True, convert from TEME to J2000/GCRS
     
     Output:
         initial_state: [x, y, z, vx, vy, vz] in meters and m/s
@@ -249,9 +266,15 @@ def get_tle_initial_state(
     if error_code != 0:
         raise ValueError(f'SGP4 error code: {error_code}')
     
-    # Convert from km to m and km/s to m/s
-    pos = np.array(teme_pos_vec) * 1000.0
-    vel = np.array(v_teme) * 1000.0
+    # Transform TEME to J2000/GCRS if requested
+    if to_j2000:
+        j2000_pos_vec, j2000_vel_vec = teme_to_j2000(teme_pos_vec, v_teme, jd + fr, debug=True)
+        pos = np.array(j2000_pos_vec) * 1000.0
+        vel = np.array(j2000_vel_vec) * 1000.0
+    else:
+        # Convert from km to m and km/s to m/s
+        pos = np.array(teme_pos_vec) * 1000.0
+        vel = np.array(v_teme) * 1000.0
     
     return np.concatenate([pos, vel])
 
