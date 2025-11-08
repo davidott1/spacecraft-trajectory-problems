@@ -398,10 +398,10 @@ def plot_horizons_vs_tle_with_index(horizons_df, tle_df, tle_epochs_df=None, tle
     # Plot TLE epoch positions as markers
     if tle_epochs_df is not None:
         r_mag_epochs = np.sqrt(tle_epochs_df['x_km']**2 + tle_epochs_df['y_km']**2 + tle_epochs_df['z_km']**2)
-        ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['x_km'], c='red', marker='o', s=50, zorder=5, label='TLE Epochs (X)')
-        ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['y_km'], c='green', marker='o', s=50, zorder=5, label='TLE Epochs (Y)')
-        ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['z_km'], c='blue', marker='o', s=50, zorder=5, label='TLE Epochs (Z)')
-        ax.scatter(tle_epochs_df['datetime'], r_mag_epochs, c='black', marker='o', s=50, zorder=5, label='TLE Epochs (Mag)')
+        ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['x_km'], c='red', marker='o', s=50, zorder=5)
+        ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['y_km'], c='green', marker='o', s=50, zorder=5)
+        ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['z_km'], c='blue', marker='o', s=50, zorder=5)
+        ax.scatter(tle_epochs_df['datetime'], r_mag_epochs, c='black', marker='o', s=50, zorder=5)
     
     # Add vertical dotted lines at TLE transitions
     for t in transition_times:
@@ -426,10 +426,10 @@ def plot_horizons_vs_tle_with_index(horizons_df, tle_df, tle_epochs_df=None, tle
     # Plot TLE epoch velocities as markers
     if tle_epochs_df is not None:
         v_mag_epochs = np.sqrt(tle_epochs_df['vx_km_s']**2 + tle_epochs_df['vy_km_s']**2 + tle_epochs_df['vz_km_s']**2)
-        ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['vx_km_s'], c='red', marker='o', s=50, zorder=5, label='TLE Epochs (X)')
-        ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['vy_km_s'], c='green', marker='o', s=50, zorder=5, label='TLE Epochs (Y)')
-        ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['vz_km_s'], c='blue', marker='o', s=50, zorder=5, label='TLE Epochs (Z)')
-        ax.scatter(tle_epochs_df['datetime'], v_mag_epochs, c='black', marker='o', s=50, zorder=5, label='TLE Epochs (Mag)')
+        ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['vx_km_s'], c='red', marker='o', s=50, zorder=5)
+        ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['vy_km_s'], c='green', marker='o', s=50, zorder=5)
+        ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['vz_km_s'], c='blue', marker='o', s=50, zorder=5)
+        ax.scatter(tle_epochs_df['datetime'], v_mag_epochs, c='black', marker='o', s=50, zorder=5)
     
     # Add vertical dotted lines at TLE transitions
     for t in transition_times:
@@ -440,8 +440,8 @@ def plot_horizons_vs_tle_with_index(horizons_df, tle_df, tle_epochs_df=None, tle
     ax.legend(loc='best', ncol=2, fontsize=8)
     ax.grid(True, alpha=0.3)
     
-    plt.xticks(rotation=45)
-    plt.tight_layout()
+    plt.xticks(rotation=90)
+    plt.tight_layout(rect=(0, 0.03, 1, 0.97))
 
     # Rotate x-axis labels
     for ax in axes:
@@ -449,11 +449,16 @@ def plot_horizons_vs_tle_with_index(horizons_df, tle_df, tle_epochs_df=None, tle
     
     return fig
 
-def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
+def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None, tle_epochs_df=None):
     """Plot orbital elements comparing Horizons and TLE data, with TLE index markers."""
     fig, axes = plt.subplots(7, 1, figsize=(14, 8), sharex=True,
                              gridspec_kw={'height_ratios': [1, 2, 2, 2, 2, 2, 2]})
     fig.suptitle('ISS Orbital Elements: Horizons vs TLE Propagation (with TLE Index)', fontsize=16)
+    
+    # Compute orbital elements for TLE epochs if provided
+    tle_epochs_oe_df = None
+    if tle_epochs_df is not None:
+        tle_epochs_oe_df = compute_orbital_elements(tle_epochs_df)
     
     # Store transition times for vertical lines
     transition_times = []
@@ -513,7 +518,9 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     # Semi-major axis
     ax = axes[1]
     ax.plot(horizons_oe_df['datetime'], horizons_oe_df['a'], 'k-', label='Horizons', linewidth=1.5, alpha=0.7)
-    ax.plot(tle_oe_df['datetime'], tle_oe_df['a'], 'r--', label='TLE', linewidth=1.5, alpha=0.7)
+    ax.plot(tle_oe_df['datetime'], tle_oe_df['a'], 'k--', label='TLE', linewidth=1.5, alpha=0.7)
+    if tle_epochs_oe_df is not None:
+        ax.scatter(tle_epochs_oe_df['datetime'], tle_epochs_oe_df['a'], c='black', marker='o', s=50, zorder=5)
     for t in transition_times:
         ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('Semi-major axis (km)', fontsize=11)
@@ -523,7 +530,9 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     # Eccentricity
     ax = axes[2]
     ax.plot(horizons_oe_df['datetime'], horizons_oe_df['e'], 'k-', label='Horizons', linewidth=1.5, alpha=0.7)
-    ax.plot(tle_oe_df['datetime'], tle_oe_df['e'], 'r--', label='TLE', linewidth=1.5, alpha=0.7)
+    ax.plot(tle_oe_df['datetime'], tle_oe_df['e'], 'k--', label='TLE', linewidth=1.5, alpha=0.7)
+    if tle_epochs_oe_df is not None:
+        ax.scatter(tle_epochs_oe_df['datetime'], tle_epochs_oe_df['e'], c='black', marker='o', s=50, zorder=5)
     for t in transition_times:
         ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('Eccentricity', fontsize=11)
@@ -532,7 +541,9 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     # Inclination
     ax = axes[3]
     ax.plot(horizons_oe_df['datetime'], horizons_oe_df['i'], 'k-', label='Horizons', linewidth=1.5, alpha=0.7)
-    ax.plot(tle_oe_df['datetime'], tle_oe_df['i'], 'r--', label='TLE', linewidth=1.5, alpha=0.7)
+    ax.plot(tle_oe_df['datetime'], tle_oe_df['i'], 'k--', label='TLE', linewidth=1.5, alpha=0.7)
+    if tle_epochs_oe_df is not None:
+        ax.scatter(tle_epochs_oe_df['datetime'], tle_epochs_oe_df['i'], c='black', marker='o', s=50, zorder=5)
     for t in transition_times:
         ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('Inclination (deg)', fontsize=11)
@@ -541,7 +552,9 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     # RAAN
     ax = axes[4]
     ax.plot(horizons_oe_df['datetime'], horizons_oe_df['raan'], 'k-', label='Horizons', linewidth=1.5, alpha=0.7)
-    ax.plot(tle_oe_df['datetime'], tle_oe_df['raan'], 'r--', label='TLE', linewidth=1.5, alpha=0.7)
+    ax.plot(tle_oe_df['datetime'], tle_oe_df['raan'], 'k--', label='TLE', linewidth=1.5, alpha=0.7)
+    if tle_epochs_oe_df is not None:
+        ax.scatter(tle_epochs_oe_df['datetime'], tle_epochs_oe_df['raan'], c='black', marker='o', s=50, zorder=5)
     for t in transition_times:
         ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('RAAN (deg)', fontsize=11)
@@ -550,7 +563,9 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     # Argument of Periapsis
     ax = axes[5]
     ax.plot(horizons_oe_df['datetime'], horizons_oe_df['arg_pe'], 'k-', label='Horizons', linewidth=1.5, alpha=0.7)
-    ax.plot(tle_oe_df['datetime'], tle_oe_df['arg_pe'], 'r--', label='TLE', linewidth=1.5, alpha=0.7)
+    ax.plot(tle_oe_df['datetime'], tle_oe_df['arg_pe'], 'k--', label='TLE', linewidth=1.5, alpha=0.7)
+    if tle_epochs_oe_df is not None:
+        ax.scatter(tle_epochs_oe_df['datetime'], tle_epochs_oe_df['arg_pe'], c='black', marker='o', s=50, zorder=5)
     for t in transition_times:
         ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('Arg. of Periapsis (deg)', fontsize=11)
@@ -559,15 +574,17 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     # True Anomaly
     ax = axes[6]
     ax.plot(horizons_oe_df['datetime'], horizons_oe_df['ta'], 'k-', label='Horizons', linewidth=1.5, alpha=0.7)
-    ax.plot(tle_oe_df['datetime'], tle_oe_df['ta'], 'r--', label='TLE', linewidth=1.5, alpha=0.7)
+    ax.plot(tle_oe_df['datetime'], tle_oe_df['ta'], 'k--', label='TLE', linewidth=1.5, alpha=0.7)
+    if tle_epochs_oe_df is not None:
+        ax.scatter(tle_epochs_oe_df['datetime'], tle_epochs_oe_df['ta'], c='black', marker='o', s=50, zorder=5)
     for t in transition_times:
         ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('True Anomaly (deg)', fontsize=11)
     ax.set_xlabel('Time (UTC)', fontsize=11)
     ax.grid(True, alpha=0.3)
     
-    plt.xticks(rotation=45)
-    plt.tight_layout()
+    plt.xticks(rotation=90)
+    plt.tight_layout(rect=(0, 0.03, 1, 0.97))
     
     # Rotate x-axis labels
     for ax in axes:
@@ -575,9 +592,9 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     
     return fig
 
-def plot_position_velocity_errors(horizons_df, tle_df, tles=None):
+def plot_position_velocity_errors(horizons_df, tle_df, tles=None, tle_epochs_df=None):
     """Plot position and velocity errors between Horizons and TLE data, with TLE index markers."""
-    fig, axes = plt.subplots(3, 1, figsize=(14, 10), sharex=True,
+    fig, axes = plt.subplots(3, 1, figsize=(14, 8), sharex=True,
                              gridspec_kw={'height_ratios': [1, 4, 4]})
     fig.suptitle('ISS Position and Velocity Errors: Horizons - TLE (with TLE Index)', fontsize=16)
     
@@ -642,6 +659,9 @@ def plot_position_velocity_errors(horizons_df, tle_df, tles=None):
     ax.plot(horizons_df['datetime'], pos_error_y, 'g-', label='Y error', linewidth=1.5, alpha=0.7)
     ax.plot(horizons_df['datetime'], pos_error_z, 'b-', label='Z error', linewidth=1.5, alpha=0.7)
     ax.plot(horizons_df['datetime'], pos_error_mag, 'k-', label='Magnitude', linewidth=2)
+    # Add markers at TLE epochs (error should be zero at epoch times)
+    if tle_epochs_df is not None:
+        ax.scatter(tle_epochs_df['datetime'], np.zeros(len(tle_epochs_df)), c='black', marker='o', s=50, zorder=5)
     for t in transition_times:
         ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('Position Error (km)', fontsize=12)
@@ -654,6 +674,9 @@ def plot_position_velocity_errors(horizons_df, tle_df, tles=None):
     ax.plot(horizons_df['datetime'], vel_error_y, 'g-', label='Y error', linewidth=1.5, alpha=0.7)
     ax.plot(horizons_df['datetime'], vel_error_z, 'b-', label='Z error', linewidth=1.5, alpha=0.7)
     ax.plot(horizons_df['datetime'], vel_error_mag, 'k-', label='Magnitude', linewidth=2)
+    # Add markers at TLE epochs (error should be zero at epoch times)
+    if tle_epochs_df is not None:
+        ax.scatter(tle_epochs_df['datetime'], np.zeros(len(tle_epochs_df)), c='black', marker='o', s=50, zorder=5)
     for t in transition_times:
         ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('Velocity Error (km/s)', fontsize=12)
@@ -661,16 +684,15 @@ def plot_position_velocity_errors(horizons_df, tle_df, tles=None):
     ax.legend(loc='best', fontsize=10)
     ax.grid(True, alpha=0.3)
     
-    plt.tight_layout()
-    
     for ax in axes:
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=90, ha='right')
+    plt.tight_layout(rect=(0, 0.03, 1, 0.97))
     
     return fig
 
-def plot_orbital_element_errors(horizons_oe_df, tle_oe_df, tles=None):
+def plot_orbital_element_errors(horizons_oe_df, tle_oe_df, tles=None, tle_epochs_df=None):
     """Plot orbital element errors between Horizons and TLE data, with TLE index markers."""
-    fig, axes = plt.subplots(7, 1, figsize=(14, 12), sharex=True,
+    fig, axes = plt.subplots(7, 1, figsize=(14, 8), sharex=True,
                              gridspec_kw={'height_ratios': [1, 2, 2, 2, 2, 2, 2]})
     fig.suptitle('ISS Orbital Element Errors: Horizons - TLE (with TLE Index)', fontsize=16)
     
@@ -695,28 +717,36 @@ def plot_orbital_element_errors(horizons_oe_df, tle_oe_df, tles=None):
         
         for i in range(1, len(tle_index_df)):
             if tle_index_df.iloc[i]['tle_index'] != current_idx or i == len(tle_index_df) - 1:
+                # End of segment
                 if i == len(tle_index_df) - 1 and tle_index_df.iloc[i]['tle_index'] == current_idx:
                     end_time = tle_index_df.iloc[i]['datetime']
                 else:
                     end_time = tle_index_df.iloc[i-1]['datetime']
                 
+                # Ensure timezone consistency
                 if hasattr(start_time, 'tzinfo') and start_time.tzinfo is not None:
                     if not hasattr(end_time, 'tzinfo') or end_time.tzinfo is None:
                         end_time = pd.Timestamp(end_time).tz_localize('UTC')
                 
+                # Plot horizontal line for this segment
                 ax.hlines(y=0, xmin=start_time, xmax=end_time, colors='black', linewidth=3)
+                
+                # Add vertical line at segment start
                 ax.vlines(x=start_time, ymin=-0.3, ymax=0.3, colors='black', linewidth=2)
                 transition_times.append(start_time)
                 
+                # Add text label in the middle of the segment
                 mid_time = start_time + (end_time - start_time) / 2
                 ax.text(mid_time, 0, f'TLE {current_idx}', ha='center', va='center',
                        fontsize=10, bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
                 
+                # Start new segment
                 current_idx = tle_index_df.iloc[i]['tle_index']
                 start_time = tle_index_df.iloc[i]['datetime']
         
+        # Add final vertical line at the end
         final_time = tle_index_df.iloc[-1]['datetime']
-        ax.vlines(x=final_time, ymin=-0.3, ymax=0.3, colors='black', linewidth=2)
+        ax.vlines(x=final_time, ymin=-0.3, ymax=0.3, colors='black', linewidth=2) 
         transition_times.append(final_time)
         
         ax.set_ylim(-0.5, 0.5)
@@ -729,6 +759,8 @@ def plot_orbital_element_errors(horizons_oe_df, tle_oe_df, tles=None):
     # Semi-major axis error
     ax = axes[1]
     ax.plot(horizons_oe_df['datetime'], a_error, 'k-', linewidth=1.5)
+    if tle_epochs_df is not None:
+        ax.scatter(tle_epochs_df['datetime'], np.zeros(len(tle_epochs_df)), c='black', marker='o', s=50, zorder=5)
     for t in transition_times:
         ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('a error (km)', fontsize=11)
@@ -737,6 +769,8 @@ def plot_orbital_element_errors(horizons_oe_df, tle_oe_df, tles=None):
     # Eccentricity error
     ax = axes[2]
     ax.plot(horizons_oe_df['datetime'], e_error, 'k-', linewidth=1.5)
+    if tle_epochs_df is not None:
+        ax.scatter(tle_epochs_df['datetime'], np.zeros(len(tle_epochs_df)), c='black', marker='o', s=50, zorder=5)
     for t in transition_times:
         ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('e error', fontsize=11)
@@ -745,6 +779,8 @@ def plot_orbital_element_errors(horizons_oe_df, tle_oe_df, tles=None):
     # Inclination error
     ax = axes[3]
     ax.plot(horizons_oe_df['datetime'], i_error, 'k-', linewidth=1.5)
+    if tle_epochs_df is not None:
+        ax.scatter(tle_epochs_df['datetime'], np.zeros(len(tle_epochs_df)), c='black', marker='o', s=50, zorder=5)
     for t in transition_times:
         ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('i error (deg)', fontsize=11)
@@ -753,6 +789,8 @@ def plot_orbital_element_errors(horizons_oe_df, tle_oe_df, tles=None):
     # RAAN error
     ax = axes[4]
     ax.plot(horizons_oe_df['datetime'], raan_error, 'k-', linewidth=1.5)
+    if tle_epochs_df is not None:
+        ax.scatter(tle_epochs_df['datetime'], np.zeros(len(tle_epochs_df)), c='black', marker='o', s=50, zorder=5)
     for t in transition_times:
         ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('RAAN error (deg)', fontsize=11)
@@ -761,6 +799,8 @@ def plot_orbital_element_errors(horizons_oe_df, tle_oe_df, tles=None):
     # Argument of Periapsis error
     ax = axes[5]
     ax.plot(horizons_oe_df['datetime'], arg_pe_error, 'k-', linewidth=1.5)
+    if tle_epochs_df is not None:
+        ax.scatter(tle_epochs_df['datetime'], np.zeros(len(tle_epochs_df)), c='black', marker='o', s=50, zorder=5)
     for t in transition_times:
         ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('ω error (deg)', fontsize=11)
@@ -769,16 +809,17 @@ def plot_orbital_element_errors(horizons_oe_df, tle_oe_df, tles=None):
     # True Anomaly error
     ax = axes[6]
     ax.plot(horizons_oe_df['datetime'], ta_error, 'k-', linewidth=1.5)
+    if tle_epochs_df is not None:
+        ax.scatter(tle_epochs_df['datetime'], np.zeros(len(tle_epochs_df)), c='black', marker='o', s=50, zorder=5)
     for t in transition_times:
         ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('ν error (deg)', fontsize=11)
     ax.set_xlabel('Time (UTC)', fontsize=11)
     ax.grid(True, alpha=0.3)
     
-    plt.tight_layout()
-    
     for ax in axes:
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=90, ha='right')
+    plt.tight_layout(rect=(0, 0.03, 1, 0.97))
     
     return fig
 
@@ -831,9 +872,9 @@ def main():
     
     # Create plots
     fig1 = plot_horizons_vs_tle_with_index(horizons_df, tle_df, tle_epochs_df, tles)
-    fig2 = plot_orbital_elements_tle_comparison(oe_df, tle_oe_df, tles)
-    fig3 = plot_position_velocity_errors(horizons_df, tle_df, tles)
-    fig4 = plot_orbital_element_errors(oe_df, tle_oe_df, tles)
+    fig2 = plot_orbital_elements_tle_comparison(oe_df, tle_oe_df, tles, tle_epochs_df)
+    fig3 = plot_position_velocity_errors(horizons_df, tle_df, tles, tle_epochs_df)
+    fig4 = plot_orbital_element_errors(oe_df, tle_oe_df, tles, tle_epochs_df)
     
     # Save plots
     output_file4 = Path(__file__).parent / 'iss_horizons_vs_tle_with_index_plot.png'
