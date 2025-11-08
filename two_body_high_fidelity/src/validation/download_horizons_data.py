@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import requests
 from astropy.time import Time
+import pandas as pd
 
 # Get the project root directory (assuming this script is at src/validation/download_horizons_data.py)
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
@@ -253,8 +254,8 @@ def download_goes_ephemeris(
     )
     
     # Get vectors in ICRF/J2000 equatorial frame
-    # refplane='earth' gives Earth mean equator and equinox of J2000.0 (ICRF)
-    vectors = obj.vectors(refplane='earth') # type: ignore
+    # Add extra_precision=True for better time handling
+    vectors = obj.vectors(refplane='earth', cache=False)
     
     # # refplane='earth' gives equatorial, refplane='ecliptic' would give ecliptic
     # vectors = obj.vectors(refplane='earth',    # Earth equatorial plane
@@ -286,6 +287,44 @@ def download_goes_ephemeris(
     
     return vectors
 
+
+def convert_horizons_to_utc(horizons_table, output_file=None):
+    """
+    Convert HORIZONS ephemeris times from TDB to UTC.
+    
+    Parameters:
+    -----------
+    horizons_table : astropy.table.Table
+        HORIZONS vectors table with 'datetime_jd' column in TDB
+    output_file : str or Path, optional
+        If provided, save the UTC-converted table to this file
+    
+    Returns:
+    --------
+    pandas.DataFrame with UTC times
+    """
+    # Convert to pandas for easier manipulation
+    df = horizons_table.to_pandas()
+    
+    # Convert JD from TDB to UTC
+    tdb_times = Time(df['datetime_jd'].values, format='jd', scale='tdb')
+    utc_times = tdb_times.utc
+    
+    # Add UTC columns
+    df['datetime_jd_utc'] = utc_times.jd
+    df['datetime_str_utc'] = utc_times.iso
+    
+    # Calculate time difference (TDB - UTC)
+    df['tdb_utc_offset_sec'] = (tdb_times.jd - utc_times.jd) * 86400  # Convert days to seconds
+    
+    print(f"\nTime system conversion:")
+    print(f"  TDB - UTC offset: {df['tdb_utc_offset_sec'].mean():.3f} ± {df['tdb_utc_offset_sec'].std():.3f} seconds")
+    
+    if output_file:
+        df.to_csv(output_file, index=False)
+        print(f"  Saved UTC-converted data to: {output_file}")
+    
+    return df
 
 def download_goes_data_package(norad_id=41866, days=7):
     """
@@ -333,7 +372,8 @@ def download_goes_data_package(norad_id=41866, days=7):
     print("\n" + "="*80)
     print(f"Downloading historical TLEs for {sat_name.upper()}")
     print("="*80)
-    tle_history_file = data_dir / f'tle_history_{sat_name}.txt'
+    # Use pattern: tle_history_<satname>_<norad_id>.txt to avoid conflicts
+    tle_history_file = data_dir / f'tle_history_{sat_name}_{norad_id}.txt'
     tle_history = download_historical_tles(
         norad_id=norad_id,
         start_time=start_time,
@@ -345,7 +385,8 @@ def download_goes_data_package(norad_id=41866, days=7):
     print("\n" + "="*80)
     print(f"Downloading latest TLE for reference")
     print("="*80)
-    tle_file = data_dir / f'tle_{sat_name}.txt'
+    # Use pattern: tle_latest_<satname>_<norad_id>.txt to distinguish from JSON TLEs
+    tle_file = data_dir / f'tle_latest_{sat_name}_{norad_id}.txt'
     tle_line1, tle_line2, tle_epoch_jd = download_tle_for_satellite(norad_id, output_file=tle_file)
     
     # Get HORIZONS epoch from the data
@@ -359,7 +400,7 @@ def download_goes_data_package(norad_id=41866, days=7):
     print(f"HORIZONS end:       {end_time}")
     print(f"Number of TLEs:     {len(tle_history)}")
     print(f"HORIZONS file:      {horizons_file}")
-    print(f"TLE file:           {tle_file}")
+    print(f"Latest TLE file:    {tle_file}")
     print(f"TLE history file:   {tle_history_file}")
     
     return {
@@ -438,6 +479,132 @@ def download_all_satellites():
     return results
 
 
+def download_iss_high_resolution(days=7, step='1m', output_dir=None, convert_to_utc=True):
+    """
+    Download ISS ephemeris with high time resolution (1-minute intervals)
+    
+    Parameters:
+    -----------
+    days : float
+        Number of days to download (default 7)
+    step : str
+        Time step for ephemeris (default '1m' for 1 minute)
+    output_dir : str or Path, optional
+        Output directory. If None, uses data/ephems/large
+    convert_to_utc : bool
+        If True, also save a version with UTC timestamps (default True)
+    
+    Returns:
+    --------
+    dict with ephemeris data and file paths
+    """
+    # Use fixed time range: October 1-8, 2025
+    start_time = datetime(2025, 10, 1, 0, 0, 0)
+    end_time = start_time + timedelta(days=days)
+    
+    norad_id = 25544  # ISS
+    sat_name = 'iss'
+    
+    # Set output directory
+    if output_dir is None:
+        output_dir = PROJECT_ROOT / 'data' / 'ephems' / 'large'
+    else:
+        output_dir = Path(output_dir)
+    
+    output_dir.mkdir(exist_ok=True, parents=True)
+    
+    print("="*80)
+    print(f"Downloading HIGH-RESOLUTION ISS ephemeris")
+    print(f"Time range: {start_time} to {end_time}")
+    print(f"Time step: {step}")
+    print(f"Output directory: {output_dir}")
+    print("="*80)
+    
+    # Query HORIZONS using NORAD catalog number
+    sat_id = -(100000 + norad_id)
+    obj = Horizons(
+        id=f"{sat_id}",
+        location='@399',  # Earth center (geocentric)
+        epochs={'start' : start_time.strftime('%Y-%m-%d %H:%M'),
+                'stop'  : end_time.strftime('%Y-%m-%d %H:%M'),
+                'step'  : step}
+    )
+    
+    # Get vectors in ICRF/J2000 equatorial frame
+    print(f"Querying HORIZONS for ISS (NORAD {norad_id})...")
+    vectors = obj.vectors(refplane='earth')
+    
+    print(f"Retrieved {len(vectors)} data points")
+    print(f"Reference frame: ICRF/J2000 Earth equatorial (refplane='earth')")
+    
+    # Diagnostics
+    print("\nData preview:")
+    print(f"  Columns: {vectors.colnames}")
+    print(f"  Target: {vectors['targetname'][0]}")
+    if 'x' in vectors.colnames:
+        print(f"  Sample X: {vectors['x'][0]} AU")
+        print(f"  Sample VX: {vectors['vx'][0]} AU/day")
+        r_sample = np.sqrt(vectors['x'][0]**2 + vectors['y'][0]**2 + vectors['z'][0]**2)
+        print(f"  Sample |r|: {r_sample} AU ({r_sample * 1.495978707e8} km)")
+    
+    # Save to file with timestamp in filename
+    timestamp_str = start_time.strftime('%Y%m%d')
+    output_file = output_dir / f'horizons_{sat_name}_highres_{step}_{timestamp_str}.csv'
+    
+    vectors.write(output_file, format='csv', overwrite=True)
+    print(f"\nSaved TDB ephemeris to: {output_file}")
+    print(f"File size: {output_file.stat().st_size / (1024*1024):.2f} MB")
+    
+    # Convert to UTC if requested
+    utc_file = None
+    if convert_to_utc:
+        utc_file = output_file.parent / output_file.name.replace('.csv', '_utc.csv')
+        df_utc = convert_horizons_to_utc(vectors, utc_file)
+    
+    # Also download TLE for reference
+    print("\n" + "="*80)
+    print("Downloading TLE for reference")
+    print("="*80)
+    tle_file = output_dir / f'tle_{sat_name}_{norad_id}_{timestamp_str}.txt'
+    tle_line1, tle_line2, tle_epoch_jd = download_tle_for_satellite(norad_id, output_file=tle_file)
+    
+    print("\n" + "="*80)
+    print("DOWNLOAD COMPLETE")
+    print("="*80)
+    print(f"Data points:        {len(vectors)}")
+    print(f"Time step:          {step}")
+    print(f"TDB ephemeris file: {output_file}")
+    if convert_to_utc:
+        print(f"UTC ephemeris file: {utc_file}")
+    print(f"TLE file:           {tle_file}")
+    
+    return {
+        'horizons'          : vectors,
+        'horizons_utc'      : df_utc if convert_to_utc else None,
+        'tle'               : (tle_line1, tle_line2),
+        'start_time'        : start_time,
+        'end_time'          : end_time,
+        'step'              : step,
+        'horizons_file'     : output_file,
+        'horizons_utc_file' : utc_file if convert_to_utc else None,
+        'tle_file'          : tle_file,
+        'sat_name'          : sat_name,
+        'norad_id'          : norad_id,
+        'num_points'        : len(vectors),
+    }
+
+
 if __name__ == "__main__":
-    # Download data for all satellites (LEO, MEO, GEO)
+    # Download high-resolution ISS data first
+    print("\n" + "="*80)
+    print("DOWNLOADING HIGH-RESOLUTION ISS DATA")
+    print("="*80 + "\n")
+    
+    iss_result = download_iss_high_resolution(days=7, step='1m')
+    
+    # Then download data for all satellites (LEO, MEO, GEO) with normal resolution
+    print("\n" + "="*80)
+    print("DOWNLOADING STANDARD-RESOLUTION DATA FOR ALL SATELLITES")
+    print("="*80 + "\n")
+    
     download_all_satellites()
