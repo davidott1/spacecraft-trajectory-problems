@@ -685,7 +685,7 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     ax.plot(horizons_oe_df['datetime'], horizons_oe_df['a'], 'k-', label='Horizons', linewidth=1.5, alpha=0.7)
     ax.plot(tle_oe_df['datetime'], tle_oe_df['a'], 'r--', label='TLE', linewidth=1.5, alpha=0.7)
     for t in transition_times:
-        ax.axvline(x=t, color='black', linestyle=':', linewidth=2, alpha=0.7)
+        ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('Semi-major axis (km)', fontsize=11)
     ax.legend(loc='best', fontsize=10)
     ax.grid(True, alpha=0.3)
@@ -695,7 +695,7 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     ax.plot(horizons_oe_df['datetime'], horizons_oe_df['e'], 'k-', label='Horizons', linewidth=1.5, alpha=0.7)
     ax.plot(tle_oe_df['datetime'], tle_oe_df['e'], 'r--', label='TLE', linewidth=1.5, alpha=0.7)
     for t in transition_times:
-        ax.axvline(x=t, color='black', linestyle=':', linewidth=2, alpha=0.7)
+        ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('Eccentricity', fontsize=11)
     ax.grid(True, alpha=0.3)
     
@@ -704,7 +704,7 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     ax.plot(horizons_oe_df['datetime'], horizons_oe_df['i'], 'k-', label='Horizons', linewidth=1.5, alpha=0.7)
     ax.plot(tle_oe_df['datetime'], tle_oe_df['i'], 'r--', label='TLE', linewidth=1.5, alpha=0.7)
     for t in transition_times:
-        ax.axvline(x=t, color='black', linestyle=':', linewidth=2, alpha=0.7)
+        ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('Inclination (deg)', fontsize=11)
     ax.grid(True, alpha=0.3)
     
@@ -713,7 +713,7 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     ax.plot(horizons_oe_df['datetime'], horizons_oe_df['raan'], 'k-', label='Horizons', linewidth=1.5, alpha=0.7)
     ax.plot(tle_oe_df['datetime'], tle_oe_df['raan'], 'r--', label='TLE', linewidth=1.5, alpha=0.7)
     for t in transition_times:
-        ax.axvline(x=t, color='black', linestyle=':', linewidth=2, alpha=0.7)
+        ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('RAAN (deg)', fontsize=11)
     ax.grid(True, alpha=0.3)
     
@@ -722,7 +722,7 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     ax.plot(horizons_oe_df['datetime'], horizons_oe_df['arg_pe'], 'k-', label='Horizons', linewidth=1.5, alpha=0.7)
     ax.plot(tle_oe_df['datetime'], tle_oe_df['arg_pe'], 'r--', label='TLE', linewidth=1.5, alpha=0.7)
     for t in transition_times:
-        ax.axvline(x=t, color='black', linestyle=':', linewidth=2, alpha=0.7)
+        ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('Arg. of Periapsis (deg)', fontsize=11)
     ax.grid(True, alpha=0.3)
     
@@ -731,7 +731,7 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     ax.plot(horizons_oe_df['datetime'], horizons_oe_df['ta'], 'k-', label='Horizons', linewidth=1.5, alpha=0.7)
     ax.plot(tle_oe_df['datetime'], tle_oe_df['ta'], 'r--', label='TLE', linewidth=1.5, alpha=0.7)
     for t in transition_times:
-        ax.axvline(x=t, color='black', linestyle=':', linewidth=2, alpha=0.7)
+        ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     ax.set_ylabel('True Anomaly (deg)', fontsize=11)
     ax.set_xlabel('Time (UTC)', fontsize=11)
     ax.grid(True, alpha=0.3)
@@ -742,6 +742,213 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     # Rotate x-axis labels
     for ax in axes:
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=90)
+    
+    return fig
+
+def plot_position_velocity_errors(horizons_df, tle_df, tles=None):
+    """Plot position and velocity errors between Horizons and TLE data, with TLE index markers."""
+    fig, axes = plt.subplots(3, 1, figsize=(14, 10), sharex=True,
+                             gridspec_kw={'height_ratios': [1, 4, 4]})
+    fig.suptitle('ISS Position and Velocity Errors: Horizons - TLE (with TLE Index)', fontsize=16)
+    
+    # Compute errors
+    pos_error_x = horizons_df['x_km'].values - tle_df['x_km'].values
+    pos_error_y = horizons_df['y_km'].values - tle_df['y_km'].values
+    pos_error_z = horizons_df['z_km'].values - tle_df['z_km'].values
+    pos_error_mag = np.sqrt(pos_error_x**2 + pos_error_y**2 + pos_error_z**2)
+    
+    vel_error_x = horizons_df['vx_km_s'].values - tle_df['vx_km_s'].values
+    vel_error_y = horizons_df['vy_km_s'].values - tle_df['vy_km_s'].values
+    vel_error_z = horizons_df['vz_km_s'].values - tle_df['vz_km_s'].values
+    vel_error_mag = np.sqrt(vel_error_x**2 + vel_error_y**2 + vel_error_z**2)
+    
+    # Store transition times for vertical lines
+    transition_times = []
+    
+    # TLE Index plot
+    ax = axes[0]
+    if tles is not None:
+        tle_index_df = get_best_tle_indices(horizons_df, tles)
+        
+        current_idx = tle_index_df.iloc[0]['tle_index']
+        start_time = tle_index_df.iloc[0]['datetime']
+        
+        for i in range(1, len(tle_index_df)):
+            if tle_index_df.iloc[i]['tle_index'] != current_idx or i == len(tle_index_df) - 1:
+                if i == len(tle_index_df) - 1 and tle_index_df.iloc[i]['tle_index'] == current_idx:
+                    end_time = tle_index_df.iloc[i]['datetime']
+                else:
+                    end_time = tle_index_df.iloc[i-1]['datetime']
+                
+                if hasattr(start_time, 'tzinfo') and start_time.tzinfo is not None:
+                    if not hasattr(end_time, 'tzinfo') or end_time.tzinfo is None:
+                        end_time = pd.Timestamp(end_time).tz_localize('UTC')
+                
+                ax.hlines(y=0, xmin=start_time, xmax=end_time, colors='black', linewidth=3)
+                ax.vlines(x=start_time, ymin=-0.3, ymax=0.3, colors='black', linewidth=2)
+                transition_times.append(start_time)
+                
+                mid_time = start_time + (end_time - start_time) / 2
+                ax.text(mid_time, 0, f'TLE {current_idx}', ha='center', va='center',
+                       fontsize=10, bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+                
+                current_idx = tle_index_df.iloc[i]['tle_index']
+                start_time = tle_index_df.iloc[i]['datetime']
+        
+        final_time = tle_index_df.iloc[-1]['datetime']
+        ax.vlines(x=final_time, ymin=-0.3, ymax=0.3, colors='black', linewidth=2)
+        transition_times.append(final_time)
+        
+        ax.set_ylim(-0.5, 0.5)
+        ax.set_yticks([])
+    
+    ax.set_ylabel('Active TLE', fontsize=12)
+    ax.set_title('TLE Timeline', fontsize=14)
+    ax.grid(True, alpha=0.3, axis='x')
+    
+    # Position error plot
+    ax = axes[1]
+    ax.plot(horizons_df['datetime'], pos_error_x, 'r-', label='X error', linewidth=1.5, alpha=0.7)
+    ax.plot(horizons_df['datetime'], pos_error_y, 'g-', label='Y error', linewidth=1.5, alpha=0.7)
+    ax.plot(horizons_df['datetime'], pos_error_z, 'b-', label='Z error', linewidth=1.5, alpha=0.7)
+    ax.plot(horizons_df['datetime'], pos_error_mag, 'k-', label='Magnitude', linewidth=2)
+    for t in transition_times:
+        ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
+    ax.set_ylabel('Position Error (km)', fontsize=12)
+    ax.legend(loc='best', fontsize=10)
+    ax.grid(True, alpha=0.3)
+    
+    # Velocity error plot
+    ax = axes[2]
+    ax.plot(horizons_df['datetime'], vel_error_x, 'r-', label='X error', linewidth=1.5, alpha=0.7)
+    ax.plot(horizons_df['datetime'], vel_error_y, 'g-', label='Y error', linewidth=1.5, alpha=0.7)
+    ax.plot(horizons_df['datetime'], vel_error_z, 'b-', label='Z error', linewidth=1.5, alpha=0.7)
+    ax.plot(horizons_df['datetime'], vel_error_mag, 'k-', label='Magnitude', linewidth=2)
+    for t in transition_times:
+        ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
+    ax.set_ylabel('Velocity Error (km/s)', fontsize=12)
+    ax.set_xlabel('Time (UTC)', fontsize=12)
+    ax.legend(loc='best', fontsize=10)
+    ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    for ax in axes:
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+    
+    return fig
+
+def plot_orbital_element_errors(horizons_oe_df, tle_oe_df, tles=None):
+    """Plot orbital element errors between Horizons and TLE data, with TLE index markers."""
+    fig, axes = plt.subplots(7, 1, figsize=(14, 12), sharex=True,
+                             gridspec_kw={'height_ratios': [1, 2, 2, 2, 2, 2, 2]})
+    fig.suptitle('ISS Orbital Element Errors: Horizons - TLE (with TLE Index)', fontsize=16)
+    
+    # Compute errors
+    a_error = horizons_oe_df['a'].values - tle_oe_df['a'].values
+    e_error = horizons_oe_df['e'].values - tle_oe_df['e'].values
+    i_error = horizons_oe_df['i'].values - tle_oe_df['i'].values
+    raan_error = horizons_oe_df['raan'].values - tle_oe_df['raan'].values
+    arg_pe_error = horizons_oe_df['arg_pe'].values - tle_oe_df['arg_pe'].values
+    ta_error = horizons_oe_df['ta'].values - tle_oe_df['ta'].values
+    
+    # Store transition times for vertical lines
+    transition_times = []
+    
+    # TLE Index plot
+    ax = axes[0]
+    if tles is not None:
+        tle_index_df = get_best_tle_indices(horizons_oe_df, tles)
+        
+        current_idx = tle_index_df.iloc[0]['tle_index']
+        start_time = tle_index_df.iloc[0]['datetime']
+        
+        for i in range(1, len(tle_index_df)):
+            if tle_index_df.iloc[i]['tle_index'] != current_idx or i == len(tle_index_df) - 1:
+                if i == len(tle_index_df) - 1 and tle_index_df.iloc[i]['tle_index'] == current_idx:
+                    end_time = tle_index_df.iloc[i]['datetime']
+                else:
+                    end_time = tle_index_df.iloc[i-1]['datetime']
+                
+                if hasattr(start_time, 'tzinfo') and start_time.tzinfo is not None:
+                    if not hasattr(end_time, 'tzinfo') or end_time.tzinfo is None:
+                        end_time = pd.Timestamp(end_time).tz_localize('UTC')
+                
+                ax.hlines(y=0, xmin=start_time, xmax=end_time, colors='black', linewidth=3)
+                ax.vlines(x=start_time, ymin=-0.3, ymax=0.3, colors='black', linewidth=2)
+                transition_times.append(start_time)
+                
+                mid_time = start_time + (end_time - start_time) / 2
+                ax.text(mid_time, 0, f'TLE {current_idx}', ha='center', va='center',
+                       fontsize=10, bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+                
+                current_idx = tle_index_df.iloc[i]['tle_index']
+                start_time = tle_index_df.iloc[i]['datetime']
+        
+        final_time = tle_index_df.iloc[-1]['datetime']
+        ax.vlines(x=final_time, ymin=-0.3, ymax=0.3, colors='black', linewidth=2)
+        transition_times.append(final_time)
+        
+        ax.set_ylim(-0.5, 0.5)
+        ax.set_yticks([])
+    
+    ax.set_ylabel('Active TLE', fontsize=10)
+    ax.set_title('TLE Timeline', fontsize=12)
+    ax.grid(True, alpha=0.3, axis='x')
+    
+    # Semi-major axis error
+    ax = axes[1]
+    ax.plot(horizons_oe_df['datetime'], a_error, 'k-', linewidth=1.5)
+    for t in transition_times:
+        ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
+    ax.set_ylabel('a error (km)', fontsize=11)
+    ax.grid(True, alpha=0.3)
+    
+    # Eccentricity error
+    ax = axes[2]
+    ax.plot(horizons_oe_df['datetime'], e_error, 'k-', linewidth=1.5)
+    for t in transition_times:
+        ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
+    ax.set_ylabel('e error', fontsize=11)
+    ax.grid(True, alpha=0.3)
+    
+    # Inclination error
+    ax = axes[3]
+    ax.plot(horizons_oe_df['datetime'], i_error, 'k-', linewidth=1.5)
+    for t in transition_times:
+        ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
+    ax.set_ylabel('i error (deg)', fontsize=11)
+    ax.grid(True, alpha=0.3)
+    
+    # RAAN error
+    ax = axes[4]
+    ax.plot(horizons_oe_df['datetime'], raan_error, 'k-', linewidth=1.5)
+    for t in transition_times:
+        ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
+    ax.set_ylabel('RAAN error (deg)', fontsize=11)
+    ax.grid(True, alpha=0.3)
+    
+    # Argument of Periapsis error
+    ax = axes[5]
+    ax.plot(horizons_oe_df['datetime'], arg_pe_error, 'k-', linewidth=1.5)
+    for t in transition_times:
+        ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
+    ax.set_ylabel('ω error (deg)', fontsize=11)
+    ax.grid(True, alpha=0.3)
+    
+    # True Anomaly error
+    ax = axes[6]
+    ax.plot(horizons_oe_df['datetime'], ta_error, 'k-', linewidth=1.5)
+    for t in transition_times:
+        ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
+    ax.set_ylabel('ν error (deg)', fontsize=11)
+    ax.set_xlabel('Time (UTC)', fontsize=11)
+    ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    for ax in axes:
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
     
     return fig
 
@@ -798,27 +1005,37 @@ def main():
     fig3 = plot_horizons_vs_tle(horizons_df, tle_df, tle_epochs_df)
     fig4 = plot_horizons_vs_tle_with_index(horizons_df, tle_df, tle_epochs_df, tles)
     fig5 = plot_orbital_elements_tle_comparison(oe_df, tle_oe_df, tles)
+    fig6 = plot_position_velocity_errors(horizons_df, tle_df, tles)
+    fig7 = plot_orbital_element_errors(oe_df, tle_oe_df, tles)
     
     # Save plots
     output_file1 = Path(__file__).parent / 'iss_horizons_plot.png'
     fig1.savefig(output_file1, dpi=150, bbox_inches='tight')
-    print(f"\nPosition/Velocity plot saved to: {output_file1}")
+    print(f"Horizons plot saved to: {output_file1}")
     
-    output_file2 = Path(__file__).parent / 'iss_horizons_elements_plot.png'
+    output_file2 = Path(__file__).parent / 'iss_orbital_elements_plot.png'
     fig2.savefig(output_file2, dpi=150, bbox_inches='tight')
     print(f"Orbital elements plot saved to: {output_file2}")
     
     output_file3 = Path(__file__).parent / 'iss_horizons_vs_tle_plot.png'
     fig3.savefig(output_file3, dpi=150, bbox_inches='tight')
-    print(f"Horizons vs TLE comparison plot saved to: {output_file3}")
+    print(f"Horizons vs TLE plot saved to: {output_file3}")
     
     output_file4 = Path(__file__).parent / 'iss_horizons_vs_tle_with_index_plot.png'
     fig4.savefig(output_file4, dpi=150, bbox_inches='tight')
-    print(f"Horizons vs TLE comparison with index plot saved to: {output_file4}")
+    print(f"Horizons vs TLE with index plot saved to: {output_file4}")
     
     output_file5 = Path(__file__).parent / 'iss_orbital_elements_tle_comparison_plot.png'
     fig5.savefig(output_file5, dpi=150, bbox_inches='tight')
     print(f"Orbital elements TLE comparison plot saved to: {output_file5}")
+    
+    output_file6 = Path(__file__).parent / 'iss_position_velocity_errors_plot.png'
+    fig6.savefig(output_file6, dpi=150, bbox_inches='tight')
+    print(f"Position/velocity errors plot saved to: {output_file6}")
+    
+    output_file7 = Path(__file__).parent / 'iss_orbital_element_errors_plot.png'
+    fig7.savefig(output_file7, dpi=150, bbox_inches='tight')
+    print(f"Orbital element errors plot saved to: {output_file7}")
     
     plt.show()
 
