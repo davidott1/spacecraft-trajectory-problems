@@ -621,7 +621,7 @@ def plot_horizons_vs_tle_with_index(horizons_df, tle_df, tle_epochs_df=None, tle
 
 def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     """Plot orbital elements comparing Horizons and TLE data, with TLE index markers."""
-    fig, axes = plt.subplots(7, 1, figsize=(14, 12), sharex=True,
+    fig, axes = plt.subplots(7, 1, figsize=(14, 8), sharex=True,
                              gridspec_kw={'height_ratios': [1, 2, 2, 2, 2, 2, 2]})
     fig.suptitle('ISS Orbital Elements: Horizons vs TLE Propagation (with TLE Index)', fontsize=16)
     
@@ -687,7 +687,6 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     for t in transition_times:
         ax.axvline(x=t, color='black', linestyle=':', linewidth=2, alpha=0.7)
     ax.set_ylabel('Semi-major axis (km)', fontsize=11)
-    ax.set_title('Semi-major Axis', fontsize=12)
     ax.legend(loc='best', fontsize=10)
     ax.grid(True, alpha=0.3)
     
@@ -698,8 +697,6 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     for t in transition_times:
         ax.axvline(x=t, color='black', linestyle=':', linewidth=2, alpha=0.7)
     ax.set_ylabel('Eccentricity', fontsize=11)
-    ax.set_title('Eccentricity', fontsize=12)
-    ax.legend(loc='best', fontsize=10)
     ax.grid(True, alpha=0.3)
     
     # Inclination
@@ -709,8 +706,6 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     for t in transition_times:
         ax.axvline(x=t, color='black', linestyle=':', linewidth=2, alpha=0.7)
     ax.set_ylabel('Inclination (deg)', fontsize=11)
-    ax.set_title('Inclination', fontsize=12)
-    ax.legend(loc='best', fontsize=10)
     ax.grid(True, alpha=0.3)
     
     # RAAN
@@ -720,8 +715,6 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     for t in transition_times:
         ax.axvline(x=t, color='black', linestyle=':', linewidth=2, alpha=0.7)
     ax.set_ylabel('RAAN (deg)', fontsize=11)
-    ax.set_title('Right Ascension of Ascending Node', fontsize=12)
-    ax.legend(loc='best', fontsize=10)
     ax.grid(True, alpha=0.3)
     
     # Argument of Periapsis
@@ -731,8 +724,6 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
     for t in transition_times:
         ax.axvline(x=t, color='black', linestyle=':', linewidth=2, alpha=0.7)
     ax.set_ylabel('Arg. of Periapsis (deg)', fontsize=11)
-    ax.set_title('Argument of Periapsis', fontsize=12)
-    ax.legend(loc='best', fontsize=10)
     ax.grid(True, alpha=0.3)
     
     # True Anomaly
@@ -743,8 +734,6 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
         ax.axvline(x=t, color='black', linestyle=':', linewidth=2, alpha=0.7)
     ax.set_ylabel('True Anomaly (deg)', fontsize=11)
     ax.set_xlabel('Time (UTC)', fontsize=11)
-    ax.set_title('True Anomaly', fontsize=12)
-    ax.legend(loc='best', fontsize=10)
     ax.grid(True, alpha=0.3)
     
     plt.xticks(rotation=45)
