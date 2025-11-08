@@ -111,104 +111,6 @@ def compute_orbital_elements(df):
     
     return pd.DataFrame(elements)
 
-def plot_horizons(df):
-    """Plot ISS position and velocity from Horizons data."""
-    fig, axes = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
-    fig.suptitle('ISS State from Horizons Ephemeris', fontsize=16)
-    
-    # Compute magnitudes
-    r_mag = np.sqrt(df['x_km']**2 + df['y_km']**2 + df['z_km']**2)
-    v_mag = np.sqrt(df['vx_km_s']**2 + df['vy_km_s']**2 + df['vz_km_s']**2)
-    
-    # Position plot
-    ax = axes[0]
-    ax.plot(df['datetime'], df['x_km'], 'r-', label='X', linewidth=1.5)
-    ax.plot(df['datetime'], df['y_km'], 'g-', label='Y', linewidth=1.5)
-    ax.plot(df['datetime'], df['z_km'], 'b-', label='Z', linewidth=1.5)
-    ax.plot(df['datetime'], r_mag, 'k-', label='Magnitude', linewidth=1.5)
-    ax.set_ylabel('Position (km)', fontsize=12)
-    ax.set_title('Position Components', fontsize=14)
-    ax.legend(loc='best')
-    ax.grid(True, alpha=0.3)
-    
-    # Velocity plot
-    ax = axes[1]
-    ax.plot(df['datetime'], df['vx_km_s'], 'r-', label='X', linewidth=1.5)
-    ax.plot(df['datetime'], df['vy_km_s'], 'g-', label='Y', linewidth=1.5)
-    ax.plot(df['datetime'], df['vz_km_s'], 'b-', label='Z', linewidth=1.5)
-    ax.plot(df['datetime'], v_mag, 'k-', label='Magnitude', linewidth=1.5)
-    ax.set_ylabel('Velocity (km/s)', fontsize=12)
-    ax.set_xlabel('Time (UTC)', fontsize=12)
-    ax.set_title('Velocity Components', fontsize=14)
-    ax.legend(loc='best')
-    ax.grid(True, alpha=0.3)
-    
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-
-    # Rotate x-axis labels
-    for ax in axes:
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=90)
-    
-    return fig
-
-def plot_orbital_elements(oe_df):
-    """Plot orbital elements from Horizons data."""
-    fig, axes = plt.subplots(3, 2, figsize=(14, 8), sharex=True)
-    fig.suptitle('ISS Orbital Elements from Horizons Ephemeris', fontsize=16)
-    
-    # Semi-major axis
-    ax = axes[0, 0]
-    ax.plot(oe_df['datetime'], oe_df['a'], 'k-', linewidth=1.5)
-    ax.set_ylabel('Semi-major axis (km)', fontsize=11)
-    ax.set_title('Semi-major Axis', fontsize=12)
-    ax.grid(True, alpha=0.3)
-    
-    # Eccentricity
-    ax = axes[0, 1]
-    ax.plot(oe_df['datetime'], oe_df['e'], 'k-', linewidth=1.5)
-    ax.set_ylabel('Eccentricity', fontsize=11)
-    ax.set_title('Eccentricity', fontsize=12)
-    ax.grid(True, alpha=0.3)
-    
-    # Inclination
-    ax = axes[1, 0]
-    ax.plot(oe_df['datetime'], oe_df['i'], 'k-', linewidth=1.5)
-    ax.set_ylabel('Inclination (deg)', fontsize=11)
-    ax.set_title('Inclination', fontsize=12)
-    ax.grid(True, alpha=0.3)
-    
-    # RAAN
-    ax = axes[1, 1]
-    ax.plot(oe_df['datetime'], oe_df['raan'], 'k-', linewidth=1.5)
-    ax.set_ylabel('RAAN (deg)', fontsize=11)
-    ax.set_title('Right Ascension of Ascending Node', fontsize=12)
-    ax.grid(True, alpha=0.3)
-    
-    # Argument of Periapsis
-    ax = axes[2, 0]
-    ax.plot(oe_df['datetime'], oe_df['arg_pe'], 'k-', linewidth=1.5)
-    ax.set_ylabel('Arg. of Periapsis (deg)', fontsize=11)
-    ax.set_xlabel('Time (UTC)', fontsize=11)
-    ax.set_title('Argument of Periapsis', fontsize=12)
-    ax.grid(True, alpha=0.3)
-    
-    # True Anomaly
-    ax = axes[2, 1]
-    ax.plot(oe_df['datetime'], oe_df['ta'], 'k-', linewidth=1.5)
-    ax.set_ylabel('True Anomaly (deg)', fontsize=11)
-    ax.set_xlabel('Time (UTC)', fontsize=11)
-    ax.set_title('True Anomaly', fontsize=12)
-    ax.grid(True, alpha=0.3)
-    
-    # Rotate x-axis labels
-    for ax in axes[-1, :]:
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=90)
-    
-    plt.tight_layout()
-    
-    return fig
-
 def load_tle_data(filepath):
     """Load TLE data from file."""
     tles = []
@@ -366,78 +268,6 @@ def get_tle_epoch_states(tles):
         })
     
     return pd.DataFrame(results)
-
-def plot_horizons_vs_tle(horizons_df, tle_df, tle_epochs_df=None):
-    """Plot ISS position and velocity comparing Horizons and TLE data."""
-    fig, axes = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
-    fig.suptitle('ISS State: Horizons vs TLE Propagation', fontsize=16)
-    
-    # Compute magnitudes
-    r_mag_hor = np.sqrt(horizons_df['x_km']**2 + horizons_df['y_km']**2 + horizons_df['z_km']**2)
-    v_mag_hor = np.sqrt(horizons_df['vx_km_s']**2 + horizons_df['vy_km_s']**2 + horizons_df['vz_km_s']**2)
-    
-    r_mag_tle = np.sqrt(tle_df['x_km']**2 + tle_df['y_km']**2 + tle_df['z_km']**2)
-    v_mag_tle = np.sqrt(tle_df['vx_km_s']**2 + tle_df['vy_km_s']**2 + tle_df['vz_km_s']**2)
-    
-    # Position plot
-    ax = axes[0]
-    ax.plot(horizons_df['datetime'], horizons_df['x_km'], 'r-', label='X (Horizons)', linewidth=1.5, alpha=0.7)
-    ax.plot(horizons_df['datetime'], horizons_df['y_km'], 'g-', label='Y (Horizons)', linewidth=1.5, alpha=0.7)
-    ax.plot(horizons_df['datetime'], horizons_df['z_km'], 'b-', label='Z (Horizons)', linewidth=1.5, alpha=0.7)
-    ax.plot(horizons_df['datetime'], r_mag_hor, 'k-', label='Magnitude (Horizons)', linewidth=1.5, alpha=0.7)
-    
-    ax.plot(tle_df['datetime'], tle_df['x_km'], 'r--', label='X (TLE)', linewidth=1.5, alpha=0.7)
-    ax.plot(tle_df['datetime'], tle_df['y_km'], 'g--', label='Y (TLE)', linewidth=1.5, alpha=0.7)
-    ax.plot(tle_df['datetime'], tle_df['z_km'], 'b--', label='Z (TLE)', linewidth=1.5, alpha=0.7)
-    ax.plot(tle_df['datetime'], r_mag_tle, 'k--', label='Magnitude (TLE)', linewidth=1.5, alpha=0.7)
-    
-    # Plot TLE epoch positions as markers
-    if tle_epochs_df is not None:
-        r_mag_epochs = np.sqrt(tle_epochs_df['x_km']**2 + tle_epochs_df['y_km']**2 + tle_epochs_df['z_km']**2)
-        ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['x_km'], c='red', marker='o', s=50, zorder=5, label='TLE Epochs (X)')
-        ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['y_km'], c='green', marker='o', s=50, zorder=5, label='TLE Epochs (Y)')
-        ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['z_km'], c='blue', marker='o', s=50, zorder=5, label='TLE Epochs (Z)')
-        ax.scatter(tle_epochs_df['datetime'], r_mag_epochs, c='black', marker='o', s=50, zorder=5, label='TLE Epochs (Mag)')
-    
-    ax.set_ylabel('Position (km)', fontsize=12)
-    ax.set_title('Position Components', fontsize=14)
-    ax.legend(loc='best', ncol=2, fontsize=8)
-    ax.grid(True, alpha=0.3)
-    
-    # Velocity plot
-    ax = axes[1]
-    ax.plot(horizons_df['datetime'], horizons_df['vx_km_s'], 'r-', label='X (Horizons)', linewidth=1.5, alpha=0.7)
-    ax.plot(horizons_df['datetime'], horizons_df['vy_km_s'], 'g-', label='Y (Horizons)', linewidth=1.5, alpha=0.7)
-    ax.plot(horizons_df['datetime'], horizons_df['vz_km_s'], 'b-', label='Z (Horizons)', linewidth=1.5, alpha=0.7)
-    ax.plot(horizons_df['datetime'], v_mag_hor, 'k-', label='Magnitude (Horizons)', linewidth=1.5, alpha=0.7)
-    
-    ax.plot(tle_df['datetime'], tle_df['vx_km_s'], 'r--', label='X (TLE)', linewidth=1.5, alpha=0.7)
-    ax.plot(tle_df['datetime'], tle_df['vy_km_s'], 'g--', label='Y (TLE)', linewidth=1.5, alpha=0.7)
-    ax.plot(tle_df['datetime'], tle_df['vz_km_s'], 'b--', label='Z (TLE)', linewidth=1.5, alpha=0.7)
-    ax.plot(tle_df['datetime'], v_mag_tle, 'k--', label='Magnitude (TLE)', linewidth=1.5, alpha=0.7)
-    
-    # Plot TLE epoch velocities as markers
-    if tle_epochs_df is not None:
-        v_mag_epochs = np.sqrt(tle_epochs_df['vx_km_s']**2 + tle_epochs_df['vy_km_s']**2 + tle_epochs_df['vz_km_s']**2)
-        ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['vx_km_s'], c='red', marker='o', s=50, zorder=5, label='TLE Epochs (X)')
-        ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['vy_km_s'], c='green', marker='o', s=50, zorder=5, label='TLE Epochs (Y)')
-        ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['vz_km_s'], c='blue', marker='o', s=50, zorder=5, label='TLE Epochs (Z)')
-        ax.scatter(tle_epochs_df['datetime'], v_mag_epochs, c='black', marker='o', s=50, zorder=5, label='TLE Epochs (Mag)')
-    
-    ax.set_ylabel('Velocity (km/s)', fontsize=12)
-    ax.set_xlabel('Time (UTC)', fontsize=12)
-    ax.set_title('Velocity Components', fontsize=14)
-    ax.legend(loc='best', ncol=2, fontsize=8)
-    ax.grid(True, alpha=0.3)
-    
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-
-    # Rotate x-axis labels
-    for ax in axes:
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=90)
-    
-    return fig
 
 def get_best_tle_indices(horizons_df, tles):
     """
@@ -670,7 +500,7 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None):
         
         # Add final vertical line at the end
         final_time = tle_index_df.iloc[-1]['datetime']
-        ax.vlines(x=final_time, ymin=-0.3, ymax=0.3, colors='black', linewidth=2)
+        ax.vlines(x=final_time, ymin=-0.3, ymax=0.3, colors='black', linewidth=2) 
         transition_times.append(final_time)
         
         ax.set_ylim(-0.5, 0.5)
@@ -1000,41 +830,26 @@ def main():
     print(tle_oe_df[['datetime', 'a', 'e', 'i', 'raan', 'arg_pe', 'ta']].head())
     
     # Create plots
-    fig1 = plot_horizons(horizons_df)
-    fig2 = plot_orbital_elements(oe_df)
-    fig3 = plot_horizons_vs_tle(horizons_df, tle_df, tle_epochs_df)
-    fig4 = plot_horizons_vs_tle_with_index(horizons_df, tle_df, tle_epochs_df, tles)
-    fig5 = plot_orbital_elements_tle_comparison(oe_df, tle_oe_df, tles)
-    fig6 = plot_position_velocity_errors(horizons_df, tle_df, tles)
-    fig7 = plot_orbital_element_errors(oe_df, tle_oe_df, tles)
+    fig1 = plot_horizons_vs_tle_with_index(horizons_df, tle_df, tle_epochs_df, tles)
+    fig2 = plot_orbital_elements_tle_comparison(oe_df, tle_oe_df, tles)
+    fig3 = plot_position_velocity_errors(horizons_df, tle_df, tles)
+    fig4 = plot_orbital_element_errors(oe_df, tle_oe_df, tles)
     
     # Save plots
-    output_file1 = Path(__file__).parent / 'iss_horizons_plot.png'
-    fig1.savefig(output_file1, dpi=150, bbox_inches='tight')
-    print(f"Horizons plot saved to: {output_file1}")
-    
-    output_file2 = Path(__file__).parent / 'iss_orbital_elements_plot.png'
-    fig2.savefig(output_file2, dpi=150, bbox_inches='tight')
-    print(f"Orbital elements plot saved to: {output_file2}")
-    
-    output_file3 = Path(__file__).parent / 'iss_horizons_vs_tle_plot.png'
-    fig3.savefig(output_file3, dpi=150, bbox_inches='tight')
-    print(f"Horizons vs TLE plot saved to: {output_file3}")
-    
     output_file4 = Path(__file__).parent / 'iss_horizons_vs_tle_with_index_plot.png'
-    fig4.savefig(output_file4, dpi=150, bbox_inches='tight')
+    fig1.savefig(output_file4, dpi=150, bbox_inches='tight')
     print(f"Horizons vs TLE with index plot saved to: {output_file4}")
     
     output_file5 = Path(__file__).parent / 'iss_orbital_elements_tle_comparison_plot.png'
-    fig5.savefig(output_file5, dpi=150, bbox_inches='tight')
+    fig2.savefig(output_file5, dpi=150, bbox_inches='tight')
     print(f"Orbital elements TLE comparison plot saved to: {output_file5}")
     
     output_file6 = Path(__file__).parent / 'iss_position_velocity_errors_plot.png'
-    fig6.savefig(output_file6, dpi=150, bbox_inches='tight')
+    fig3.savefig(output_file6, dpi=150, bbox_inches='tight')
     print(f"Position/velocity errors plot saved to: {output_file6}")
     
     output_file7 = Path(__file__).parent / 'iss_orbital_element_errors_plot.png'
-    fig7.savefig(output_file7, dpi=150, bbox_inches='tight')
+    fig4.savefig(output_file7, dpi=150, bbox_inches='tight')
     print(f"Orbital element errors plot saved to: {output_file7}")
     
     plt.show()
