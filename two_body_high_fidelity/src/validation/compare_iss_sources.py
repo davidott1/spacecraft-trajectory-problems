@@ -498,6 +498,9 @@ def plot_horizons_vs_tle_with_index(horizons_df, tle_df, tle_epochs_df=None, tle
     r_mag_tle = np.sqrt(tle_df['x_km']**2 + tle_df['y_km']**2 + tle_df['z_km']**2)
     v_mag_tle = np.sqrt(tle_df['vx_km_s']**2 + tle_df['vy_km_s']**2 + tle_df['vz_km_s']**2)
     
+    # Store transition times for vertical lines
+    transition_times = []
+    
     # TLE Index plot
     ax = axes[0]
     if tles is not None:
@@ -527,6 +530,7 @@ def plot_horizons_vs_tle_with_index(horizons_df, tle_df, tle_epochs_df=None, tle
                 
                 # Add vertical line at segment start
                 ax.vlines(x=start_time, ymin=-0.3, ymax=0.3, colors='black', linewidth=2)
+                transition_times.append(start_time)
                 
                 # Add text label in the middle of the segment
                 mid_time = start_time + (end_time - start_time) / 2
@@ -540,6 +544,7 @@ def plot_horizons_vs_tle_with_index(horizons_df, tle_df, tle_epochs_df=None, tle
         # Add final vertical line at the end
         final_time = tle_index_df.iloc[-1]['datetime']
         ax.vlines(x=final_time, ymin=-0.3, ymax=0.3, colors='black', linewidth=2)
+        transition_times.append(final_time)
         
         ax.set_ylim(-0.5, 0.5)
         ax.set_yticks([])
@@ -568,6 +573,10 @@ def plot_horizons_vs_tle_with_index(horizons_df, tle_df, tle_epochs_df=None, tle
         ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['z_km'], c='blue', marker='o', s=50, zorder=5, label='TLE Epochs (Z)')
         ax.scatter(tle_epochs_df['datetime'], r_mag_epochs, c='black', marker='o', s=50, zorder=5, label='TLE Epochs (Mag)')
     
+    # Add vertical dotted lines at TLE transitions
+    for t in transition_times:
+        ax.axvline(x=t, color='gray', linestyle=':', linewidth=1, alpha=0.5)
+    
     ax.set_ylabel('Position (km)', fontsize=12)
     ax.legend(loc='best', ncol=2, fontsize=8)
     ax.grid(True, alpha=0.3)
@@ -591,6 +600,10 @@ def plot_horizons_vs_tle_with_index(horizons_df, tle_df, tle_epochs_df=None, tle
         ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['vy_km_s'], c='green', marker='o', s=50, zorder=5, label='TLE Epochs (Y)')
         ax.scatter(tle_epochs_df['datetime'], tle_epochs_df['vz_km_s'], c='blue', marker='o', s=50, zorder=5, label='TLE Epochs (Z)')
         ax.scatter(tle_epochs_df['datetime'], v_mag_epochs, c='black', marker='o', s=50, zorder=5, label='TLE Epochs (Mag)')
+    
+    # Add vertical dotted lines at TLE transitions
+    for t in transition_times:
+        ax.axvline(x=t, color='gray', linestyle=':', linewidth=1, alpha=0.5)
     
     ax.set_ylabel('Velocity (km/s)', fontsize=12)
     ax.set_xlabel('Time (UTC)', fontsize=12)
