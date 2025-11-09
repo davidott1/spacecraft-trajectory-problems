@@ -399,7 +399,7 @@ def download_satellite_data(norad_id, start_time, end_time, step='1h'):
     print("\n" + "="*80)
     print("DOWNLOADING HORIZONS EPHEMERIS")
     print("="*80)
-    horizons_file = OUTPUT_DIR / f'horizons_{sat_name}_{step}_{timestamp_str}_utc.csv'
+    horizons_file = OUTPUT_DIR / f'horizons_ephem_{sat_name}_{step}_{timestamp_str}_utc.csv'
     horizons_data = download_horizons_ephemeris(
         norad_id=norad_id,
         start_time=start_time,
@@ -412,7 +412,7 @@ def download_satellite_data(norad_id, start_time, end_time, step='1h'):
     print("\n" + "="*80)
     print("DOWNLOADING TLE HISTORY")
     print("="*80)
-    tle_history_file = OUTPUT_DIR / f'tle_history_{sat_name}.txt'
+    tle_history_file = OUTPUT_DIR / f'celestrak_tles_{sat_name}_{timestamp_str}_utc.txt'
     tle_history = download_historical_tles(
         norad_id=norad_id,
         start_time=start_time,
