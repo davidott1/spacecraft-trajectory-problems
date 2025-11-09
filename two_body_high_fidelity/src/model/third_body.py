@@ -5,36 +5,52 @@ Third-body gravitational perturbations using SPICE ephemerides
 import numpy as np
 import spiceypy as spice
 from pathlib import Path
-import matplotlib.pyplot as plt
+from typing import Optional
+
+from two_body_high_fidelity.src.model.constants import PHYSICALCONSTANTS, CONVERTER
 
 class ThirdBodyPerturbations:
     """
-    Third-body gravitational perturbations from Sun and Moon
+    Third-body gravitational perturbations from Sun and Moon.
     Uses SPICE ephemerides for body positions
+
+    Methods
+        get_body_position(body_name, et_seconds, frame='J2000')
+            Get position of celestial body at given time
+        compute_acceleration(r_sat, et_seconds, bodies=['SUN', 'MOON'])
+            Compute third-body gravitational acceleration on satellite
+    
+    Private Methods
+        _load_spice_kernels(kernel_dir)
+            Load required SPICE kernels from directory
+        _get_naif_id(body_name)
+            Get NAIF ID for celestial body
+        _analytical_position(body_name, et_seconds)
+            Compute approximate position using analytical formulas
     """
-    
-    # Gravitational parameters [km^3/s^2]
-    GM_SUN = 1.32712440018e11
-    GM_MOON = 4.9028e3
-    
-    def __init__(self, use_spice=True, spice_kernel_dir=None):
+    def __init__(
+        self,
+        use_spice        : bool           = True,
+        spice_kernel_dir : Optional[Path] = None,
+    ):
         """
         Initialize third-body perturbations
         
-        Parameters:
-        -----------
-        use_spice : bool
-            If True, use SPICE ephemerides (high accuracy)
-            If False, use analytical approximations (faster, less accurate)
-        spice_kernel_dir : str or Path
-            Directory containing SPICE kernel files
+        Input
+            use_spice : bool
+                If True, use SPICE ephemerides (high accuracy)
+                If False, use analytical approximations (faster, less accurate)
+            spice_kernel_dir : str or Path
+                Directory containing SPICE kernel files
         """
         self.use_spice = use_spice
-        
         if use_spice:
             self._load_spice_kernels(spice_kernel_dir)
     
-    def _load_spice_kernels(self, kernel_dir):
+    def _load_spice_kernels(
+        self,
+        kernel_dir: Optional[Path],
+    ):  
         """
         Load required SPICE kernels
         
@@ -84,43 +100,51 @@ class ThirdBodyPerturbations:
         
         print(f"SPICE kernels loaded from: {kernel_dir}")
     
-    def get_body_position(self, body_name, et_seconds, frame='J2000'):
+    def get_body_position(
+        self,
+        body_name  : str,
+        et_seconds : float,
+        frame      : str   = 'J2000',
+    ) -> np.ndarray:
         """
         Get position of celestial body at given time
         
-        Parameters:
-        -----------
-        body_name : str
-            'SUN' or 'MOON'
-        et_seconds : float
-            Ephemeris time in seconds past J2000 epoch
-        frame : str
-            Reference frame (default: 'J2000')
+        Input
+            body_name : str
+                'SUN' or 'MOON'
+            et_seconds : float
+                Ephemeris time in seconds past J2000 epoch
+            frame : str
+                Reference frame (default: 'J2000')
         
-        Returns:
-        --------
-        pos : np.ndarray (3,)
-            Position vector [km]
+        Output
+            pos_vec : np.ndarray (3,)
+                Position vector [km]
         """
         if self.use_spice:
             # SPICE state relative to Earth
             state, _ = spice.spkez(
-                targ=self._get_naif_id(body_name),
-                et=et_seconds,
-                ref=frame,
-                abcorr='NONE',
-                obs=399  # Earth
+                targ   = self._get_naif_id(body_name),
+                et     = et_seconds,
+                ref    = frame,
+                abcorr = 'NONE',
+                obs    = 399  # Earth
             )
-            return np.array(state[0:3])  # Position only
+            return np.array(state[0:3])  # position only
         else:
             # Use analytical approximation
             return self._analytical_position(body_name, et_seconds)
     
-    def _get_naif_id(self, body_name):
-        """Get NAIF ID for body"""
+    def _get_naif_id(
+        self,
+        body_name : str,
+    ) -> int:
+        """
+        Get NAIF ID for body
+        """
         naif_ids = {
-            'SUN': 10,
-            'MOON': 301
+            'SUN'  : 10,
+            'MOON' : 301,
         }
         return naif_ids[body_name.upper()]
     
@@ -184,55 +208,59 @@ class ThirdBodyPerturbations:
         else:
             raise ValueError(f"Unknown body: {body_name}")
     
-    def compute_acceleration(self, r_sat, et_seconds, bodies=['SUN', 'MOON']):
+    def compute_acceleration(
+        self,
+        pos_sat_vec : np.ndarray,
+        et_seconds  : float,
+        bodies      : list = ['SUN', 'MOON'],
+    ) -> np.ndarray:
         """
         Compute third-body gravitational acceleration on satellite
         
-        Parameters:
-        -----------
-        r_sat : np.ndarray (3,)
+        Input
+        pos_sat_vec : np.ndarray (3,)
             Satellite position relative to Earth [km]
         et_seconds : float
             Ephemeris time in seconds past J2000
         bodies : list of str
             Which bodies to include (default: ['SUN', 'MOON'])
         
-        Returns:
-        --------
-        accel : np.ndarray (3,)
-            Acceleration vector [km/s^2]
+        Output
+        acc_vec : np.ndarray (3,)
+            Acceleration vector [km/s²]
         """
-        accel = np.zeros(3)
-        
+        acc_vec = np.zeros(3)
         for body in bodies:
             # Get position of perturbing body relative to Earth
-            r_body = self.get_body_position(body, et_seconds)
+            pos_body_vec = self.get_body_position(body, et_seconds)
             
             # Position of satellite relative to perturbing body
-            r_sat_to_body = r_body - r_sat
+            pos_sat_to_body = pos_body_vec - pos_sat_vec
             
             # Get gravitational parameter
             if body.upper() == 'SUN':
-                GM = self.GM_SUN
+                GP = PHYSICALCONSTANTS.SUN.GP  * CONVERTER.KM_PER_M**3  # [m³/s²] -> [km³/s²]
             elif body.upper() == 'MOON':
-                GM = self.GM_MOON
+                GP = PHYSICALCONSTANTS.MOON.GP  * CONVERTER.KM_PER_M**3  # [m³/s²] -> [km³/s²]
             else:
                 continue
             
             # Third-body acceleration (point mass approximation)
-            # a = GM * (r_sat_to_body / |r_sat_to_body|^3 - r_body / |r_body|^3)
-            r_sat_to_body_mag = np.linalg.norm(r_sat_to_body)
-            r_body_mag = np.linalg.norm(r_body)
-            
-            accel += GM * (
-                r_sat_to_body / r_sat_to_body_mag**3 - 
-                r_body / r_body_mag**3
+            #   a = GM * (r_sat_to_body / |r_sat_to_body|³ - r_body / |r_body|³)
+            pos_sat_to_body_mag = np.linalg.norm(pos_sat_to_body)
+            pos_body_mag        = np.linalg.norm(pos_body_vec)
+
+            acc_vec += GP * (
+                pos_sat_to_body / pos_sat_to_body_mag**3
+                - pos_body_vec / pos_body_mag**3
             )
         
-        return accel
+        return acc_vec
     
     def __del__(self):
-        """Unload SPICE kernels on cleanup"""
+        """
+        Unload SPICE kernels on cleanup
+        """
         if self.use_spice:
             try:
                 spice.kclear()
