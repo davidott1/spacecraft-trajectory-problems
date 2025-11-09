@@ -49,8 +49,8 @@ class ThirdBodyPerturbations:
     
     def _load_spice_kernels(
         self,
-        kernel_dir: Optional[Path],
-    ):  
+        kernel_dir : Optional[Path],
+    ) -> None:
         """
         Load required SPICE kernels
         
@@ -110,16 +110,18 @@ class ThirdBodyPerturbations:
         Get position of celestial body at given time
         
         Input
-            body_name : str
-                'SUN' or 'MOON'
-            et_seconds : float
-                Ephemeris time in seconds past J2000 epoch
-            frame : str
-                Reference frame (default: 'J2000')
+        -----
+        body_name : str
+            'SUN' or 'MOON'
+        et_seconds : float
+            Ephemeris time in seconds past J2000 epoch
+        frame : str
+            Reference frame (default: 'J2000')
         
         Output
-            pos_vec : np.ndarray (3,)
-                Position vector [km]
+        ------
+        pos_vec : np.ndarray (3,)
+            Position vector [km]
         """
         if self.use_spice:
             # SPICE state relative to Earth
@@ -148,11 +150,27 @@ class ThirdBodyPerturbations:
         }
         return naif_ids[body_name.upper()]
     
-    def _analytical_position(self, body_name, et_seconds):
+    def _analytical_position(
+        self,
+        body_name  : str,
+        et_seconds : float,
+    ) -> np.ndarray:
         """
         Simple analytical approximation for Sun/Moon position
         Lower accuracy (~1000 km for Moon, ~10,000 km for Sun)
         Good enough for rough estimates
+
+        Input
+        -----
+        body_name : str
+            'SUN' or 'MOON'
+        et_seconds : float
+            Ephemeris time in seconds past J2000 epoch
+
+        Output
+        ------
+        pos_vec : np.ndarray (3,)
+            Position vector [km]
         """
         # Convert to Julian centuries from J2000
         T = et_seconds / (86400.0 * 36525.0)
@@ -218,6 +236,7 @@ class ThirdBodyPerturbations:
         Compute third-body gravitational acceleration on satellite
         
         Input
+        -----
         pos_sat_vec : np.ndarray (3,)
             Satellite position relative to Earth [km]
         et_seconds : float
@@ -226,6 +245,7 @@ class ThirdBodyPerturbations:
             Which bodies to include (default: ['SUN', 'MOON'])
         
         Output
+        ------
         acc_vec : np.ndarray (3,)
             Acceleration vector [km/s²]
         """
@@ -257,7 +277,9 @@ class ThirdBodyPerturbations:
         
         return acc_vec
     
-    def __del__(self):
+    def __del__(
+        self,
+    ):
         """
         Unload SPICE kernels on cleanup
         """
