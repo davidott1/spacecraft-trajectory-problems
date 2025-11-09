@@ -16,12 +16,58 @@ from datetime import datetime, timedelta
 import requests
 from astropy.time import Time
 import sys
+import numpy as np
 
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
+# Add src to path to import constants
+sys.path.insert(0, str(PROJECT_ROOT / 'two_body_high_fidelity' / 'src'))
+from src.constants import CONVERTER
+
 # Output directory
 OUTPUT_DIR = PROJECT_ROOT / 'data' / 'ephems'
+
+def parse_time(time_str):
+    """
+    Parse time string in multiple formats (all assumed UTC)
+    
+    Parameters:
+    -----------
+    time_str : str
+        Time string in various formats
+    
+    Returns:
+    --------
+    datetime : Parsed datetime object
+    
+    Supported formats:
+    - YYYY-MM-DD
+    - YYYY-MM-DD HH:MM
+    - YYYY-MM-DD HH:MM:SS
+    - YYYY-MM-DDTHH:MM
+    - YYYY-MM-DDTHH:MM:SS
+    - YYYY-MM-DDTHH:MM:SSZ (with trailing Z)
+    """
+    # Remove trailing 'Z' if present (ISO 8601 UTC designator)
+    time_str = time_str.rstrip('Z')
+    
+    # Try different formats
+    formats = [
+        '%Y-%m-%dT%H:%M:%S',  # ISO 8601 with seconds: 2025-10-01T00:00:00
+        '%Y-%m-%dT%H:%M',     # ISO 8601 without seconds: 2025-10-01T00:00
+        '%Y-%m-%d %H:%M:%S',  # Space-separated with seconds: 2025-10-01 00:00:00
+        '%Y-%m-%d %H:%M',     # Space-separated without seconds: 2025-10-01 00:00
+        '%Y-%m-%d',           # Date only: 2025-10-01
+    ]
+    
+    for fmt in formats:
+        try:
+            return datetime.strptime(time_str, fmt)
+        except ValueError:
+            continue
+    
+    raise ValueError(f"Cannot parse time string: {time_str}")
 
 def get_satellite_name(norad_id):
     """Get satellite name from NORAD ID or return generic name"""
@@ -237,8 +283,81 @@ def download_horizons_ephemeris(norad_id, start_time, end_time, step='1h', outpu
     print(f"Retrieved {len(vectors)} data points")
     print(f"Reference frame: ICRF/J2000 Earth equatorial (refplane='earth')")
     
+    # Add UTC time columns manually (TDB to UTC conversion)
+    tdb_times = Time(vectors['datetime_jd'], format='jd', scale='tdb')
+    utc_times = tdb_times.utc
+    
+    # Calculate TDB-UTC offset
+    tdb_utc_offset_sec = (tdb_times.jd - utc_times.jd) * 86400.0  # Convert days to seconds
+    
+    # Add and convert columns
+    vectors['datetime'] = [t.iso for t in utc_times]
+    vectors['tdb_utc_offset'] = tdb_utc_offset_sec
+    
+    # Convert position from AU to meters
+    vectors['pos_x'] = vectors['x'] * CONVERTER.M_PER_AU
+    vectors['pos_y'] = vectors['y'] * CONVERTER.M_PER_AU
+    vectors['pos_z'] = vectors['z'] * CONVERTER.M_PER_AU
+    
+    # Convert velocity from AU/day to m/s
+    vectors['vel_x'] = vectors['vx'] * CONVERTER.M_PER_SEC__PER__AU_PER_DAY
+    vectors['vel_y'] = vectors['vy'] * CONVERTER.M_PER_SEC__PER__AU_PER_DAY
+    vectors['vel_z'] = vectors['vz'] * CONVERTER.M_PER_SEC__PER__AU_PER_DAY
+    
+    # Convert lighttime from days to seconds
+    vectors['lighttime'] = vectors['lighttime'] * CONVERTER.SEC_PER_DAY
+    
+    # Convert range from AU to meters
+    vectors['range'] = vectors['range'] * CONVERTER.M_PER_AU
+    
+    # Convert range_rate from AU/day to m/s
+    vectors['range_rate'] = vectors['range_rate'] * CONVERTER.M_PER_SEC__PER__AU_PER_DAY
+    
+    # Reorder columns with new names (UTC only)
+    column_order = [
+        'targetname',
+        'datetime',           # UTC ISO string
+        'tdb_utc_offset',     # Time scale offset (seconds)
+        'pos_x',              # Position X (meters)
+        'pos_y',              # Position Y (meters)
+        'pos_z',              # Position Z (meters)
+        'vel_x',              # Velocity X (m/s)
+        'vel_y',              # Velocity Y (m/s)
+        'vel_z',              # Velocity Z (m/s)
+        'lighttime',          # Light time (seconds)
+        'range',              # Range (meters)
+        'range_rate',         # Range rate (m/s)
+    ]
+    
+    # Reorder the table
+    vectors = vectors[column_order]
+    
+    print(f"Columns (reordered with SI units): {vectors.colnames}")
+    print(f"Time scale: UTC (Coordinated Universal Time)")
+    print(f"TDB-UTC offset: ~{np.mean(tdb_utc_offset_sec):.3f} ± {np.std(tdb_utc_offset_sec):.3f} sec")
+    print(f"Units: Position [m], Velocity [m/s], Time [s], Range [m], Range-rate [m/s]")
+    
     if output_file:
+        # Write to CSV with custom header including units row
+        import csv
+        
+        # First write using astropy to get the data
         vectors.write(output_file, format='csv', overwrite=True)
+        
+        # Read the file back
+        with open(output_file, 'r') as f:
+            lines = f.readlines()
+        
+        # Insert units row after header
+        header = lines[0].strip()
+        units_row = ',iso_utc,s,m,m,m,m/s,m/s,m/s,s,m,m/s\n'
+        
+        # Write back with units row
+        with open(output_file, 'w') as f:
+            f.write(header + '\n')
+            f.write(units_row)
+            f.writelines(lines[1:])
+        
         print(f"Saved ephemeris to: {output_file}")
         file_size = Path(output_file).stat().st_size / (1024*1024)
         print(f"File size: {file_size:.2f} MB")
@@ -318,13 +437,24 @@ def download_satellite_data(norad_id, start_time, end_time, step='1h'):
         'norad_id': norad_id,
     }
 
-if __name__ == "__main__":
+def parse_command_line_args():
+    """
+    Parse and validate command line arguments
+    
+    Returns:
+    --------
+    tuple : (norad_id, start_time, end_time, step)
+    
+    Raises:
+    -------
+    SystemExit : If arguments are invalid
+    """
     if len(sys.argv) < 4:
-        print("Usage: python download_horizons_data.py <norad_id> <start_time> <end_time> [step]")
+        print("Usage: python download_horizons_ephems_celestrak_tles.py <norad_id> <start_time> <end_time> [step]")
         print("\nExample:")
-        print('  python download_horizons_data.py 25544 "2025-10-01" "2025-10-08"')
-        print('  python download_horizons_data.py 25544 "2025-10-01T00:00:00Z" "2025-10-08T00:00:00Z" 1m')
-        print('  python download_horizons_data.py 25544 "2025-10-01 00:00" "2025-10-08 00:00"')
+        print('  python download_horizons_ephems_celestrak_tles.py 25544 "2025-10-01" "2025-10-08"')
+        print('  python download_horizons_ephems_celestrak_tles.py 25544 "2025-10-01T00:00:00Z" "2025-10-08T00:00:00Z" 1m')
+        print('  python download_horizons_ephems_celestrak_tles.py 25544 "2025-10-01 00:00" "2025-10-08 00:00"')
         print("\nTime format (UTC assumed):")
         print("  YYYY-MM-DD")
         print("  YYYY-MM-DD HH:MM")
@@ -343,29 +473,6 @@ if __name__ == "__main__":
     start_str = sys.argv[2]
     end_str = sys.argv[3]
     step = sys.argv[4] if len(sys.argv) > 4 else '1h'
-    
-    # Parse start and end times
-    def parse_time(time_str):
-        """Parse time string in multiple formats (all assumed UTC)"""
-        # Remove trailing 'Z' if present (ISO 8601 UTC designator)
-        time_str = time_str.rstrip('Z')
-        
-        # Try different formats
-        formats = [
-            '%Y-%m-%dT%H:%M:%S',  # ISO 8601 with seconds: 2025-10-01T00:00:00
-            '%Y-%m-%dT%H:%M',     # ISO 8601 without seconds: 2025-10-01T00:00
-            '%Y-%m-%d %H:%M:%S',  # Space-separated with seconds: 2025-10-01 00:00:00
-            '%Y-%m-%d %H:%M',     # Space-separated without seconds: 2025-10-01 00:00
-            '%Y-%m-%d',           # Date only: 2025-10-01
-        ]
-        
-        for fmt in formats:
-            try:
-                return datetime.strptime(time_str, fmt)
-            except ValueError:
-                continue
-        
-        raise ValueError(f"Cannot parse time string: {time_str}")
     
     try:
         start_time = parse_time(start_str)
@@ -386,4 +493,8 @@ if __name__ == "__main__":
         print("Error: End time must be after start time")
         sys.exit(1)
     
+    return norad_id, start_time, end_time, step
+
+if __name__ == "__main__":
+    norad_id, start_time, end_time, step = parse_command_line_args()
     download_satellite_data(norad_id, start_time, end_time, step)
