@@ -50,13 +50,13 @@ def compute_orbital_elements(df):
 
         # Store elements
         elements.append({
-            'datetime' : row['datetime'],
-            'sma'      : coe['sma'] / 1000,  # Convert m to km
-            'ecc'      : coe['ecc'],
-            'inc'      : np.degrees(coe['inc']),
-            'raan'     : np.degrees(coe['raan']),
-            'argp'     : np.degrees(coe['argp']),
-            'ta'       : np.degrees(coe['ta'])
+            'datetime' : row['datetime'], 
+            'sma'      : coe['sma' ] * CONVERTER.M_PER_KM,     # [m]
+            'ecc'      : coe['ecc' ],                          # [-]
+            'inc'      : coe['inc' ] * CONVERTER.DEG_PER_RAD,  # [deg]
+            'raan'     : coe['raan'] * CONVERTER.DEG_PER_RAD,  # [deg]
+            'argp'     : coe['argp'] * CONVERTER.DEG_PER_RAD,  # [deg]
+            'ta'       : coe['ta'  ] * CONVERTER.DEG_PER_RAD,  # [deg]
         })
     
     return pd.DataFrame(elements)
@@ -83,15 +83,18 @@ def load_tle_data(filepath):
     
     return tles
 
-def propagate_tle_to_times(tle_line1, tle_line2, times):
+def propagate_tle_to_times(
+    tle_line1,
+    tle_line2,
+    times,
+):
     """
     Propagate a TLE to specified times using Skyfield.
     
-    Args:
-        tle_line1, tle_line2: TLE lines
-        times: pandas Series of datetime objects
-    
-    Returns:
+    Input
+        tle_line1, tle_line2 : TLE lines
+        times                : pandas Series of datetime objects
+    Output
         DataFrame with propagated positions and velocities
     """
     import pytz
@@ -109,17 +112,17 @@ def propagate_tle_to_times(tle_line1, tle_line2, times):
         geocentric = satellite.at(t)
         
         # Get position and velocity in km and km/s
-        pos = geocentric.position.km
-        vel = geocentric.velocity.km_per_s
-        
+        pos_vec:np.ndarray = geocentric.position.km        # type: ignore
+        vel_vec:np.ndarray = geocentric.velocity.km_per_s  # type: ignore
+
         results.append({
-            'datetime': dt,
-            'pos_x__km': pos[0],
-            'pos_y__km': pos[1],
-            'pos_z__km': pos[2],
-            'vel_x__km_per_s': vel[0],
-            'vel_y__km_per_s': vel[1],
-            'vel_z__km_per_s': vel[2]
+            'datetime'        : dt,
+            'pos_x__km'       : float(pos_vec[0]),
+            'pos_y__km'       : float(pos_vec[1]),
+            'pos_z__km'       : float(pos_vec[2]),
+            'vel_x__km_per_s' : float(vel_vec[0]),
+            'vel_y__km_per_s' : float(vel_vec[1]),
+            'vel_z__km_per_s' : float(vel_vec[2])
         })
     
     return pd.DataFrame(results)
@@ -145,8 +148,8 @@ def propagate_all_tles_and_select_best(tles, times):
         sat = EarthSatellite(line1, line2, 'ISS', ts)
         satellites.append(sat)
         epoch_dt = sat.epoch.utc_datetime()
-        if epoch_dt.tzinfo is None:
-            epoch_dt = pytz.utc.localize(epoch_dt)
+        if epoch_dt.tzinfo is None: # type: ignore
+            epoch_dt = pytz.utc.localize(epoch_dt) # type: ignore
         tle_epochs.append(epoch_dt)
     
     results = []
@@ -170,23 +173,25 @@ def propagate_all_tles_and_select_best(tles, times):
         geocentric = satellites[best_idx].at(t)
         
         # Get position and velocity in km and km/s
-        pos = geocentric.position.km
-        vel = geocentric.velocity.km_per_s
-        
+        pos_vec:np.ndarray = geocentric.position.km        # type: ignore
+        vel_vec:np.ndarray = geocentric.velocity.km_per_s  # type: ignore
+
         results.append({
             'datetime'        : dt,
-            'pos_x__km'       : pos[0],
-            'pos_y__km'       : pos[1],
-            'pos_z__km'       : pos[2],
-            'vel_x__km_per_s' : vel[0],
-            'vel_y__km_per_s' : vel[1],
-            'vel_z__km_per_s' : vel[2],
+            'pos_x__km'       : float(pos_vec[0]),
+            'pos_y__km'       : float(pos_vec[1]),
+            'pos_z__km'       : float(pos_vec[2]),
+            'vel_x__km_per_s' : float(vel_vec[0]),
+            'vel_y__km_per_s' : float(vel_vec[1]),
+            'vel_z__km_per_s' : float(vel_vec[2]),
             'tle_index'       : best_idx
         })
     
     return pd.DataFrame(results)
 
-def get_tle_epoch_states(tles):
+def get_tle_epoch_states(
+    tles : list[tuple[str, str]]
+) -> pd.DataFrame:
     """
     Get the state vector at the epoch time for each TLE.
     
@@ -205,22 +210,22 @@ def get_tle_epoch_states(tles):
         
         # Get state at epoch
         geocentric = sat.at(epoch_time)
-        pos = geocentric.position.km
-        vel = geocentric.velocity.km_per_s
-        
+        pos_vec:np.ndarray = geocentric.position.km        # type: ignore
+        vel_vec:np.ndarray = geocentric.velocity.km_per_s  # type: ignore
+
         # Convert epoch to datetime
         epoch_dt = epoch_time.utc_datetime()
-        if epoch_dt.tzinfo is None:
-            epoch_dt = pytz.utc.localize(epoch_dt)
+        if epoch_dt.tzinfo is None: # type: ignore
+            epoch_dt = pytz.utc.localize(epoch_dt) # type: ignore
         
         results.append({
-            'datetime': epoch_dt,
-            'pos_x__km': pos[0],
-            'pos_y__km': pos[1],
-            'pos_z__km': pos[2],
-            'vel_x__km_per_s': vel[0],
-            'vel_y__km_per_s': vel[1],
-            'vel_z__km_per_s': vel[2]
+            'datetime'        : epoch_dt,
+            'pos_x__km'       : float(pos_vec[0]),
+            'pos_y__km'       : float(pos_vec[1]),
+            'pos_z__km'       : float(pos_vec[2]),
+            'vel_x__km_per_s' : float(vel_vec[0]),
+            'vel_y__km_per_s' : float(vel_vec[1]),
+            'vel_z__km_per_s' : float(vel_vec[2])
         })
     
     return pd.DataFrame(results)
@@ -244,8 +249,8 @@ def get_best_tle_indices(horizons_df, tles):
     for line1, line2 in tles:
         sat = EarthSatellite(line1, line2, 'ISS', ts)
         epoch_dt = sat.epoch.utc_datetime()
-        if epoch_dt.tzinfo is None:
-            epoch_dt = pytz.utc.localize(epoch_dt)
+        if epoch_dt.tzinfo is None: # type: ignore
+            epoch_dt = pytz.utc.localize(epoch_dt) # type: ignore
         tle_epochs.append(epoch_dt)
     
     # For each horizons time, find closest TLE
