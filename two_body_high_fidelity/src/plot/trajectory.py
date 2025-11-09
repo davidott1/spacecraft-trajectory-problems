@@ -4,7 +4,7 @@ import numpy as np
 
 from plot.utility import get_equal_limits
 from constants import CONVERTER
-from model.dynamics import PHYSICALCONSTANTS
+from two_body_high_fidelity.src.model.two_body import PHYSICALCONSTANTS
 
 def plot_3d_trajectories(
     result: dict,

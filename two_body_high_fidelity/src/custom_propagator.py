@@ -5,7 +5,7 @@ from sgp4.api import jday
 from tle_propagator import propagate_tle
 from model.coordinate_system_converter import CoordinateSystemConverter
 from constants import CONVERTER, TIMEVALUES
-from model.dynamics import PHYSICALCONSTANTS
+from two_body_high_fidelity.src.model.two_body import PHYSICALCONSTANTS
 
 def solve_kepler(M, e, tol=1e-12):
     """Solves Kepler's equation M = E - e*sin(E) for E using Newton's method."""

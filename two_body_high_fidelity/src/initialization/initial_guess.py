@@ -1,5 +1,5 @@
 import numpy as np
-from model.dynamics import PHYSICALCONSTANTS
+from two_body_high_fidelity.src.model.two_body import PHYSICALCONSTANTS
 from initialization.utility import rotation_matrix
 
 def get_initial_state(

@@ -6,7 +6,7 @@ from astropy import units as u
 from astropy.time import Time
 from astropy.coordinates import TEME, GCRS, CartesianRepresentation, CartesianDifferential
 from model.coordinate_system_converter import CoordinateSystemConverter
-from model.dynamics import PHYSICALCONSTANTS
+from two_body_high_fidelity.src.model.two_body import PHYSICALCONSTANTS
 
 
 def teme_to_j2000(teme_pos_vec, teme_vel_vec, jd_utc, debug=False):
