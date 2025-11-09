@@ -5,24 +5,27 @@ from pathlib import Path
 from skyfield.api import load, EarthSatellite
 from skyfield.timelib import Time
 
+from src.constants import CONVERTER
+
 # Constants
 AU_TO_KM = 149597870.7  # km per AU
 MU_EARTH = 398600.4418  # km^3/s^2, Earth's gravitational parameter
 
 def load_horizons_data(filepath):
-    """Load Horizons ephemeris data from CSV."""
-    df = pd.read_csv(filepath)
+    """Load Horizons ephemeris data from CSV with units row."""
+    # Read CSV, skipping the units row (row 1)
+    df = pd.read_csv(filepath, skiprows=[1])
     
     # Convert datetime string to datetime object
-    df['datetime'] = pd.to_datetime(df['datetime_str_utc'])
+    df['datetime'] = pd.to_datetime(df['datetime'])
     
-    # Convert AU to km and AU/day to km/s
-    df['x_km'] = df['x'] * AU_TO_KM
-    df['y_km'] = df['y'] * AU_TO_KM
-    df['z_km'] = df['z'] * AU_TO_KM
-    df['vx_km_s'] = df['vx'] * AU_TO_KM / 86400
-    df['vy_km_s'] = df['vy'] * AU_TO_KM / 86400
-    df['vz_km_s'] = df['vz'] * AU_TO_KM / 86400
+    # Data is already in meters and m/s, convert to km and km/s
+    df['x_km'] = df['pos_x'] * CONVERTER.KM_PER_M
+    df['y_km'] = df['pos_y'] * CONVERTER.KM_PER_M
+    df['z_km'] = df['pos_z'] * CONVERTER.KM_PER_M
+    df['vx_km_s'] = df['vel_x'] * CONVERTER.KM_PER_M
+    df['vy_km_s'] = df['vel_y'] * CONVERTER.KM_PER_M
+    df['vz_km_s'] = df['vel_z'] * CONVERTER.KM_PER_M
     
     return df
 
@@ -112,17 +115,18 @@ def compute_orbital_elements(df):
     return pd.DataFrame(elements)
 
 def load_tle_data(filepath):
-    """Load TLE data from file."""
+    """Load TLE data from file with multiple TLEs."""
     tles = []
     with open(filepath, 'r') as f:
         lines = f.readlines()
     
-    # Parse TLEs (2 lines per TLE)
+    # Parse TLEs (every 2 lines is one TLE)
     for i in range(0, len(lines), 2):
         if i + 1 < len(lines):
             line1 = lines[i].strip()
             line2 = lines[i + 1].strip()
-            tles.append((line1, line2))
+            if line1.startswith('1 ') and line2.startswith('2 '):
+                tles.append((line1, line2))
     
     return tles
 
@@ -162,7 +166,7 @@ def propagate_tle_to_times(tle_line1, tle_line2, times):
             'z_km': pos[2],
             'vx_km_s': vel[0],
             'vy_km_s': vel[1],
-            'vz_km': vel[2]
+            'vz_km_s': vel[2]
         })
     
     return pd.DataFrame(results)
@@ -826,8 +830,8 @@ def plot_orbital_element_errors(horizons_oe_df, tle_oe_df, tles=None, tle_epochs
 def main():
     # Define file paths
     base_path = Path(__file__).parent.parent.parent.parent / 'data'
-    horizons_file = base_path / 'ephems' / 'large' / 'horizons_iss_highres_1m_20251001_utc.csv'
-    tle_file      = base_path / 'ephems' / 'tle_history_iss.txt'
+    horizons_file = base_path / 'ephems' / 'horizons_ephem_25544_iss_20251001_20251008_1m.csv'
+    tle_file      = base_path / 'ephems' / 'celestrak_tles_25544_iss_20251001_20251008.txt'
     
     print(f"Loading Horizons data from: {horizons_file}")
     

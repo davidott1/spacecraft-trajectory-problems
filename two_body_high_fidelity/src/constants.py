@@ -3,9 +3,13 @@ class CONVERTER:
     RAD2DEG = 180.0 / 3.141592653589793  # [degree] per [radian]
     DEG2RAD = 3.141592653589793 / 180.0  # [radian] per [degree]
 
-    # Distance Conversions
+    # Time Conversions
     SEC_PER_DAY = 86400.0         # [seconds] per [day]
-    M_PER_AU    = 149597870700.0  # [meters] per [astronomical unit]
+
+    # Distance Conversions
+    M_PER_KM = 1000.0          # [meters] per [kilometer]
+    KM_PER_M = 1.0 / 1000.0    # [kilometers] per [meter]
+    M_PER_AU = 149597870700.0  # [meters] per [astronomical unit]
     
     # Velocity Conversions
     M_PER_SEC__PER__AU_PER_DAY = M_PER_AU / SEC_PER_DAY  # [meters/second] per [astronomical units/day]
