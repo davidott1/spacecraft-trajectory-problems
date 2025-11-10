@@ -1,13 +1,13 @@
-import numpy as np
-import pandas as pd
+import numpy             as np
+import pandas            as pd
 import matplotlib.pyplot as plt
-from pathlib import Path
-from skyfield.api import load, EarthSatellite
-from skyfield.timelib import Time
 import pytz
+from pathlib          import Path
+from skyfield.api     import load, EarthSatellite
+from skyfield.timelib import Time
 
 from src.model.constants import CONVERTER, PHYSICALCONSTANTS
-from src.model.dynamics import CoordinateSystemConverter
+from src.model.dynamics import CoordinateSystemConverter  # type: ignore[reportMissingImports]
 
 # Initialize coordinate converter
 coord_sys_converter = CoordinateSystemConverter(gp=PHYSICALCONSTANTS.EARTH.GP)
@@ -97,7 +97,6 @@ def propagate_tle_to_times(
     Output
         DataFrame with propagated positions and velocities
     """
-    import pytz
     ts = load.timescale()
     satellite = EarthSatellite(tle_line1, tle_line2, 'ISS', ts)
     
@@ -138,7 +137,6 @@ def propagate_all_tles_and_select_best(tles, times):
     Returns:
         DataFrame with propagated positions and velocities from the best TLE at each time
     """
-    import pytz
     ts = load.timescale()
     
     # Get TLE epochs
@@ -241,7 +239,6 @@ def get_best_tle_indices(horizons_df, tles):
     Returns:
         DataFrame with datetime and tle_index columns
     """
-    import pytz
     ts = load.timescale()
     
     # Get TLE epochs
@@ -313,7 +310,6 @@ def plot_horizons_vs_tle_with_index(horizons_df, tle_df, tle_epochs_df=None, tle
                 # Ensure timezone consistency
                 if hasattr(start_time, 'tzinfo') and start_time.tzinfo is not None:
                     if not hasattr(end_time, 'tzinfo') or end_time.tzinfo is None:
-                        import pytz
                         end_time = pd.Timestamp(end_time).tz_localize('UTC')
                 
                 # Plot horizontal line for this segment
@@ -447,7 +443,6 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None, t
                 # Ensure timezone consistency
                 if hasattr(start_time, 'tzinfo') and start_time.tzinfo is not None:
                     if not hasattr(end_time, 'tzinfo') or end_time.tzinfo is None:
-                        import pytz
                         end_time = pd.Timestamp(end_time).tz_localize('UTC')
                 
                 # Plot horizontal line for this segment
