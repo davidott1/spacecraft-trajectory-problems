@@ -130,7 +130,7 @@ class ThirdBodyPerturbations:
                 et     = et_seconds,
                 ref    = frame,
                 abcorr = 'NONE',
-                obs    = 399  # Earth
+                obs    = 399  # relative to Earth
             )
             return np.array(state[0:3])  # position only
         else:
@@ -254,25 +254,25 @@ class ThirdBodyPerturbations:
             # Get position of perturbing body relative to Earth
             pos_body_vec = self.get_body_position(body, et_seconds)
             
-            # Position of satellite relative to perturbing body
-            pos_sat_to_body = pos_body_vec - pos_sat_vec
+            # Position of perturbing body relative to satellite
+            pos_sat_to_body_vec = pos_body_vec - pos_sat_vec
             
             # Get gravitational parameter
             if body.upper() == 'SUN':
-                GP = PHYSICALCONSTANTS.SUN.GP  * CONVERTER.KM_PER_M**3  # [m³/s²] -> [km³/s²]
+                GP = PHYSICALCONSTANTS.SUN.GP * CONVERTER.KM_PER_M**3  # [m³/s²] -> [km³/s²]
             elif body.upper() == 'MOON':
-                GP = PHYSICALCONSTANTS.MOON.GP  * CONVERTER.KM_PER_M**3  # [m³/s²] -> [km³/s²]
+                GP = PHYSICALCONSTANTS.MOON.GP * CONVERTER.KM_PER_M**3  # [m³/s²] -> [km³/s²]
             else:
                 continue
             
-            # Third-body acceleration (point mass approximation)
-            #   a = GM * (r_sat_to_body / |r_sat_to_body|³ - r_body / |r_body|³)
-            pos_sat_to_body_mag = np.linalg.norm(pos_sat_to_body)
+            # Third-body acceleration
+            #   a = GP * (r_sat_to_body / |r_sat_to_body|³ - r_body / |r_body|³)
+            pos_sat_to_body_mag = np.linalg.norm(pos_sat_to_body_vec)
             pos_body_mag        = np.linalg.norm(pos_body_vec)
 
-            acc_vec += GP * (
-                pos_sat_to_body / pos_sat_to_body_mag**3
-                - pos_body_vec / pos_body_mag**3
+            acc_vec += (
+                - GP * pos_body_vec / pos_body_mag**3
+                + GP * pos_sat_to_body_vec / pos_sat_to_body_mag**3
             )
         
         return acc_vec
