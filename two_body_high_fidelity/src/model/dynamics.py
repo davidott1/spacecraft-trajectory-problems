@@ -347,7 +347,7 @@ class ThirdBodyGravity:
         
         print(f"SPICE kernels loaded from: {kernel_folderpath}")
     
-    def _get_body_position(
+    def _get_position_body_spice(
         self,
         body_name  : str,
         et_seconds : float,
@@ -382,7 +382,7 @@ class ThirdBodyGravity:
             return np.array(state[0:3])  # position only
         else:
             # Use analytical approximation
-            return self._analytical_position(body_name, et_seconds)
+            return self._get_position_body_analytical(body_name, et_seconds)
     
     def _get_naif_id(
         self,
@@ -406,8 +406,8 @@ class ThirdBodyGravity:
             'MOON' : 301,
         }
         return naif_ids[body_name.upper()]
-    
-    def _analytical_position(
+
+    def _get_position_body_analytical(
         self,
         body_name  : str,
         et_seconds : float,
@@ -507,7 +507,7 @@ class ThirdBodyGravity:
         et_seconds = self.time_o + time
         
         # Compute acceleration for all bodies
-        acc_vec_km = np.zeros(3)
+        acc_vec = np.zeros(3)
         for body in self.bodies:
 
             # Get gravitational parameter
@@ -519,7 +519,7 @@ class ThirdBodyGravity:
                 continue
 
             # Position of central body (Earth) to perturbing body
-            pos_centbody_to_pertbody_vec  = self._get_body_position(body, et_seconds)
+            pos_centbody_to_pertbody_vec  = self._get_position_body_spice(body, et_seconds)
             breakpoint()
             pos_centbody_to_pertbody_vec *= CONVERTER.M_PER_KM  # [km] -> [m]
             pos_centbody_to_pertbody_mag  = np.linalg.norm(pos_centbody_to_pertbody_vec)
@@ -529,12 +529,12 @@ class ThirdBodyGravity:
             pos_sat_to_pertbody_mag = np.linalg.norm(pos_sat_to_pertbody_vec)
 
             # Third-body acceleration contribution
-            acc_vec_km += (
+            acc_vec += (
                 GP * pos_sat_to_pertbody_vec / pos_sat_to_pertbody_mag**3
                 - GP * pos_centbody_to_pertbody_vec / pos_centbody_to_pertbody_mag**3
             )
-        
-        return acc_vec_km
+
+        return acc_vec
     
     def __del__(self):
         """
