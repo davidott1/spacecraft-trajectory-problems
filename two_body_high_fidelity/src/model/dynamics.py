@@ -1,3 +1,98 @@
+"""
+Spacecraft Orbital Dynamics Module
+==================================
+
+High-fidelity orbital dynamics models for spacecraft trajectory propagation.
+
+Class Structure:
+----------------
+
+Acceleration Hierarchy:
+    Acceleration (coordinator)
+    ├── Gravity
+    │   ├── TwoBodyGravity
+    │   │   ├── point_mass()
+    │   │   └── oblate (J2, J3, J4)
+    │   └── ThirdBodyGravity
+    │       ├── point_mass() (Sun, Moon)
+    │       ├── oblate() (future)
+    │       └── SPICE/analytical ephemerides
+    ├── AtmosphericDrag
+    │   └── Exponential density model
+    └── SolarRadiationPressure (future)
+
+Main Components:
+----------------
+1. **Acceleration** - Top-level coordinator that computes:
+   total = gravity + drag + solar_radiation_pressure
+
+2. **Gravity** - Gravitational acceleration coordinator with methods:
+   - two_body_point_mass()
+   - two_body_oblate()
+   - third_body_point_mass()
+   - third_body_oblate() (future)
+   - relativity() (future)
+
+3. **TwoBodyGravity** - Central body gravity:
+   - point_mass() - Keplerian two-body
+   - oblate_j2() - J2 oblateness
+   - oblate_j3() - J3 oblateness
+   - oblate_j4() - J4 oblateness
+
+4. **ThirdBodyGravity** - Perturbations from Sun, Moon, etc.:
+   - point_mass() - Third-body point mass
+   - SPICE ephemerides or analytical approximations
+
+5. **AtmosphericDrag** - Atmospheric drag model:
+   - Exponential density model
+   - Rotating atmosphere
+
+6. **SolarRadiationPressure** - SRP model (future)
+
+Utility Classes:
+----------------
+- GeneralStateEquationsOfMotion - ODE integration interface
+- TwoBody_RootSolvers - Kepler's equation, Lambert's problem
+- CoordinateSystemConverter - Position/velocity ↔ orbital elements
+
+Usage Example:
+--------------
+    from src.model.dynamics import Acceleration, GeneralStateEquationsOfMotion
+    from src.model.constants import PHYSICALCONSTANTS
+    
+    # Initialize acceleration model
+    acceleration = Acceleration(
+        gp      = PHYSICALCONSTANTS.EARTH.GP,
+        j2      = PHYSICALCONSTANTS.EARTH.J2,
+        pos_ref = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR,
+        enable_drag       = True,
+        cd                = 2.2,
+        area_drag         = 10.0,
+        mass              = 1000.0,
+        enable_third_body = True,
+    )
+    
+    # Create equations of motion
+    eom = GeneralStateEquationsOfMotion(acceleration)
+    
+    # Integrate (e.g., with scipy.integrate.solve_ivp)
+    state_dot = eom.state_time_derivative(time, state_vec)
+
+Units:
+------
+- Position: meters [m]
+- Velocity: meters per second [m/s]
+- Acceleration: meters per second squared [m/s²]
+- Time: seconds [s]
+- Angles: radians [rad]
+
+Notes:
+------
+- All calculations performed in inertial J2000 frame
+- Third-body positions from SPICE kernels or analytical approximations
+- Atmospheric model accounts for Earth rotation
+"""
+
 import numpy as np
 import spiceypy as spice
 from pathlib import Path
@@ -5,6 +100,10 @@ from typing import Optional
 
 from src.model.constants import PHYSICALCONSTANTS, CONVERTER
 
+
+# =============================================================================
+# Gravity Components (bottom of hierarchy)
+# =============================================================================
 
 class TwoBodyGravity:
     """
@@ -78,16 +177,16 @@ class TwoBodyGravity:
         if self.j2 == 0.0:
             return np.zeros(3)
         
-        pos_mag = np.linalg.norm(pos_vec)
-        posmag2 = pos_mag**2
-        posmag5 = posmag2 * posmag2 * pos_mag
+        pos_mag      = np.linalg.norm(pos_vec)
+        pos_mag_pwr2 = pos_mag**2
+        pos_mag_pwr5 = pos_mag_pwr2 * pos_mag_pwr2 * pos_mag
         
-        factor = 1.5 * self.j2 * self.gp * self.pos_ref**2 / posmag5
+        factor = 1.5 * self.j2 * self.gp * self.pos_ref**2 / pos_mag_pwr5
         
         acc_vec    = np.zeros(3)
-        acc_vec[0] = factor * pos_vec[0] * (5 * pos_vec[2]**2 / posmag2 - 1)
-        acc_vec[1] = factor * pos_vec[1] * (5 * pos_vec[2]**2 / posmag2 - 1)
-        acc_vec[2] = factor * pos_vec[2] * (5 * pos_vec[2]**2 / posmag2 - 3)
+        acc_vec[0] = factor * pos_vec[0] * (5 * pos_vec[2]**2 / pos_mag_pwr2 - 1)
+        acc_vec[1] = factor * pos_vec[1] * (5 * pos_vec[2]**2 / pos_mag_pwr2 - 1)
+        acc_vec[2] = factor * pos_vec[2] * (5 * pos_vec[2]**2 / pos_mag_pwr2 - 3)
         
         return acc_vec
     
@@ -146,7 +245,8 @@ class TwoBodyGravity:
             return np.zeros(3)
         
         x, y, z = pos_vec[0], pos_vec[1], pos_vec[2]
-        pos_mag = np.linalg.norm(pos_vec)
+
+        pos_mag      = np.linalg.norm(pos_vec)
         pos_mag_pwr2 = pos_mag**2
         pos_mag_pwr9 = pos_mag_pwr2**4 * pos_mag
         
@@ -157,9 +257,8 @@ class TwoBodyGravity:
         acc_vec[0] = factor * x * (1 - 14 * z2_r2 + 21 * z2_r2**2)
         acc_vec[1] = factor * y * (1 - 14 * z2_r2 + 21 * z2_r2**2)
         acc_vec[2] = factor * z * (5 - 70 * z2_r2 / 3 + 21 * z2_r2**2)
-        
         return acc_vec
-
+    
 
 class ThirdBodyGravity:
     """
@@ -169,10 +268,10 @@ class ThirdBodyGravity:
     
     def __init__(
         self,
-        time_o           : float = 0.0,
-        use_spice        : bool  = True,
-        bodies           : list  = None,
-        spice_kernel_dir : str   = None,
+        time_o                  : float = 0.0,
+        use_spice               : bool  = True,
+        bodies                  : list  = None,
+        spice_kernel_folderpath : str   = None,
     ):
         """
         Initialize third-body gravity model
@@ -185,7 +284,7 @@ class ThirdBodyGravity:
             Use SPICE ephemerides (True) or analytical approximations (False)
         bodies : list of str
             Which bodies to include (default: ['sun', 'moon'])
-        spice_kernel_dir : str
+        spice_kernel_folderpath : str
             Path to SPICE kernel directory
         """
         self.time_o    = time_o
@@ -193,11 +292,11 @@ class ThirdBodyGravity:
         self.use_spice = use_spice
         
         if use_spice:
-            self._load_spice_kernels(spice_kernel_dir)
+            self._load_spice_kernels(spice_kernel_folderpath)
     
     def _load_spice_kernels(
         self,
-        kernel_dir : Optional[Path],
+        kernel_folderpath : Optional[Path],
     ) -> None:
         """
         Load required SPICE kernels
@@ -209,15 +308,15 @@ class ThirdBodyGravity:
         - SPK (Planetary Ephemeris): de430.bsp or de440.bsp
         - PCK (Planetary Constants): pck00010.tpc
         """
-        if kernel_dir is None:
+        if kernel_folderpath is None:
             # Default to a kernels directory in the project
-            kernel_dir = Path(__file__).parent.parent.parent / 'data' / 'spice_kernels'
+            kernel_folderpath = Path(__file__).parent.parent.parent / 'data' / 'spice_kernels'
         
-        kernel_dir = Path(kernel_dir)
+        kernel_folderpath = Path(kernel_folderpath)
         
-        if not kernel_dir.exists():
+        if not kernel_folderpath.exists():
             raise FileNotFoundError(
-                f"SPICE kernel directory not found: {kernel_dir}\n"
+                f"SPICE kernel directory not found: {kernel_folderpath}\n"
                 f"Please download kernels from https://naif.jpl.nasa.gov/pub/naif/generic_kernels/\n"
                 f"Required files:\n"
                 f"  - lsk/naif0012.tls\n"
@@ -226,27 +325,27 @@ class ThirdBodyGravity:
             )
         
         # Load leap second kernel
-        lsk_file = kernel_dir / 'naif0012.tls'
+        lsk_file = kernel_folderpath / 'naif0012.tls'
         if lsk_file.exists():
             spice.furnsh(str(lsk_file))
         else:
             raise FileNotFoundError(f"LSK file not found: {lsk_file}")
         
         # Load planetary ephemeris
-        spk_files = list(kernel_dir.glob('de*.bsp'))
+        spk_files = list(kernel_folderpath.glob('de*.bsp'))
         if spk_files:
             spice.furnsh(str(spk_files[0]))  # Use first found
         else:
-            raise FileNotFoundError(f"No SPK files (de*.bsp) found in {kernel_dir}")
+            raise FileNotFoundError(f"No SPK files (de*.bsp) found in {kernel_folderpath}")
         
         # Load planetary constants
-        pck_file = kernel_dir / 'pck00010.tpc'
+        pck_file = kernel_folderpath / 'pck00010.tpc'
         if pck_file.exists():
             spice.furnsh(str(pck_file))
         else:
             raise FileNotFoundError(f"PCK file not found: {pck_file}")
         
-        print(f"SPICE kernels loaded from: {kernel_dir}")
+        print(f"SPICE kernels loaded from: {kernel_folderpath}")
     
     def _get_body_position(
         self,
@@ -413,12 +512,7 @@ class ThirdBodyGravity:
         # Compute acceleration for all bodies
         acc_vec_km = np.zeros(3)
         for body in self.bodies:
-            # Get position of perturbing body relative to Earth [km]
-            pos_body_vec = self._get_body_position(body, et_seconds)
-            
-            # Position of perturbing body relative to satellite [km]
-            pos_sat_to_body_vec = pos_body_vec - pos_sat_vec_km
-            
+
             # Get gravitational parameter
             if body.upper() == 'SUN':
                 GP = PHYSICALCONSTANTS.SUN.GP * CONVERTER.KM_PER_M**3  # [m³/s²] -> [km³/s²]
@@ -426,15 +520,19 @@ class ThirdBodyGravity:
                 GP = PHYSICALCONSTANTS.MOON.GP * CONVERTER.KM_PER_M**3  # [m³/s²] -> [km³/s²]
             else:
                 continue
-            
-            # Third-body acceleration [km/s²]
-            #   a = GP * (r_sat_to_body / |r_sat_to_body|³ - r_body / |r_body|³)
-            pos_sat_to_body_mag = np.linalg.norm(pos_sat_to_body_vec)
-            pos_body_mag        = np.linalg.norm(pos_body_vec)
 
+            # Position of central body (Earth) to perturbing body
+            pos_centbody_to_pertbody_vec = self._get_body_position(body, et_seconds)
+            pos_centbody_to_pertbody_mag = np.linalg.norm(pos_centbody_to_pertbody_vec)
+            
+            # Position of satellite to perturbing body
+            pos_sat_to_pertbody_vec = pos_centbody_to_pertbody_vec - pos_sat_vec_km
+            pos_sat_to_pertbody_mag = np.linalg.norm(pos_sat_to_pertbody_vec)
+
+            # Third-body acceleration contribution
             acc_vec_km += (
-                - GP * pos_body_vec / pos_body_mag**3
-                + GP * pos_sat_to_body_vec / pos_sat_to_body_mag**3
+                GP * pos_sat_to_pertbody_vec / pos_sat_to_pertbody_mag**3
+                - GP * pos_centbody_to_pertbody_vec / pos_centbody_to_pertbody_mag**3
             )
         
         # Convert km/s² to m/s²
@@ -462,16 +560,16 @@ class Gravity:
     
     def __init__(
         self,
-        gp                   : float,
-        j2                   : float = 0.0,
-        j3                   : float = 0.0,
-        j4                   : float = 0.0,
-        pos_ref              : float = 0.0,
-        enable_third_body    : bool  = False,
-        time_o               : float = 0.0,
-        third_body_use_spice : bool  = True,
-        third_body_bodies    : list  = None,
-        spice_kernel_dir     : str   = None,
+        gp                      : float,
+        j2                      : float = 0.0,
+        j3                      : float = 0.0,
+        j4                      : float = 0.0,
+        pos_ref                 : float = 0.0,
+        enable_third_body       : bool  = False,
+        time_o                  : float = 0.0,
+        third_body_use_spice    : bool  = True,
+        third_body_bodies       : list  = None,
+        spice_kernel_folderpath : str   = None,
     ):
         """
         Initialize gravity acceleration components
@@ -492,7 +590,7 @@ class Gravity:
             Use SPICE ephemerides (True) or analytical approximations (False)
         third_body_bodies : list of str
             Which bodies to include (default: ['sun', 'moon'])
-        spice_kernel_dir : str
+        spice_kernel_folderpath : str
             Path to SPICE kernel directory
         """
         # Two-body gravity
@@ -508,10 +606,10 @@ class Gravity:
         self.enable_third_body = enable_third_body
         if self.enable_third_body:
             self.third_body = ThirdBodyGravity(
-                time_o           = time_o,
-                use_spice        = third_body_use_spice,
-                bodies           = third_body_bodies,
-                spice_kernel_dir = spice_kernel_dir,
+                time_o                  = time_o,
+                use_spice               = third_body_use_spice,
+                bodies                  = third_body_bodies,
+                spice_kernel_folderpath = spice_kernel_folderpath,
             )
         else:
             self.third_body = None
@@ -536,6 +634,7 @@ class Gravity:
         acc_vec : np.ndarray
             Total gravity acceleration [m/s²]
         """
+        # Initialize acceleration vector
         acc_vec = np.zeros(3)
         
         # Two-body contributions
@@ -661,6 +760,10 @@ class Gravity:
         # TODO: Implement post-Newtonian corrections
         return np.zeros(3)
 
+
+# =============================================================================
+# Non-Gravitational Accelerations
+# =============================================================================
 
 class AtmosphericDrag:
     """
@@ -807,6 +910,10 @@ class SolarRadiationPressure:
         return np.zeros(3)
 
 
+# =============================================================================
+# Top-Level Coordinator
+# =============================================================================
+
 class Acceleration:
     """
     Acceleration coordinator - orchestrates all acceleration components
@@ -821,23 +928,23 @@ class Acceleration:
     
     def __init__(
         self,
-        gp                   : float,
-        time_o               : float = 0.0,
-        j2                   : float = 0.0,
-        j3                   : float = 0.0,
-        j4                   : float = 0.0,
-        pos_ref              : float = 0.0,
-        mass                 : float = 1.0,
-        enable_drag          : bool  = False,
-        cd                   : float = 0.0,
-        area_drag            : float = 0.0,
-        enable_third_body    : bool  = False,
-        third_body_use_spice : bool  = True,
-        third_body_bodies    : list  = None,
-        spice_kernel_dir     : str   = None,
-        enable_srp           : bool  = False,
-        cr                   : float = 0.0,
-        area_srp             : float = 0.0,
+        gp                      : float,
+        time_o                  : float = 0.0,
+        j2                      : float = 0.0,
+        j3                      : float = 0.0,
+        j4                      : float = 0.0,
+        pos_ref                 : float = 0.0,
+        mass                    : float = 1.0,
+        enable_drag             : bool  = False,
+        cd                      : float = 0.0,
+        area_drag               : float = 0.0,
+        enable_third_body       : bool  = False,
+        third_body_use_spice    : bool  = True,
+        third_body_bodies       : list  = None,
+        spice_kernel_folderpath : str   = None,
+        enable_srp              : bool  = False,
+        cr                      : float = 0.0,
+        area_srp                : float = 0.0,
     ):
         """
         Initialize acceleration coordinator
@@ -866,7 +973,7 @@ class Acceleration:
             Use SPICE ephemerides (True) or analytical approximations (False)
         third_body_bodies : list of str
             Which bodies to include (default: ['sun', 'moon'])
-        spice_kernel_dir : str
+        spice_kernel_folderpath : str
             Path to SPICE kernel directory
         enable_srp : bool
             Enable solar radiation pressure (not yet implemented)
@@ -877,16 +984,16 @@ class Acceleration:
         """
         # Create acceleration component instances
         self.gravity = Gravity(
-            gp                   = gp,
-            j2                   = j2,
-            j3                   = j3,
-            j4                   = j4,
-            pos_ref              = pos_ref,
-            enable_third_body    = enable_third_body,
-            time_o               = time_o,
-            third_body_use_spice = third_body_use_spice,
-            third_body_bodies    = third_body_bodies,
-            spice_kernel_dir     = spice_kernel_dir,
+            gp                      = gp,
+            j2                      = j2,
+            j3                      = j3,
+            j4                      = j4,
+            pos_ref                 = pos_ref,
+            enable_third_body       = enable_third_body,
+            time_o                  = time_o,
+            third_body_use_spice    = third_body_use_spice,
+            third_body_bodies       = third_body_bodies,
+            spice_kernel_folderpath = spice_kernel_folderpath,
         )
         
         self.enable_drag = enable_drag
@@ -946,6 +1053,10 @@ class Acceleration:
         return acc_vec
 
 
+# =============================================================================
+# Equations of Motion
+# =============================================================================
+
 class GeneralStateEquationsOfMotion:
     """
     General state equations of motion for orbit propagation
@@ -995,6 +1106,10 @@ class GeneralStateEquationsOfMotion:
         
         return state_dot_vec
 
+
+# =============================================================================
+# Utility Classes
+# =============================================================================
 
 class TwoBody_RootSolvers:
     """
