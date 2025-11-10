@@ -5,10 +5,5 @@
     "[python]": {
         "editor.tabSize": 2,
         "editor.insertSpaces": true
-    },
-    "python.analysis.extraPaths": [
-        "${workspaceFolder}/two_body_high_fidelity"
-    ],
-    "python.defaultInterpreterPath": "python",
-    "python.analysis.typeCheckingMode": "basic"
+    }
 }
