@@ -245,7 +245,7 @@ class TwoBodyGravity:
             return np.zeros(3)
         
         x, y, z = pos_vec[0], pos_vec[1], pos_vec[2]
-
+        
         pos_mag      = np.linalg.norm(pos_vec)
         pos_mag_pwr2 = pos_mag**2
         pos_mag_pwr9 = pos_mag_pwr2**4 * pos_mag
@@ -257,6 +257,7 @@ class TwoBodyGravity:
         acc_vec[0] = factor * x * (1 - 14 * z2_r2 + 21 * z2_r2**2)
         acc_vec[1] = factor * y * (1 - 14 * z2_r2 + 21 * z2_r2**2)
         acc_vec[2] = factor * z * (5 - 70 * z2_r2 / 3 + 21 * z2_r2**2)
+        
         return acc_vec
     
 

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 from constants import CONVERTER, TIMEVALUES
-from model.dynamics import TwoBodyDynamics, PHYSICALCONSTANTS, EquationsOfMotion
+from two_body_high_fidelity.src.model.two_body import TwoBodyDynamics, PHYSICALCONSTANTS, EquationsOfMotion
 from plot.trajectory import plot_3d_trajectories, plot_time_series, plot_3d_error, plot_time_series_error
 from model.coordinate_system_converter import CoordinateSystemConverter
 from initialization import initial_guess
