@@ -368,7 +368,7 @@ class ThirdBodyGravity:
         Output:
         -------
         pos_vec : np.ndarray (3,)
-            Position vector [km]
+            Position vector [m]
         """
         if self.use_spice:
             # SPICE state relative to Earth
@@ -379,10 +379,11 @@ class ThirdBodyGravity:
                 abcorr = 'NONE',
                 obs    = 399  # relative to Earth
             )
-            return np.array(state[0:3])  # position only
+            # SPICE returns km, convert to m
+            return np.array(state[0:3]) * CONVERTER.M_PER_KM
         else:
-            # Use analytical approximation
-            return self._get_position_body_analytical(body_name, et_seconds)
+            # Use analytical approximation (returns km, convert to m)
+            return self._get_position_body_analytical(body_name, et_seconds) * CONVERTER.M_PER_KM
     
     def _get_naif_id(
         self,
@@ -427,7 +428,7 @@ class ThirdBodyGravity:
         Output:
         -------
         pos_vec : np.ndarray (3,)
-            Position vector [km]
+            Position vector [km]  # Note: returns km (caller converts to m)
         """
         # Convert to Julian centuries from J2000
         T = et_seconds / (86400.0 * 36525.0)
@@ -495,7 +496,7 @@ class ThirdBodyGravity:
         ------
         time : float
             Current time [s]
-        pos_vec : np.ndarray
+        pos_sat_vec : np.ndarray
             Satellite position vector [m]
         
         Output:
@@ -510,25 +511,24 @@ class ThirdBodyGravity:
         acc_vec = np.zeros(3)
         for body in self.bodies:
 
-            # Get gravitational parameter
+            # Get gravitational parameter [m³/s²]
             if body.upper() == 'SUN':
-                GP = PHYSICALCONSTANTS.SUN.GP   # [m³/s²]
+                GP = PHYSICALCONSTANTS.SUN.GP
             elif body.upper() == 'MOON':
-                GP = PHYSICALCONSTANTS.MOON.GP  # [m³/s²]
+                GP = PHYSICALCONSTANTS.MOON.GP
             else:
                 continue
 
-            # Position of central body (Earth) to perturbing body
-            pos_centbody_to_pertbody_vec  = self._get_position_body_spice(body, et_seconds)
-            breakpoint()
-            pos_centbody_to_pertbody_vec *= CONVERTER.M_PER_KM  # [km] -> [m]
-            pos_centbody_to_pertbody_mag  = np.linalg.norm(pos_centbody_to_pertbody_vec)
+            # Position of central body (Earth) to perturbing body [m]
+            # _get_position_body_spice already returns meters
+            pos_centbody_to_pertbody_vec = self._get_position_body_spice(body, et_seconds)
+            pos_centbody_to_pertbody_mag = np.linalg.norm(pos_centbody_to_pertbody_vec)
             
-            # Position of satellite to perturbing body
+            # Position of satellite to perturbing body [m]
             pos_sat_to_pertbody_vec = pos_centbody_to_pertbody_vec - pos_sat_vec
             pos_sat_to_pertbody_mag = np.linalg.norm(pos_sat_to_pertbody_vec)
 
-            # Third-body acceleration contribution
+            # Third-body acceleration contribution [m/s²]
             acc_vec += (
                 GP * pos_sat_to_pertbody_vec / pos_sat_to_pertbody_mag**3
                 - GP * pos_centbody_to_pertbody_vec / pos_centbody_to_pertbody_mag**3
