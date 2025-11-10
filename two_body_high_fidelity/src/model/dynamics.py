@@ -485,8 +485,8 @@ class ThirdBodyGravity:
     
     def point_mass(
         self,
-        time    : float,
-        pos_vec : np.ndarray,
+        time        : float,
+        pos_sat_vec : np.ndarray,
     ) -> np.ndarray:
         """
         Third-body point mass perturbations (Sun, Moon)
@@ -506,27 +506,26 @@ class ThirdBodyGravity:
         # Ephemeris time is seconds from J2000 epoch
         et_seconds = self.time_o + time
         
-        # Convert satellite position to km
-        pos_sat_vec_km = pos_vec / 1000.0
-        
         # Compute acceleration for all bodies
         acc_vec_km = np.zeros(3)
         for body in self.bodies:
 
             # Get gravitational parameter
             if body.upper() == 'SUN':
-                GP = PHYSICALCONSTANTS.SUN.GP * CONVERTER.KM_PER_M**3  # [m³/s²] -> [km³/s²]
+                GP = PHYSICALCONSTANTS.SUN.GP   # [m³/s²]
             elif body.upper() == 'MOON':
-                GP = PHYSICALCONSTANTS.MOON.GP * CONVERTER.KM_PER_M**3  # [m³/s²] -> [km³/s²]
+                GP = PHYSICALCONSTANTS.MOON.GP  # [m³/s²]
             else:
                 continue
 
             # Position of central body (Earth) to perturbing body
-            pos_centbody_to_pertbody_vec = self._get_body_position(body, et_seconds)
-            pos_centbody_to_pertbody_mag = np.linalg.norm(pos_centbody_to_pertbody_vec)
+            pos_centbody_to_pertbody_vec  = self._get_body_position(body, et_seconds)
+            breakpoint()
+            pos_centbody_to_pertbody_vec *= CONVERTER.M_PER_KM  # [km] -> [m]
+            pos_centbody_to_pertbody_mag  = np.linalg.norm(pos_centbody_to_pertbody_vec)
             
             # Position of satellite to perturbing body
-            pos_sat_to_pertbody_vec = pos_centbody_to_pertbody_vec - pos_sat_vec_km
+            pos_sat_to_pertbody_vec = pos_centbody_to_pertbody_vec - pos_sat_vec
             pos_sat_to_pertbody_mag = np.linalg.norm(pos_sat_to_pertbody_vec)
 
             # Third-body acceleration contribution
@@ -535,8 +534,7 @@ class ThirdBodyGravity:
                 - GP * pos_centbody_to_pertbody_vec / pos_centbody_to_pertbody_mag**3
             )
         
-        # Convert km/s² to m/s²
-        return acc_vec_km * 1000.0
+        return acc_vec_km
     
     def __del__(self):
         """
