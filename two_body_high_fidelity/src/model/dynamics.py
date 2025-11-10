@@ -520,7 +520,6 @@ class ThirdBodyGravity:
                 continue
 
             # Position of central body (Earth) to perturbing body [m]
-            # _get_position_body_spice already returns meters
             pos_centbody_to_pertbody_vec = self._get_position_body_spice(body, et_seconds)
             pos_centbody_to_pertbody_mag = np.linalg.norm(pos_centbody_to_pertbody_vec)
             
