@@ -1,22 +1,471 @@
 import numpy as np
-from src.model.constants import PHYSICALCONSTANTS
-from src.model.third_body import ThirdBodyPerturbations
+import spiceypy as spice
+from pathlib import Path
+from typing import Optional
+
+from src.model.constants import PHYSICALCONSTANTS, CONVERTER
 
 
-class GravityAcceleration:
+class TwoBodyGravity:
     """
-    Gravitational acceleration components:
-    - Two-body point mass
-    - Two-body oblateness (J2, J3, J4)
-    - Third-body point mass (Sun, Moon)
+    Two-body gravitational acceleration components
+    Handles point mass and oblateness (J2, J3, J4) perturbations
+    """
+    
+    def __init__(
+        self,
+        gp      : float,
+        j2      : float = 0.0,
+        j3      : float = 0.0,
+        j4      : float = 0.0,
+        pos_ref : float = 0.0,
+    ):
+        """
+        Initialize two-body gravity model
+        
+        Input:
+        ------
+        gp : float
+            Gravitational parameter of central body [m³/s²]
+        j2, j3, j4 : float
+            Harmonic coefficients for oblateness
+        pos_ref : float
+            Reference radius for harmonic coefficients [m]
+        """
+        self.gp      = gp
+        self.pos_ref = pos_ref
+        self.j2      = j2
+        self.j3      = j3
+        self.j4      = j4
+    
+    def point_mass(
+        self,
+        pos_vec : np.ndarray,
+    ) -> np.ndarray:
+        """
+        Two-body point mass gravity
+        
+        Input:
+        ------
+        pos_vec : np.ndarray
+            Position vector [m]
+        
+        Output:
+        -------
+        acc_vec : np.ndarray
+            Acceleration vector [m/s²]
+        """
+        pos_mag = np.linalg.norm(pos_vec)
+        return -self.gp * pos_vec / pos_mag**3
+    
+    def oblate_j2(
+        self,
+        pos_vec : np.ndarray,
+    ) -> np.ndarray:
+        """
+        J2 oblateness perturbation
+        
+        Input:
+        ------
+        pos_vec : np.ndarray
+            Position vector [m]
+        
+        Output:
+        -------
+        acc_vec : np.ndarray
+            Acceleration vector [m/s²]
+        """
+        if self.j2 == 0.0:
+            return np.zeros(3)
+        
+        pos_mag = np.linalg.norm(pos_vec)
+        posmag2 = pos_mag**2
+        posmag5 = posmag2 * posmag2 * pos_mag
+        
+        factor = 1.5 * self.j2 * self.gp * self.pos_ref**2 / posmag5
+        
+        acc_vec    = np.zeros(3)
+        acc_vec[0] = factor * pos_vec[0] * (5 * pos_vec[2]**2 / posmag2 - 1)
+        acc_vec[1] = factor * pos_vec[1] * (5 * pos_vec[2]**2 / posmag2 - 1)
+        acc_vec[2] = factor * pos_vec[2] * (5 * pos_vec[2]**2 / posmag2 - 3)
+        
+        return acc_vec
+    
+    def oblate_j3(
+        self,
+        pos_vec : np.ndarray,
+    ) -> np.ndarray:
+        """
+        J3 oblateness perturbation
+        
+        Input:
+        ------
+        pos_vec : np.ndarray
+            Position vector [m]
+        
+        Output:
+        -------
+        acc_vec : np.ndarray
+            Acceleration vector [m/s²]
+        """
+        if self.j3 == 0.0:
+            return np.zeros(3)
+        
+        x, y, z = pos_vec[0], pos_vec[1], pos_vec[2]
+        pos_mag = np.linalg.norm(pos_vec)
+        posmag2 = pos_mag**2
+        posmag7 = posmag2 * posmag2 * posmag2 * pos_mag
+        
+        factor = 2.5 * self.j3 * self.gp * self.pos_ref**3 / posmag7
+        
+        acc_vec    = np.zeros(3)
+        acc_vec[0] = factor * x * z * (3 - 7 * z**2 / posmag2)
+        acc_vec[1] = factor * y * z * (3 - 7 * z**2 / posmag2)
+        acc_vec[2] = factor * (3 * z**2 - 7 * z**4 / posmag2 - 0.6 * posmag2)
+        
+        return acc_vec
+    
+    def oblate_j4(
+        self,
+        pos_vec : np.ndarray,
+    ) -> np.ndarray:
+        """
+        J4 oblateness perturbation
+        
+        Input:
+        ------
+        pos_vec : np.ndarray
+            Position vector [m]
+        
+        Output:
+        -------
+        acc_vec : np.ndarray
+            Acceleration vector [m/s²]
+        """
+        if self.j4 == 0.0:
+            return np.zeros(3)
+        
+        x, y, z = pos_vec[0], pos_vec[1], pos_vec[2]
+        pos_mag = np.linalg.norm(pos_vec)
+        pos_mag_pwr2 = pos_mag**2
+        pos_mag_pwr9 = pos_mag_pwr2**4 * pos_mag
+        
+        z2_r2  = z**2 / pos_mag_pwr2
+        factor = 1.875 * self.j4 * self.gp * self.pos_ref**4 / pos_mag_pwr9
+        
+        acc_vec    = np.zeros(3)
+        acc_vec[0] = factor * x * (1 - 14 * z2_r2 + 21 * z2_r2**2)
+        acc_vec[1] = factor * y * (1 - 14 * z2_r2 + 21 * z2_r2**2)
+        acc_vec[2] = factor * z * (5 - 70 * z2_r2 / 3 + 21 * z2_r2**2)
+        
+        return acc_vec
+
+
+class ThirdBodyGravity:
+    """
+    Third-body gravitational perturbations from Sun, Moon, and other bodies
+    Uses SPICE ephemerides or analytical approximations
+    """
+    
+    def __init__(
+        self,
+        time_o           : float = 0.0,
+        use_spice        : bool  = True,
+        bodies           : list  = None,
+        spice_kernel_dir : str   = None,
+    ):
+        """
+        Initialize third-body gravity model
+        
+        Input:
+        ------
+        time_o : float
+            Initial epoch time [s from J2000]
+        use_spice : bool
+            Use SPICE ephemerides (True) or analytical approximations (False)
+        bodies : list of str
+            Which bodies to include (default: ['sun', 'moon'])
+        spice_kernel_dir : str
+            Path to SPICE kernel directory
+        """
+        self.time_o    = time_o
+        self.bodies    = bodies if bodies else ['sun', 'moon']
+        self.use_spice = use_spice
+        
+        if use_spice:
+            self._load_spice_kernels(spice_kernel_dir)
+    
+    def _load_spice_kernels(
+        self,
+        kernel_dir : Optional[Path],
+    ) -> None:
+        """
+        Load required SPICE kernels
+        
+        Download from: https://naif.jpl.nasa.gov/pub/naif/generic_kernels/
+        
+        Required kernels:
+        - LSK (Leap Second Kernel): naif0012.tls
+        - SPK (Planetary Ephemeris): de430.bsp or de440.bsp
+        - PCK (Planetary Constants): pck00010.tpc
+        """
+        if kernel_dir is None:
+            # Default to a kernels directory in the project
+            kernel_dir = Path(__file__).parent.parent.parent / 'data' / 'spice_kernels'
+        
+        kernel_dir = Path(kernel_dir)
+        
+        if not kernel_dir.exists():
+            raise FileNotFoundError(
+                f"SPICE kernel directory not found: {kernel_dir}\n"
+                f"Please download kernels from https://naif.jpl.nasa.gov/pub/naif/generic_kernels/\n"
+                f"Required files:\n"
+                f"  - lsk/naif0012.tls\n"
+                f"  - spk/planets/de440.bsp (or de430.bsp)\n"
+                f"  - pck/pck00010.tpc"
+            )
+        
+        # Load leap second kernel
+        lsk_file = kernel_dir / 'naif0012.tls'
+        if lsk_file.exists():
+            spice.furnsh(str(lsk_file))
+        else:
+            raise FileNotFoundError(f"LSK file not found: {lsk_file}")
+        
+        # Load planetary ephemeris
+        spk_files = list(kernel_dir.glob('de*.bsp'))
+        if spk_files:
+            spice.furnsh(str(spk_files[0]))  # Use first found
+        else:
+            raise FileNotFoundError(f"No SPK files (de*.bsp) found in {kernel_dir}")
+        
+        # Load planetary constants
+        pck_file = kernel_dir / 'pck00010.tpc'
+        if pck_file.exists():
+            spice.furnsh(str(pck_file))
+        else:
+            raise FileNotFoundError(f"PCK file not found: {pck_file}")
+        
+        print(f"SPICE kernels loaded from: {kernel_dir}")
+    
+    def _get_body_position(
+        self,
+        body_name  : str,
+        et_seconds : float,
+        frame      : str = 'J2000',
+    ) -> np.ndarray:
+        """
+        Get position of celestial body at given time
+        
+        Input:
+        ------
+        body_name : str
+            'SUN' or 'MOON'
+        et_seconds : float
+            Ephemeris time in seconds past J2000 epoch
+        frame : str
+            Reference frame (default: 'J2000')
+        
+        Output:
+        -------
+        pos_vec : np.ndarray (3,)
+            Position vector [km]
+        """
+        if self.use_spice:
+            # SPICE state relative to Earth
+            state, _ = spice.spkez(
+                targ   = self._get_naif_id(body_name),
+                et     = et_seconds,
+                ref    = frame,
+                abcorr = 'NONE',
+                obs    = 399  # relative to Earth
+            )
+            return np.array(state[0:3])  # position only
+        else:
+            # Use analytical approximation
+            return self._analytical_position(body_name, et_seconds)
+    
+    def _get_naif_id(
+        self,
+        body_name : str,
+    ) -> int:
+        """
+        Get NAIF ID for body
+        
+        Input:
+        ------
+        body_name : str
+            Body name ('SUN' or 'MOON')
+        
+        Output:
+        -------
+        naif_id : int
+            NAIF ID code
+        """
+        naif_ids = {
+            'SUN'  : 10,
+            'MOON' : 301,
+        }
+        return naif_ids[body_name.upper()]
+    
+    def _analytical_position(
+        self,
+        body_name  : str,
+        et_seconds : float,
+    ) -> np.ndarray:
+        """
+        Simple analytical approximation for Sun/Moon position
+        Lower accuracy (~1000 km for Moon, ~10,000 km for Sun)
+        Good enough for rough estimates
+
+        Input:
+        ------
+        body_name : str
+            'SUN' or 'MOON'
+        et_seconds : float
+            Ephemeris time in seconds past J2000 epoch
+
+        Output:
+        -------
+        pos_vec : np.ndarray (3,)
+            Position vector [km]
+        """
+        # Convert to Julian centuries from J2000
+        T = et_seconds / (86400.0 * 36525.0)
+        
+        if body_name.upper() == 'SUN':
+            # Very simplified Sun position (ecliptic plane approximation)
+            # Mean longitude
+            L = np.radians(280.460 + 36000.771 * T)
+            # Mean anomaly
+            g = np.radians(357.528 + 35999.050 * T)
+            # Ecliptic longitude
+            lambda_sun = L + np.radians(1.915) * np.sin(g) + np.radians(0.020) * np.sin(2*g)
+            
+            # Distance (AU to km)
+            r_sun = 149597870.7 * (1.00014 - 0.01671 * np.cos(g) - 0.00014 * np.cos(2*g))
+            
+            # Ecliptic to equatorial (simple rotation)
+            epsilon = np.radians(23.439)  # Obliquity
+            
+            x = r_sun * np.cos(lambda_sun)
+            y = r_sun * np.sin(lambda_sun) * np.cos(epsilon)
+            z = r_sun * np.sin(lambda_sun) * np.sin(epsilon)
+            
+            return np.array([x, y, z])
+        
+        elif body_name.upper() == 'MOON':
+            # Very simplified Moon position
+            # Mean longitude
+            L = np.radians(218.316 + 481267.881 * T)
+            # Mean anomaly
+            M = np.radians(134.963 + 477198.868 * T)
+            # Mean distance of Moon from ascending node
+            F = np.radians(93.272 + 483202.018 * T)
+            
+            # Longitude
+            lambda_moon = L + np.radians(6.289) * np.sin(M)
+            # Latitude
+            beta = np.radians(5.128) * np.sin(F)
+            # Distance
+            r_moon = 385000.0 - 20905.0 * np.cos(M)
+            
+            # Ecliptic to equatorial
+            epsilon = np.radians(23.439)
+            
+            x = r_moon * np.cos(beta) * np.cos(lambda_moon)
+            y = r_moon * (np.cos(beta) * np.sin(lambda_moon) * np.cos(epsilon) - 
+                          np.sin(beta) * np.sin(epsilon))
+            z = r_moon * (np.cos(beta) * np.sin(lambda_moon) * np.sin(epsilon) + 
+                          np.sin(beta) * np.cos(epsilon))
+            
+            return np.array([x, y, z])
+        
+        else:
+            raise ValueError(f"Unknown body: {body_name}")
+    
+    def point_mass(
+        self,
+        time    : float,
+        pos_vec : np.ndarray,
+    ) -> np.ndarray:
+        """
+        Third-body point mass perturbations (Sun, Moon)
+        
+        Input:
+        ------
+        time : float
+            Current time [s]
+        pos_vec : np.ndarray
+            Satellite position vector [m]
+        
+        Output:
+        -------
+        acc_vec : np.ndarray
+            Third-body acceleration [m/s²]
+        """
+        # Ephemeris time is seconds from J2000 epoch
+        et_seconds = self.time_o + time
+        
+        # Convert satellite position to km
+        pos_sat_vec_km = pos_vec / 1000.0
+        
+        # Compute acceleration for all bodies
+        acc_vec_km = np.zeros(3)
+        for body in self.bodies:
+            # Get position of perturbing body relative to Earth [km]
+            pos_body_vec = self._get_body_position(body, et_seconds)
+            
+            # Position of perturbing body relative to satellite [km]
+            pos_sat_to_body_vec = pos_body_vec - pos_sat_vec_km
+            
+            # Get gravitational parameter
+            if body.upper() == 'SUN':
+                GP = PHYSICALCONSTANTS.SUN.GP * CONVERTER.KM_PER_M**3  # [m³/s²] -> [km³/s²]
+            elif body.upper() == 'MOON':
+                GP = PHYSICALCONSTANTS.MOON.GP * CONVERTER.KM_PER_M**3  # [m³/s²] -> [km³/s²]
+            else:
+                continue
+            
+            # Third-body acceleration [km/s²]
+            #   a = GP * (r_sat_to_body / |r_sat_to_body|³ - r_body / |r_body|³)
+            pos_sat_to_body_mag = np.linalg.norm(pos_sat_to_body_vec)
+            pos_body_mag        = np.linalg.norm(pos_body_vec)
+
+            acc_vec_km += (
+                - GP * pos_body_vec / pos_body_mag**3
+                + GP * pos_sat_to_body_vec / pos_sat_to_body_mag**3
+            )
+        
+        # Convert km/s² to m/s²
+        return acc_vec_km * 1000.0
+    
+    def __del__(self):
+        """
+        Unload SPICE kernels on cleanup
+        """
+        if self.use_spice:
+            try:
+                spice.kclear()
+            except:
+                pass
+
+
+class Gravity:
+    """
+    Gravitational acceleration coordinator
+    
+    Computes gravity as:
+        gravity = two_body_point_mass + two_body_oblate + third_body_point_mass + 
+                  third_body_oblate (future) + relativity (future)
     """
     
     def __init__(
         self,
         gp                   : float,
-        j_2                  : float = 0.0,
-        j_3                  : float = 0.0,
-        j_4                  : float = 0.0,
+        j2                   : float = 0.0,
+        j3                   : float = 0.0,
+        j4                   : float = 0.0,
         pos_ref              : float = 0.0,
         enable_third_body    : bool  = False,
         time_o               : float = 0.0,
@@ -27,11 +476,11 @@ class GravityAcceleration:
         """
         Initialize gravity acceleration components
         
-        Parameters:
-        -----------
+        Input:
+        ------
         gp : float
             Gravitational parameter of central body [m³/s²]
-        j_2, j_3, j_4 : float
+        j2, j3, j4 : float
             Harmonic coefficients for oblateness
         pos_ref : float
             Reference radius for harmonic coefficients [m]
@@ -46,20 +495,22 @@ class GravityAcceleration:
         spice_kernel_dir : str
             Path to SPICE kernel directory
         """
-        self.gp      = gp
-        self.j_2     = j_2
-        self.j_3     = j_3
-        self.j_4     = j_4
-        self.pos_ref = pos_ref
+        # Two-body gravity
+        self.two_body = TwoBodyGravity(
+            gp      = gp,
+            j2      = j2,
+            j3      = j3,
+            j4      = j4,
+            pos_ref = pos_ref,
+        )
         
-        # Third-body perturbations
+        # Third-body gravity
         self.enable_third_body = enable_third_body
-        self.time_o            = time_o
-        self.third_body_bodies = third_body_bodies if third_body_bodies else ['sun', 'moon']
-        
         if self.enable_third_body:
-            self.third_body = ThirdBodyPerturbations(
+            self.third_body = ThirdBodyGravity(
+                time_o           = time_o,
                 use_spice        = third_body_use_spice,
+                bodies           = third_body_bodies,
                 spice_kernel_dir = spice_kernel_dir,
             )
         else:
@@ -73,25 +524,29 @@ class GravityAcceleration:
         """
         Compute total gravity acceleration
         
-        Parameters:
-        -----------
+        Input:
+        ------
         time : float
             Current time [s]
         pos_vec : np.ndarray
             Position vector [m]
         
-        Returns:
-        --------
+        Output:
+        -------
         acc_vec : np.ndarray
             Total gravity acceleration [m/s²]
         """
-        acc_vec  = self.two_body_point_mass(pos_vec)
-        acc_vec += self.two_body_oblate_j2(pos_vec)
-        acc_vec += self.two_body_oblate_j3(pos_vec)
-        acc_vec += self.two_body_oblate_j4(pos_vec)
+        acc_vec = np.zeros(3)
         
+        # Two-body contributions
+        acc_vec += self.two_body_point_mass(pos_vec)
+        acc_vec += self.two_body_oblate(pos_vec)
+        
+        # Third-body contributions
         if self.enable_third_body:
             acc_vec += self.third_body_point_mass(time, pos_vec)
+        
+        # Future: third_body_oblate, relativity
         
         return acc_vec
     
@@ -99,74 +554,41 @@ class GravityAcceleration:
         self,
         pos_vec : np.ndarray,
     ) -> np.ndarray:
-        """Two-body point mass gravity"""
-        pos_mag = np.linalg.norm(pos_vec)
-        return -self.gp * pos_vec / pos_mag**3
+        """
+        Two-body point mass gravity
+        
+        Input:
+        ------
+        pos_vec : np.ndarray
+            Position vector [m]
+        
+        Output:
+        -------
+        acc_vec : np.ndarray
+            Acceleration vector [m/s²]
+        """
+        return self.two_body.point_mass(pos_vec)
     
-    def two_body_oblate_j2(
+    def two_body_oblate(
         self,
         pos_vec : np.ndarray,
     ) -> np.ndarray:
-        """J2 oblateness perturbation"""
-        if self.j_2 == 0.0:
-            return np.zeros(3)
+        """
+        Two-body oblateness (J2, J3, J4)
         
-        pos_mag = np.linalg.norm(pos_vec)
-        posmag2 = pos_mag**2
-        posmag5 = posmag2 * posmag2 * pos_mag
+        Input:
+        ------
+        pos_vec : np.ndarray
+            Position vector [m]
         
-        factor = 1.5 * self.j_2 * self.gp * self.pos_ref**2 / posmag5
-        
-        acc_vec    = np.zeros(3)
-        acc_vec[0] = factor * pos_vec[0] * (5 * pos_vec[2]**2 / posmag2 - 1)
-        acc_vec[1] = factor * pos_vec[1] * (5 * pos_vec[2]**2 / posmag2 - 1)
-        acc_vec[2] = factor * pos_vec[2] * (5 * pos_vec[2]**2 / posmag2 - 3)
-        
-        return acc_vec
-    
-    def two_body_oblate_j3(
-        self,
-        pos_vec : np.ndarray,
-    ) -> np.ndarray:
-        """J3 oblateness perturbation"""
-        if self.j_3 == 0.0:
-            return np.zeros(3)
-        
-        x, y, z = pos_vec[0], pos_vec[1], pos_vec[2]
-        pos_mag = np.linalg.norm(pos_vec)
-        posmag2 = pos_mag**2
-        posmag7 = posmag2 * posmag2 * posmag2 * pos_mag
-        
-        factor = 2.5 * self.j_3 * self.gp * self.pos_ref**3 / posmag7
-        
-        acc_vec    = np.zeros(3)
-        acc_vec[0] = factor * x * z * (3 - 7 * z**2 / posmag2)
-        acc_vec[1] = factor * y * z * (3 - 7 * z**2 / posmag2)
-        acc_vec[2] = factor * (3 * z**2 - 7 * z**4 / posmag2 - 0.6 * posmag2)
-        
-        return acc_vec
-    
-    def two_body_oblate_j4(
-        self,
-        pos_vec : np.ndarray,
-    ) -> np.ndarray:
-        """J4 oblateness perturbation"""
-        if self.j_4 == 0.0:
-            return np.zeros(3)
-        
-        x, y, z = pos_vec[0], pos_vec[1], pos_vec[2]
-        pos_mag = np.linalg.norm(pos_vec)
-        posmag2 = pos_mag**2
-        posmag9 = posmag2**4 * pos_mag
-        
-        z2_r2  = z**2 / posmag2
-        factor = 1.875 * self.j_4 * self.gp * self.pos_ref**4 / posmag9
-        
-        acc_vec    = np.zeros(3)
-        acc_vec[0] = factor * x * (1 - 14 * z2_r2 + 21 * z2_r2**2)
-        acc_vec[1] = factor * y * (1 - 14 * z2_r2 + 21 * z2_r2**2)
-        acc_vec[2] = factor * z * (5 - 70 * z2_r2 / 3 + 21 * z2_r2**2)
-        
+        Output:
+        -------
+        acc_vec : np.ndarray
+            Acceleration vector [m/s²]
+        """
+        acc_vec  = self.two_body.oblate_j2(pos_vec)
+        acc_vec += self.two_body.oblate_j3(pos_vec)
+        acc_vec += self.two_body.oblate_j4(pos_vec)
         return acc_vec
     
     def third_body_point_mass(
@@ -174,22 +596,70 @@ class GravityAcceleration:
         time    : float,
         pos_vec : np.ndarray,
     ) -> np.ndarray:
-        """Third-body point mass perturbations (Sun, Moon)"""
-        if not self.enable_third_body or self.third_body is None:
+        """
+        Third-body point mass perturbations
+        
+        Input:
+        ------
+        time : float
+            Current time [s]
+        pos_vec : np.ndarray
+            Position vector [m]
+        
+        Output:
+        -------
+        acc_vec : np.ndarray
+            Acceleration vector [m/s²]
+        """
+        if self.third_body is None:
             return np.zeros(3)
+        return self.third_body.point_mass(time, pos_vec)
+    
+    def third_body_oblate(
+        self,
+        time    : float,
+        pos_vec : np.ndarray,
+    ) -> np.ndarray:
+        """
+        Third-body oblateness perturbations (future implementation)
         
-        # Ephemeris time is seconds from J2000 epoch
-        et_seconds = self.time_o + time
+        Input:
+        ------
+        time : float
+            Current time [s]
+        pos_vec : np.ndarray
+            Position vector [m]
         
-        # Third-body acceleration in km/s²
-        accel_third_body_km = self.third_body.compute_acceleration(
-            pos_sat_vec = pos_vec / 1000.0,  # Convert m to km
-            et_seconds  = et_seconds,
-            bodies      = self.third_body_bodies,
-        )
+        Output:
+        -------
+        acc_vec : np.ndarray
+            Acceleration vector [m/s²]
+        """
+        # TODO: Implement third-body oblateness
+        return np.zeros(3)
+    
+    def relativity(
+        self,
+        pos_vec : np.ndarray,
+        vel_vec : np.ndarray,
+    ) -> np.ndarray:
+        """
+        Relativistic corrections (future implementation)
         
-        # Convert km/s² to m/s²
-        return accel_third_body_km * 1000.0
+        Input:
+        ------
+        pos_vec : np.ndarray
+            Position vector [m]
+        vel_vec : np.ndarray
+            Velocity vector [m/s]
+        
+        Output:
+        -------
+        acc_vec : np.ndarray
+            Acceleration vector [m/s²]
+        """
+        # TODO: Implement post-Newtonian corrections
+        return np.zeros(3)
 
 
 class AtmosphericDrag:
@@ -206,8 +676,8 @@ class AtmosphericDrag:
         """
         Initialize drag model
         
-        Parameters:
-        -----------
+        Input:
+        ------
         cd : float
             Drag coefficient
         area : float
@@ -227,15 +697,15 @@ class AtmosphericDrag:
         """
         Compute drag acceleration
         
-        Parameters:
-        -----------
+        Input:
+        ------
         pos_vec : np.ndarray
             Position vector [m]
         vel_vec : np.ndarray
             Velocity vector [m/s]
         
-        Returns:
-        --------
+        Output:
+        -------
         acc_vec : np.ndarray
             Drag acceleration [m/s²]
         """
@@ -267,13 +737,13 @@ class AtmosphericDrag:
         """
         Simplified exponential atmospheric density model
         
-        Parameters:
-        -----------
+        Input:
+        ------
         altitude : float
             Altitude above Earth's surface [m]
         
-        Returns:
-        --------
+        Output:
+        -------
         density : float
             Atmospheric density [kg/m³]
         """
@@ -300,8 +770,8 @@ class SolarRadiationPressure:
         """
         Initialize SRP model
         
-        Parameters:
-        -----------
+        Input:
+        ------
         cr : float
             Radiation pressure coefficient
         area : float
@@ -321,15 +791,15 @@ class SolarRadiationPressure:
         """
         Compute SRP acceleration (not yet implemented)
         
-        Parameters:
-        -----------
+        Input:
+        ------
         time : float
             Current time [s]
         pos_vec : np.ndarray
             Position vector [m]
         
-        Returns:
-        --------
+        Output:
+        -------
         acc_vec : np.ndarray
             SRP acceleration [m/s²]
         """
@@ -353,37 +823,38 @@ class Acceleration:
         self,
         gp                   : float,
         time_o               : float = 0.0,
-        j_2                  : float = 0.0,
-        j_3                  : float = 0.0,
-        j_4                  : float = 0.0,
+        j2                   : float = 0.0,
+        j3                   : float = 0.0,
+        j4                   : float = 0.0,
         pos_ref              : float = 0.0,
-        cd                   : float = 0.0,
-        area                 : float = 0.0,
         mass                 : float = 1.0,
         enable_drag          : bool  = False,
+        cd                   : float = 0.0,
+        area_drag            : float = 0.0,
         enable_third_body    : bool  = False,
         third_body_use_spice : bool  = True,
         third_body_bodies    : list  = None,
         spice_kernel_dir     : str   = None,
         enable_srp           : bool  = False,
-        cr                   : float = 1.3,
+        cr                   : float = 0.0,
+        area_srp             : float = 0.0,
     ):
         """
         Initialize acceleration coordinator
         
-        Parameters:
-        -----------
+        Input:
+        ------
         gp : float
             Gravitational parameter of central body [m³/s²]
         time_o : float
             Initial epoch time [s]
-        j_2, j_3, j_4 : float
+        j2, j3, j4 : float
             Harmonic coefficients for oblateness
         pos_ref : float
             Reference radius for harmonic coefficients [m]
         cd : float
             Drag coefficient
-        area : float
+        area_drag : float
             Cross-sectional area [m²]
         mass : float
             Spacecraft mass [kg]
@@ -401,13 +872,15 @@ class Acceleration:
             Enable solar radiation pressure (not yet implemented)
         cr : float
             Radiation pressure coefficient
+        area_srp : float
+            Cross-sectional area for SRP [m²]
         """
         # Create acceleration component instances
-        self.gravity = GravityAcceleration(
+        self.gravity = Gravity(
             gp                   = gp,
-            j_2                  = j_2,
-            j_3                  = j_3,
-            j_4                  = j_4,
+            j2                   = j2,
+            j3                   = j3,
+            j4                   = j4,
             pos_ref              = pos_ref,
             enable_third_body    = enable_third_body,
             time_o               = time_o,
@@ -417,18 +890,26 @@ class Acceleration:
         )
         
         self.enable_drag = enable_drag
-        if self.enable_drag and cd > 0 and area > 0 and mass > 0:
-            self.drag = AtmosphericDrag(cd=cd, area=area, mass=mass)
+        if self.enable_drag and cd > 0 and area_drag > 0 and mass > 0:
+            self.drag = AtmosphericDrag(
+                cd   = cd,
+                area = area_drag,
+                mass = mass,
+            )
         else:
             self.drag = None
         
         self.enable_srp = enable_srp
         if self.enable_srp:
-            self.srp = SolarRadiationPressure(cr=cr, area=area, mass=mass)
+            self.srp = SolarRadiationPressure(
+                cr   = cr,
+                area = area_srp,
+                mass = mass,
+            )
         else:
             self.srp = None
     
-    def total(
+    def compute(
         self,
         time    : float,
         pos_vec : np.ndarray,
@@ -437,8 +918,8 @@ class Acceleration:
         """
         Compute total acceleration from all components
         
-        Parameters:
-        -----------
+        Input:
+        ------
         time : float
             Current time [s]
         pos_vec : np.ndarray
@@ -446,19 +927,19 @@ class Acceleration:
         vel_vec : np.ndarray
             Velocity vector [m/s]
         
-        Returns:
-        --------
+        Output:
+        -------
         acc_vec : np.ndarray
             Total acceleration [m/s²]
         """
-        # Gravity (always included)
+        # Gravity (always)
         acc_vec = self.gravity.compute(time, pos_vec)
         
         # Atmospheric drag (optional)
         if self.drag is not None:
             acc_vec += self.drag.compute(pos_vec, vel_vec)
         
-        # Solar radiation pressure (optional, future)
+        # Solar radiation pressure (optional)
         if self.srp is not None:
             acc_vec += self.srp.compute(time, pos_vec)
         
@@ -477,8 +958,8 @@ class GeneralStateEquationsOfMotion:
         """
         Initialize equations of motion
         
-        Parameters:
-        -----------
+        Input:
+        ------
         acceleration : Acceleration
             Acceleration coordinator instance
         """
@@ -492,21 +973,21 @@ class GeneralStateEquationsOfMotion:
         """
         Compute state time derivative for ODE integration
         
-        Parameters:
-        -----------
+        Input:
+        ------
         time : float
             Current time [s]
         state_vec : np.ndarray
             Current state vector [pos, vel] [m, m/s]
         
-        Returns:
-        --------
+        Output:
+        -------
         state_dot_vec : np.ndarray
             Time derivative of state vector [vel, acc] [m/s, m/s²]
         """
         pos_vec = state_vec[0:3]
         vel_vec = state_vec[3:6]
-        acc_vec = self.acceleration.total(time, pos_vec, vel_vec)
+        acc_vec = self.acceleration.compute(time, pos_vec, vel_vec)
         
         state_dot_vec      = np.zeros(6)
         state_dot_vec[0:3] = vel_vec
@@ -530,8 +1011,8 @@ class TwoBody_RootSolvers:
         """
         Solve Kepler's equation ma = ea - ecc*sin(ea) for eccentric anomaly ea.
         
-        Parameters:
-        -----------
+        Input:
+        ------
         ma : float
             Mean anomaly [rad]
         ecc : float
@@ -541,8 +1022,8 @@ class TwoBody_RootSolvers:
         max_iter : int
             Maximum iterations
         
-        Returns:
-        --------
+        Output:
+        -------
         ea : float
             Eccentric anomaly [rad]
         """
@@ -576,8 +1057,8 @@ class TwoBody_RootSolvers:
         """
         Solve Lambert's problem for transfer orbit between two position vectors.
         
-        Parameters:
-        -----------
+        Input:
+        ------
         pos_o_vec : np.ndarray
             Initial position vector [m]
         pos_f_vec : np.ndarray
@@ -593,8 +1074,8 @@ class TwoBody_RootSolvers:
         tol : float
             Convergence tolerance
         
-        Returns:
-        --------
+        Output:
+        -------
         vel_o_vec : np.ndarray
             Initial velocity vector [m/s]
         vel_f_vec : np.ndarray
@@ -668,8 +1149,8 @@ class CoordinateSystemConverter:
         """
         Initialize converter
         
-        Parameters:
-        -----------
+        Input:
+        ------
         gp : float
             Gravitational parameter [m³/s²]
         """
@@ -683,15 +1164,15 @@ class CoordinateSystemConverter:
         """
         Convert position and velocity vectors to classical orbital elements.
         
-        Parameters:
-        -----------
+        Input:
+        ------
         pos_vec : np.ndarray
             Position vector [m]
         vel_vec : np.ndarray
             Velocity vector [m/s]
         
-        Returns:
-        --------
+        Output:
+        -------
         dict : Dictionary containing orbital elements:
             sma  : semi-major axis [m]
             ecc  : eccentricity
@@ -782,8 +1263,8 @@ class CoordinateSystemConverter:
         """
         Convert classical orbital elements to position and velocity vectors.
         
-        Parameters:
-        -----------
+        Input:
+        ------
         coe : dict
             Dictionary containing:
                 - sma  : semi-major axis [m]
@@ -793,8 +1274,8 @@ class CoordinateSystemConverter:
                 - argp : argument of perigee [rad]
                 - ta   : true anomaly [rad] (or use 'ma' for mean anomaly)
         
-        Returns:
-        --------
+        Output:
+        -------
         pos : np.ndarray
             Position vector [m]
         vel : np.ndarray
