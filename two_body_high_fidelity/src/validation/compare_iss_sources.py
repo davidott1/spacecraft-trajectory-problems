@@ -13,24 +13,24 @@ from src.model.dynamics import CoordinateSystemConverter
 coord_sys_converter = CoordinateSystemConverter(gp=PHYSICALCONSTANTS.EARTH.GP)
 
 def load_horizons_data(filepath):
-    """
-    Load Horizons ephemeris data from CSV with units row.
-    """
-    # Read CSV, skipping the units row (row 1)
-    df = pd.read_csv(filepath, skiprows=[1])
-    
-    # Convert datetime string to datetime object
-    df['datetime'] = pd.to_datetime(df['datetime'])
-    
-    # Data is already in meters and m/s, convert to km and km/s
-    df['pos_x__km']       = df['pos_x'] * CONVERTER.KM_PER_M
-    df['pos_y__km']       = df['pos_y'] * CONVERTER.KM_PER_M
-    df['pos_z__km']       = df['pos_z'] * CONVERTER.KM_PER_M
-    df['vel_x__km_per_s'] = df['vel_x'] * CONVERTER.KM_PER_M
-    df['vel_y__km_per_s'] = df['vel_y'] * CONVERTER.KM_PER_M
-    df['vel_z__km_per_s'] = df['vel_z'] * CONVERTER.KM_PER_M
-    
-    return df
+  """
+  Load Horizons ephemeris data from CSV with units row.
+  """
+  # Read CSV, skipping the units row (row 1)
+  df = pd.read_csv(filepath, skiprows=[1])
+
+  # Convert datetime string to datetime object
+  df['datetime'] = pd.to_datetime(df['datetime'])
+
+  # Data is already in meters and m/s, convert to km and km/s
+  df['pos_x__km']       = df['pos_x'] * CONVERTER.KM_PER_M
+  df['pos_y__km']       = df['pos_y'] * CONVERTER.KM_PER_M
+  df['pos_z__km']       = df['pos_z'] * CONVERTER.KM_PER_M
+  df['vel_x__km_per_s'] = df['vel_x'] * CONVERTER.KM_PER_M
+  df['vel_y__km_per_s'] = df['vel_y'] * CONVERTER.KM_PER_M
+  df['vel_z__km_per_s'] = df['vel_z'] * CONVERTER.KM_PER_M
+
+  return df
 
 def compute_orbital_elements(df):
     """
