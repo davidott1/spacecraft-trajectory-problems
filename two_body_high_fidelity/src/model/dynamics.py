@@ -1428,96 +1428,10 @@ class CoordinateSystemConverter:
         'ha'   : ha,
         'pa'   : pa,
       }
-    
+
 
     @staticmethod
     def coe_to_pv(
-        coe : dict,
-        gp  : float = PHYSICALCONSTANTS.EARTH.GP,
-    ) -> tuple:
-        """
-        Convert classical orbital elements to position and velocity vectors.
-        
-        Input:
-        ------
-        coe : dict
-          Dictionary containing:
-            - sma  : semi-major axis [m]
-            - ecc  : eccentricity [-]
-            - inc  : inclination [rad]
-            - raan : RAAN [rad]
-            - argp : argument of perigee [rad]
-            - ta   : true anomaly [rad] (or use 'ma' for mean anomaly)
-        
-        Output:
-        -------
-        pos_vec : np.ndarray
-            Position vector [m]
-        vel_vec : np.ndarray
-            Velocity vector [m/s]
-        """
-        sma  = coe['sma' ]
-        ecc  = coe['ecc' ]
-        inc  = coe['inc' ]
-        raan = coe['raan']
-        argp = coe['argp']
-        
-        # Convert mean anomaly to true anomaly if needed
-        if 'ta' in coe:
-            ta = coe['ta']
-        elif 'ma' in coe:
-            # Solve Kepler's equation: M = E - e*sin(E)
-            ma = coe['ma']
-            ea = TwoBody_RootSolvers.kepler(ma, ecc)
-            
-            # Convert eccentric anomaly to true anomaly
-            ta = 2 * np.arctan2(
-                np.sqrt(1 + ecc) * np.sin(ea / 2),
-                np.sqrt(1 - ecc) * np.cos(ea / 2)
-            )
-        else:
-            raise ValueError("Must provide either 'ta' or 'ma' in coe dict")
-        
-        # Orbital plane (perifocal) coordinates
-        slr   = sma * (1 - ecc**2)  # Semi-latus rectum
-        r_mag = slr / (1 + ecc * np.cos(ta))
-        
-        # Position in perifocal frame
-        r_pqw = np.array([
-            r_mag * np.cos(ta),
-            r_mag * np.sin(ta),
-            0.0
-        ])
-        
-        # Velocity in perifocal frame
-        v_pqw = np.array([
-            -np.sqrt(gp / slr) * np.sin(ta),
-            np.sqrt(gp / slr) * (ecc + np.cos(ta)),
-            0.0
-        ])
-        
-        # Rotation matrix from perifocal to inertial (3-1-3 Euler angles)
-        cos_raan = np.cos(raan)
-        sin_raan = np.sin(raan)
-        cos_inc  = np.cos(inc)
-        sin_inc  = np.sin(inc)
-        cos_argp = np.cos(argp)
-        sin_argp = np.sin(argp)
-        
-        R = np.array([
-            [ cos_raan * cos_argp - sin_raan * sin_argp * cos_inc, -cos_raan * sin_argp - sin_raan * cos_argp * cos_inc,  sin_raan * sin_inc],
-            [ sin_raan * cos_argp + cos_raan * sin_argp * cos_inc, -sin_raan * sin_argp + cos_raan * cos_argp * cos_inc, -cos_raan * sin_inc],
-            [ sin_argp * sin_inc, cos_argp * sin_inc, cos_inc]
-        ])
-        
-        # Transform to inertial frame
-        pos_vec = R @ r_pqw
-        vel_vec = R @ v_pqw
-
-        return pos_vec, vel_vec
-
-    @staticmethod
-    def coe_to_pv_v2(
         coe : dict,
         gp  : float = PHYSICALCONSTANTS.EARTH.GP,
     ) -> tuple[np.ndarray, np.ndarray]:
