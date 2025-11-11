@@ -1455,7 +1455,7 @@ class CoordinateSystemConverter:
             - slr         : semi-latus rectum [m]
             - ang_mom_mag : angular momentum magnitude [m²/s]
         gp : float
-            Gravitational parameter [m³/s²]
+          Gravitational parameter [m³/s²]
         
         Output:
         -------
@@ -1467,11 +1467,14 @@ class CoordinateSystemConverter:
         Notes:
         ------
         The code can handle the following orbit types:
-            - circular      :  e = 0           a > 0
-            - elliptical-2D :  0 < e < 1       a > 0
-            - elliptical-1D :  e = 1           a > 0 and finite (rectilinear)
-            - parabolic     :  e = 1           a = inf
-            - hyperbolic    :  e > 1           a < 0
+          - circular      :  e = 0           a > 0
+          - elliptical-2D :  0 < e < 1       a > 0
+          - elliptical-1D :  e = 1           a > 0 and finite (rectilinear)
+          - parabolic-2D  :  e = 1           a = inf
+          - hyperbolic-2D :  e > 1           a < 0
+        The code does not handle the following orbit types:
+          - parabolic-1D  :  e = 1           a = ? (rectilinear)
+          - hyperbolic-1D :  e > 1           a < 0 and finite (rectilinear)
 
         Source:
         -------
