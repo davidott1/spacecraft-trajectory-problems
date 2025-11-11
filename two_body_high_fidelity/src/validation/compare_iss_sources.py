@@ -8,10 +8,7 @@ from skyfield.timelib import Time
 from matplotlib.ticker import ScalarFormatter
 
 from src.model.constants import CONVERTER, PHYSICALCONSTANTS
-from src.model.dynamics  import CoordinateSystemConverter  # type: ignore[reportMissingImports]
-
-
-coord_sys_converter = CoordinateSystemConverter(gp=PHYSICALCONSTANTS.EARTH.GP)
+from src.model.dynamics  import CoordinateSystemConverter as csc # type: ignore[reportMissingImports]
 
 
 def load_horizons_data(filepath):
@@ -49,12 +46,15 @@ def compute_orbital_elements(df):
         vel_vec = np.array([row['vel_x__km_per_s'], row['vel_y__km_per_s'], row['vel_z__km_per_s']]) * CONVERTER.M_PER_KM  # [m/s]
         
         # Compute classical orbital elements
-        coe = coord_sys_converter.pv_to_coe(pos_vec, vel_vec)
+        coe = csc.pv_to_coe_v2(
+          pos_vec = pos_vec,
+          vel_vec = vel_vec,
+          gp      = PHYSICALCONSTANTS.EARTH.GP,
+        )
 
         # Store elements
         elements.append({
             'datetime' : row['datetime'], 
-            # convert m -> km correctly
             'sma'      : coe['sma' ] * CONVERTER.KM_PER_M,     # [km]
             'ecc'      : coe['ecc' ],
             'inc'      : coe['inc' ] * CONVERTER.DEG_PER_RAD,
@@ -538,28 +538,15 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None, t
     ax.set_ylabel('Arg. of Periapsis (deg)', fontsize=11)
     ax.grid(True, alpha=0.3)
     
-    # True Anomaly -> use argument of latitude u = ω + ν (unwrap to avoid TLE switch jumps)
+    # True Anomaly
     ax = axes[6]
-    u_h = (horizons_oe_df['argp'] + horizons_oe_df['ta']).to_numpy(dtype=float)
-    u_t = (tle_oe_df['argp'] + tle_oe_df['ta']).to_numpy(dtype=float)
-    # stitch TLE segments (requires TLE indices)
-    if tles is not None:
-        tle_index_df = get_best_tle_indices(horizons_oe_df, tles)
-        u_t = _stitch_segments_deg(u_t, tle_index_df['tle_index'].to_numpy())
-    u_h_unw = np.rad2deg(np.unwrap(np.deg2rad(u_h)))
-    u_t_unw = np.rad2deg(np.unwrap(np.deg2rad(u_t)))
-    ax.plot(horizons_oe_df['datetime'], u_h_unw, 'k-', label='Horizons', linewidth=1.5, alpha=0.7)
-    ax.plot(tle_oe_df['datetime'], u_t_unw, 'k--', label='TLE', linewidth=1.5, alpha=0.7)
+    ax.plot(horizons_oe_df['datetime'], horizons_oe_df['ta'], 'k-', label='Horizons', linewidth=1.5, alpha=0.7)
+    ax.plot(tle_oe_df['datetime'], tle_oe_df['ta'], 'k--', label='TLE', linewidth=1.5, alpha=0.7)
     if tle_epochs_oe_df is not None:
-        u_e = (tle_epochs_oe_df['argp'] + tle_epochs_oe_df['ta']).to_numpy(dtype=float)
-        ax.scatter(tle_epochs_oe_df['datetime'],
-                   np.rad2deg(np.unwrap(np.deg2rad(u_e))),
-                   c='black', marker='o', s=50, zorder=5)
-    # Add vertical dotted lines at TLE transitions
+        ax.scatter(tle_epochs_oe_df['datetime'], tle_epochs_oe_df['ta'], c='black', marker='o', s=50, zorder=5)
     for t in transition_times:
         ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
-    
-    ax.set_ylabel('Arg. of latitude, u (deg)', fontsize=11)
+    ax.set_ylabel('True Anomaly (deg)', fontsize=11)
     ax.set_xlabel('Time (UTC)', fontsize=11)
     ax.grid(True, alpha=0.3)
 
@@ -813,6 +800,14 @@ def plot_orbital_element_errors(horizons_oe_df, tle_oe_df, tles=None, tle_epochs
         ax.scatter(tle_epochs_df['datetime'], np.zeros(len(tle_epochs_df)), c='black', marker='o', s=50, zorder=5)
     for t in transition_times:
         ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
+    
+    # Set y-axis limits excluding outliers (using 1st and 99th percentiles)
+    ta_error_p01 = np.percentile(ta_error, 1)
+    ta_error_p99 = np.percentile(ta_error, 99)
+    ta_error_range = ta_error_p99 - ta_error_p01
+    ta_error_margin = 0.15 * ta_error_range  # 15% margin
+    ax.set_ylim(ta_error_p01 - ta_error_margin, ta_error_p99 + ta_error_margin)
+    
     ax.set_ylabel('TA error\n[deg]', fontsize=11, rotation=90, va='center', labelpad=18)
     ax.set_xlabel('Time (UTC)', fontsize=11)
     ax.grid(True, alpha=0.3)
@@ -840,69 +835,6 @@ def plot_orbital_element_errors(horizons_oe_df, tle_oe_df, tles=None, tle_epochs
     fig.align_ylabels(axes[1:])
 
     return fig
-
-def diagnose_jump(jump_time_str: str, horizons_df: pd.DataFrame, tle_df: pd.DataFrame, tles):
-    """
-    Print diagnostics around a suspected anomaly time.
-    jump_time_str: ISO string e.g. '2025-10-07 10:46:45'
-    """
-    jt = pd.to_datetime(jump_time_str)
-    window = (horizons_df['datetime'] >= jt - pd.Timedelta(minutes=10)) & (horizons_df['datetime'] <= jt + pd.Timedelta(minutes=10))
-
-    print(f"\n--- Diagnostics around {jt} (±10 min) ---")
-
-    # Show TLE index changes (nearest-epoch selection)
-    idx_series = tle_df.loc[window, 'tle_index']
-    switch_points = idx_series[idx_series.diff().fillna(0) != 0]
-    print("TLE index switch times in window:")
-    print(switch_points.index.map(lambda i: tle_df.loc[i, 'datetime']).tolist(), "indices:", switch_points.values.tolist())
-
-    # List all TLE epochs and midpoint times between successive epochs
-    ts = load.timescale()
-    epochs = []
-    for line1, line2 in tles:
-        sat = EarthSatellite(line1, line2, 'ISS', ts)
-        epochs.append(pytz.utc.localize(sat.epoch.utc_datetime()))
-    print("\nTLE epochs:")
-    for i,e in enumerate(epochs):
-        print(f"  {i:2d}: {e}")
-
-    print("\nMidpoints between consecutive epochs (nearest switch boundaries):")
-    for i in range(len(epochs)-1):
-        mid = epochs[i] + (epochs[i+1] - epochs[i])/2
-        print(f"  between {i} and {i+1}: {mid}")
-
-    # Show COE around jump for Horizons vs TLE
-    h_sub = horizons_df.loc[window].copy()
-    t_sub = tle_df.loc[window].copy()
-
-    h_oe = compute_orbital_elements(h_sub)
-    t_oe = compute_orbital_elements(t_sub)
-
-    # Focus on angles (deg) that can wrap
-    cols = ['argp', 'ta', 'raan']
-    print("\nAngle samples near jump (first 8 rows in window):")
-    for k in cols:
-        print(f"{k} (Horizons):", h_oe[k].head(8).to_list())
-        print(f"{k} (TLE)     :", t_oe[k].head(8).to_list())
-    # Show differences just before vs just after jump time
-    before = h_oe[h_oe['datetime'] < jt].tail(1)
-    after  = h_oe[h_oe['datetime'] >= jt].head(1)
-    if not before.empty and not after.empty:
-        print("\nHorizons angle change across jump_time:")
-        for k in cols:
-            print(f"  Δ{k} =", float(after[k].values[0] - before[k].values[0]))
-    before_t = t_oe[t_oe['datetime'] < jt].tail(1)
-    after_t  = t_oe[t_oe['datetime'] >= jt].head(1)
-    if not before_t.empty and not after_t.empty:
-        print("\nTLE angle change across jump_time:")
-        for k in cols:
-            print(f"  Δ{k} =", float(after_t[k].values[0] - before_t[k].values[0]))
-
-    print("\nLikely cause:")
-    print("- Near-circular orbit makes argp poorly defined; normalization inside pv_to_coe causes sudden 0/360 wrap.")
-    print("- Nearest-epoch selection boundary occurs earlier (~midpoint) than expected; angle wrap coincides with switch.")
-    print("- Use argument of latitude or along-track error instead of raw TA, or implement continuous angle tracking.")
 
 
 def main():
@@ -981,9 +913,6 @@ def main():
     output_file7 = output_folderpath / f'iss_{norad_id}_orbital_element_errors_plot.png'
     fig4.savefig(output_file7, dpi=150, bbox_inches='tight')
     print(f"Orbital element errors plot saved to: {output_file7}")
-    
-    # Diagnose a jump around a suspected anomaly time (uncomment to use)
-    diagnose_jump('2025-10-07 10:46:45', horizons_df, tle_df, tles)
     
     plt.show()
 

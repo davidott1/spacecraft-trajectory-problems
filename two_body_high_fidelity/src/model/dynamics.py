@@ -96,6 +96,7 @@ import numpy as np
 import spiceypy as spice
 from pathlib import Path
 from typing import Optional
+import warnings
 
 from src.model.constants import PHYSICALCONSTANTS, CONVERTER
 
@@ -1199,7 +1200,7 @@ class TwoBody_RootSolvers:
         c_vec     = pos_f_vec - pos_o_vec
         c_mag     = np.linalg.norm(c_vec)
         
-        # Semi-perimeter
+        # Semi-latus rectum
         s = 0.5 * (pos_o_mag + pos_f_mag + c_mag)
         
         # Minimum energy semi-major axis
@@ -1255,7 +1256,7 @@ class CoordinateSystemConverter:
     """
     
     @staticmethod
-    def pv_to_coe_v2(
+    def pv_to_coe(
       pos_vec : np.ndarray,
       vel_vec : np.ndarray,
       gp      : float = PHYSICALCONSTANTS.EARTH.GP,
@@ -1275,29 +1276,45 @@ class CoordinateSystemConverter:
       Output:
       -------
       dict : Dictionary containing orbital elements:
-          sma   : semi-major axis [m] (or -rp for parabolic orbits)
-          ecc   : eccentricity [-]
-          inc   : inclination [rad]
-          raan  : right ascension of ascending node [rad]
-          argp  : argument of periapsis [rad]
-          ma    : mean anomaly [rad] (None for rectilinear or parabolic)
-          ta    : true anomaly [rad] (None for rectilinear)
-          ea    : eccentric anomaly [rad] (None for hyperbolic/parabolic/non-rectilinear-elliptic)
-          ha    : hyperbolic anomaly [rad] (None for elliptic/parabolic/non-rectilinear-hyperbolic)
-          pa    : parabolic anomaly [rad] (None for elliptic/hyperbolic)
-          
+        sma  : semi-major axis [m] (or np.inf for parabolic orbits)
+        ecc  : eccentricity [-]
+        inc  : inclination [rad]
+        raan : right ascension of the ascending node [rad]
+        argp : argument of periapsis [rad]
+        ma   : mean anomaly [rad] (None for rectilinear or parabolic)
+        ta   : true anomaly [rad] (None for rectilinear)
+        ea   : eccentric anomaly [rad] (None for hyperbolic/parabolic/non-rectilinear-elliptic)
+        ha   : hyperbolic anomaly [rad] (None for elliptic/parabolic/non-rectilinear-hyperbolic)
+        pa   : parabolic anomaly [rad] (None for elliptic/hyperbolic)
+
       Notes:
-      ------
+      ------      
       - Handles circular, elliptical, parabolic, hyperbolic, and rectilinear orbits
-      - For parabolic orbits, returns -rp (radius at periapsis) instead of semi-major axis
+        - circular:       e = 0           a > 0
+        - elliptical-2D:  0 < e < 1       a > 0
+        - elliptical-1D:  e = 1           a > 0 (rectilinear)
+        - parabolic:      e = 1           a = inf
+        - hyperbolic:     e > 1           a < 0
       - For rectilinear motion:
-          * Elliptic: returns ea (eccentric anomaly)
-          * Hyperbolic: returns ha (hyperbolic anomaly)
+          * Elliptic   : returns ea (eccentric anomaly)
+          * Hyperbolic : returns ha (hyperbolic anomaly)
       - For non-rectilinear motion:
-          * Elliptic: returns ta, ea, ma
-          * Hyperbolic: returns ta, ha, ma
-          * Parabolic: returns ta, pa, ma
-      - Anomaly fields not applicable to the orbit type are set to None
+          * Elliptic   : returns ta, ea, ma
+          * Hyperbolic : returns ta, ha, ma
+          * Parabolic  : returns ta, pa, ma
+      - For the circular case, the ascending node (AN) and argument of periapsis (AP) 
+        are ill-defined, along with the associated eccentricity direction vector (ie) 
+        and periapsis direction vector (ip) of the perifocal frame. In this circular 
+        orbit case, the unit vector ie is set equal to the normalized inertial 
+        position vector (ir).
+      - Anomaly fields not applicable to the orbit type are set to None.
+
+      Source:
+      -------
+      Modified from
+        Analytical Mechanics of Space Systems, Fourth Edition
+        Hanspeter Schaub and John L. Junkins
+        DOI: https://doi.org/10.2514/4.105210
       """
       # Small number for numerical comparisons
       eps = 1e-12
@@ -1325,19 +1342,16 @@ class CoordinateSystemConverter:
           sma = 1.0 / sma_inv
       else:
           # Parabolic case
-          semi_parameter = ang_mom_mag * ang_mom_mag / gp
-          periapsis_mag  = semi_parameter / 2.0
-          sma            = -periapsis_mag  # sma is not defined for parabola, so -radius_periapsis is returned
-          ecc_mag        = 1.0
+          sma     = np.inf
+          ecc_mag = 1.0
 
       # Handle rectilinear motion case
       if ang_mom_mag < eps:
           # periapsis_dir and ang_mom_dir are arbitrary
-          ecc_dir      = pos_dir.copy()
-          
-          dum          = np.array([0, 0, 1])
-          dum2         = np.array([0, 1, 0])
-          ang_mom_dir  = np.cross(ecc_dir, dum)
+          ecc_dir       = pos_dir.copy()
+          dum           = np.array([0, 0, 1])
+          dum2          = np.array([0, 1, 0])
+          ang_mom_dir   = np.cross(ecc_dir, dum)
           periapsis_dir = np.cross(ecc_dir, dum2)
 
           if np.linalg.norm(ang_mom_dir) > np.linalg.norm(periapsis_dir):
@@ -1415,111 +1429,11 @@ class CoordinateSystemConverter:
         'pa'   : pa,
       }
     
-    @staticmethod
-    def pv_to_coe(
-      pos_vec : np.ndarray,
-      vel_vec : np.ndarray,
-      gp      : float = PHYSICALCONSTANTS.EARTH.GP,
-    ) -> dict:
-        """
-        Convert position and velocity vectors to classical orbital elements.
-        
-        Input:
-        ------
-        pos_vec : np.ndarray
-            Position vector [m]
-        vel_vec : np.ndarray
-            Velocity vector [m/s]
-        
-        Output:
-        -------
-        dict : Dictionary containing orbital elements:
-            sma  : semi-major axis [m]
-            ecc  : eccentricity
-            inc  : inclination [rad]
-            raan : right ascension of ascending node [rad]
-            argp : argument of perigee [rad]
-            ma   : mean anomaly [rad]
-            ta   : true anomaly [rad]
-            ea   : eccentric anomaly [rad]
-        """
-        # Convert inputs to numpy arrays
-        pos_vec = np.array(pos_vec)
-        vel_vec = np.array(vel_vec)
-        
-        # Orbit radius
-        pos_mag = np.linalg.norm(pos_vec)
 
-        # Specific angular momentum
-        ang_mom_vec = np.cross(pos_vec, vel_vec)
-        ang_mom_mag = np.linalg.norm(ang_mom_vec)
-        
-        # Eccentricity vector
-        ecc_vec = np.cross(vel_vec, ang_mom_vec) / gp - pos_vec / pos_mag
-        ecc_mag = np.linalg.norm(ecc_vec)
-        
-        # Semi-major axis
-        vel_mag     = np.linalg.norm(vel_vec)
-        spec_energy = vel_mag**2 / 2 - gp / pos_mag
-        sma         = -gp / (2 * spec_energy)
-
-        # Inclination
-        inc = np.arccos(ang_mom_vec[2] / ang_mom_mag)
-        
-        # Node vector
-        node_vec = np.cross([0, 0, 1], ang_mom_vec)
-        node_mag = np.linalg.norm(node_vec)
-        
-        # RAAN
-        if node_mag - 1e-10 * gp > 0:
-            raan = np.arccos(np.clip(node_vec[0] / node_mag, -1, 1))
-            if node_vec[1] + 1e-10 * gp < 0:
-                raan = 2 * np.pi - raan
-        else:
-            raan = 0
-        
-        # Argument of perigee
-        if node_mag - 1e-10 * gp > 0 and ecc_mag + 1e-10 > 0:
-            argp = np.arccos(np.clip(np.dot(node_vec/node_mag, ecc_vec/ecc_mag), -1, 1))
-            if ecc_vec[2] < 0:
-                argp = 2 * np.pi - argp
-        else:
-            argp = 0
-        
-        # True anomaly
-        if ecc_mag - 1e-10 > 0:
-            cos_ta = np.dot(ecc_vec, pos_vec) / (ecc_mag * pos_mag)
-            cos_ta = np.clip(cos_ta, -1, 1)
-            ta     = np.arccos(cos_ta)
-            if np.dot(pos_vec, vel_vec) < 0:
-                ta = 2 * np.pi - ta
-            
-            # Eccentric anomaly
-            ea = 2 * np.arctan(np.sqrt((1 - ecc_mag) / (1 + ecc_mag)) * np.tan(ta / 2))
-            ea = ea + 2 * np.pi * (ea < 0)  # ensure positive
-            
-            # Mean anomaly
-            ma = ea - ecc_mag * np.sin(ea)
-            ma = ma % (2 * np.pi)
-        else:
-            ta = 0
-            ea = 0
-            ma = 0
-        
-        return {
-            'sma'  : sma,
-            'ecc'  : ecc_mag,
-            'inc'  : inc,
-            'raan' : raan,
-            'argp' : argp,
-            'ma'   : ma,
-            'ta'   : ta,
-            'ea'   : ea,
-        }
-    
     @staticmethod
     def coe_to_pv(
-        coe: dict,
+        coe : dict,
+        gp  : float = PHYSICALCONSTANTS.EARTH.GP,
     ) -> tuple:
         """
         Convert classical orbital elements to position and velocity vectors.
@@ -1527,24 +1441,24 @@ class CoordinateSystemConverter:
         Input:
         ------
         coe : dict
-            Dictionary containing:
-                - sma  : semi-major axis [m]
-                - ecc  : eccentricity [-]
-                - inc  : inclination [rad]
-                - raan : RAAN [rad]
-                - argp : argument of perigee [rad]
-                - ta   : true anomaly [rad] (or use 'ma' for mean anomaly)
+          Dictionary containing:
+            - sma  : semi-major axis [m]
+            - ecc  : eccentricity [-]
+            - inc  : inclination [rad]
+            - raan : RAAN [rad]
+            - argp : argument of perigee [rad]
+            - ta   : true anomaly [rad] (or use 'ma' for mean anomaly)
         
         Output:
         -------
-        pos : np.ndarray
+        pos_vec : np.ndarray
             Position vector [m]
-        vel : np.ndarray
+        vel_vec : np.ndarray
             Velocity vector [m/s]
         """
-        sma  = coe['sma']
-        ecc  = coe['ecc']
-        inc  = coe['inc']
+        sma  = coe['sma' ]
+        ecc  = coe['ecc' ]
+        inc  = coe['inc' ]
         raan = coe['raan']
         argp = coe['argp']
         
@@ -1565,8 +1479,8 @@ class CoordinateSystemConverter:
             raise ValueError("Must provide either 'ta' or 'ma' in coe dict")
         
         # Orbital plane (perifocal) coordinates
-        p = sma * (1 - ecc**2)  # Semi-latus rectum
-        r_mag = p / (1 + ecc * np.cos(ta))
+        slr   = sma * (1 - ecc**2)  # Semi-latus rectum
+        r_mag = slr / (1 + ecc * np.cos(ta))
         
         # Position in perifocal frame
         r_pqw = np.array([
@@ -1577,8 +1491,8 @@ class CoordinateSystemConverter:
         
         # Velocity in perifocal frame
         v_pqw = np.array([
-            -np.sqrt(self.gp / p) * np.sin(ta),
-            np.sqrt(self.gp / p) * (ecc + np.cos(ta)),
+            -np.sqrt(gp / slr) * np.sin(ta),
+            np.sqrt(gp / slr) * (ecc + np.cos(ta)),
             0.0
         ])
         
@@ -1597,9 +1511,173 @@ class CoordinateSystemConverter:
         ])
         
         # Transform to inertial frame
-        pos = R @ r_pqw
-        vel = R @ v_pqw
+        pos_vec = R @ r_pqw
+        vel_vec = R @ v_pqw
+
+        return pos_vec, vel_vec
+
+    @staticmethod
+    def coe_to_pv_v2(
+        coe : dict,
+        gp  : float = PHYSICALCONSTANTS.EARTH.GP,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Convert classical orbital elements to position and velocity vectors.
+        Handles all orbit types including parabolic and rectilinear cases.
         
-        return pos, vel
+        Input:
+        ------
+        coe : dict
+          sma  : semi-major axis [m]
+          ecc  : eccentricity [-]
+          inc  : inclination [rad]
+          raan : RAAN [rad]
+          argp : argument of periapsis [rad]
+          ta   : true anomaly [rad] (for non-rectilinear orbits)
+          ea   : eccentric anomaly [rad] (for rectilinear elliptic only)
+          For parabolic orbits (ecc≈1), one of the following must be provided
+          to define the orbit's size, as 'sma' is infinite:
+            - periapsis   : periapsis radius [m]
+            - slr         : semi-latus rectum [m]
+            - ang_mom_mag : angular momentum magnitude [m²/s]
+        gp : float
+            Gravitational parameter [m³/s²]
+        
+        Output:
+        -------
+        pos_vec : np.ndarray
+            Position vector [m]
+        vel_vec : np.ndarray
+            Velocity vector [m/s]
+        
+        Notes:
+        ------
+        The code can handle the following orbit types:
+            - circular      :  e = 0           a > 0
+            - elliptical-2D :  0 < e < 1       a > 0
+            - elliptical-1D :  e = 1           a > 0 and finite (rectilinear)
+            - parabolic     :  e = 1           a = inf
+            - hyperbolic    :  e > 1           a < 0
+
+        Source:
+        -------
+        Modified from
+          Analytical Mechanics of Space Systems, Fourth Edition
+          Hanspeter Schaub and John L. Junkins
+          DOI: https://doi.org/10.2514/4.105210
+        """
+        # Extract orbital elements
+        sma  = coe['sma' ]
+        ecc  = coe['ecc' ]
+        inc  = coe['inc' ]
+        raan = coe['raan']
+        argp = coe['argp']
+
+        # Rectilinear vs. non-rectilinear case handling
+        if ecc == 1.0 and sma > 0 and np.isfinite(sma):
+          # Rectilinear elliptic orbit case
+
+          # Extract eccentric anomaly
+          ea = coe.get('ea', None)
+          if ea is None:
+            raise ValueError("Eccentric anomaly 'ea' must be provided for rectilinear elliptic orbits")
+
+          # Position and velocity magnitudes
+          pos_mag = sma * (1 - ecc * np.cos(ea))
+          vel_mag = np.sqrt(2 * gp / pos_mag - gp / sma)
+          
+          # Position vector
+          pos_dir = np.array([
+            np.cos(raan) * np.cos(argp) - np.sin(raan) * np.sin(argp) * np.cos(inc),
+            np.sin(raan) * np.cos(argp) + np.cos(raan) * np.sin(argp) * np.cos(inc),
+            np.sin(argp) * np.sin(inc)
+          ])
+          pos_vec = pos_mag * pos_dir
+          
+          # Velocity direction (along or opposite to position direction)
+          if np.sin(ea) > 0:
+            vel_vec = -vel_mag * pos_dir
+          else:
+            vel_vec =  vel_mag * pos_dir
+        
+        else:
+          # Non-rectilinear cases: elliptic-2D, hyperbolic, parabolic
+
+          # Extract true anomaly
+          ta = coe.get('ta', None)  
+          if ta is None:
+            raise ValueError("True anomaly 'ta' must be provided for non-rectilinear orbits")
+
+          # Orbit conic cases: parabolic vs. elliptic/hyperbolic
+          if ecc == 1:
+            # Parabolic case
+            #   Priority cascade for size input parameter:
+            #   1. 'periapsis' (highest priority)
+            #   2. 'slr'
+            #   3. 'ang_mom_mag' (lowest priority)
+
+            # Fetch all possible inputs first
+            periapsis_mag = coe.get('periapsis', None)
+            slr_val       = coe.get('slr', None)
+            ang_mom_mag   = coe.get('ang_mom_mag', None)
+
+            # Apply priority cascade
+            if periapsis_mag is not None:
+                slr = 2 * periapsis_mag
+                # Build a list of ignored parameters for a specific warning
+                ignored_params = []
+                if slr_val is not None:
+                    ignored_params.append("'slr'")
+                if ang_mom_mag is not None:
+                    ignored_params.append("'ang_mom_mag'")
+                if ignored_params:
+                    ignored_str = " and ".join(ignored_params)
+                    warning_msg = (
+                        "Multiple size parameters for non-rectilinear parabolic orbit found in 'coe' dict. "
+                        f"Using 'periapsis' (highest priority). Ignoring {ignored_str}."
+                    )
+                    warnings.warn(warning_msg, UserWarning)
+
+            elif slr_val is not None:
+                slr = slr_val
+                # Warn if lower-priority key was also present
+                if ang_mom_mag is not None:
+                    warnings.warn("Multiple parabolic input parameters found to coe_to_pv function. 'periapsis' is None. Using 'slr' and ignoring 'ang_mom_mag'.", UserWarning)
+            
+            elif ang_mom_mag is not None:
+                slr = ang_mom_mag**2 / gp
+                # No warning needed, this is the last resort
+            
+            else:
+                # All three are None, this is a fatal error
+                raise ValueError("Either 'periapsis', 'slr', or 'ang_mom_mag' must be provided for parabolic orbits")
+          
+          else:
+            # Elliptic and hyperbolic cases
+            slr = sma * (1 - ecc**2)  # semi-latus rectum
+
+          # Position magnitude, true latitude angle, angular momentum magnitude
+          pos_mag     = slr / (1 + ecc * np.cos(ta))  # orbit radius
+          theta       = argp + ta                     # true latitude angle
+          ang_mom_mag = np.sqrt(gp * slr)             # orbit angular momentum magnitude
+
+          # Position vector
+          pos_vec = np.array([
+            pos_mag * (np.cos(raan) * np.cos(theta) - np.sin(raan) * np.sin(theta) * np.cos(inc)),
+            pos_mag * (np.sin(raan) * np.cos(theta) + np.cos(raan) * np.sin(theta) * np.cos(inc)),
+            pos_mag * (                                              np.sin(theta) * np.sin(inc))
+          ])
+          
+          # Velocity vector
+          vel_vec = np.array([
+            -gp / ang_mom_mag * (np.cos(raan) * (np.sin(theta) + ecc * np.sin(argp)) + np.sin(raan) * (np.cos(theta) + ecc * np.cos(argp)) * np.cos(inc)),
+            -gp / ang_mom_mag * (np.sin(raan) * (np.sin(theta) + ecc * np.sin(argp)) - np.cos(raan) * (np.cos(theta) + ecc * np.cos(argp)) * np.cos(inc)),
+            -gp / ang_mom_mag * (                                                                    -(np.cos(theta) + ecc * np.cos(argp)) * np.sin(inc))
+          ])
+        
+        return pos_vec, vel_vec
+
+
+
 
 
