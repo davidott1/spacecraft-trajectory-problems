@@ -1255,7 +1255,7 @@ class CoordinateSystemConverter:
     """
     
     @staticmethod
-    def rv2elem(
+    def pv_to_coe_v2(
       pos_vec : np.ndarray,
       vel_vec : np.ndarray,
       gp      : float = PHYSICALCONSTANTS.EARTH.GP,
@@ -1265,28 +1265,39 @@ class CoordinateSystemConverter:
       
       Input:
       ------
-      mu : float
-          Gravitational parameter [m³/s²]
       pos_vec : np.ndarray
           Position vector [m]
       vel_vec : np.ndarray
           Velocity vector [m/s]
+      gp : float
+          Gravitational parameter [m³/s²]
           
       Output:
       -------
       dict : Dictionary containing orbital elements:
-          a     : semi-major axis [m] (or -rp for parabolic orbits)
-          e     : eccentricity
-          i     : inclination [rad]
-          Omega : ascending node [rad]
-          omega : argument of periapsis [rad]
-          anom  : true anomaly [rad] (or eccentric/hyperbolic anomaly for rectilinear motion)
+          sma   : semi-major axis [m] (or -rp for parabolic orbits)
+          ecc   : eccentricity [-]
+          inc   : inclination [rad]
+          raan  : right ascension of ascending node [rad]
+          argp  : argument of periapsis [rad]
+          ma    : mean anomaly [rad] (None for rectilinear or parabolic)
+          ta    : true anomaly [rad] (None for rectilinear)
+          ea    : eccentric anomaly [rad] (None for hyperbolic/parabolic/non-rectilinear-elliptic)
+          ha    : hyperbolic anomaly [rad] (None for elliptic/parabolic/non-rectilinear-hyperbolic)
+          pa    : parabolic anomaly [rad] (None for elliptic/hyperbolic)
           
       Notes:
       ------
-      Handles circular, elliptical (2D and 1D), parabolic, and hyperbolic orbits.
-      For parabolic orbits, returns -rp instead of semi-major axis.
-      For rectilinear motion, returns eccentric or hyperbolic anomaly instead of true anomaly.
+      - Handles circular, elliptical, parabolic, hyperbolic, and rectilinear orbits
+      - For parabolic orbits, returns -rp (radius at periapsis) instead of semi-major axis
+      - For rectilinear motion:
+          * Elliptic: returns ea (eccentric anomaly)
+          * Hyperbolic: returns ha (hyperbolic anomaly)
+      - For non-rectilinear motion:
+          * Elliptic: returns ta, ea, ma
+          * Hyperbolic: returns ta, ha, ma
+          * Parabolic: returns ta, pa, ma
+      - Anomaly fields not applicable to the orbit type are set to None
       """
       # Small number for numerical comparisons
       eps = 1e-12
@@ -1315,7 +1326,7 @@ class CoordinateSystemConverter:
       else:
           # Parabolic case
           semi_parameter = ang_mom_mag * ang_mom_mag / gp
-          periapsis_mag   = semi_parameter / 2.0
+          periapsis_mag  = semi_parameter / 2.0
           sma            = -periapsis_mag  # sma is not defined for parabola, so -radius_periapsis is returned
           ecc_mag        = 1.0
 
@@ -1351,66 +1362,64 @@ class CoordinateSystemConverter:
       argp = np.arctan2(ecc_dir[2], periapsis_dir[2])
       
       # Compute anomalies
+      ma = None
+      ta = None
+      ea = None
+      ha = None
+      pa = None
       if ang_mom_mag < eps:
-          # Rectilinear motion case
-          if sma_inv > 0:
-              # Elliptic case
-              Ecc = np.arccos(1 - pos_mag * sma_inv)
-              if np.dot(pos_vec, vel_vec) > 0:
-                  Ecc = 2 * np.pi - Ecc
-              anom = Ecc  # Return eccentric anomaly
-          else:
-              # Hyperbolic case
-              H = np.arccosh(pos_mag * sma_inv + 1)
-              if np.dot(pos_vec, vel_vec) < 0:
-                  H = 2 * np.pi - H
-              anom = H  # Return hyperbolic anomaly
+        # Rectilinear motion case
+        if sma_inv > 0:
+          # Elliptic case
+          ea = np.arccos(1 - pos_mag * sma_inv)
+          if np.dot(pos_vec, vel_vec) > 0:
+            ea = 2 * np.pi - ea
+        else:
+          # Hyperbolic case
+          ha = np.arccosh(pos_mag * sma_inv + 1)
+          if np.dot(pos_vec, vel_vec) < 0:
+            ha = 2 * np.pi - ha
       else:
-          # Compute true anomaly
-          dum = np.cross(ecc_dir, pos_dir)
-          ta  = np.arctan2(np.dot(dum, ang_mom_dir), np.dot(ecc_dir, pos_dir))
+        # Compute true anomaly
+        dum = np.cross(ecc_dir, pos_dir)
+        ta  = np.arctan2(np.dot(dum, ang_mom_dir), np.dot(ecc_dir, pos_dir))
 
-          # # Compute mean anomaly
-          # if ecc_mag < 1.0 - eps:  # Elliptical case
-          #     Ecc = 2 * np.arctan(np.tan(ta / 2) / np.sqrt((1 + ecc_mag) / (1 - ecc_mag)))
-          #     if Ecc < 0:
-          #         Ecc = Ecc + 2 * np.pi
-          #     ma = Ecc - ecc_mag * np.sin(Ecc)
-          #     ma = ma % (2 * np.pi)
-          # elif ecc_mag > 1.0 + eps:  # Hyperbolic case
-          #     H = 2 * np.arctanh(np.tan(ta / 2) * np.sqrt((ecc_mag - 1) / (ecc_mag + 1)))
-          #     ma = ecc_mag * np.sinh(H) - H
-          # else:  # Parabolic case
-          #     D = np.tan(ta / 2)
-          #     ma = D + D**3 / 3
-
-          # # Compute eccentric anomaly
-          # if ecc_mag < 1.0 - eps:  # Elliptical case
-          #     ea = 2 * np.arctan(np.tan(ta / 2) / np.sqrt((1 + ecc_mag) / (1 - ecc_mag)))
-          #     if ea < 0:
-          #         ea = ea + 2 * np.pi
-          # elif ecc_mag > 1.0 + eps:  # Hyperbolic case
-          #     H = 2 * np.arctanh(np.tan(ta / 2) * np.sqrt((ecc_mag - 1) / (ecc_mag + 1)))
-          #     ea = H
-          # else:  # Parabolic case
-          #     D = np.tan(ta / 2)
-          #     ea = D
+        # Compute eccentric anomaly and mean anomaly
+        if ecc_mag < 1.0 - eps:
+          # Elliptical case - CORRECTED FORMULA
+          ea = 2 * np.arctan2(
+              np.sqrt(1 - ecc_mag) * np.sin(ta / 2),
+              np.sqrt(1 + ecc_mag) * np.cos(ta / 2)
+          )
+          ma = ea - ecc_mag * np.sin(ea)
+          ma = ma % (2 * np.pi)
+        elif ecc_mag > 1.0 + eps:
+          # Hyperbolic case
+          ha  = 2 * np.arctanh(np.tan(ta / 2) * np.sqrt((ecc_mag - 1) / (ecc_mag + 1)))
+          ma = ecc_mag * np.sinh(ha) - ha
+        else:
+          # Parabolic case
+          pa = np.tan(ta / 2)
+          ma = pa + pa**3 / 3
 
       return {
-            'sma'   : sma,
-            'ecc'   : ecc_mag,
-            'inc'   : inc,
-            'Omega' : raan,
-            'omega' : argp,
-            'ma'    : ma,
-            'ta'    : ta,
-            'ea'    : ea,
-        }
+        'sma'  : sma,
+        'ecc'  : ecc_mag,
+        'inc'  : inc,
+        'raan' : raan,
+        'argp' : argp,
+        'ma'   : ma,
+        'ta'   : ta,
+        'ea'   : ea,
+        'ha'   : ha,
+        'pa'   : pa,
+      }
     
+    @staticmethod
     def pv_to_coe(
-        self,
-        pos_vec: np.ndarray,
-        vel_vec: np.ndarray,
+      pos_vec : np.ndarray,
+      vel_vec : np.ndarray,
+      gp      : float = PHYSICALCONSTANTS.EARTH.GP,
     ) -> dict:
         """
         Convert position and velocity vectors to classical orbital elements.
@@ -1446,14 +1455,14 @@ class CoordinateSystemConverter:
         ang_mom_mag = np.linalg.norm(ang_mom_vec)
         
         # Eccentricity vector
-        ecc_vec = np.cross(vel_vec, ang_mom_vec) / self.gp - pos_vec / pos_mag
+        ecc_vec = np.cross(vel_vec, ang_mom_vec) / gp - pos_vec / pos_mag
         ecc_mag = np.linalg.norm(ecc_vec)
         
         # Semi-major axis
         vel_mag     = np.linalg.norm(vel_vec)
-        spec_energy = vel_mag**2 / 2 - self.gp / pos_mag
-        sma         = -self.gp / (2 * spec_energy)
-        
+        spec_energy = vel_mag**2 / 2 - gp / pos_mag
+        sma         = -gp / (2 * spec_energy)
+
         # Inclination
         inc = np.arccos(ang_mom_vec[2] / ang_mom_mag)
         
@@ -1462,15 +1471,15 @@ class CoordinateSystemConverter:
         node_mag = np.linalg.norm(node_vec)
         
         # RAAN
-        if node_mag - 1e-10 * self.gp > 0:
+        if node_mag - 1e-10 * gp > 0:
             raan = np.arccos(np.clip(node_vec[0] / node_mag, -1, 1))
-            if node_vec[1] + 1e-10 * self.gp < 0:
+            if node_vec[1] + 1e-10 * gp < 0:
                 raan = 2 * np.pi - raan
         else:
             raan = 0
         
         # Argument of perigee
-        if node_mag - 1e-10 * self.gp > 0 and ecc_mag + 1e-10 > 0:
+        if node_mag - 1e-10 * gp > 0 and ecc_mag + 1e-10 > 0:
             argp = np.arccos(np.clip(np.dot(node_vec/node_mag, ecc_vec/ecc_mag), -1, 1))
             if ecc_vec[2] < 0:
                 argp = 2 * np.pi - argp
@@ -1487,8 +1496,7 @@ class CoordinateSystemConverter:
             
             # Eccentric anomaly
             ea = 2 * np.arctan(np.sqrt((1 - ecc_mag) / (1 + ecc_mag)) * np.tan(ta / 2))
-            if ea < 0:
-                ea = ea + 2 * np.pi
+            ea = ea + 2 * np.pi * (ea < 0)  # ensure positive
             
             # Mean anomaly
             ma = ea - ecc_mag * np.sin(ea)
@@ -1509,8 +1517,8 @@ class CoordinateSystemConverter:
             'ea'   : ea,
         }
     
+    @staticmethod
     def coe_to_pv(
-        self,
         coe: dict,
     ) -> tuple:
         """
@@ -1593,3 +1601,5 @@ class CoordinateSystemConverter:
         vel = R @ v_pqw
         
         return pos, vel
+
+
