@@ -6,7 +6,6 @@ High-fidelity orbital dynamics models for spacecraft trajectory propagation.
 
 Class Structure:
 ----------------
-
 Acceleration Hierarchy:
     Acceleration (coordinator)
     ├── Gravity
@@ -1255,19 +1254,158 @@ class CoordinateSystemConverter:
     Conversion between position/velocity and classical orbital elements
     """
     
-    def __init__(
-        self,
-        gp: float = PHYSICALCONSTANTS.EARTH.GP,
-    ):
-        """
-        Initialize converter
-        
-        Input:
-        ------
-        gp : float
-            Gravitational parameter [m³/s²]
-        """
-        self.gp = gp
+    @staticmethod
+    def rv2elem(
+      pos_vec : np.ndarray,
+      vel_vec : np.ndarray,
+      gp      : float = PHYSICALCONSTANTS.EARTH.GP,
+    ) -> dict:
+      """
+      Convert Cartesian position and velocity vectors to classical orbital elements.
+      
+      Input:
+      ------
+      mu : float
+          Gravitational parameter [m³/s²]
+      pos_vec : np.ndarray
+          Position vector [m]
+      vel_vec : np.ndarray
+          Velocity vector [m/s]
+          
+      Output:
+      -------
+      dict : Dictionary containing orbital elements:
+          a     : semi-major axis [m] (or -rp for parabolic orbits)
+          e     : eccentricity
+          i     : inclination [rad]
+          Omega : ascending node [rad]
+          omega : argument of periapsis [rad]
+          anom  : true anomaly [rad] (or eccentric/hyperbolic anomaly for rectilinear motion)
+          
+      Notes:
+      ------
+      Handles circular, elliptical (2D and 1D), parabolic, and hyperbolic orbits.
+      For parabolic orbits, returns -rp instead of semi-major axis.
+      For rectilinear motion, returns eccentric or hyperbolic anomaly instead of true anomaly.
+      """
+      # Small number for numerical comparisons
+      eps = 1e-12
+      
+      # Ensure vectors are numpy arrays
+      pos_vec = np.asarray(pos_vec).flatten()
+      vel_vec = np.asarray(vel_vec).flatten()
+      
+      # Orbit radius
+      pos_mag = np.linalg.norm(pos_vec)
+      pos_dir = pos_vec / pos_mag
+
+      # Angular momentum vector
+      ang_mom_vec = np.cross(pos_vec, vel_vec)
+      ang_mom_mag = np.linalg.norm(ang_mom_vec)
+
+      # Eccentricity vector
+      ecc_vec = np.cross(vel_vec, ang_mom_vec) / gp - pos_vec / pos_mag
+      ecc_mag = np.linalg.norm(ecc_vec)
+
+      # Compute semi-major axis
+      sma_inv = 2.0 / pos_mag - np.dot(vel_vec, vel_vec) / gp
+      if abs(sma_inv) > eps:
+          # Elliptic or hyperbolic case
+          sma = 1.0 / sma_inv
+      else:
+          # Parabolic case
+          semi_parameter = ang_mom_mag * ang_mom_mag / gp
+          periapsis_mag   = semi_parameter / 2.0
+          sma            = -periapsis_mag  # sma is not defined for parabola, so -radius_periapsis is returned
+          ecc_mag        = 1.0
+
+      # Handle rectilinear motion case
+      if ang_mom_mag < eps:
+          # periapsis_dir and ang_mom_dir are arbitrary
+          ecc_dir      = pos_dir.copy()
+          
+          dum          = np.array([0, 0, 1])
+          dum2         = np.array([0, 1, 0])
+          ang_mom_dir  = np.cross(ecc_dir, dum)
+          periapsis_dir = np.cross(ecc_dir, dum2)
+
+          if np.linalg.norm(ang_mom_dir) > np.linalg.norm(periapsis_dir):
+              ang_mom_dir = ang_mom_dir / np.linalg.norm(ang_mom_dir)
+          else:
+              ang_mom_dir = periapsis_dir / np.linalg.norm(periapsis_dir)
+          periapsis_dir = np.cross(ang_mom_dir, ecc_dir)
+      else:
+          # Compute perifocal frame unit direction vectors
+          ang_mom_dir = ang_mom_vec / ang_mom_mag
+          if abs(ecc_mag) > eps:
+              # Non-circular case
+              ecc_dir = ecc_vec / ecc_mag
+          else:
+              # Circular orbit case
+              ecc_dir = pos_dir.copy()
+          periapsis_dir = np.cross(ang_mom_dir, ecc_dir)
+      
+      # Compute the 3-1-3 orbit plane orientation angles
+      raan = np.arctan2(ang_mom_dir[0], -ang_mom_dir[1])
+      inc  = np.arccos(ang_mom_dir[2])
+      argp = np.arctan2(ecc_dir[2], periapsis_dir[2])
+      
+      # Compute anomalies
+      if ang_mom_mag < eps:
+          # Rectilinear motion case
+          if sma_inv > 0:
+              # Elliptic case
+              Ecc = np.arccos(1 - pos_mag * sma_inv)
+              if np.dot(pos_vec, vel_vec) > 0:
+                  Ecc = 2 * np.pi - Ecc
+              anom = Ecc  # Return eccentric anomaly
+          else:
+              # Hyperbolic case
+              H = np.arccosh(pos_mag * sma_inv + 1)
+              if np.dot(pos_vec, vel_vec) < 0:
+                  H = 2 * np.pi - H
+              anom = H  # Return hyperbolic anomaly
+      else:
+          # Compute true anomaly
+          dum = np.cross(ecc_dir, pos_dir)
+          ta  = np.arctan2(np.dot(dum, ang_mom_dir), np.dot(ecc_dir, pos_dir))
+
+          # # Compute mean anomaly
+          # if ecc_mag < 1.0 - eps:  # Elliptical case
+          #     Ecc = 2 * np.arctan(np.tan(ta / 2) / np.sqrt((1 + ecc_mag) / (1 - ecc_mag)))
+          #     if Ecc < 0:
+          #         Ecc = Ecc + 2 * np.pi
+          #     ma = Ecc - ecc_mag * np.sin(Ecc)
+          #     ma = ma % (2 * np.pi)
+          # elif ecc_mag > 1.0 + eps:  # Hyperbolic case
+          #     H = 2 * np.arctanh(np.tan(ta / 2) * np.sqrt((ecc_mag - 1) / (ecc_mag + 1)))
+          #     ma = ecc_mag * np.sinh(H) - H
+          # else:  # Parabolic case
+          #     D = np.tan(ta / 2)
+          #     ma = D + D**3 / 3
+
+          # # Compute eccentric anomaly
+          # if ecc_mag < 1.0 - eps:  # Elliptical case
+          #     ea = 2 * np.arctan(np.tan(ta / 2) / np.sqrt((1 + ecc_mag) / (1 - ecc_mag)))
+          #     if ea < 0:
+          #         ea = ea + 2 * np.pi
+          # elif ecc_mag > 1.0 + eps:  # Hyperbolic case
+          #     H = 2 * np.arctanh(np.tan(ta / 2) * np.sqrt((ecc_mag - 1) / (ecc_mag + 1)))
+          #     ea = H
+          # else:  # Parabolic case
+          #     D = np.tan(ta / 2)
+          #     ea = D
+
+      return {
+            'sma'   : sma,
+            'ecc'   : ecc_mag,
+            'inc'   : inc,
+            'Omega' : raan,
+            'omega' : argp,
+            'ma'    : ma,
+            'ta'    : ta,
+            'ea'    : ea,
+        }
     
     def pv_to_coe(
         self,
@@ -1300,12 +1438,14 @@ class CoordinateSystemConverter:
         pos_vec = np.array(pos_vec)
         vel_vec = np.array(vel_vec)
         
+        # Orbit radius
+        pos_mag = np.linalg.norm(pos_vec)
+
         # Specific angular momentum
         ang_mom_vec = np.cross(pos_vec, vel_vec)
         ang_mom_mag = np.linalg.norm(ang_mom_vec)
         
         # Eccentricity vector
-        pos_mag = np.linalg.norm(pos_vec)
         ecc_vec = np.cross(vel_vec, ang_mom_vec) / self.gp - pos_vec / pos_mag
         ecc_mag = np.linalg.norm(ecc_vec)
         
@@ -1366,7 +1506,7 @@ class CoordinateSystemConverter:
             'argp' : argp,
             'ma'   : ma,
             'ta'   : ta,
-            'ea'   : ea
+            'ea'   : ea,
         }
     
     def coe_to_pv(
