@@ -3,85 +3,13 @@ from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-from constants import CONVERTER, TIMEVALUES
+from src.model.constants import CONVERTER
 from two_body_high_fidelity.src.model.two_body import TwoBodyDynamics, PHYSICALCONSTANTS, EquationsOfMotion
 from plot.trajectory import plot_3d_trajectories, plot_time_series, plot_3d_error, plot_time_series_error
-from model.coordinate_system_converter import CoordinateSystemConverter
+from src.propagation import propagate_orbit
 from initialization import initial_guess
-from tle_propagator import propagate_tle, get_tle_initial_state
+from two_body_high_fidelity.src.propagation.tle_propagator import propagate_tle, get_tle_initial_state
 from typing import Optional
-
-def propagate_orbit(
-    initial_state       : np.ndarray,
-    time_o              : float,
-    time_f              : float,
-    dynamics            : TwoBodyDynamics,
-    method              : str  = 'DOP853', # DOP853 RK45
-    rtol                : float = 1e-12,
-    atol                : float = 1e-12,
-    get_coe_time_series : bool  = False,
-    num_points          : Optional[int] = None,
-) -> dict:
-    """
-    Propagate an orbit from initial cartesian state.
-    
-    Parameters:
-    -----------
-    num_points : int, optional
-        Number of output points. If None, uses adaptive timesteps from solver.
-        If specified, solution is evaluated at uniformly spaced times.
-    """
-    # Time span for integration
-    time_span = (time_o, time_f)
-
-    # Solve initial value problem
-    solution = solve_ivp(
-        fun          = EquationsOfMotion(dynamics).state_time_derivative,
-        t_span       = time_span,
-        y0           = initial_state,
-        method       = method,
-        rtol         = rtol,
-        atol         = atol,
-        dense_output = True,
-    )
-    
-    # If num_points is specified, evaluate solution at uniform time grid
-    if num_points is not None:
-        t_eval = np.linspace(time_o, time_f, num_points)
-        y_eval = solution.sol(t_eval)
-        solution.t = t_eval
-        solution.y = y_eval
-    
-    # Convert all states to classical orbital elements
-    num_steps = solution.y.shape[1]
-    coe_time_series = {
-        'sma'  : np.zeros(num_steps),
-        'ecc'  : np.zeros(num_steps),
-        'inc'  : np.zeros(num_steps),
-        'raan' : np.zeros(num_steps),
-        'argp' : np.zeros(num_steps),
-        'ma'   : np.zeros(num_steps),
-        'ta'   : np.zeros(num_steps),
-        'ea'   : np.zeros(num_steps),
-    }
-    if get_coe_time_series:
-        coord_sys_converter = CoordinateSystemConverter(dynamics.gp)
-        for i in range(num_steps):
-            pos = solution.y[0:3, i]
-            vel = solution.y[3:6, i]
-            coe = coord_sys_converter.rv2coe(pos, vel)
-            
-            for key in coe_time_series.keys():
-                coe_time_series[key][i] = coe[key]
-    
-    return {
-        'success'     : solution.success,
-        'message'     : solution.message,
-        'time'        : solution.t,
-        'state'       : solution.y,
-        'final_state' : solution.y[:, -1],
-        'coe'         : coe_time_series,
-    }
 
 def main():
     """
@@ -95,9 +23,9 @@ def main():
     - SGP4: Used for orbits with period < 225 minutes (orbital radius < ~6.6 R_E or ~42,164 km)
     - SDP4: Used for orbits with period >= 225 minutes (typically GEO and higher)
     
-    For circular orbits:
-    - LEO  (~500 km):   Period ~95 min  -> SGP4
-    - MEO  (~20,000 km): Period ~718 min -> SDP4  
+    For circular orbits:s
+    - LEO  (   ~500 km): Period   ~95 min -> SGP4
+    - MEO  (~20,000 km): Period  ~718 min -> SDP4  
     - GEO  (~35,786 km): Period ~1436 min -> SDP4
     
     The transition happens at approximately 6.6 Earth radii from Earth's center,
@@ -106,8 +34,8 @@ def main():
     #### INPUT ####
 
     # Time
-    time_o = 0.0                               # initial time [s]
-    time_f = time_o + 1 * TIMEVALUES.ONE_DAY   # final time [s]
+    time_o = 0.0                                  # initial time [s]
+    time_f = time_o + 1 * CONVERTER.SEC_PER_DAY   # final time [s]
 
     # Example TLEs:
     
@@ -198,9 +126,9 @@ def main():
         print(f"\nPropagating TLE for {time_offset/60.0} minutes to get new initial state...")
         
         state_at_offset = propagate_tle(
-            tle_line1=tle_line1, tle_line2=tle_line2,
-            time_o=time_offset, time_f=time_offset, num_points=1,
-            disable_drag=disable_drag_sgp4, to_j2000=True
+          tle_line1=tle_line1, tle_line2=tle_line2,
+          time_o=time_offset, time_f=time_offset, num_points=1,
+          disable_drag=disable_drag_sgp4, to_j2000=True
         )
         if not state_at_offset['success']:
             raise RuntimeError(f"Failed to get state at {time_offset}s: {state_at_offset['message']}")
@@ -210,10 +138,10 @@ def main():
         
         print(f"New initial state obtained for t = {time_o}s.")
     else:
-        igs = 'elliptical'             # initial guess selection: circular elliptical
-        alt = 500e3                    # altitude [m]
-        ecc = 0.2                      # eccentricity [-]
-        inc = 95.0 * CONVERTER.DEG2RAD # inclination [rad]
+        igs = 'elliptical'                 # initial guess selection: circular elliptical
+        alt = 500e3                        # altitude [m]
+        ecc = 0.2                          # eccentricity [-]
+        inc = 95.0 * CONVERTER.RAD_PER_DEG # inclination [rad]
         
         initial_state = initial_guess.get_initial_state(
             initial_guess_selection = igs,

@@ -8,7 +8,7 @@ from skyfield.timelib import Time
 from matplotlib.ticker import ScalarFormatter
 
 from src.model.constants import CONVERTER, PHYSICALCONSTANTS
-from src.model.dynamics  import CoordinateSystemConverter as csc # type: ignore[reportMissingImports]
+from src.model.dynamics  import OrbitConverter as csc # type: ignore[reportMissingImports]
 
 
 def load_horizons_data(filepath):
@@ -46,7 +46,7 @@ def compute_orbital_elements(df):
         vel_vec = np.array([row['vel_x__km_per_s'], row['vel_y__km_per_s'], row['vel_z__km_per_s']]) * CONVERTER.M_PER_KM  # [m/s]
         
         # Compute classical orbital elements
-        coe = csc.pv_to_coe_v2(
+        coe = csc.pv_to_coe(
           pos_vec = pos_vec,
           vel_vec = vel_vec,
           gp      = PHYSICALCONSTANTS.EARTH.GP,

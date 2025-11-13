@@ -70,9 +70,9 @@ Usage Example:
     
     # Initialize acceleration model
     acceleration = Acceleration(
-        gp      = PHYSICALCONSTANTS.EARTH.GP,
-        j2      = PHYSICALCONSTANTS.EARTH.J2,
-        pos_ref = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR,
+        gp                = PHYSICALCONSTANTS.EARTH.GP,
+        j2                = PHYSICALCONSTANTS.EARTH.J2,
+        pos_ref           = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR,
         enable_drag       = True,
         cd                = 2.2,
         area_drag         = 10.0,
@@ -88,11 +88,11 @@ Usage Example:
 
 Units:
 ------
-- Position: meters [m]
-- Velocity: meters per second [m/s]
-- Acceleration: meters per second squared [m/s²]
-- Time: seconds [s]
-- Angles: radians [rad]
+- Position     : meters [m]
+- Velocity     : meters per second [m/s]
+- Acceleration : meters per second squared [m/s²]
+- Time         : seconds [s]
+- Angles       : radians [rad]
 
 Notes:
 ------
@@ -1714,7 +1714,7 @@ class OrbitConverter:
       ta : float
           True anomaly [rad]
       ecc : float
-          Eccentricity (0 <= e < 1)
+          Eccentricity (0 <= ecc < 1)
       
       Output:
       -------
@@ -1936,6 +1936,9 @@ class OrbitConverter:
         raise ValueError(f"mha_to_ha() requires ecc > 1, received ecc = {ecc}")
 
       return ha
+
+# # Backward compatibility alias
+# CoordinateSystemConverter = OrbitConverter
 
 
 

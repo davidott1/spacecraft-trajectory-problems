@@ -156,3 +156,5 @@ class PHYSICALCONSTANTS:
         SMA = 39.48168677 * CONVERTER.M_PER_AU    # Semi-major axis [m]
         ECC = 0.24880766                          # Eccentricity
         INC = 17.14175    * CONVERTER.DEG_PER_RAD # Inclination [rad]
+
+

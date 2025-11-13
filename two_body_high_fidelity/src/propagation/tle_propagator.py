@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 from astropy import units as u
 from astropy.time import Time
 from astropy.coordinates import TEME, GCRS, CartesianRepresentation, CartesianDifferential
-from model.coordinate_system_converter import CoordinateSystemConverter
-from two_body_high_fidelity.src.model.two_body import PHYSICALCONSTANTS
+from src.model.dynamics import OrbitConverter
+from src.model.constants import PHYSICALCONSTANTS
 
 
 def teme_to_j2000(teme_pos_vec, teme_vel_vec, jd_utc, debug=False):
@@ -174,9 +174,7 @@ def propagate_tle(
         'ta'   : np.zeros(num_points),
         'ea'   : np.zeros(num_points),
     }
-    
-    coord_sys_converter = CoordinateSystemConverter(PHYSICALCONSTANTS.EARTH.GP)
-    
+
     # Propagate at each time step
     for i, t in enumerate(time_array):
         # Convert time to datetime
@@ -209,7 +207,7 @@ def propagate_tle(
         state_array[3:6, i] = j2000_vel_vec
         
         # Compute osculating elements
-        coe = coord_sys_converter.rv2coe(j2000_pos_vec, j2000_vel_vec)
+        coe = OrbitConverter.rv2coe(j2000_pos_vec, j2000_vel_vec)
         for key in coe_time_series.keys():
             coe_time_series[key][i] = coe[key]
     

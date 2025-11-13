@@ -2,7 +2,7 @@ import numpy as np
 from sgp4.api import Satrec
 from sgp4.api import jday
 
-from tle_propagator import propagate_tle
+from two_body_high_fidelity.src.propagation.tle_propagator import propagate_tle
 from model.coordinate_system_converter import CoordinateSystemConverter
 from constants import CONVERTER, TIMEVALUES
 from two_body_high_fidelity.src.model.two_body import PHYSICALCONSTANTS
