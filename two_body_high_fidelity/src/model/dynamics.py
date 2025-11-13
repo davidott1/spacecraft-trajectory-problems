@@ -4,6 +4,15 @@ Spacecraft Orbital Dynamics Module
 
 High-fidelity orbital dynamics models for spacecraft trajectory propagation.
 
+Summary:
+--------
+This module provides a comprehensive framework for modeling spacecraft orbital dynamics,
+including gravitational forces (two-body and third-body), atmospheric drag, and solar 
+radiation pressure. It features a hierarchical acceleration model architecture, orbital 
+element conversions, anomaly transformations, and specialized solvers for Kepler's equation 
+and Lambert's problem. The module supports all orbit types (circular, elliptical, parabolic, 
+hyperbolic, and rectilinear) and integrates with SPICE for high-accuracy ephemerides.
+
 Class Structure:
 ----------------
 Acceleration Hierarchy:
@@ -1126,41 +1135,44 @@ class TwoBody_RootSolvers:
         tol      : float = 1e-10,
         max_iter : int   = 50
     ) -> float:
-        """
-        Solve Kepler's equation ma = ea - ecc*sin(ea) for eccentric anomaly ea.
-        
-        Input:
-        ------
-        ma : float
-            Mean anomaly [rad]
-        ecc : float
-            Eccentricity
-        tol : float
-            Convergence tolerance
-        max_iter : int
-            Maximum iterations
-        
-        Output:
-        -------
-        ea : float
-            Eccentric anomaly [rad]
-        """
-        # Initial guess
-        if ecc < 0.8:
-            ea = ma
-        else:
-            ea = np.pi
-        
-        for _ in range(max_iter):
-            func       = ea - ecc * np.sin(ea) - ma
-            func_prime = 1 - ecc * np.cos(ea)
-            ea_new = ea - func / func_prime
-            
-            if abs(ea_new - ea) < tol:
-                return ea_new
-            ea = ea_new
-        
-        return ea  # Return best estimate if not converged
+      """
+      Solve Kepler's equation ma = ea - ecc*sin(ea) for eccentric anomaly ea.
+      
+      Input:
+      ------
+      ma : float
+          Mean anomaly [rad]
+      ecc : float
+          Eccentricity
+      tol : float
+          Convergence tolerance
+      max_iter : int
+          Maximum iterations
+      
+      Output:
+      -------
+      ea : float
+          Eccentric anomaly [rad]
+      """
+      # Initial guess
+      if ecc < 0.8:
+        ea = ma
+      else:
+        ea = np.pi
+      
+      # Newton-Raphson iteration
+      for i in range(max_iter+1):
+        func       = ea - ecc * np.sin(ea) - ma
+        func_prime = 1 - ecc * np.cos(ea)
+        delta_ea   = -func / func_prime
+        if abs(delta_ea) < tol:
+          return ea
+        if i == max_iter:
+          print("Kepler's equation not converged")
+          break
+        ea = ea + delta_ea
+      
+      return ea  # return best estimate if not converged
     
     # Alias for kepler function - converts mean anomaly to eccentric anomaly
     M2E_kepler = kepler
@@ -1258,9 +1270,22 @@ class TwoBody_RootSolvers:
         return vel_o_vec, vel_f_vec
 
 
-class CoordinateSystemConverter:
+class OrbitConverter:
     """
     Conversion between position/velocity and classical orbital elements
+    
+    Summary:
+    --------
+    Provides comprehensive conversion utilities for orbital mechanics, including:
+    - Cartesian state (position/velocity) ↔ classical orbital elements
+    - Anomaly transformations (true, eccentric, mean, hyperbolic, parabolic)
+    - Support for all orbit types (circular, elliptical, parabolic, hyperbolic, rectilinear)
+    
+    Key Methods:
+    ------------
+    - pv_to_coe() : Convert position/velocity to orbital elements
+    - coe_to_pv() : Convert orbital elements to position/velocity
+    - Anomaly conversions: ea_to_ta, ta_to_ea, ma_to_ea, ea_to_ma, etc.
     """
     
     @staticmethod
@@ -1714,7 +1739,10 @@ class CoordinateSystemConverter:
       return ea
     
     @staticmethod
-    def ta_to_ha(ta: float, ecc: float) -> float:
+    def ta_to_ha(
+        ta  : float,
+        ecc : float,
+      ) -> float:
       """
       Maps true anomaly to hyperbolic anomaly for hyperbolic orbits.
       
@@ -1724,7 +1752,12 @@ class CoordinateSystemConverter:
         True anomaly [rad]
       ecc : float
         Eccentricity (ecc > 1)
-      
+
+      Output:
+      -------
+      ha : float
+          Hyperbolic anomaly [rad]
+
       Output:
       -------
       ha : float
@@ -1784,8 +1817,8 @@ class CoordinateSystemConverter:
     
     @staticmethod
     def ha_to_mha(
-      ha: float,
-      ecc: float,
+      ha  : float,
+      ecc : float,
     ) -> float:
       """
       Maps hyperbolic anomaly to mean hyperbolic anomaly for hyperbolic orbits.
@@ -1818,10 +1851,10 @@ class CoordinateSystemConverter:
 
     @staticmethod
     def ma_to_ea(
-      ma: float,
-      ecc: float,
-      tol: float = 1e-13,
-      max_iter: int = 200,
+      ma       : float,
+      ecc      : float,
+      tol      : float = 1e-13,
+      max_iter : int = 200,
     ) -> float:
       """
       Maps mean anomaly to eccentric anomaly using Newton-Raphson iteration for both 2D and 1D elliptic orbits.
