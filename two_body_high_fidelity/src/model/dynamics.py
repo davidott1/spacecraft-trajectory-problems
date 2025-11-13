@@ -90,6 +90,11 @@ Notes:
 - All calculations performed in inertial J2000 frame
 - Third-body positions from SPICE kernels or analytical approximations
 - Atmospheric model accounts for Earth rotation
+
+Sources:
+--------
+- Vallado, D. A. (2013). Fundamentals of Astrodynamics and Applications (4th ed.). Microcosm Press.
+- Montenbruck, O., & Gill, E. (2000). Satellite Orbits: Models, Methods and Applications. Springer.
 """
 
 import numpy as np
@@ -1598,226 +1603,306 @@ class CoordinateSystemConverter:
         return pos_vec, vel_vec
 
     @staticmethod
-    def E2f(ea: float, ecc: float) -> float:
-        """
-        Maps eccentric anomaly to true anomaly.
-        For circular or non-rectilinear elliptic orbits.
-        
-        Input:
-        ------
-        ea : float
-            Eccentric anomaly [rad]
-        ecc : float
-            Eccentricity (0 <= e < 1)
-        
-        Output:
-        -------
-        ta : float
-            True anomaly [rad]
-        """
-        if 0 <= ecc < 1:
-            ta = 2 * np.arctan2(
-                np.sqrt(1 + ecc) * np.sin(ea / 2),
-                np.sqrt(1 - ecc) * np.cos(ea / 2)
-            )
-        else:
-            raise ValueError(f"E2f() requires 0 <= e < 1, received e = {ecc}")
-        
-        return ta
+    def ea_to_ta(
+      ea  : float,
+      ecc : float,
+    ) -> float:
+      """
+      Maps eccentric anomaly to true anomaly.
+      For circular or non-rectilinear elliptic orbits.
+      
+      Input:
+      ------
+      ea : float
+          Eccentric anomaly [rad]
+      ecc : float
+          Eccentricity (0 <= ecc < 1)
+      
+      Output:
+      -------
+      ta : float
+          True anomaly [rad]
+
+      Source:
+      -------
+      Modified from
+        Analytical Mechanics of Space Systems, Fourth Edition
+        Hanspeter Schaub and John L. Junkins
+        DOI: https://doi.org/10.2514/4.105210
+      """
+      if 0 <= ecc < 1:
+        ta = 2 * np.arctan2(
+          np.sqrt(1 + ecc) * np.sin(ea / 2),
+          np.sqrt(1 - ecc) * np.cos(ea / 2)
+        )
+      else:
+          raise ValueError(f"E2f() requires 0 <= ecc < 1, received ecc = {ecc}")
+      
+      return ta
     
     @staticmethod
-    def E2M(ea: float, ecc: float) -> float:
-        """
-        Maps eccentric anomaly to mean anomaly.
-        For both 2D and 1D elliptic orbits.
-        
-        Input:
-        ------
-        ea : float
-            Eccentric anomaly [rad]
-        ecc : float
-            Eccentricity (0 <= e < 1)
-        
-        Output:
-        -------
-        ma : float
-            Mean anomaly [rad]
-        """
-        if 0 <= ecc < 1:
-            ma = ea - ecc * np.sin(ea)
-        else:
-            raise ValueError(f"E2M() requires 0 <= e < 1, received e = {ecc}")
-        
-        return ma
+    def ea_to_ma(
+      ea  : float, 
+      ecc : float,
+    ) -> float:
+      """
+      Maps eccentric anomaly to mean anomaly.
+      For both 2D and 1D elliptic orbits.
+      
+      Input:
+      ------
+      ea : float
+          Eccentric anomaly [rad]
+      ecc : float
+          Eccentricity (0 <= ecc < 1)
+      
+      Output:
+      -------
+      ma : float
+          Mean anomaly [rad]
+
+      Source:
+      -------
+      Modified from
+        Analytical Mechanics of Space Systems, Fourth Edition
+        Hanspeter Schaub and John L. Junkins
+        DOI: https://doi.org/10.2514/4.105210
+      """
+      if 0 <= ecc < 1:
+          ma = ea - ecc * np.sin(ea)
+      else:
+          raise ValueError(f"ea_to_ma() requires 0 <= ecc < 1, received ecc = {ecc}")
+
+      return ma
     
     @staticmethod
-    def f2E(ta: float, ecc: float) -> float:
-        """
-        Maps true anomaly to eccentric anomaly.
-        For circular or non-rectilinear elliptic orbits.
-        
-        Input:
-        ------
-        ta : float
-            True anomaly [rad]
-        ecc : float
-            Eccentricity (0 <= e < 1)
-        
-        Output:
-        -------
-        ea : float
-            Eccentric anomaly [rad]
-        """
-        if 0 <= ecc < 1:
-            ea = 2 * np.arctan2(
-                np.sqrt(1 - ecc) * np.sin(ta / 2),
-                np.sqrt(1 + ecc) * np.cos(ta / 2)
-            )
-        else:
-            raise ValueError(f"f2E() requires 0 <= e < 1, received e = {ecc}")
-        
-        return ea
+    def ta_to_ea(
+      ta  : float,
+      ecc : float,
+    ) -> float:
+      """
+      Maps true anomaly to eccentric anomaly.
+      For circular or non-rectilinear elliptic orbits.
+      
+      Input:
+      ------
+      ta : float
+          True anomaly [rad]
+      ecc : float
+          Eccentricity (0 <= e < 1)
+      
+      Output:
+      -------
+      ea : float
+          Eccentric anomaly [rad]
+      
+      Source:
+      -------
+      Modified from
+        Analytical Mechanics of Space Systems, Fourth Edition
+        Hanspeter Schaub and John L. Junkins
+        DOI: https://doi.org/10.2514/4.105210
+      """
+      if 0 <= ecc < 1:
+          ea = 2 * np.arctan2(
+              np.sqrt(1 - ecc) * np.sin(ta / 2),
+              np.sqrt(1 + ecc) * np.cos(ta / 2)
+          )
+      else:
+          raise ValueError(f"ta_to_ea() requires 0 <= ecc < 1, received ecc = {ecc}")
+      
+      return ea
     
     @staticmethod
-    def f2H(ta: float, ecc: float) -> float:
-        """
-        Maps true anomaly to hyperbolic anomaly.
-        For hyperbolic orbits.
-        
-        Input:
-        ------
-        ta : float
-            True anomaly [rad]
-        ecc : float
-            Eccentricity (e > 1)
-        
-        Output:
-        -------
-        ha : float
-            Hyperbolic anomaly [rad]
-        """
-        if ecc > 1:
-            ha = 2 * np.arctanh(
-                np.sqrt((ecc - 1) / (ecc + 1)) * np.tan(ta / 2)
-            )
-        else:
-            raise ValueError(f"f2H() requires e > 1, received e = {ecc}")
-        
-        return ha
+    def ta_to_ha(ta: float, ecc: float) -> float:
+      """
+      Maps true anomaly to hyperbolic anomaly for hyperbolic orbits.
+      
+      Input:
+      ------
+      ta  : float
+        True anomaly [rad]
+      ecc : float
+        Eccentricity (ecc > 1)
+      
+      Output:
+      -------
+      ha : float
+          Hyperbolic anomaly [rad]
+
+      Source:
+      -------
+      Modified from
+        Analytical Mechanics of Space Systems, Fourth Edition
+        Hanspeter Schaub and John L. Junkins
+        DOI: https://doi.org/10.2514/4.105210
+      """
+      if ecc > 1:
+          ha = 2 * np.arctanh(
+              np.sqrt((ecc - 1) / (ecc + 1)) * np.tan(ta / 2)
+          )
+      else:
+          raise ValueError(f"ta_to_ha() requires ecc > 1, received ecc = {ecc}")
+
+      return ha
     
     @staticmethod
-    def H2f(ha: float, ecc: float) -> float:
-        """
-        Maps hyperbolic anomaly to true anomaly.
-        For hyperbolic orbits.
-        
-        Input:
-        ------
-        ha : float
-            Hyperbolic anomaly [rad]
-        ecc : float
-            Eccentricity (e > 1)
-        
-        Output:
-        -------
-        ta : float
-            True anomaly [rad]
-        """
-        if ecc > 1:
-            ta = 2 * np.arctan(
-                np.sqrt((ecc + 1) / (ecc - 1)) * np.tanh(ha / 2)
-            )
-        else:
-            raise ValueError(f"H2f() requires e > 1, received e = {ecc}")
-        
-        return ta
+    def ha_to_ta(
+      ha  : float,
+      ecc : float,
+    ) -> float:
+      """
+      Maps hyperbolic anomaly to true anomaly for hyperbolic orbits.
+      
+      Input:
+      ------
+      ha : float
+          Hyperbolic anomaly [rad]
+      ecc : float
+          Eccentricity (ecc > 1)
+      
+      Output:
+      -------
+      ta : float
+          True anomaly [rad]
+
+      Source:
+      -------
+      Modified from
+        Analytical Mechanics of Space Systems, Fourth Edition
+        Hanspeter Schaub and John L. Junkins
+        DOI: https://doi.org/10.2514/4.105210
+      """
+      if ecc > 1:
+        ta = 2 * np.arctan(
+            np.sqrt((ecc + 1) / (ecc - 1)) * np.tanh(ha / 2)
+        )
+      else:
+        raise ValueError(f"ha_to_ta() requires ecc > 1, received ecc = {ecc}")
+      
+      return ta
     
     @staticmethod
-    def H2N(ha: float, ecc: float) -> float:
-        """
-        Maps hyperbolic anomaly to mean hyperbolic anomaly.
-        For hyperbolic orbits.
-        
-        Input:
-        ------
-        ha : float
-            Hyperbolic anomaly [rad]
-        ecc : float
-            Eccentricity (e > 1)
-        
-        Output:
-        -------
-        ma : float
-            Mean hyperbolic anomaly [rad]
-        """
-        if ecc > 1:
-            ma = ecc * np.sinh(ha) - ha
-        else:
-            raise ValueError(f"H2N() requires e > 1, received e = {ecc}")
-        
-        return ma
+    def ha_to_mha(
+      ha: float,
+      ecc: float,
+    ) -> float:
+      """
+      Maps hyperbolic anomaly to mean hyperbolic anomaly for hyperbolic orbits.
+      
+      Input:
+      ------
+      ha : float
+          Hyperbolic anomaly [rad]
+      ecc : float
+          Eccentricity (e > 1)
+      
+      Output:
+      -------
+      mha : float
+          Mean hyperbolic anomaly [rad]
+
+      Source:
+      -------
+      Modified from
+        Analytical Mechanics of Space Systems, Fourth Edition
+        Hanspeter Schaub and John L. Junkins
+        DOI: https://doi.org/10.2514/4.105210
+      """
+      if ecc > 1:
+        mha = ecc * np.sinh(ha) - ha
+      else:
+        raise ValueError(f"ha_to_mha() requires ecc > 1, received ecc = {ecc}")
+
+      return mha
+
+    @staticmethod
+    def ma_to_ea(
+      ma: float,
+      ecc: float,
+      tol: float = 1e-13,
+      max_iter: int = 200,
+    ) -> float:
+      """
+      Maps mean anomaly to eccentric anomaly using Newton-Raphson iteration for both 2D and 1D elliptic orbits.
+      
+      Alias for TwoBody_RootSolvers.kepler().
+      
+      Input:
+      ------
+      ma : float
+          Mean anomaly [rad]
+      ecc : float
+          Eccentricity (0 <= e < 1)
+      tol : float
+          Convergence tolerance
+      max_iter : int
+          Maximum iterations
+      
+      Output:
+      -------
+      ea : float
+          Eccentric anomaly [rad]
+      """
+      return TwoBody_RootSolvers.kepler(ma, ecc, tol, max_iter)
     
     @staticmethod
-    def M2E(ma: float, ecc: float, tol: float = 1e-13, max_iter: int = 200) -> float:
-        """
-        Maps mean anomaly to eccentric anomaly using Newton-Raphson iteration.
-        For both 2D and 1D elliptic orbits.
-        
-        This is an alias for TwoBody_RootSolvers.kepler().
-        
-        Input:
-        ------
-        ma : float
-            Mean anomaly [rad]
-        ecc : float
-            Eccentricity (0 <= e < 1)
-        tol : float
-            Convergence tolerance
-        max_iter : int
-            Maximum iterations
-        
-        Output:
-        -------
-        ea : float
-            Eccentric anomaly [rad]
-        """
-        return TwoBody_RootSolvers.kepler(ma, ecc, tol, max_iter)
-    
-    @staticmethod
-    def N2H(ma: float, ecc: float, tol: float = 1e-13, max_iter: int = 200) -> float:
-        """
-        Maps mean hyperbolic anomaly to hyperbolic anomaly using Newton-Raphson iteration.
-        For hyperbolic orbits.
-        
-        Input:
-        ------
-        ma : float
-            Mean hyperbolic anomaly [rad]
-        ecc : float
-            Eccentricity (e > 1)
-        tol : float
-            Convergence tolerance
-        max_iter : int
-            Maximum iterations
-        
-        Output:
-        -------
-        ha : float
-            Hyperbolic anomaly [rad]
-        """
-        if ecc > 1:
-            ha = ma  # Initial guess
-            for i in range(max_iter):
-                dH = (ecc * np.sinh(ha) - ha - ma) / (ecc * np.cosh(ha) - 1)
-                ha -= dH
-                if abs(dH) < tol:
-                    break
-                if i == max_iter - 1:
-                    warnings.warn(f"N2H iteration did not converge for N={ma}, e={ecc}")
-        else:
-            raise ValueError(f"N2H() requires e > 1, received e = {ecc}")
-        
-        return ha
+    def mha_to_ha(
+      mha : float,
+      ecc : float,
+      tol : float = 1e-13,
+      max_iter: int = 200,
+    ) -> float:
+      """
+      Maps mean hyperbolic anomaly to hyperbolic anomaly using Newton-Raphson iteration.
+      For hyperbolic orbits.
+      
+      Input:
+      ------
+      ma : float
+          Mean hyperbolic anomaly [rad]
+      ecc : float
+          Eccentricity (e > 1)
+      tol : float
+          Convergence tolerance
+      max_iter : int
+          Maximum iterations
+      
+      Output:
+      -------
+      ha : float
+          Hyperbolic anomaly [rad]
+
+      Source:
+      -------
+      Modified from
+        Analytical Mechanics of Space Systems, Fourth Edition
+        Hanspeter Schaub and John L. Junkins
+        DOI: https://doi.org/10.2514/4.105210
+      """
+      if ecc > 1:
+        # Initial guess
+        ha = mha  
+
+        # Iteration loop
+        for i in range(max_iter+1):
+          # ha step
+          dha = (ecc * np.sinh(ha) - ha - mha) / (ecc * np.cosh(ha) - 1)
+
+          # Check convergence
+          if abs(dha) < tol:
+            break
+
+          # Check max iterations
+          if i == max_iter:
+            warnings.warn(f"mha_to_ha iteration did not converge for mha={mha}, ecc={ecc}")
+
+          # Update ha
+          ha += -dha
+      else:
+        raise ValueError(f"mha_to_ha() requires ecc > 1, received ecc = {ecc}")
+
+      return ha
 
 
 
