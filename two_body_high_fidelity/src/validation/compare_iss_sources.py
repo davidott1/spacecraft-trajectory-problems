@@ -130,7 +130,10 @@ def propagate_tle_to_times(
     
     return pd.DataFrame(results)
 
-def propagate_all_tles_and_select_best(tles, times):
+def propagate_all_tles_and_select_best(
+  tles,
+  times,
+):
     """
     Propagate all TLEs to specified times and select the best (nearest epoch) TLE state for each time.
     """

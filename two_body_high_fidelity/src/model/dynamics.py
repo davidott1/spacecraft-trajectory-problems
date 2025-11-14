@@ -65,26 +65,26 @@ Utility Classes:
 
 Usage Example:
 --------------
-    from src.model.dynamics import Acceleration, GeneralStateEquationsOfMotion
-    from src.model.constants import PHYSICALCONSTANTS
-    
-    # Initialize acceleration model
-    acceleration = Acceleration(
-        gp                = PHYSICALCONSTANTS.EARTH.GP,
-        j2                = PHYSICALCONSTANTS.EARTH.J2,
-        pos_ref           = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR,
-        enable_drag       = True,
-        cd                = 2.2,
-        area_drag         = 10.0,
-        mass              = 1000.0,
-        enable_third_body = True,
-    )
-    
-    # Create equations of motion
-    eom = GeneralStateEquationsOfMotion(acceleration)
-    
-    # Integrate (e.g., with scipy.integrate.solve_ivp)
-    state_dot = eom.state_time_derivative(time, state_vec)
+  from src.model.dynamics import Acceleration, GeneralStateEquationsOfMotion
+  from src.model.constants import PHYSICALCONSTANTS
+  
+  # Initialize acceleration model
+  acceleration = Acceleration(
+      gp                = PHYSICALCONSTANTS.EARTH.GP,
+      j2                = PHYSICALCONSTANTS.EARTH.J2,
+      pos_ref           = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR,
+      enable_drag       = True,
+      cd                = 2.2,
+      area_drag         = 10.0,
+      mass              = 1000.0,
+      enable_third_body = True,
+  )
+  
+  # Create equations of motion
+  eom = GeneralStateEquationsOfMotion(acceleration)
+  
+  # Integrate (e.g., with scipy.integrate.solve_ivp)
+  state_dot = eom.state_time_derivative(time, state_vec)
 
 Units:
 ------

@@ -27,12 +27,12 @@ def teme_to_j2000(teme_pos_vec, teme_vel_vec, jd_utc, debug=False):
     t = Time(jd_utc, format='jd', scale='utc')
     
     if debug:
-        print(f"\nTEME→J2000 Conversion Debug:")
-        print(f"  Input time (UTC JD): {jd_utc:.6f}")
-        print(f"  Input time (TT JD): {t.tt.jd:.6f}")
-        print(f"  Delta-T (TT-UTC): {(t.tt.jd - t.utc.jd)*86400:.3f} seconds")
-        print(f"  Input position (TEME): {teme_pos_vec} km")
-        print(f"  Input velocity (TEME): {teme_vel_vec} km/s")
+        print(f"\nTEME→J2000 Conversion Debug")
+        print(f"  Input time (UTC JD)       : {jd_utc:.6f}")
+        print(f"  Input time (TT JD)        : {t.tt.jd:.6f}")
+        print(f"  Delta-T (TT-UTC)          : {(t.tt.jd - t.utc.jd)*86400:.3f} seconds")
+        print(f"  Input position (TEME)     : {teme_pos_vec} km")
+        print(f"  Input velocity (TEME)     : {teme_vel_vec} km/s")
     
     # Create CartesianRepresentation with velocity differential
     cart_rep = CartesianRepresentation(
@@ -65,10 +65,10 @@ def teme_to_j2000(teme_pos_vec, teme_vel_vec, jd_utc, debug=False):
     ])
     
     if debug:
-        print(f"  Output position (GCRS): {j2000_pos_vec} km")
-        print(f"  Output velocity (GCRS): {j2000_vel_vec} km/s")
+        print(f"  Output position (GCRS)    : {j2000_pos_vec} km")
+        print(f"  Output velocity (GCRS)    : {j2000_vel_vec} km/s")
         diff_pos = np.linalg.norm(j2000_pos_vec - np.array(teme_pos_vec))
-        print(f"  Position change magnitude: {diff_pos:.3f} km")
+        print(f"  Position change magnitude : {diff_pos:.3f} km")
     
     return j2000_pos_vec, j2000_vel_vec
 
@@ -207,7 +207,11 @@ def propagate_tle(
         state_array[3:6, i] = j2000_vel_vec
         
         # Compute osculating elements
-        coe = OrbitConverter.rv2coe(j2000_pos_vec, j2000_vel_vec)
+        coe = OrbitConverter.pv_to_coe(
+            j2000_pos_vec,
+            j2000_vel_vec,
+            gp=PHYSICALCONSTANTS.EARTH.GP,
+          )
         for key in coe_time_series.keys():
             coe_time_series[key][i] = coe[key]
     
