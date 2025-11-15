@@ -68,123 +68,8 @@ def main():
   print("ISS Orbit Propagation")
   print("="*60)
   
-  # Step 1: Get initial state from TLE using SGP4
-  print("\nStep 1: Converting TLE to initial Cartesian state...")
-  print(f"  TLE Line 1: {tle_line1_iss}")
-  print(f"  TLE Line 2: {tle_line2_iss}")
-  
-  # Propagate TLE to target start time to get position/velocity
-  result_tle_initial = propagate_tle(
-    tle_line1  = tle_line1_iss,
-    tle_line2  = tle_line2_iss,
-    time_o     = integ_time_o,
-    time_f     = integ_time_o,  # Just get initial state at target start time
-    num_points = 1,
-    to_j2000   = True,    # Convert from TEME to J2000
-  )
-  if not result_tle_initial['success']:
-    raise RuntimeError(f"Failed to get initial state from TLE: {result_tle_initial['message']}")
-  
-  initial_state = result_tle_initial['state'][:, 0]
-  
-  print(f"  Initial position (Oct 1 00:00 UTC): [{initial_state[0]/1e3:.3f}, {initial_state[1]/1e3:.3f}, {initial_state[2]/1e3:.3f}] km")
-  print(f"  Initial velocity (Oct 1 00:00 UTC): [{initial_state[3]/1e3:.3f}, {initial_state[4]/1e3:.3f}, {initial_state[5]/1e3:.3f}] km/s")
-  
-  # Step 2: Set up high-fidelity dynamics model
-  print("\nStep 2: Setting up high-fidelity dynamics model ...")
-  print(f"  Including: Two-body gravity, J2, J3, J4, Atmospheric drag, Third-body (Sun/Moon)")
-  
-  # Convert target_start_dt to ET seconds for SPICE
-  # SPICE needs ET (Ephemeris Time), not UTC
-  # Use spiceypy to do the proper conversion
-  
-  # Load leap seconds kernel first (minimal kernel set for time conversion)
-  lsk_path = Path('/Users/davidottesen/github/spacecraft-trajectory-problems/data/spice_kernels/naif0012.tls')
-  spice.furnsh(str(lsk_path))
-  
-  # Convert UTC datetime to ET seconds past J2000
-  utc_str = target_start_dt.strftime('%Y-%m-%dT%H:%M:%S')
-  et_j2000_time_o = spice.str2et(utc_str)
-  
-  print(f"  Target start UTC: {utc_str}")
-  print(f"  Target start ET seconds from J2000: {et_j2000_time_o:.3f}")
-  
-  # Clear kernels (they'll be reloaded in Acceleration init)
-  spice.kclear()
-  
-  acceleration = Acceleration(
-    gp                      = PHYSICALCONSTANTS.EARTH.GP,
-    et_j2000_time_o         = et_j2000_time_o,
-    time_o                  = integ_time_o,
-    j2                      = PHYSICALCONSTANTS.EARTH.J2,
-    j3                      = PHYSICALCONSTANTS.EARTH.J3,
-    j4                      = PHYSICALCONSTANTS.EARTH.J4,
-    pos_ref                 = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR,
-    mass                    = mass,
-    enable_drag             = True,
-    cd                      = cd,
-    area_drag               = area_drag,
-    enable_third_body       = True,
-    third_body_use_spice    = True,
-    third_body_bodies       = ['SUN', 'MOON'],
-    spice_kernel_folderpath = '/Users/davidottesen/github/spacecraft-trajectory-problems/data/spice_kernels',
-  )
-  
-  # Step 3: Propagate with high-fidelity model
-  print("\nStep 3: Propagating orbit with high-fidelity model using numerical integration ...")
-  print(f"  Time span: {target_start_dt} to {target_end_dt} UTC ({delta_time/3600:.1f} hours)")
-  result_hifi = propagate_state_numerical_integration(
-    initial_state       = initial_state,
-    time_o              = integ_time_o,
-    time_f              = integ_time_f,
-    dynamics            = acceleration,
-    method              = 'DOP853',
-    rtol                = 1e-12,
-    atol                = 1e-12,
-    get_coe_time_series = True,
-    gp                  = PHYSICALCONSTANTS.EARTH.GP,
-  )
-
-  if result_hifi['success']:
-    print(f"  ✓ Propagation successful!")
-    print(f"  Number of time steps: {len(result_hifi['time'])}")
-    
-    # Store integration time (seconds from TLE epoch)
-    result_hifi['integ_time_s'] = result_hifi['time']
-    print(f"  Integration time range (from TLE epoch): {result_hifi['integ_time_s'][0]:.1f} to {result_hifi['integ_time_s'][-1]:.1f} seconds")
-    
-    # Create plotting time array (seconds from target start time)
-    result_hifi['plot_time_s'] = result_hifi['time'] - integ_time_o
-    print(f"  Plotting time range (from Oct 1 00:00): {result_hifi['plot_time_s'][0]:.1f} to {result_hifi['plot_time_s'][-1]:.1f} seconds")
-  else:
-    print(f"  ✗ Propagation failed: {result_hifi['message']}")
-    return result_hifi
-  
-  # Step 4: Propagating with SGP4 for comparison
-  print("\nStep 4: Propagating with SGP4 for comparison...")
-  result_sgp4 = propagate_tle(
-    tle_line1  = tle_line1_iss,
-    tle_line2  = tle_line2_iss,
-    time_o     = integ_time_o,
-    time_f     = integ_time_f,
-    num_points = 1000,
-    to_j2000   = True,
-  )
-  
-  if result_sgp4['success']:
-    # Store integration time (seconds from TLE epoch)
-    result_sgp4['integ_time_s'] = result_sgp4['time']
-    print(f"  SGP4 integration time (from TLE epoch): [{result_sgp4['integ_time_s'][0]:.1f}, {result_sgp4['integ_time_s'][-1]:.1f}] seconds")
-    
-    # Create plotting time array (seconds from target start time)
-    result_sgp4['plot_time_s'] = result_sgp4['time'] - integ_time_o
-    print(f"  SGP4 plotting time (from Oct 1 00:00): [{result_sgp4['plot_time_s'][0]:.1f}, {result_sgp4['plot_time_s'][-1]:.1f}] seconds")
-    print(f"  ✓ SGP4 propagation successful!")
-  else:
-    print(f"  ✗ SGP4 propagation failed: {result_sgp4['message']}")
-  
-  # Step 5: Load Horizons ephemeris
-  print("\nStep 5: Loading JPL Horizons ephemeris...")
+  # Step 1: Load Horizons ephemeris (reference truth)
+  print("\nStep 1: Loading JPL Horizons ephemeris (reference truth)...")
   print(f"  File path: {horizons_file}")
   print(f"  File exists: {horizons_file.exists()}")
   print(f"  Requesting data from {target_start_dt} to {target_end_dt}")
@@ -231,17 +116,132 @@ def main():
     print(f"  ✗ Horizons loading failed: {result_horizons['message']}")
     result_horizons = None
   
+  # Step 2: Get initial state from TLE using SGP4
+  print("\nStep 2: Converting TLE to initial Cartesian state...")
+  print(f"  TLE Line 1: {tle_line1_iss}")
+  print(f"  TLE Line 2: {tle_line2_iss}")
+  
+  # Propagate TLE to target start time to get position/velocity
+  result_tle_initial = propagate_tle(
+    tle_line1  = tle_line1_iss,
+    tle_line2  = tle_line2_iss,
+    time_o     = integ_time_o,
+    time_f     = integ_time_o,  # Just get initial state at target start time
+    num_points = 1,
+    to_j2000   = True,    # Convert from TEME to J2000
+  )
+  if not result_tle_initial['success']:
+    raise RuntimeError(f"Failed to get initial state from TLE: {result_tle_initial['message']}")
+  
+  initial_state = result_tle_initial['state'][:, 0]
+  
+  print(f"  Initial position (Oct 1 00:00 UTC): [{initial_state[0]/1e3:.3f}, {initial_state[1]/1e3:.3f}, {initial_state[2]/1e3:.3f}] km")
+  print(f"  Initial velocity (Oct 1 00:00 UTC): [{initial_state[3]/1e3:.3f}, {initial_state[4]/1e3:.3f}, {initial_state[5]/1e3:.3f}] km/s")
+  
+  # Step 3: Set up high-fidelity dynamics model
+  print("\nStep 3: Setting up high-fidelity dynamics model ...")
+  print(f"  Including: Two-body gravity, J2, J3, J4, Atmospheric drag, Third-body (Sun/Moon)")
+  
+  # Convert target_start_dt to ET seconds for SPICE
+  # SPICE needs ET (Ephemeris Time), not UTC
+  # Use spiceypy to do the proper conversion
+  
+  # Load leap seconds kernel first (minimal kernel set for time conversion)
+  lsk_path = Path('/Users/davidottesen/github/spacecraft-trajectory-problems/data/spice_kernels/naif0012.tls')
+  spice.furnsh(str(lsk_path))
+  
+  # Convert UTC datetime to ET seconds past J2000
+  utc_str = target_start_dt.strftime('%Y-%m-%dT%H:%M:%S')
+  et_j2000_time_o = spice.str2et(utc_str)
+  
+  print(f"  Target start UTC: {utc_str}")
+  print(f"  Target start ET seconds from J2000: {et_j2000_time_o:.3f}")
+  
+  # Clear kernels (they'll be reloaded in Acceleration init)
+  spice.kclear()
+  
+  acceleration = Acceleration(
+    gp                      = PHYSICALCONSTANTS.EARTH.GP,
+    et_j2000_time_o         = et_j2000_time_o,
+    time_o                  = integ_time_o,
+    j2                      = PHYSICALCONSTANTS.EARTH.J2,
+    j3                      = PHYSICALCONSTANTS.EARTH.J3,
+    j4                      = PHYSICALCONSTANTS.EARTH.J4,
+    pos_ref                 = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR,
+    mass                    = mass,
+    enable_drag             = True,
+    cd                      = cd,
+    area_drag               = area_drag,
+    enable_third_body       = True,
+    third_body_use_spice    = True,
+    third_body_bodies       = ['SUN', 'MOON'],
+    spice_kernel_folderpath = '/Users/davidottesen/github/spacecraft-trajectory-problems/data/spice_kernels',
+  )
+  
+  # Step 4: Propagate with high-fidelity model
+  print("\nStep 4: Propagating orbit with high-fidelity model using numerical integration ...")
+  print(f"  Time span: {target_start_dt} to {target_end_dt} UTC ({delta_time/3600:.1f} hours)")
+  result_hifi = propagate_state_numerical_integration(
+    initial_state       = initial_state,
+    time_o              = integ_time_o,
+    time_f              = integ_time_f,
+    dynamics            = acceleration,
+    method              = 'DOP853',
+    rtol                = 1e-12,
+    atol                = 1e-12,
+    get_coe_time_series = True,
+    gp                  = PHYSICALCONSTANTS.EARTH.GP,
+  )
+
+  if result_hifi['success']:
+    print(f"  ✓ Propagation successful!")
+    print(f"  Number of time steps: {len(result_hifi['time'])}")
+    
+    # Store integration time (seconds from TLE epoch)
+    result_hifi['integ_time_s'] = result_hifi['time']
+    print(f"  Integration time range (from TLE epoch): {result_hifi['integ_time_s'][0]:.1f} to {result_hifi['integ_time_s'][-1]:.1f} seconds")
+    
+    # Create plotting time array (seconds from target start time)
+    result_hifi['plot_time_s'] = result_hifi['time'] - integ_time_o
+    print(f"  Plotting time range (from Oct 1 00:00): {result_hifi['plot_time_s'][0]:.1f} to {result_hifi['plot_time_s'][-1]:.1f} seconds")
+  else:
+    print(f"  ✗ Propagation failed: {result_hifi['message']}")
+    return result_hifi
+  
+  # Step 5: Propagating with SGP4 for comparison
+  print("\nStep 5: Propagating with SGP4 for comparison...")
+  result_sgp4 = propagate_tle(
+    tle_line1  = tle_line1_iss,
+    tle_line2  = tle_line2_iss,
+    time_o     = integ_time_o,
+    time_f     = integ_time_f,
+    num_points = 1000,
+    to_j2000   = True,
+  )
+  
+  if result_sgp4['success']:
+    # Store integration time (seconds from TLE epoch)
+    result_sgp4['integ_time_s'] = result_sgp4['time']
+    print(f"  SGP4 integration time (from TLE epoch): [{result_sgp4['integ_time_s'][0]:.1f}, {result_sgp4['integ_time_s'][-1]:.1f}] seconds")
+    
+    # Create plotting time array (seconds from target start time)
+    result_sgp4['plot_time_s'] = result_sgp4['time'] - integ_time_o
+    print(f"  SGP4 plotting time (from Oct 1 00:00): [{result_sgp4['plot_time_s'][0]:.1f}, {result_sgp4['plot_time_s'][-1]:.1f}] seconds")
+    print(f"  ✓ SGP4 propagation successful!")
+  else:
+    print(f"  ✗ SGP4 propagation failed: {result_sgp4['message']}")
+  
   # Step 6: Display results and create plots
   print("\n" + "="*60)
   print("Results Summary")
   print("="*60)
   
   print("\nFinal time ranges for plotting:")
+  if result_horizons and result_horizons['success']:
+    print(f"  Horizons:      {result_horizons['plot_time_s'][0]:.1f} to {result_horizons['plot_time_s'][-1]:.1f} seconds")
   print(f"  High-fidelity: {result_hifi['plot_time_s'][0]:.1f} to {result_hifi['plot_time_s'][-1]:.1f} seconds")
   if result_sgp4['success']:
     print(f"  SGP4:          {result_sgp4['plot_time_s'][0]:.1f} to {result_sgp4['plot_time_s'][-1]:.1f} seconds")
-  if result_horizons and result_horizons['success']:
-    print(f"  Horizons:      {result_horizons['plot_time_s'][0]:.1f} to {result_horizons['plot_time_s'][-1]:.1f} seconds")
   
   # Print final orbital elements (high-fidelity)
   final_alt_km = (np.linalg.norm(result_hifi['state'][0:3, -1]) - PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR) / 1e3
@@ -258,39 +258,40 @@ def main():
   print(f"DEBUG - First time value in result_hifi['plot_time_s']: {result_hifi['plot_time_s'][0]} seconds")
   print(f"DEBUG - Expected first UTC time: {(target_start_dt + timedelta(seconds=result_hifi['plot_time_s'][0])).isoformat()}")
   
-  # High-fidelity plots
-  fig1 = plot_3d_trajectories(result_hifi)
-  fig1.suptitle('ISS Orbit - High-Fidelity Propagation', fontsize=16)
-  fig1.savefig(output_dir / 'iss_hifi_3d.png', dpi=300, bbox_inches='tight')
-  print(f"  Saved: {output_dir / 'iss_hifi_3d.png'}")
-  
-  fig2 = plot_time_series(result_hifi, epoch=target_start_dt)
-  fig2.suptitle('ISS Orbit - High-Fidelity Time Series', fontsize=16)
-  fig2.savefig(output_dir / 'iss_hifi_timeseries.png', dpi=300, bbox_inches='tight')
-  print(f"  Saved: {output_dir / 'iss_hifi_timeseries.png'}")
-  
-  # SGP4 plots
-  if result_sgp4['success']:
-    fig3 = plot_3d_trajectories(result_sgp4)
-    fig3.suptitle('ISS Orbit - SGP4 Propagation', fontsize=16)
-    fig3.savefig(output_dir / 'iss_sgp4_3d.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_dir / 'iss_sgp4_3d.png'}")
-    
-    fig4 = plot_time_series(result_sgp4, epoch=target_start_dt)
-    fig4.suptitle('ISS Orbit - SGP4 Time Series', fontsize=16)
-    fig4.savefig(output_dir / 'iss_sgp4_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_dir / 'iss_sgp4_timeseries.png'}")
-  # Horizons plots
+  # Horizons plots (first)
   if result_horizons and result_horizons['success']:
-    fig5 = plot_3d_trajectories(result_horizons)
-    fig5.suptitle('ISS Orbit - JPL Horizons Ephemeris', fontsize=16)
-    fig5.savefig(output_dir / 'iss_horizons_3d.png', dpi=300, bbox_inches='tight')
+    fig1 = plot_3d_trajectories(result_horizons)
+    fig1.suptitle('ISS Orbit - JPL Horizons Ephemeris', fontsize=16)
+    fig1.savefig(output_dir / 'iss_horizons_3d.png', dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_dir / 'iss_horizons_3d.png'}")
     
-    fig6 = plot_time_series(result_horizons, epoch=target_start_dt)
-    fig6.suptitle('ISS Orbit - JPL Horizons Time Series', fontsize=16)
-    fig6.savefig(output_dir / 'iss_horizons_timeseries.png', dpi=300, bbox_inches='tight')
+    fig2 = plot_time_series(result_horizons, epoch=target_start_dt)
+    fig2.suptitle('ISS Orbit - JPL Horizons Time Series', fontsize=16)
+    fig2.savefig(output_dir / 'iss_horizons_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_dir / 'iss_horizons_timeseries.png'}")
+  
+  # High-fidelity plots (second)
+  fig3 = plot_3d_trajectories(result_hifi)
+  fig3.suptitle('ISS Orbit - High-Fidelity Propagation', fontsize=16)
+  fig3.savefig(output_dir / 'iss_hifi_3d.png', dpi=300, bbox_inches='tight')
+  print(f"  Saved: {output_dir / 'iss_hifi_3d.png'}")
+  
+  fig4 = plot_time_series(result_hifi, epoch=target_start_dt)
+  fig4.suptitle('ISS Orbit - High-Fidelity Time Series', fontsize=16)
+  fig4.savefig(output_dir / 'iss_hifi_timeseries.png', dpi=300, bbox_inches='tight')
+  print(f"  Saved: {output_dir / 'iss_hifi_timeseries.png'}")
+  
+  # SGP4 plots (third)
+  if result_sgp4['success']:
+    fig5 = plot_3d_trajectories(result_sgp4)
+    fig5.suptitle('ISS Orbit - SGP4 Propagation', fontsize=16)
+    fig5.savefig(output_dir / 'iss_sgp4_3d.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_dir / 'iss_sgp4_3d.png'}")
+    
+    fig6 = plot_time_series(result_sgp4, epoch=target_start_dt)
+    fig6.suptitle('ISS Orbit - SGP4 Time Series', fontsize=16)
+    fig6.savefig(output_dir / 'iss_sgp4_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_dir / 'iss_sgp4_timeseries.png'}")
   
   print(f"\nAll figures saved to: {output_dir}")
   plt.show()
