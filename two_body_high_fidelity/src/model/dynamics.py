@@ -283,7 +283,7 @@ class ThirdBodyGravity:
     
     def __init__(
         self,
-        time_o                  : float = 0.0,
+        et_offset               : float = 0.0,
         use_spice               : bool  = True,
         bodies                  : list  = None,
         spice_kernel_folderpath : str   = None,
@@ -293,8 +293,8 @@ class ThirdBodyGravity:
         
         Input:
         ------
-        time_o : float
-            Initial epoch time [s from J2000]
+        et_offset : float
+            Offset to convert integrator time to ET: et = et_offset + time [s]
         use_spice : bool
             Use SPICE ephemerides (True) or analytical approximations (False)
         bodies : list of str
@@ -302,7 +302,8 @@ class ThirdBodyGravity:
         spice_kernel_folderpath : str
             Path to SPICE kernel directory
         """
-        self.time_o    = time_o
+        self.et_offset = et_offset
+        self.time_o    = et_offset
         self.bodies    = bodies if bodies else ['sun', 'moon']
         self.use_spice = use_spice
         
@@ -489,10 +490,8 @@ class ThirdBodyGravity:
             epsilon = np.radians(23.439)
             
             x = r_moon * np.cos(beta) * np.cos(lambda_moon)
-            y = r_moon * (np.cos(beta) * np.sin(lambda_moon) * np.cos(epsilon) - 
-                          np.sin(beta) * np.sin(epsilon))
-            z = r_moon * (np.cos(beta) * np.sin(lambda_moon) * np.sin(epsilon) + 
-                          np.sin(beta) * np.cos(epsilon))
+            y = r_moon * np.cos(beta) * np.sin(lambda_moon) * np.cos(epsilon) - np.sin(beta) * np.sin(epsilon)
+            z = r_moon * np.cos(beta) * np.sin(lambda_moon) * np.sin(epsilon) + np.sin(beta) * np.cos(epsilon)
             
             return np.array([x, y, z])
         
@@ -520,7 +519,7 @@ class ThirdBodyGravity:
             Third-body acceleration [m/s²]
         """
         # Ephemeris time is seconds from J2000 epoch
-        et_seconds = self.time_o + time
+        et_seconds = self.et_offset + time
         
         # Compute acceleration for all bodies
         acc_vec = np.zeros(3)
@@ -578,7 +577,7 @@ class Gravity:
         j4                      : float = 0.0,
         pos_ref                 : float = 0.0,
         enable_third_body       : bool  = False,
-        time_o                  : float = 0.0,
+        et_offset               : float = 0.0,
         third_body_use_spice    : bool  = True,
         third_body_bodies       : list  = None,
         spice_kernel_folderpath : str   = None,
@@ -596,8 +595,8 @@ class Gravity:
             Reference radius for harmonic coefficients [m]
         enable_third_body : bool
             Enable Sun/Moon gravitational perturbations
-        time_o : float
-            Initial epoch time [s]
+        et_offset : float
+            Offset to convert integrator time to ET: et = et_offset + time [s]
         third_body_use_spice : bool
             Use SPICE ephemerides (True) or analytical approximations (False)
         third_body_bodies : list of str
@@ -618,7 +617,7 @@ class Gravity:
         self.enable_third_body = enable_third_body
         if self.enable_third_body:
             self.third_body = ThirdBodyGravity(
-                time_o                  = time_o,
+                et_offset               = et_offset,
                 use_spice               = third_body_use_spice,
                 bodies                  = third_body_bodies,
                 spice_kernel_folderpath = spice_kernel_folderpath,
@@ -941,6 +940,7 @@ class Acceleration:
     def __init__(
         self,
         gp                      : float,
+        et_j2000_time_o         : float = 0.0,
         time_o                  : float = 0.0,
         j2                      : float = 0.0,
         j3                      : float = 0.0,
@@ -965,8 +965,10 @@ class Acceleration:
         ------
         gp : float
             Gravitational parameter of central body [m³/s²]
+        et_j2000_time_o : float
+            ET seconds from J2000 at the initial time [s]
         time_o : float
-            Initial epoch time [s]
+            Initial time in integrator's time system [s]
         j2, j3, j4 : float
             Harmonic coefficients for oblateness
         pos_ref : float
@@ -994,6 +996,9 @@ class Acceleration:
         area_srp : float
             Cross-sectional area for SRP [m²]
         """
+        # Compute ET offset internally
+        et_offset = et_j2000_time_o - time_o
+        
         # Create acceleration component instances
         self.gravity = Gravity(
             gp                      = gp,
@@ -1002,7 +1007,7 @@ class Acceleration:
             j4                      = j4,
             pos_ref                 = pos_ref,
             enable_third_body       = enable_third_body,
-            time_o                  = time_o,
+            et_offset               = et_offset,
             third_body_use_spice    = third_body_use_spice,
             third_body_bodies       = third_body_bodies,
             spice_kernel_folderpath = spice_kernel_folderpath,
@@ -1936,9 +1941,6 @@ class OrbitConverter:
         raise ValueError(f"mha_to_ha() requires ecc > 1, received ecc = {ecc}")
 
       return ha
-
-# # Backward compatibility alias
-# CoordinateSystemConverter = OrbitConverter
 
 
 

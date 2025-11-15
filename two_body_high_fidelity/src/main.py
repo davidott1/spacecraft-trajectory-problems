@@ -1,14 +1,16 @@
-from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
-import numpy as np
-from pathlib import Path
+import numpy             as np
+import spiceypy          as spice
 
-from src.plot.trajectory            import plot_3d_trajectories, plot_time_series, plot_3d_error, plot_time_series_error
-from src.propagation                import propagate_orbit
-from src.propagation.tle_propagator import propagate_tle
+from pathlib         import Path
+from scipy.integrate import solve_ivp
+
+from src.plot.trajectory             import plot_3d_trajectories, plot_time_series, plot_3d_error, plot_time_series_error
+from src.propagation.propagator      import propagate_state_numerical_integration
+from src.propagation.tle_propagator  import propagate_tle
 from src.propagation.horizons_loader import load_horizons_ephemeris
-from src.model.dynamics             import Acceleration, OrbitConverter
-from src.model.constants            import PHYSICALCONSTANTS, CONVERTER
+from src.model.dynamics              import Acceleration, OrbitConverter
+from src.model.constants             import PHYSICALCONSTANTS, CONVERTER
 
 def main():
   """
@@ -32,7 +34,7 @@ def main():
   tle_epoch_dt = datetime(2000, 1, 1, 12, 0, 0) + timedelta(days=tle_epoch_jd - 2451545.0)
   
   # Target propagation start/end times
-  target_start_dt =  datetime(2025, 10, 1, 0, 0, 0)
+  target_start_dt = datetime(2025, 10, 1, 0, 0, 0)
   target_end_dt   = datetime(2025, 10, 2, 0, 0, 0)
   delta_time      = (target_end_dt - target_start_dt).total_seconds()
   
@@ -79,7 +81,6 @@ def main():
     num_points = 1,
     to_j2000   = True,    # Convert from TEME to J2000
   )
-  
   if not result_tle_initial['success']:
     raise RuntimeError(f"Failed to get initial state from TLE: {result_tle_initial['message']}")
   
@@ -89,13 +90,12 @@ def main():
   print(f"  Initial velocity (Oct 1 00:00 UTC): [{initial_state[3]/1e3:.3f}, {initial_state[4]/1e3:.3f}, {initial_state[5]/1e3:.3f}] km/s")
   
   # Step 2: Set up high-fidelity dynamics model
-  print("\nStep 2: Setting up high-fidelity dynamics model...")
+  print("\nStep 2: Setting up high-fidelity dynamics model ...")
   print(f"  Including: Two-body gravity, J2, J3, J4, Atmospheric drag, Third-body (Sun/Moon)")
   
   # Convert target_start_dt to ET seconds for SPICE
   # SPICE needs ET (Ephemeris Time), not UTC
   # Use spiceypy to do the proper conversion
-  import spiceypy as spice
   
   # Load leap seconds kernel first (minimal kernel set for time conversion)
   lsk_path = Path('/Users/davidottesen/github/spacecraft-trajectory-problems/data/spice_kernels/naif0012.tls')
@@ -113,7 +113,8 @@ def main():
   
   acceleration = Acceleration(
     gp                      = PHYSICALCONSTANTS.EARTH.GP,
-    time_o                  = et_j2000_time_o,  # Use ET seconds, not UTC seconds
+    et_j2000_time_o         = et_j2000_time_o,
+    time_o                  = time_o,
     j2                      = PHYSICALCONSTANTS.EARTH.J2,
     j3                      = PHYSICALCONSTANTS.EARTH.J3,
     j4                      = PHYSICALCONSTANTS.EARTH.J4,
@@ -129,13 +130,12 @@ def main():
   )
   
   # Step 3: Propagate with high-fidelity model
-  print("\nStep 3: Propagating orbit with high-fidelity model...")
-  print(f"  Time span: Oct 1 00:00 to Oct 2 00:00 UTC (24 hours)")
-  
-  result_hifi = propagate_orbit(
+  print("\nStep 3: Propagating orbit with high-fidelity model using numerical integration ...")
+  print(f"  Time span: {target_start_dt} to {target_end_dt} UTC ({delta_time/3600:.1f} hours)")
+  result_hifi = propagate_state_numerical_integration(
     initial_state       = initial_state,
-    time_o              = 0.0,
-    time_f              = delta_time,
+    time_o              = time_o,
+    time_f              = time_f,
     dynamics            = acceleration,
     method              = 'DOP853',
     rtol                = 1e-12,
@@ -143,35 +143,44 @@ def main():
     get_coe_time_series = True,
     gp                  = PHYSICALCONSTANTS.EARTH.GP,
   )
-  
+
   if result_hifi['success']:
     print(f"  ✓ Propagation successful!")
     print(f"  Number of time steps: {len(result_hifi['time'])}")
-    print(f"  High-fidelity time range: {result_hifi['time'][0]:.1f} to {result_hifi['time'][-1]:.1f} seconds")
+    
+    # Store integration time (seconds from TLE epoch)
+    result_hifi['integ_time_s'] = result_hifi['time']
+    print(f"  Integration time range (from TLE epoch): {result_hifi['integ_time_s'][0]:.1f} to {result_hifi['integ_time_s'][-1]:.1f} seconds")
+    
+    # Create plotting time array (seconds from target start time)
+    result_hifi['plot_time_s'] = result_hifi['time'] - time_o
+    print(f"  Plotting time range (from Oct 1 00:00): {result_hifi['plot_time_s'][0]:.1f} to {result_hifi['plot_time_s'][-1]:.1f} seconds")
   else:
     print(f"  ✗ Propagation failed: {result_hifi['message']}")
     return result_hifi
   
-  # # Step 4: Propagating with SGP4 for comparison
-  # print("\nStep 4: Propagating with SGP4 for comparison...")
+  # Step 4: Propagating with SGP4 for comparison
+  print("\nStep 4: Propagating with SGP4 for comparison...")
+  result_sgp4 = propagate_tle(
+    tle_line1  = tle_line1_iss,
+    tle_line2  = tle_line2_iss,
+    time_o     = time_o,
+    time_f     = time_f,
+    num_points = 1000,
+    to_j2000   = True,
+  )
   
-  # result_sgp4 = propagate_tle(
-  #   tle_line1  = tle_line1_iss,
-  #   tle_line2  = tle_line2_iss,
-  #   time_o     = time_o,
-  #   time_f     = time_f,
-  #   num_points = 1000,
-  #   to_j2000   = True,
-  # )
-  
-  # if result_sgp4['success']:
-  #   print(f"  SGP4 time before shift: [{result_sgp4['time'][0]:.1f}, {result_sgp4['time'][-1]:.1f}] seconds")
-  #   # Shift time array to start at 0 (time_o is the offset from TLE epoch to our target start)
-  #   result_sgp4['time'] = result_sgp4['time'] - result_sgp4['time'][0]
-  #   print(f"  SGP4 time after shift: [{result_sgp4['time'][0]:.1f}, {result_sgp4['time'][-1]:.1f}] seconds")
-  #   print(f"  ✓ SGP4 propagation successful!")
-  # else:
-  #   print(f"  ✗ SGP4 propagation failed: {result_sgp4['message']}")
+  if result_sgp4['success']:
+    # Store integration time (seconds from TLE epoch)
+    result_sgp4['integ_time_s'] = result_sgp4['time']
+    print(f"  SGP4 integration time (from TLE epoch): [{result_sgp4['integ_time_s'][0]:.1f}, {result_sgp4['integ_time_s'][-1]:.1f}] seconds")
+    
+    # Create plotting time array (seconds from target start time)
+    result_sgp4['plot_time_s'] = result_sgp4['time'] - time_o
+    print(f"  SGP4 plotting time (from Oct 1 00:00): [{result_sgp4['plot_time_s'][0]:.1f}, {result_sgp4['plot_time_s'][-1]:.1f}] seconds")
+    print(f"  ✓ SGP4 propagation successful!")
+  else:
+    print(f"  ✗ SGP4 propagation failed: {result_sgp4['message']}")
   
   # # Step 5: Load Horizons ephemeris
   # print("\nStep 5: Loading JPL Horizons ephemeris...")
@@ -241,9 +250,9 @@ def main():
   print("="*60)
   
   print("\nFinal time ranges for plotting:")
-  print(f"  High-fidelity: {result_hifi['time'][0]:.1f} to {result_hifi['time'][-1]:.1f} seconds")
-  # if result_sgp4['success']:
-  #   print(f"  SGP4:          {result_sgp4['time'][0]:.1f} to {result_sgp4['time'][-1]:.1f} seconds")
+  print(f"  High-fidelity: {result_hifi['plot_time_s'][0]:.1f} to {result_hifi['plot_time_s'][-1]:.1f} seconds")
+  if result_sgp4['success']:
+    print(f"  SGP4:          {result_sgp4['plot_time_s'][0]:.1f} to {result_sgp4['plot_time_s'][-1]:.1f} seconds")
   # if result_horizons and result_horizons['success']:
   #   print(f"  Horizons:      {result_horizons['time'][0]:.1f} to {result_horizons['time'][-1]:.1f} seconds")
   
@@ -259,8 +268,8 @@ def main():
   
   # Debug: Check what epoch we're passing
   print(f"\nDEBUG - Epoch being passed to plots: {target_start_dt.isoformat()} UTC")
-  print(f"DEBUG - First time value in result_hifi['time']: {result_hifi['time'][0]} seconds")
-  print(f"DEBUG - Expected first UTC time: {(target_start_dt + timedelta(seconds=result_hifi['time'][0])).isoformat()}")
+  print(f"DEBUG - First time value in result_hifi['plot_time_s']: {result_hifi['plot_time_s'][0]} seconds")
+  print(f"DEBUG - Expected first UTC time: {(target_start_dt + timedelta(seconds=result_hifi['plot_time_s'][0])).isoformat()}")
   
   # High-fidelity plots
   fig1 = plot_3d_trajectories(result_hifi)
@@ -273,18 +282,17 @@ def main():
   fig2.savefig(output_dir / 'iss_hifi_timeseries.png', dpi=300, bbox_inches='tight')
   print(f"  Saved: {output_dir / 'iss_hifi_timeseries.png'}")
   
-  # # SGP4 plots
-  # if result_sgp4['success']:
-  #   fig3 = plot_3d_trajectories(result_sgp4)
-  #   fig3.suptitle('ISS Orbit - SGP4 Propagation', fontsize=16)
-  #   fig3.savefig(output_dir / 'iss_sgp4_3d.png', dpi=300, bbox_inches='tight')
-  #   print(f"  Saved: {output_dir / 'iss_sgp4_3d.png'}")
+  # SGP4 plots
+  if result_sgp4['success']:
+    fig3 = plot_3d_trajectories(result_sgp4)
+    fig3.suptitle('ISS Orbit - SGP4 Propagation', fontsize=16)
+    fig3.savefig(output_dir / 'iss_sgp4_3d.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_dir / 'iss_sgp4_3d.png'}")
     
-  #   fig4 = plot_time_series(result_sgp4, epoch=target_start_dt)
-  #   fig4.suptitle('ISS Orbit - SGP4 Time Series', fontsize=16)
-  #   fig4.savefig(output_dir / 'iss_sgp4_timeseries.png', dpi=300, bbox_inches='tight')
-  #   print(f"  Saved: {output_dir / 'iss_sgp4_timeseries.png'}")
-  
+    fig4 = plot_time_series(result_sgp4, epoch=target_start_dt)
+    fig4.suptitle('ISS Orbit - SGP4 Time Series', fontsize=16)
+    fig4.savefig(output_dir / 'iss_sgp4_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_dir / 'iss_sgp4_timeseries.png'}")
   # # Horizons plots
   # if result_horizons and result_horizons['success']:
   #   fig5 = plot_3d_trajectories(result_horizons)

@@ -85,7 +85,7 @@ def plot_time_series(
   fig = plt.figure(figsize=(18,10))
   
   # Extract data
-  time = result['time']
+  time = result['plot_time_s']
   states = result['state']
   pos_x, pos_y, pos_z = states[0, :], states[1, :], states[2, :]
   vel_x, vel_y, vel_z = states[3, :], states[4, :], states[5, :]
@@ -299,10 +299,10 @@ def plot_time_series_error(
   # Interpolate comparison result to reference time points
   from scipy.interpolate import interp1d
   
-  time_ref = result_ref['time']
-  time_cmp = result_cmp['time']
+  time_ref  = result_ref['plot_time_s']
+  time_cmp  = result_cmp['plot_time_s']
   state_cmp = result_cmp['state']
-  coe_cmp = result_cmp['coe']
+  coe_cmp   = result_cmp['coe']
   
   # Interpolate state
   state_cmp_interp = np.zeros((6, len(time_ref)))
