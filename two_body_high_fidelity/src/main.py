@@ -38,16 +38,17 @@ def main():
   target_end_dt   = datetime(2025, 10, 2, 0, 0, 0)
   delta_time      = (target_end_dt - target_start_dt).total_seconds()
   
-  # Time offset from TLE epoch to target start
-  time_o = (target_start_dt - tle_epoch_dt).total_seconds()
-  time_f = time_o + delta_time
+  # Integration time bounds (seconds from TLE epoch)
+  integ_time_o = (target_start_dt - tle_epoch_dt).total_seconds()
+  integ_time_f = integ_time_o + delta_time
+  delta_integ_time = integ_time_f - integ_time_o
   
   print(f"\nPropagation Time Span:")
   print(f"  TLE epoch:     {tle_epoch_dt.isoformat()} UTC")
   print(f"  Target start:  {target_start_dt.isoformat()} UTC")
   print(f"  Target end:    {target_end_dt.isoformat()} UTC")
-  print(f"  Time offset from TLE epoch: {time_o/3600:.2f} hours ({time_o:.1f} seconds)")
-  print(f"  Propagation duration: {(time_f - time_o)/3600:.2f} hours")
+  print(f"  Time offset from TLE epoch: {integ_time_o/3600:.2f} hours ({integ_time_o:.1f} seconds)")
+  print(f"  Propagation duration: {delta_integ_time/3600:.2f} hours")
   
   # ISS properties (approximate)
   mass      = 420000.0    # ISS mass [kg] (approximate)
@@ -76,8 +77,8 @@ def main():
   result_tle_initial = propagate_tle(
     tle_line1  = tle_line1_iss,
     tle_line2  = tle_line2_iss,
-    time_o     = time_o,
-    time_f     = time_o,  # Just get initial state at target start time
+    time_o     = integ_time_o,
+    time_f     = integ_time_o,  # Just get initial state at target start time
     num_points = 1,
     to_j2000   = True,    # Convert from TEME to J2000
   )
@@ -114,7 +115,7 @@ def main():
   acceleration = Acceleration(
     gp                      = PHYSICALCONSTANTS.EARTH.GP,
     et_j2000_time_o         = et_j2000_time_o,
-    time_o                  = time_o,
+    time_o                  = integ_time_o,
     j2                      = PHYSICALCONSTANTS.EARTH.J2,
     j3                      = PHYSICALCONSTANTS.EARTH.J3,
     j4                      = PHYSICALCONSTANTS.EARTH.J4,
@@ -134,8 +135,8 @@ def main():
   print(f"  Time span: {target_start_dt} to {target_end_dt} UTC ({delta_time/3600:.1f} hours)")
   result_hifi = propagate_state_numerical_integration(
     initial_state       = initial_state,
-    time_o              = time_o,
-    time_f              = time_f,
+    time_o              = integ_time_o,
+    time_f              = integ_time_f,
     dynamics            = acceleration,
     method              = 'DOP853',
     rtol                = 1e-12,
@@ -153,7 +154,7 @@ def main():
     print(f"  Integration time range (from TLE epoch): {result_hifi['integ_time_s'][0]:.1f} to {result_hifi['integ_time_s'][-1]:.1f} seconds")
     
     # Create plotting time array (seconds from target start time)
-    result_hifi['plot_time_s'] = result_hifi['time'] - time_o
+    result_hifi['plot_time_s'] = result_hifi['time'] - integ_time_o
     print(f"  Plotting time range (from Oct 1 00:00): {result_hifi['plot_time_s'][0]:.1f} to {result_hifi['plot_time_s'][-1]:.1f} seconds")
   else:
     print(f"  ✗ Propagation failed: {result_hifi['message']}")
@@ -164,8 +165,8 @@ def main():
   result_sgp4 = propagate_tle(
     tle_line1  = tle_line1_iss,
     tle_line2  = tle_line2_iss,
-    time_o     = time_o,
-    time_f     = time_f,
+    time_o     = integ_time_o,
+    time_f     = integ_time_f,
     num_points = 1000,
     to_j2000   = True,
   )
@@ -176,7 +177,7 @@ def main():
     print(f"  SGP4 integration time (from TLE epoch): [{result_sgp4['integ_time_s'][0]:.1f}, {result_sgp4['integ_time_s'][-1]:.1f}] seconds")
     
     # Create plotting time array (seconds from target start time)
-    result_sgp4['plot_time_s'] = result_sgp4['time'] - time_o
+    result_sgp4['plot_time_s'] = result_sgp4['time'] - integ_time_o
     print(f"  SGP4 plotting time (from Oct 1 00:00): [{result_sgp4['plot_time_s'][0]:.1f}, {result_sgp4['plot_time_s'][-1]:.1f}] seconds")
     print(f"  ✓ SGP4 propagation successful!")
   else:
