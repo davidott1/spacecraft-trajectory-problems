@@ -5,7 +5,7 @@ import spiceypy          as spice
 from pathlib         import Path
 from scipy.integrate import solve_ivp
 
-from src.plot.trajectory             import plot_3d_trajectories, plot_time_series, plot_3d_error, plot_time_series_error, plot_true_longitude_error
+from src.plot.trajectory             import plot_3d_trajectories, plot_time_series, plot_3d_error, plot_time_series_error
 from src.propagation.propagator      import propagate_state_numerical_integration
 from src.propagation.tle_propagator  import propagate_tle
 from src.propagation.horizons_loader import load_horizons_ephemeris
@@ -376,11 +376,6 @@ def main():
     fig_err_ts.suptitle('ISS RIC Position/Velocity Errors: Horizons vs High-Fidelity', fontsize=16)
     fig_err_ts.savefig(output_dir / 'iss_error_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_dir / 'iss_error_timeseries.png'}")
-    
-    # True longitude error plot
-    fig_u_err = plot_true_longitude_error(result_horizons, result_hifi, epoch=target_start_dt)
-    fig_u_err.savefig(output_dir / 'iss_true_longitude_error.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_dir / 'iss_true_longitude_error.png'}")
     
     # Compute and display error statistics
     pos_error_km = np.linalg.norm(result_hifi['state'][0:3, :] - result_horizons['state'][0:3, :], axis=0) / 1e3
