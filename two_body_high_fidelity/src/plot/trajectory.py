@@ -374,7 +374,9 @@ def plot_time_series_error(
   
   # Plot SMA error (row 0, column 1)
   ax_sma = plt.subplot2grid((6, 2), (0, 1), sharex=ax_pos)
-  ax_sma.plot(time_ref, coe_cmp_interp['sma'] - coe_ref['sma'], 'b-', linewidth=1.5)
+  if 'sma' in result_ref['coe'] and 'sma' in coe_cmp:
+      sma_error = result_ref['coe']['sma'] - coe_cmp['sma']
+      ax_sma.plot(time_ref, sma_error, 'b-', linewidth=1.5)
   ax_sma.tick_params(labelbottom=False)
   ax_sma.set_ylabel('SMA Error\n[m]')
   ax_sma.grid(True)
@@ -382,7 +384,9 @@ def plot_time_series_error(
   
   # Plot eccentricity error (row 1, column 1)
   ax_ecc = plt.subplot2grid((6, 2), (1, 1), sharex=ax_pos)
-  ax_ecc.plot(time_ref, coe_cmp_interp['ecc'] - coe_ref['ecc'], 'b-', linewidth=1.5)
+  if 'ecc' in result_ref['coe'] and 'ecc' in coe_cmp:
+      ecc_error = result_ref['coe']['ecc'] - coe_cmp['ecc']
+      ax_ecc.plot(time_ref, ecc_error, 'b-', linewidth=1.5)
   ax_ecc.tick_params(labelbottom=False)
   ax_ecc.set_ylabel('Eccentricity Error\n[-]')
   ax_ecc.grid(True)
@@ -390,7 +394,9 @@ def plot_time_series_error(
   
   # Plot inclination error (row 2, column 1)
   ax_inc = plt.subplot2grid((6, 2), (2, 1), sharex=ax_pos)
-  ax_inc.plot(time_ref, (coe_cmp_interp['inc'] - coe_ref['inc']) * CONVERTER.DEG_PER_RAD, 'b-', linewidth=1.5)
+  if 'inc' in result_ref['coe'] and 'inc' in coe_cmp:
+      inc_error = (result_ref['coe']['inc'] - coe_cmp['inc']) * CONVERTER.DEG_PER_RAD
+      ax_inc.plot(time_ref, inc_error, 'b-', linewidth=1.5)
   ax_inc.tick_params(labelbottom=False)
   ax_inc.set_ylabel('Inclination Error\n[deg]')
   ax_inc.grid(True)
@@ -398,7 +404,12 @@ def plot_time_series_error(
   
   # Plot RAAN error (row 3, column 1)
   ax_raan = plt.subplot2grid((6, 2), (3, 1), sharex=ax_pos)
-  ax_raan.plot(time_ref, (coe_cmp_interp['raan'] - coe_ref['raan']) * CONVERTER.DEG_PER_RAD, 'b-', linewidth=1.5)
+  if 'raan' in result_ref['coe'] and 'raan' in coe_cmp:
+      # Handle angle wrapping for RAAN
+      raan_error_rad = np.arctan2(np.sin(result_ref['coe']['raan'] - coe_cmp['raan']), 
+                                   np.cos(result_ref['coe']['raan'] - coe_cmp['raan']))
+      raan_error = raan_error_rad * CONVERTER.DEG_PER_RAD
+      ax_raan.plot(time_ref, raan_error, 'b-', linewidth=1.5)
   ax_raan.tick_params(labelbottom=False)
   ax_raan.set_ylabel('RAAN Error\n[deg]')
   ax_raan.grid(True)
@@ -406,24 +417,331 @@ def plot_time_series_error(
   
   # Plot argument of perigee error (row 4, column 1)
   ax_argp = plt.subplot2grid((6, 2), (4, 1), sharex=ax_pos)
-  ax_argp.plot(time_ref, (coe_cmp_interp['argp'] - coe_ref['argp']) * CONVERTER.DEG_PER_RAD, 'b-', linewidth=1.5)
+  if 'argp' in result_ref['coe'] and 'argp' in coe_cmp:
+      # Handle angle wrapping for ArgP
+      argp_error_rad = np.arctan2(np.sin(result_ref['coe']['argp'] - coe_cmp['argp']), 
+                                   np.cos(result_ref['coe']['argp'] - coe_cmp['argp']))
+      argp_error = argp_error_rad * CONVERTER.DEG_PER_RAD
+      ax_argp.plot(time_ref, argp_error, 'b-', linewidth=1.5)
   ax_argp.tick_params(labelbottom=False)
-  ax_argp.set_ylabel('ArgP Error\n[deg]')
+  ax_argp.set_ylabel('Argument of\nPerigee Error\n[deg]')
   ax_argp.grid(True)
   ax_argp.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
   
-  # Plot mean anomaly error (row 5, column 1)
-  ax_ma = plt.subplot2grid((6, 2), (5, 1), sharex=ax_pos)
-  ax_ma.plot(time_ref, (coe_cmp_interp['ma'] - coe_ref['ma']) * CONVERTER.DEG_PER_RAD, 'b-', linewidth=1.5)
-  ax_ma.set_xlabel('Time\n[s]')
-  ax_ma.set_ylabel('Mean Anomaly Error\n[deg]')
-  ax_ma.grid(True)
-  ax_ma.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
-  
+  # Plot true anomaly error vs time (row 5, column 1)
+  ax_ta = plt.subplot2grid((6, 2), (5, 1), sharex=ax_pos)
+  if 'ta' in result_ref['coe'] and 'ta' in coe_cmp:
+      # Handle angle wrapping for TA
+      ta_error_rad = np.arctan2(np.sin(result_ref['coe']['ta'] - coe_cmp['ta']), 
+                                 np.cos(result_ref['coe']['ta'] - coe_cmp['ta']))
+      ta_error = ta_error_rad * CONVERTER.DEG_PER_RAD
+      ax_ta.plot(time_ref, ta_error, 'b-', linewidth=1.5)
+  ax_ta.set_xlabel('Time\n[s]')
+  ax_ta.set_ylabel('True Anomaly\nError\n[deg]')
+  ax_ta.grid(True)
+  ax_ta.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
   # Align y-axis labels
-  fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_argp, ax_ma])
+  fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_argp, ax_ta])
   fig.align_ylabels([ax_pos, ax_vel])
   
   fig.suptitle(title, fontsize=16)
   plt.subplots_adjust(hspace=0.17, wspace=0.2)
   return fig
+
+
+def plot_time_series_error(result_ref, result_comp, epoch=None, title="Time Series Error"):
+    """
+    Create time series error plots between reference and comparison trajectories
+    
+    Parameters:
+    -----------
+    result_ref : dict
+        Reference result dictionary with plot_time_s and state/coe
+    result_comp : dict
+        Comparison result dictionary with plot_time_s and state/coe
+    epoch : datetime or None
+        Reference epoch for time axis
+    title : str
+        Title for the figure
+    """
+    # Use plot_time_s for both datasets
+    time_ref = result_ref['plot_time_s']
+    time_comp = result_comp['plot_time_s']
+    
+    # Check if time grids match
+    if not np.array_equal(time_ref, time_comp):
+        raise ValueError(
+            f"Time grids don't match! "
+            f"Reference has {len(time_ref)} points from {time_ref[0]:.1f} to {time_ref[-1]:.1f} s, "
+            f"Comparison has {len(time_comp)} points from {time_comp[0]:.1f} to {time_comp[-1]:.1f} s. "
+            f"Both datasets must use the same time grid for error comparison."
+        )
+    
+    state_comp = result_comp['state']
+    coe_comp   = result_comp['coe']
+    
+    # Create figure with subplots matching the grid structure
+    fig = plt.figure(figsize=(18, 10))
+    
+    # Extract data
+    time = time_ref
+    pos_error = result_ref['state'][0:3, :] - state_comp[0:3, :]
+    vel_error = result_ref['state'][3:6, :] - state_comp[3:6, :]
+    
+    # Calculate error magnitudes
+    pos_error_mag = np.linalg.norm(pos_error, axis=0)
+    vel_error_mag = np.linalg.norm(vel_error, axis=0)
+    
+    # LEFT SIDE: Position and Velocity Errors
+    # Plot position error vs time (spans rows 0-2, column 0)
+    ax_pos = plt.subplot2grid((6, 2), (0, 0), rowspan=3)
+    ax_pos.plot(time, pos_error[0, :], 'r-', label='X', linewidth=1.5)
+    ax_pos.plot(time, pos_error[1, :], 'g-', label='Y', linewidth=1.5)
+    ax_pos.plot(time, pos_error[2, :], 'b-', label='Z', linewidth=1.5)
+    ax_pos.plot(time, pos_error_mag, 'k-', label='Magnitude', linewidth=2)
+    ax_pos.tick_params(labelbottom=False)
+    ax_pos.set_ylabel('Position Error\n[m]')
+    ax_pos.legend()
+    ax_pos.grid(True)
+    ax_pos.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+    # Plot velocity error vs time (spans rows 3-5, column 0)
+    ax_vel = plt.subplot2grid((6, 2), (3, 0), rowspan=3, sharex=ax_pos)
+    ax_vel.plot(time, vel_error[0, :], 'r-', label='X', linewidth=1.5)
+    ax_vel.plot(time, vel_error[1, :], 'g-', label='Y', linewidth=1.5)
+    ax_vel.plot(time, vel_error[2, :], 'b-', label='Z', linewidth=1.5)
+    ax_vel.plot(time, vel_error_mag, 'k-', label='Magnitude', linewidth=2)
+    ax_vel.set_xlabel('Time\n[s]')
+    ax_vel.set_ylabel('Velocity Error\n[m/s]')
+    ax_vel.legend()
+    ax_vel.grid(True)
+    ax_vel.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+    # RIGHT SIDE: Orbital Element Errors
+    # Plot SMA error vs time (row 0, column 1)
+    ax_sma = plt.subplot2grid((6, 2), (0, 1), sharex=ax_pos)
+    if 'sma' in result_ref['coe'] and 'sma' in coe_comp:
+        sma_error = result_ref['coe']['sma'] - coe_comp['sma']
+        ax_sma.plot(time, sma_error, 'b-', linewidth=1.5)
+    ax_sma.tick_params(labelbottom=False)
+    ax_sma.set_ylabel('SMA Error\n[m]')
+    ax_sma.grid(True)
+    ax_sma.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+    # Plot eccentricity error vs time (row 1, column 1)
+    ax_ecc = plt.subplot2grid((6, 2), (1, 1), sharex=ax_pos)
+    if 'ecc' in result_ref['coe'] and 'ecc' in coe_comp:
+        ecc_error = result_ref['coe']['ecc'] - coe_comp['ecc']
+        ax_ecc.plot(time, ecc_error, 'b-', linewidth=1.5)
+    ax_ecc.tick_params(labelbottom=False)
+    ax_ecc.set_ylabel('Eccentricity Error\n[-]')
+    ax_ecc.grid(True)
+    ax_ecc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+    # Plot inclination error (row 2, column 1)
+    ax_inc = plt.subplot2grid((6, 2), (2, 1), sharex=ax_pos)
+    if 'inc' in result_ref['coe'] and 'inc' in coe_comp:
+        inc_error = (result_ref['coe']['inc'] - coe_comp['inc']) * CONVERTER.DEG_PER_RAD
+        ax_inc.plot(time, inc_error, 'b-', linewidth=1.5)
+    ax_inc.tick_params(labelbottom=False)
+    ax_inc.set_ylabel('Inclination Error\n[deg]')
+    ax_inc.grid(True)
+    ax_inc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+    # Plot RAAN error vs time (row 3, column 1)
+    ax_raan = plt.subplot2grid((6, 2), (3, 1), sharex=ax_pos)
+    if 'raan' in result_ref['coe'] and 'raan' in coe_comp:
+        # Handle angle wrapping for RAAN
+        raan_error_rad = np.arctan2(np.sin(result_ref['coe']['raan'] - coe_comp['raan']), 
+                                     np.cos(result_ref['coe']['raan'] - coe_comp['raan']))
+        raan_error = raan_error_rad * CONVERTER.DEG_PER_RAD
+        ax_raan.plot(time, raan_error, 'b-', linewidth=1.5)
+    ax_raan.tick_params(labelbottom=False)
+    ax_raan.set_ylabel('RAAN Error\n[deg]')
+    ax_raan.grid(True)
+    ax_raan.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+    # Plot argument of perigee error vs time (row 4, column 1)
+    ax_argp = plt.subplot2grid((6, 2), (4, 1), sharex=ax_pos)
+    if 'argp' in result_ref['coe'] and 'argp' in coe_comp:
+        # Handle angle wrapping for ArgP
+        argp_error_rad = np.arctan2(np.sin(result_ref['coe']['argp'] - coe_comp['argp']), 
+                                     np.cos(result_ref['coe']['argp'] - coe_comp['argp']))
+        argp_error = argp_error_rad * CONVERTER.DEG_PER_RAD
+        ax_argp.plot(time, argp_error, 'b-', linewidth=1.5)
+    ax_argp.tick_params(labelbottom=False)
+    ax_argp.set_ylabel('Argument of\nPerigee Error\n[deg]')
+    ax_argp.grid(True)
+    ax_argp.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+    # Plot true anomaly error vs time (row 5, column 1)
+    ax_ta = plt.subplot2grid((6, 2), (5, 1), sharex=ax_pos)
+    if 'ta' in result_ref['coe'] and 'ta' in coe_comp:
+        # Handle angle wrapping for TA
+        ta_error_rad = np.arctan2(np.sin(result_ref['coe']['ta'] - coe_comp['ta']), 
+                                   np.cos(result_ref['coe']['ta'] - coe_comp['ta']))
+        ta_error = ta_error_rad * CONVERTER.DEG_PER_RAD
+        ax_ta.plot(time, ta_error, 'b-', linewidth=1.5)
+    ax_ta.set_xlabel('Time\n[s]')
+    ax_ta.set_ylabel('True Anomaly\nError\n[deg]')
+    ax_ta.grid(True)
+    ax_ta.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+    # Add UTC time axis if epoch is provided
+    if epoch is not None:
+        # Only add UTC time to top row axes
+        top_row_axes = [ax_pos, ax_sma]
+        
+        for ax in top_row_axes:
+            # Create secondary x-axis
+            ax2 = ax.twiny()
+            ax2.set_xlim(ax.get_xlim())
+            
+            # Get tick positions in seconds and filter to only positive values
+            tick_positions_sec = ax.get_xticks()
+            
+            # Filter out negative ticks and ticks beyond our data range
+            valid_ticks = tick_positions_sec[(tick_positions_sec >= 0) & (tick_positions_sec <= 86400)]
+            
+            # If we don't have enough valid ticks, create our own
+            if len(valid_ticks) < 2:
+                valid_ticks = np.linspace(0, 86400, 7)  # Every 4 hours
+            
+            # Convert directly from seconds to UTC datetime
+            utc_times = [epoch + timedelta(seconds=float(t)) for t in valid_ticks]
+            
+            # Format UTC time labels
+            time_labels = [t.strftime('%m/%d %H:%M') for t in utc_times]
+            
+            ax2.set_xticks(valid_ticks)
+            ax2.set_xticklabels(time_labels, rotation=45, ha='left', fontsize=8)
+            ax2.set_xlabel('UTC Time', fontsize=9)
+            
+            # Position the secondary axis at the top
+            ax2.xaxis.set_label_position('top')
+            ax2.xaxis.tick_top()
+
+    # Align y-axis labels for right column
+    fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_argp, ax_ta])
+    
+    # Align y-axis labels for left column
+    fig.align_ylabels([ax_pos, ax_vel])
+    
+    fig.suptitle(title, fontsize=16)
+    plt.subplots_adjust(hspace=0.17, wspace=0.2)
+    return fig
+
+
+def plot_true_longitude_error(result_ref, result_comp, epoch=None):
+    """
+    Create true longitude error plot (RAAN + ArgP + TA combined error)
+    
+    Parameters:
+    -----------
+    result_ref : dict
+        Reference result dictionary with plot_time_s and state/coe
+    result_comp : dict
+        Comparison result dictionary with plot_time_s and state/coe
+    epoch : datetime or None
+        Reference epoch for time axis
+    """
+    # Use plot_time_s for both datasets
+    time_ref = result_ref['plot_time_s']
+    time_comp = result_comp['plot_time_s']
+    
+    # Check if time grids match
+    if not np.array_equal(time_ref, time_comp):
+        raise ValueError(
+            f"Time grids don't match! "
+            f"Reference has {len(time_ref)} points from {time_ref[0]:.1f} to {time_ref[-1]:.1f} s, "
+            f"Comparison has {len(time_comp)} points from {time_comp[0]:.1f} to {time_comp[-1]:.1f} s. "
+            f"Both datasets must use the same time grid for error comparison."
+        )
+    
+    coe_comp = result_comp['coe']
+    coe_ref = result_ref['coe']
+    
+    # Create figure
+    fig = plt.figure(figsize=(14, 6))
+    ax = plt.gca()
+
+    # Compute true longitude for both datasets
+    # u = RAAN + ArgP + TA (convert to radians for proper angular addition)
+    if all(k in coe_ref and k in coe_comp for k in ['raan', 'argp', 'ta']):
+        u_ref = coe_ref['raan'] + coe_ref['argp'] + coe_ref['ta']  # Already in radians
+        u_comp = coe_comp['raan'] + coe_comp['argp'] + coe_comp['ta']  # Already in radians
+        
+        # Compute circular difference (handles angle wrapping)
+        u_error_rad = np.arctan2(np.sin(u_ref - u_comp), np.cos(u_ref - u_comp))
+        u_error_deg = u_error_rad * CONVERTER.DEG_PER_RAD
+        
+        # Plot the error
+        ax.plot(time_ref, u_error_deg, 'purple', linewidth=2.0, 
+                label='True Longitude Error (RAAN + ArgP + TA)')
+        
+        # Add zero reference line
+        ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5, alpha=0.3)
+        
+        # Calculate statistics
+        mean_error = np.mean(u_error_deg)
+        std_error = np.std(u_error_deg)
+        max_error = np.max(np.abs(u_error_deg))
+        rms_error = np.sqrt(np.mean(u_error_deg**2))
+        
+        # Add statistics text box
+        stats_text = (f'Mean: {mean_error:.3f}°\n'
+                     f'Std: {std_error:.3f}°\n'
+                     f'RMS: {rms_error:.3f}°\n'
+                     f'Max |error|: {max_error:.3f}°')
+        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, 
+                fontsize=10, verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+        
+        ax.set_xlabel('Time [s]', fontsize=12)
+        ax.set_ylabel('True Longitude Error [deg]', fontsize=12)
+        ax.set_title('True Longitude Error (Combined Angular Position Error)', fontsize=14)
+        ax.legend(loc='upper right', fontsize=10)
+        ax.grid(True, alpha=0.3)
+        
+        # Format y-axis
+        ax.ticklabel_format(style='plain', axis='y')
+        
+        # Add UTC time axis if epoch is provided
+        if epoch is not None:
+            ax2 = ax.twiny()
+            ax2.set_xlim(ax.get_xlim())
+            
+            # Get tick positions in seconds
+            tick_positions_sec = ax.get_xticks()
+            
+            # Filter out negative ticks and ticks beyond our data range
+            valid_ticks = tick_positions_sec[(tick_positions_sec >= 0) & (tick_positions_sec <= 86400)]
+            
+            # If we don't have enough valid ticks, create our own
+            if len(valid_ticks) < 2:
+                valid_ticks = np.linspace(0, 86400, 7)  # Every 4 hours
+            
+            # Convert directly from seconds to UTC datetime
+            utc_times = [epoch + timedelta(seconds=float(t)) for t in valid_ticks]
+            
+            # Format UTC time labels
+            time_labels = [t.strftime('%m/%d %H:%M') for t in utc_times]
+            
+            ax2.set_xticks(valid_ticks)
+            ax2.set_xticklabels(time_labels, rotation=45, ha='left', fontsize=8)
+            ax2.set_xlabel('UTC Time', fontsize=9)
+            
+            # Position the secondary axis at the top
+            ax2.xaxis.set_label_position('top')
+            ax2.xaxis.tick_top()
+    else:
+        # If orbital elements not available, show message
+        ax.text(0.5, 0.5, 'Orbital elements not available for error calculation', 
+                transform=ax.transAxes, ha='center', va='center', fontsize=14)
+        ax.set_xlabel('Time [s]', fontsize=12)
+        ax.set_ylabel('True Longitude Error [deg]', fontsize=12)
+        ax.set_title('True Longitude Error', fontsize=14)
+
+    plt.tight_layout()
+    return fig

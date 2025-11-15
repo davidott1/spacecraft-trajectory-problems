@@ -839,6 +839,132 @@ def plot_orbital_element_errors(horizons_oe_df, tle_oe_df, tles=None, tle_epochs
 
     return fig
 
+def plot_true_longitude_error(horizons_oe_df, tle_oe_df, tles=None, tle_epochs_df=None):
+    """
+    Plot combined angular error (RAAN + ArgP + TA) which represents true longitude error.
+    """
+    fig, axes = plt.subplots(2, 1, figsize=(14, 6), sharex=True,
+                             gridspec_kw={'height_ratios': [1, 4]})
+    fig.suptitle('ISS True Longitude Error: (RAAN + ArgP + TA) - Horizons vs TLE', fontsize=16)
+    
+    # Compute true longitude for both datasets
+    # lambda = RAAN + ArgP + TA (all in radians for proper addition)
+    lambda_horizons = np.deg2rad(horizons_oe_df['raan'].values + 
+                                 horizons_oe_df['argp'].values + 
+                                 horizons_oe_df['ta'].values)
+    
+    lambda_tle = np.deg2rad(tle_oe_df['raan'].values + 
+                            tle_oe_df['argp'].values + 
+                            tle_oe_df['ta'].values)
+    
+    # Compute circular difference
+    lambda_error_rad = np.arctan2(np.sin(lambda_horizons - lambda_tle), np.cos(lambda_horizons - lambda_tle))
+    lambda_error_deg = np.rad2deg(lambda_error_rad)
+    
+    # If available, smooth jumps at TLE boundaries
+    if tles is not None:
+        tle_index_df = get_best_tle_indices(horizons_oe_df, tles)
+        lambda_error_deg = _stitch_segments_deg(lambda_error_deg, tle_index_df['tle_index'].to_numpy())
+    
+    # Store transition times for vertical lines
+    transition_times = []
+    
+    # TLE Index plot
+    ax = axes[0]
+    if tles is not None:
+        # Get best TLE index for each time
+        tle_index_df = get_best_tle_indices(horizons_oe_df, tles)
+        
+        # Find continuous segments of the same TLE index
+        current_idx = tle_index_df.iloc[0]['tle_index']
+        start_time = tle_index_df.iloc[0]['datetime']
+        
+        for i in range(1, len(tle_index_df)):
+            if tle_index_df.iloc[i]['tle_index'] != current_idx or i == len(tle_index_df) - 1:
+                # End of segment
+                if i == len(tle_index_df) - 1 and tle_index_df.iloc[i]['tle_index'] == current_idx:
+                    end_time = tle_index_df.iloc[i]['datetime']
+                else:
+                    end_time = tle_index_df.iloc[i-1]['datetime']
+                
+                # Ensure timezone consistency
+                if hasattr(start_time, 'tzinfo') and start_time.tzinfo is not None:
+                    if not hasattr(end_time, 'tzinfo') or end_time.tzinfo is None:
+                        end_time = pd.Timestamp(end_time).tz_localize('UTC')
+                
+                # Plot horizontal line for this segment
+                ax.hlines(y=0, xmin=start_time, xmax=end_time, colors='black', linewidth=3)
+                
+                # Add vertical line at segment start
+                ax.vlines(x=start_time, ymin=-0.3, ymax=0.3, colors='black', linewidth=2)
+                transition_times.append(start_time)
+                
+                # Add text label in the middle of the segment
+                mid_time = start_time + (end_time - start_time) / 2
+                ax.text(mid_time, 0, f'TLE {current_idx}', ha='center', va='center',
+                       fontsize=10, bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+                
+                # Start new segment
+                current_idx = tle_index_df.iloc[i]['tle_index']
+                start_time = tle_index_df.iloc[i]['datetime']
+        
+        # Add final vertical line at the end
+        final_time = tle_index_df.iloc[-1]['datetime']
+        ax.vlines(x=final_time, ymin=-0.3, ymax=0.3, colors='black', linewidth=2)
+        transition_times.append(final_time)
+        
+        ax.set_ylim(-0.5, 0.5)
+        ax.set_yticks([])
+    
+    ax.set_ylabel('Active TLE', fontsize=10)
+    ax.set_title('TLE Timeline', fontsize=12)
+    ax.grid(True, alpha=0.3, axis='x')
+    
+    # True longitude error plot
+    ax = axes[1]
+    ax.plot(horizons_oe_df['datetime'], lambda_error_deg, 'purple', linewidth=1.5, 
+            label='True Longitude Error (RAAN + ArgP + TA)')
+    
+    # Add markers at TLE epochs
+    if tle_epochs_df is not None:
+        ax.scatter(tle_epochs_df['datetime'], np.zeros(len(tle_epochs_df)), 
+                  c='black', marker='o', s=50, zorder=5, label='TLE Epochs')
+    
+    # Add vertical lines at transitions
+    for t in transition_times:
+        ax.axvline(x=t, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
+    
+    # Add zero line for reference
+    ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5, alpha=0.3)
+    
+    # Statistics text
+    mean_error = np.mean(lambda_error_deg)
+    std_error = np.std(lambda_error_deg)
+    max_error = np.max(np.abs(lambda_error_deg))
+    
+    stats_text = f'Mean: {mean_error:.3f}°\nStd: {std_error:.3f}°\nMax |error|: {max_error:.3f}°'
+    ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, 
+            fontsize=10, verticalalignment='top',
+            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    
+    ax.set_ylabel('True Longitude Error\n[deg]', fontsize=11)
+    ax.set_xlabel('Time (UTC)', fontsize=11)
+    ax.legend(loc='upper right', fontsize=10)
+    ax.grid(True, alpha=0.3)
+    
+    # Set y-axis limits using percentiles to handle outliers
+    lambda_error_p01 = np.percentile(lambda_error_deg, 1)
+    lambda_error_p99 = np.percentile(lambda_error_deg, 99)
+    lambda_error_range = lambda_error_p99 - lambda_error_p01
+    lambda_error_margin = 0.15 * lambda_error_range
+    ax.set_ylim(lambda_error_p01 - lambda_error_margin, lambda_error_p99 + lambda_error_margin)
+    
+    for ax in axes:
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=90, ha='right')
+    
+    plt.tight_layout(rect=(0, 0.03, 1, 0.97))
+    
+    return fig
 
 def main():
     # Define file paths
@@ -899,6 +1025,7 @@ def main():
     fig2 = plot_orbital_elements_tle_comparison(oe_df, tle_oe_df, tles, tle_epochs_df)
     fig3 = plot_position_velocity_errors(horizons_df, tle_df, tles, tle_epochs_df)
     fig4 = plot_orbital_element_errors(oe_df, tle_oe_df, tles, tle_epochs_df)
+    fig5 = plot_true_longitude_error(oe_df, tle_oe_df, tles, tle_epochs_df)  # New plot
     
     # Save plots
     output_file4 = output_folderpath / f'iss_{norad_id}_horizons_vs_tle_with_index_plot.png'
@@ -916,6 +1043,10 @@ def main():
     output_file7 = output_folderpath / f'iss_{norad_id}_orbital_element_errors_plot.png'
     fig4.savefig(output_file7, dpi=150, bbox_inches='tight')
     print(f"Orbital element errors plot saved to: {output_file7}")
+    
+    output_file8 = output_folderpath / f'iss_{norad_id}_true_longitude_error_plot.png'
+    fig5.savefig(output_file8, dpi=150, bbox_inches='tight')
+    print(f"True longitude error plot saved to: {output_file8}")
     
     plt.show()
 

@@ -5,7 +5,7 @@ import spiceypy          as spice
 from pathlib         import Path
 from scipy.integrate import solve_ivp
 
-from src.plot.trajectory             import plot_3d_trajectories, plot_time_series, plot_3d_error, plot_time_series_error
+from src.plot.trajectory             import plot_3d_trajectories, plot_time_series, plot_3d_error, plot_time_series_error, plot_true_longitude_error
 from src.propagation.propagator      import propagate_state_numerical_integration
 from src.propagation.tle_propagator  import propagate_tle
 from src.propagation.horizons_loader import load_horizons_ephemeris
@@ -138,6 +138,41 @@ def main():
   print(f"  Initial position (Oct 1 00:00 UTC): [{initial_state[0]/1e3:.3f}, {initial_state[1]/1e3:.3f}, {initial_state[2]/1e3:.3f}] km")
   print(f"  Initial velocity (Oct 1 00:00 UTC): [{initial_state[3]/1e3:.3f}, {initial_state[4]/1e3:.3f}, {initial_state[5]/1e3:.3f}] km/s")
   
+  # Compare with Horizons initial state if available
+  if result_horizons and result_horizons['success']:
+    horizons_initial = result_horizons['state'][:, 0]
+    print(f"\n  Horizons initial position: [{horizons_initial[0]/1e3:.3f}, {horizons_initial[1]/1e3:.3f}, {horizons_initial[2]/1e3:.3f}] km")
+    print(f"  Horizons initial velocity: [{horizons_initial[3]/1e3:.3f}, {horizons_initial[4]/1e3:.3f}, {horizons_initial[5]/1e3:.3f}] km/s")
+    
+    initial_pos_diff = np.linalg.norm(initial_state[0:3] - horizons_initial[0:3]) / 1e3
+    initial_vel_diff = np.linalg.norm(initial_state[3:6] - horizons_initial[3:6])
+    print(f"\n  Initial position difference (TLE vs Horizons): {initial_pos_diff:.3f} km")
+    print(f"  Initial velocity difference (TLE vs Horizons): {initial_vel_diff:.3f} m/s")
+    
+    # Detailed component-wise differences
+    print(f"\n  Component-wise differences (TLE - Horizons):")
+    print(f"    ΔX: {(initial_state[0] - horizons_initial[0])/1e3:.3f} km")
+    print(f"    ΔY: {(initial_state[1] - horizons_initial[1])/1e3:.3f} km")
+    print(f"    ΔZ: {(initial_state[2] - horizons_initial[2])/1e3:.3f} km")
+    print(f"    ΔVx: {(initial_state[3] - horizons_initial[3]):.3f} m/s")
+    print(f"    ΔVy: {(initial_state[4] - horizons_initial[4]):.3f} m/s")
+    print(f"    ΔVz: {(initial_state[5] - horizons_initial[5]):.3f} m/s")
+    
+    # Check magnitudes
+    print(f"\n  Magnitude comparison:")
+    print(f"    TLE position magnitude: {np.linalg.norm(initial_state[0:3])/1e3:.3f} km")
+    print(f"    Horizons position magnitude: {np.linalg.norm(horizons_initial[0:3])/1e3:.3f} km")
+    print(f"    TLE velocity magnitude: {np.linalg.norm(initial_state[3:6])/1e3:.3f} km/s")
+    print(f"    Horizons velocity magnitude: {np.linalg.norm(horizons_initial[3:6])/1e3:.3f} km/s")
+    
+    # Option to use Horizons initial state instead
+    use_horizons_initial = True  # Set to True to use Horizons initial state for fair dynamics comparison
+    if use_horizons_initial:
+      print("\n  ✓ Using Horizons initial state for high-fidelity propagation")
+      initial_state = horizons_initial
+    else:
+      print("\n  Using TLE-derived initial state for high-fidelity propagation")
+  
   # Step 3: Set up high-fidelity dynamics model
   print("\nStep 3: Setting up high-fidelity dynamics model ...")
   print(f"  Including: Two-body gravity, J2, J3, J4, Atmospheric drag, Third-body (Sun/Moon)")
@@ -181,18 +216,41 @@ def main():
   # Step 4: Propagate with high-fidelity model
   print("\nStep 4: Propagating orbit with high-fidelity model using numerical integration ...")
   print(f"  Time span: {target_start_dt} to {target_end_dt} UTC ({delta_time/3600:.1f} hours)")
-  result_hifi = propagate_state_numerical_integration(
-    initial_state       = initial_state,
-    time_o              = integ_time_o,
-    time_f              = integ_time_f,
-    dynamics            = acceleration,
-    method              = 'DOP853',
-    rtol                = 1e-12,
-    atol                = 1e-12,
-    get_coe_time_series = True,
-    gp                  = PHYSICALCONSTANTS.EARTH.GP,
-  )
-
+  
+  # Use Horizons time grid for high-fidelity propagation
+  if result_horizons and result_horizons['success']:
+    # Convert Horizons plot_time_s (seconds from target_start) to integration time (seconds from TLE epoch)
+    horizons_integ_times = result_horizons['plot_time_s'] + integ_time_o
+    print(f"  Using Horizons time grid: {len(horizons_integ_times)} points")
+    print(f"  Time step: {result_horizons['plot_time_s'][1] - result_horizons['plot_time_s'][0]:.1f} seconds")
+    
+    result_hifi = propagate_state_numerical_integration(
+      initial_state       = initial_state,
+      time_o              = integ_time_o,
+      time_f              = integ_time_f,
+      dynamics            = acceleration,
+      method              = 'DOP853',
+      rtol                = 1e-12,
+      atol                = 1e-12,
+      dense_output        = True,  # Enable dense output for exact time evaluation
+      t_eval              = horizons_integ_times,  # Evaluate at Horizons times
+      get_coe_time_series = True,
+      gp                  = PHYSICALCONSTANTS.EARTH.GP,
+    )
+  else:
+    # Fallback to regular grid if Horizons not available
+    result_hifi = propagate_state_numerical_integration(
+      initial_state       = initial_state,
+      time_o              = integ_time_o,
+      time_f              = integ_time_f,
+      dynamics            = acceleration,
+      method              = 'DOP853',
+      rtol                = 1e-12,
+      atol                = 1e-12,
+      get_coe_time_series = True,
+      gp                  = PHYSICALCONSTANTS.EARTH.GP,
+    )
+  
   if result_hifi['success']:
     print(f"  ✓ Propagation successful!")
     print(f"  Number of time steps: {len(result_hifi['time'])}")
@@ -293,6 +351,55 @@ def main():
     fig6.savefig(output_dir / 'iss_sgp4_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_dir / 'iss_sgp4_timeseries.png'}")
   
+  # Create error comparison plots if both Horizons and high-fidelity are available
+  if result_horizons and result_horizons['success'] and result_hifi['success']:
+    print("\nGenerating error comparison plots...")
+    
+    # First, let's debug the states at a few time points
+    print("\nDebug: Comparing states at key time points")
+    for idx in [0, len(result_hifi['time'])//2, -1]:
+      t = result_hifi['plot_time_s'][idx]
+      print(f"\n  At t = {t/3600:.2f} hours:")
+      print(f"    Hi-Fi pos: [{result_hifi['state'][0,idx]/1e3:.3f}, {result_hifi['state'][1,idx]/1e3:.3f}, {result_hifi['state'][2,idx]/1e3:.3f}] km")
+      print(f"    Horiz pos: [{result_horizons['state'][0,idx]/1e3:.3f}, {result_horizons['state'][1,idx]/1e3:.3f}, {result_horizons['state'][2,idx]/1e3:.3f}] km")
+      pos_diff = np.linalg.norm(result_hifi['state'][0:3,idx] - result_horizons['state'][0:3,idx]) / 1e3
+      print(f"    Position difference: {pos_diff:.3f} km")
+    
+    # Position and velocity error plots
+    fig_err_3d = plot_3d_error(result_horizons, result_hifi)
+    fig_err_3d.suptitle('ISS Orbit Error: Horizons vs High-Fidelity', fontsize=16)
+    fig_err_3d.savefig(output_dir / 'iss_error_3d.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_dir / 'iss_error_3d.png'}")
+    
+    # Time series error plots
+    fig_err_ts = plot_time_series_error(result_horizons, result_hifi, epoch=target_start_dt)
+    fig_err_ts.suptitle('ISS Orbital Element Errors: Horizons vs High-Fidelity', fontsize=16)
+    fig_err_ts.savefig(output_dir / 'iss_error_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_dir / 'iss_error_timeseries.png'}")
+    
+    # True longitude error plot
+    fig_u_err = plot_true_longitude_error(result_horizons, result_hifi, epoch=target_start_dt)
+    fig_u_err.savefig(output_dir / 'iss_true_longitude_error.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_dir / 'iss_true_longitude_error.png'}")
+    
+    # Compute and display error statistics
+    pos_error_km = np.linalg.norm(result_hifi['state'][0:3, :] - result_horizons['state'][0:3, :], axis=0) / 1e3
+    vel_error_ms = np.linalg.norm(result_hifi['state'][3:6, :] - result_horizons['state'][3:6, :], axis=0)
+    sma_error_km = (result_hifi['coe']['sma'] - result_horizons['coe']['sma']) / 1e3
+    
+    print("\nError Statistics (High-Fidelity vs Horizons):")
+    print(f"  Position error - Mean: {np.mean(pos_error_km):.3f} km, Max: {np.max(pos_error_km):.3f} km")
+    print(f"  Velocity error - Mean: {np.mean(vel_error_ms):.3f} m/s, Max: {np.max(vel_error_ms):.3f} m/s")
+    print(f"  SMA error - Mean: {np.mean(np.abs(sma_error_km)):.3f} km, Max: {np.max(np.abs(sma_error_km)):.3f} km")
+    
+    # Also compute argument of latitude error statistics
+    if all(k in result_horizons['coe'] and k in result_hifi['coe'] for k in ['raan', 'argp', 'ta']):
+        u_ref = result_horizons['coe']['raan'] + result_horizons['coe']['argp'] + result_horizons['coe']['ta']
+        u_comp = result_hifi['coe']['raan'] + result_hifi['coe']['argp'] + result_hifi['coe']['ta']
+        u_error_rad = np.arctan2(np.sin(u_ref - u_comp), np.cos(u_ref - u_comp))
+        u_error_deg = u_error_rad * CONVERTER.DEG_PER_RAD
+        print(f"  Arg of latitude error - Mean: {np.mean(u_error_deg):.3f}°, RMS: {np.sqrt(np.mean(u_error_deg**2)):.3f}°, Max: {np.max(np.abs(u_error_deg)):.3f}°")
+
   print(f"\nAll figures saved to: {output_dir}")
   plt.show()
   

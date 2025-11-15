@@ -20,6 +20,8 @@ def propagate_state_numerical_integration(
     method              : str           = 'DOP853', # DOP853 RK45
     rtol                : float         = 1e-12,
     atol                : float         = 1e-12,
+    dense_output        : bool          = False,
+    t_eval              : Optional[np.ndarray] = None,
     get_coe_time_series : bool          = False,
     num_points          : Optional[int] = None,
     gp                  : float         = PHYSICALCONSTANTS.EARTH.GP,
@@ -43,6 +45,10 @@ def propagate_state_numerical_integration(
         Relative tolerance for integration
     atol : float
         Absolute tolerance for integration
+    dense_output : bool
+        Enable dense output for interpolation
+    t_eval : np.ndarray, optional
+        Times at which to store the solution
     get_coe_time_series : bool
         If True, convert states to classical orbital elements
     num_points : int, optional
@@ -73,7 +79,8 @@ def propagate_state_numerical_integration(
       method       = method,
       rtol         = rtol,
       atol         = atol,
-      dense_output = True,
+      dense_output = dense_output,
+      t_eval       = t_eval,
     )
     
     # If num_points is specified, evaluate solution at uniform time grid
