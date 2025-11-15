@@ -183,67 +183,53 @@ def main():
   else:
     print(f"  ✗ SGP4 propagation failed: {result_sgp4['message']}")
   
-  # # Step 5: Load Horizons ephemeris
-  # print("\nStep 5: Loading JPL Horizons ephemeris...")
-  # print(f"  File path: {horizons_file}")
-  # print(f"  File exists: {horizons_file.exists()}")
+  # Step 5: Load Horizons ephemeris
+  print("\nStep 5: Loading JPL Horizons ephemeris...")
+  print(f"  File path: {horizons_file}")
+  print(f"  File exists: {horizons_file.exists()}")
+  print(f"  Requesting data from {target_start_dt} to {target_end_dt}")
   
-  # result_horizons = load_horizons_ephemeris(
-  #   filepath = str(horizons_file),
-  #   time_o   = 0.0,
-  #   time_f   = 86400.0,  # 24 hours worth of data
-  # )
+  # Load Horizons data for exact time range Oct 1 00:00 to Oct 2 00:00
+  result_horizons = load_horizons_ephemeris(
+    filepath = str(horizons_file),
+    start_dt = target_start_dt,
+    end_dt   = target_end_dt,
+  )
   
-  # if result_horizons['success']:
-  #   print(f"  ✓ Horizons ephemeris loaded!")
-  #   print(f"  Horizons file epoch: {result_horizons['epoch'].isoformat()} UTC")
+  if result_horizons['success']:
+    print(f"  ✓ Horizons ephemeris loaded!")
+    print(f"  Epoch: {result_horizons['epoch'].isoformat()} UTC")
+    print(f"  Number of points: {len(result_horizons['time'])}")
+    print(f"  Time span: {result_horizons['time'][0]:.1f} to {result_horizons['time'][-1]:.1f} seconds")
     
-  #   # Calculate offset to align Horizons to Oct 1 00:00
-  #   horizons_offset = (target_start_dt - result_horizons['epoch']).total_seconds()
-  #   print(f"  Time offset to align to Oct 1 00:00: {horizons_offset/3600:.2f} hours")
+    # The time array already starts at 0 from target_start_dt
+    result_horizons['plot_time_s'] = result_horizons['time']
     
-  #   # Find the index closest to our target start time
-  #   target_idx = np.argmin(np.abs(result_horizons['time'] - horizons_offset))
-  #   actual_offset = result_horizons['time'][target_idx]
+    # Compute COEs for Horizons data
+    num_points = result_horizons['state'].shape[1]
+    result_horizons['coe'] = {
+      'sma'  : np.zeros(num_points),
+      'ecc'  : np.zeros(num_points),
+      'inc'  : np.zeros(num_points),
+      'raan' : np.zeros(num_points),
+      'argp' : np.zeros(num_points),
+      'ma'   : np.zeros(num_points),
+      'ta'   : np.zeros(num_points),
+      'ea'   : np.zeros(num_points),
+    }
     
-  #   # Extract 24 hours of data starting from target_idx
-  #   end_idx = min(target_idx + 1441, result_horizons['state'].shape[1])  # 1441 points to include 24:00
-    
-  #   # Slice and re-baseline the time
-  #   result_horizons['time'] = result_horizons['time'][target_idx:end_idx] - actual_offset
-  #   result_horizons['state'] = result_horizons['state'][:, target_idx:end_idx]
-  #   result_horizons['final_state'] = result_horizons['state'][:, -1]
-  #   result_horizons['epoch'] = target_start_dt
-    
-  #   print(f"  Aligned data:")
-  #   print(f"    Number of points: {len(result_horizons['time'])}")
-  #   print(f"    Time span: {result_horizons['time'][0]:.1f} to {result_horizons['time'][-1]:.1f} seconds")
-    
-  #   # Compute COEs for Horizons data
-  #   num_points = result_horizons['state'].shape[1]
-  #   result_horizons['coe'] = {
-  #     'sma'  : np.zeros(num_points),
-  #     'ecc'  : np.zeros(num_points),
-  #     'inc'  : np.zeros(num_points),
-  #     'raan' : np.zeros(num_points),
-  #     'argp' : np.zeros(num_points),
-  #     'ma'   : np.zeros(num_points),
-  #     'ta'   : np.zeros(num_points),
-  #     'ea'   : np.zeros(num_points),
-  #   }
-    
-  #   for i in range(num_points):
-  #     coe = OrbitConverter.pv_to_coe(
-  #       result_horizons['state'][0:3, i],
-  #       result_horizons['state'][3:6, i],
-  #       PHYSICALCONSTANTS.EARTH.GP
-  #     )
-  #     for key in result_horizons['coe'].keys():
-  #       if coe[key] is not None:
-  #         result_horizons['coe'][key][i] = coe[key]
-  # else:
-  #   print(f"  ✗ Horizons loading failed: {result_horizons['message']}")
-  #   result_horizons = None
+    for i in range(num_points):
+      coe = OrbitConverter.pv_to_coe(
+        result_horizons['state'][0:3, i],
+        result_horizons['state'][3:6, i],
+        PHYSICALCONSTANTS.EARTH.GP
+      )
+      for key in result_horizons['coe'].keys():
+        if coe[key] is not None:
+          result_horizons['coe'][key][i] = coe[key]
+  else:
+    print(f"  ✗ Horizons loading failed: {result_horizons['message']}")
+    result_horizons = None
   
   # Step 6: Display results and create plots
   print("\n" + "="*60)
@@ -254,8 +240,8 @@ def main():
   print(f"  High-fidelity: {result_hifi['plot_time_s'][0]:.1f} to {result_hifi['plot_time_s'][-1]:.1f} seconds")
   if result_sgp4['success']:
     print(f"  SGP4:          {result_sgp4['plot_time_s'][0]:.1f} to {result_sgp4['plot_time_s'][-1]:.1f} seconds")
-  # if result_horizons and result_horizons['success']:
-  #   print(f"  Horizons:      {result_horizons['time'][0]:.1f} to {result_horizons['time'][-1]:.1f} seconds")
+  if result_horizons and result_horizons['success']:
+    print(f"  Horizons:      {result_horizons['plot_time_s'][0]:.1f} to {result_horizons['plot_time_s'][-1]:.1f} seconds")
   
   # Print final orbital elements (high-fidelity)
   final_alt_km = (np.linalg.norm(result_hifi['state'][0:3, -1]) - PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR) / 1e3
@@ -294,17 +280,17 @@ def main():
     fig4.suptitle('ISS Orbit - SGP4 Time Series', fontsize=16)
     fig4.savefig(output_dir / 'iss_sgp4_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_dir / 'iss_sgp4_timeseries.png'}")
-  # # Horizons plots
-  # if result_horizons and result_horizons['success']:
-  #   fig5 = plot_3d_trajectories(result_horizons)
-  #   fig5.suptitle('ISS Orbit - JPL Horizons Ephemeris', fontsize=16)
-  #   fig5.savefig(output_dir / 'iss_horizons_3d.png', dpi=300, bbox_inches='tight')
-  #   print(f"  Saved: {output_dir / 'iss_horizons_3d.png'}")
+  # Horizons plots
+  if result_horizons and result_horizons['success']:
+    fig5 = plot_3d_trajectories(result_horizons)
+    fig5.suptitle('ISS Orbit - JPL Horizons Ephemeris', fontsize=16)
+    fig5.savefig(output_dir / 'iss_horizons_3d.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_dir / 'iss_horizons_3d.png'}")
     
-  #   fig6 = plot_time_series(result_horizons, epoch=target_start_dt)
-  #   fig6.suptitle('ISS Orbit - JPL Horizons Time Series', fontsize=16)
-  #   fig6.savefig(output_dir / 'iss_horizons_timeseries.png', dpi=300, bbox_inches='tight')
-  #   print(f"  Saved: {output_dir / 'iss_horizons_timeseries.png'}")
+    fig6 = plot_time_series(result_horizons, epoch=target_start_dt)
+    fig6.suptitle('ISS Orbit - JPL Horizons Time Series', fontsize=16)
+    fig6.savefig(output_dir / 'iss_horizons_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_dir / 'iss_horizons_timeseries.png'}")
   
   print(f"\nAll figures saved to: {output_dir}")
   plt.show()
