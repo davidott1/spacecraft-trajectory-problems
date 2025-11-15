@@ -373,7 +373,7 @@ def main():
     
     # Time series error plots
     fig_err_ts = plot_time_series_error(result_horizons, result_hifi, epoch=target_start_dt)
-    fig_err_ts.suptitle('ISS Orbital Element Errors: Horizons vs High-Fidelity', fontsize=16)
+    fig_err_ts.suptitle('ISS RIC Position/Velocity Errors: Horizons vs High-Fidelity', fontsize=16)
     fig_err_ts.savefig(output_dir / 'iss_error_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_dir / 'iss_error_timeseries.png'}")
     
