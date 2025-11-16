@@ -268,6 +268,80 @@ def main():
   
   # Step 5: Propagating with SGP4 for comparison
   print("\nStep 5: Propagating with SGP4 for comparison...")
+  
+  # First, propagate SGP4 at Horizons time points for direct comparison
+  if result_horizons and result_horizons['success']:
+    print("  Propagating SGP4 at Horizons ephemeris time points...")
+    
+    # Convert Horizons plot_time_s to integration times for SGP4
+    sgp4_eval_times = result_horizons['plot_time_s'] + integ_time_o
+    
+    result_sgp4_at_horizons = propagate_tle(
+      tle_line1  = tle_line1_iss,
+      tle_line2  = tle_line2_iss,
+      time_o     = sgp4_eval_times[0],  # These are now ignored when t_eval is provided
+      time_f     = sgp4_eval_times[-1], # These are now ignored when t_eval is provided
+      num_points = len(sgp4_eval_times), # This is now ignored when t_eval is provided
+      to_j2000   = True,
+      t_eval     = sgp4_eval_times,  # Pass exact evaluation times
+    )
+    
+    if result_sgp4_at_horizons['success']:
+      # Store integration time (seconds from TLE epoch)
+      result_sgp4_at_horizons['integ_time_s'] = result_sgp4_at_horizons['time']
+      
+      # Create plotting time array (seconds from target start time)
+      result_sgp4_at_horizons['plot_time_s'] = result_sgp4_at_horizons['time'] - integ_time_o
+      
+      # Debug: Verify time alignment
+      print(f"\n  DEBUG - Time alignment check:")
+      print(f"    Horizons first 5 plot times: {result_horizons['plot_time_s'][:5]}")
+      print(f"    SGP4 first 5 plot times: {result_sgp4_at_horizons['plot_time_s'][:5]}")
+      print(f"    Time difference: {result_sgp4_at_horizons['plot_time_s'][:5] - result_horizons['plot_time_s'][:5]}")
+      
+      # Debug: Check state values
+      print(f"\n  DEBUG - State comparison at first time point:")
+      print(f"    Horizons pos [km]: {result_horizons['state'][0:3, 0]/1e3}")
+      print(f"    SGP4 pos [km]: {result_sgp4_at_horizons['state'][0:3, 0]/1e3}")
+      print(f"    Difference [km]: {(result_sgp4_at_horizons['state'][0:3, 0] - result_horizons['state'][0:3, 0])/1e3}")
+      print(f"    Horizons vel [m/s]: {result_horizons['state'][3:6, 0]}")
+      print(f"    SGP4 vel [m/s]: {result_sgp4_at_horizons['state'][3:6, 0]}")
+      print(f"    Difference [m/s]: {result_sgp4_at_horizons['state'][3:6, 0] - result_horizons['state'][3:6, 0]}")
+      
+      # Compute COEs for SGP4 data
+      num_points_sgp4 = result_sgp4_at_horizons['state'].shape[1]
+      result_sgp4_at_horizons['coe'] = {
+        'sma'  : np.zeros(num_points_sgp4),
+        'ecc'  : np.zeros(num_points_sgp4),
+        'inc'  : np.zeros(num_points_sgp4),
+        'raan' : np.zeros(num_points_sgp4),
+        'argp' : np.zeros(num_points_sgp4),
+        'ma'   : np.zeros(num_points_sgp4),
+        'ta'   : np.zeros(num_points_sgp4),
+        'ea'   : np.zeros(num_points_sgp4),
+      }
+      
+      for i in range(num_points_sgp4):
+        coe = OrbitConverter.pv_to_coe(
+          result_sgp4_at_horizons['state'][0:3, i],
+          result_sgp4_at_horizons['state'][3:6, i],
+          PHYSICALCONSTANTS.EARTH.GP
+        )
+        for key in result_sgp4_at_horizons['coe'].keys():
+          if coe[key] is not None:
+            result_sgp4_at_horizons['coe'][key][i] = coe[key]
+      
+      print(f"  ✓ SGP4 propagation at Horizons times successful!")
+      print(f"  Number of points: {num_points_sgp4}")
+      print(f"  Time span: {result_sgp4_at_horizons['plot_time_s'][0]:.1f} to {result_sgp4_at_horizons['plot_time_s'][-1]:.1f} seconds")
+    else:
+      print(f"  ✗ SGP4 propagation at Horizons times failed: {result_sgp4_at_horizons['message']}")
+      result_sgp4_at_horizons = None
+  else:
+    result_sgp4_at_horizons = None
+  
+  # Also do regular SGP4 propagation for standalone plots
+  print("  Propagating SGP4 with regular time grid...")
   result_sgp4 = propagate_tle(
     tle_line1  = tle_line1_iss,
     tle_line2  = tle_line2_iss,
@@ -350,6 +424,82 @@ def main():
     fig6.suptitle('ISS Orbit - SGP4 Time Series', fontsize=16)
     fig6.savefig(output_dir / 'iss_sgp4_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_dir / 'iss_sgp4_timeseries.png'}")
+  
+  # SGP4 at Horizons time points plots
+  if result_sgp4_at_horizons and result_sgp4_at_horizons['success']:
+    print("\nGenerating SGP4 at Horizons time points plots...")
+    
+    # 3D trajectory plot
+    fig_sgp4_hz_3d = plot_3d_trajectories(result_sgp4_at_horizons)
+    fig_sgp4_hz_3d.suptitle('ISS Orbit - SGP4 at Horizons Times', fontsize=16)
+    fig_sgp4_hz_3d.savefig(output_dir / 'iss_sgp4_at_horizons_3d.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_dir / 'iss_sgp4_at_horizons_3d.png'}")
+    
+    # Time series plot
+    fig_sgp4_hz_ts = plot_time_series(result_sgp4_at_horizons, epoch=target_start_dt)
+    fig_sgp4_hz_ts.suptitle('ISS Orbit - SGP4 at Horizons Times - Time Series', fontsize=16)
+    fig_sgp4_hz_ts.savefig(output_dir / 'iss_sgp4_at_horizons_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_dir / 'iss_sgp4_at_horizons_timeseries.png'}")
+    
+    # Error plots comparing SGP4 to Horizons
+    if result_horizons and result_horizons['success']:
+      print("\nGenerating SGP4 vs Horizons error comparison plots...")
+      
+      # 3D error plot
+      fig_sgp4_err_3d = plot_3d_error(result_horizons, result_sgp4_at_horizons)
+      fig_sgp4_err_3d.suptitle('ISS Orbit Error: Horizons vs SGP4', fontsize=16)
+      fig_sgp4_err_3d.savefig(output_dir / 'iss_sgp4_error_3d.png', dpi=300, bbox_inches='tight')
+      print(f"  Saved: {output_dir / 'iss_sgp4_error_3d.png'}")
+      
+      # Time series error plot (RIC frame)
+      fig_sgp4_err_ts = plot_time_series_error(result_horizons, result_sgp4_at_horizons, epoch=target_start_dt, use_ric=False)
+      fig_sgp4_err_ts.suptitle('ISS XYZ Position/Velocity Errors: Horizons vs SGP4', fontsize=16)
+      fig_sgp4_err_ts.savefig(output_dir / 'iss_sgp4_error_timeseries.png', dpi=300, bbox_inches='tight')
+      print(f"  Saved: {output_dir / 'iss_sgp4_error_timeseries.png'}")
+      
+      # Compute and display SGP4 error statistics
+      pos_error_sgp4_km = np.linalg.norm(result_sgp4_at_horizons['state'][0:3, :] - result_horizons['state'][0:3, :], axis=0) / 1e3
+      vel_error_sgp4_ms = np.linalg.norm(result_sgp4_at_horizons['state'][3:6, :] - result_horizons['state'][3:6, :], axis=0)
+      sma_error_sgp4_km = (result_sgp4_at_horizons['coe']['sma'] - result_horizons['coe']['sma']) / 1e3
+      
+      print("\nError Statistics (SGP4 vs Horizons):")
+      print(f"  Position error - Mean: {np.mean(pos_error_sgp4_km):.3f} km, Max: {np.max(pos_error_sgp4_km):.3f} km")
+      print(f"  Velocity error - Mean: {np.mean(vel_error_sgp4_ms):.3f} m/s, Max: {np.max(vel_error_sgp4_ms):.3f} m/s")
+      print(f"  SMA error - Mean: {np.mean(np.abs(sma_error_sgp4_km)):.3f} km, Max: {np.max(np.abs(sma_error_sgp4_km)):.3f} km")
+      
+      # Analyze error growth by removing initial offset
+      print(f"\nSGP4 Error Growth Analysis:")
+      print(f"  Initial position error (at Oct 1 00:00): {pos_error_sgp4_km[0]:.3f} km")
+      print(f"  Final position error (at Oct 2 00:00): {pos_error_sgp4_km[-1]:.3f} km")
+      print(f"  Error growth over 24 hours: {pos_error_sgp4_km[-1] - pos_error_sgp4_km[0]:.3f} km")
+      print(f"  Initial velocity error: {vel_error_sgp4_ms[0]:.3f} m/s")
+      print(f"  Final velocity error: {vel_error_sgp4_ms[-1]:.3f} m/s")
+      print(f"  Velocity error growth: {vel_error_sgp4_ms[-1] - vel_error_sgp4_ms[0]:.3f} m/s")
+      
+      # Create plot showing error growth (initial offset removed)
+      fig_sgp4_growth = plt.figure(figsize=(14, 8))
+      
+      # Position error growth subplot
+      ax1 = fig_sgp4_growth.add_subplot(2, 1, 1)
+      pos_error_growth = pos_error_sgp4_km - pos_error_sgp4_km[0]  # Remove initial offset
+      ax1.plot(result_horizons['plot_time_s']/3600, pos_error_growth, 'b-', linewidth=2)
+      ax1.set_ylabel('Position Error Growth [km]')
+      ax1.set_title('SGP4 vs Horizons: Error Growth (Initial Offset Removed)')
+      ax1.grid(True, alpha=0.3)
+      ax1.axhline(y=0, color='k', linestyle='--', alpha=0.5)
+      
+      # Velocity error growth subplot
+      ax2 = fig_sgp4_growth.add_subplot(2, 1, 2)
+      vel_error_growth = vel_error_sgp4_ms - vel_error_sgp4_ms[0]  # Remove initial offset
+      ax2.plot(result_horizons['plot_time_s']/3600, vel_error_growth, 'r-', linewidth=2)
+      ax2.set_xlabel('Time [hours]')
+      ax2.set_ylabel('Velocity Error Growth [m/s]')
+      ax2.grid(True, alpha=0.3)
+      ax2.axhline(y=0, color='k', linestyle='--', alpha=0.5)
+      
+      fig_sgp4_growth.tight_layout()
+      fig_sgp4_growth.savefig(output_dir / 'iss_sgp4_error_growth.png', dpi=300, bbox_inches='tight')
+      print(f"  Saved: {output_dir / 'iss_sgp4_error_growth.png'}")
   
   # Create error comparison plots if both Horizons and high-fidelity are available
   if result_horizons and result_horizons['success'] and result_hifi['success']:

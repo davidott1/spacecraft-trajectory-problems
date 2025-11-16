@@ -120,109 +120,144 @@ def propagate_tle(
     tle_line2    : str,
     time_o       : float,
     time_f       : float,
-    num_points   : int = 1000,
+    num_points   : int  = 100,
+    to_j2000     : bool = False,
     disable_drag : bool = False,
-    to_j2000     : bool = True,
+    t_eval       : np.ndarray = None,
 ) -> dict:
     """
-    Propagate a TLE using SGP4.
+    Propagate orbit from TLE using SGP4.
     
-    Input:
-        tle_line1    : First line of TLE
-        tle_line2    : Second line of TLE
-        time_o       : Initial time [s]
-        time_f       : Final time [s]
-        num_points   : Number of time points to evaluate
-        disable_drag : If True, set B* drag term to zero
-    
-    Output:
-        dict: Dictionary containing:
-            - success : propagation success flag
-            - time    : time array [s]
-            - state   : state array [6 x num_points] [m, m/s]
-            - coe     : classical orbital elements time series
+    Parameters:
+    -----------
+    tle_line1 : str
+        First line of TLE
+    tle_line2 : str
+        Second line of TLE  
+    time_o : float
+        Initial time in seconds from TLE epoch
+    time_f : float
+        Final time in seconds from TLE epoch
+    num_points : int
+        Number of output points (ignored if t_eval is provided)
+    to_j2000 : bool
+        Convert from TEME to J2000 frame
+    disable_drag : bool
+        If True, set B* drag term to zero
+    t_eval : np.ndarray, optional
+        Specific times to evaluate at (in seconds from TLE epoch)
+        
+    Returns:
+    --------
+    dict : Result dictionary with 'success', 'state', 'time', 'message'
     """
     # Modify TLE to disable drag if requested
     if disable_drag:
         tle_line1 = modify_tle_bstar(tle_line1, 0.0)
     
-    # Initialize satellite from TLE
-    satellite = Satrec.twoline2rv(tle_line1, tle_line2)
-    
-    # Get epoch from TLE
-    year = satellite.epochyr
-    if year < 57:
-        year += 2000
-    else:
-        year += 1900
-    
-    epoch_days = satellite.epochdays
-    epoch_datetime = datetime(year, 1, 1) + timedelta(days=epoch_days - 1)
-    
-    # Create time array
-    time_array = np.linspace(time_o, time_f, num_points)
-    
-    # Initialize arrays
-    state_array = np.zeros((6, num_points))
-    coe_time_series = {
-        'sma'  : np.zeros(num_points),
-        'ecc'  : np.zeros(num_points),
-        'inc'  : np.zeros(num_points),
-        'raan' : np.zeros(num_points),
-        'argp' : np.zeros(num_points),
-        'ma'   : np.zeros(num_points),
-        'ta'   : np.zeros(num_points),
-        'ea'   : np.zeros(num_points),
-    }
+    try:
+        # Create satellite object from TLE
+        satellite = Satrec.twoline2rv(tle_line1, tle_line2)
+        
+        # Extract epoch from TLE
+        year = satellite.epochyr
+        if year < 57:
+            year += 2000
+        else:
+            year += 1900
+        
+        epoch_days = satellite.epochdays
+        epoch_datetime = datetime(year, 1, 1) + timedelta(days=epoch_days - 1)
+        
+        # Generate time array
+        if t_eval is not None:
+            # Use provided evaluation times
+            time = t_eval
+            num_points = len(t_eval)
+        else:
+            # Generate uniform time array
+            time = np.linspace(time_o, time_f, num_points)
+        
+        # Initialize arrays
+        state_array = np.zeros((6, num_points))
+        coe_time_series = {
+            'sma'  : np.zeros(num_points),
+            'ecc'  : np.zeros(num_points),
+            'inc'  : np.zeros(num_points),
+            'raan' : np.zeros(num_points),
+            'argp' : np.zeros(num_points),
+            'ma'   : np.zeros(num_points),
+            'ta'   : np.zeros(num_points),
+            'ea'   : np.zeros(num_points),
+        }
 
-    # Propagate at each time step
-    for i, t in enumerate(time_array):
-        # Convert time to datetime
-        dt = epoch_datetime + timedelta(seconds=float(t))
+        # Propagate at each time step
+        for i, t in enumerate(time):
+            # Convert time to datetime
+            dt = epoch_datetime + timedelta(seconds=float(t))
+            
+            # Get Julian date
+            jd, fr = jday(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second + dt.microsecond/1e6)
+            
+            # Debug output for first few time points
+            if i < 3 and t_eval is not None:
+                print(f"\n  DEBUG SGP4 propagation point {i}:")
+                print(f"    t_eval value: {t:.6f} seconds from TLE epoch")
+                print(f"    dt: {dt.isoformat()}")
+                print(f"    JD: {jd + fr:.8f}")
+            
+            # Propagate
+            error_code, teme_pos_vec, v_teme = satellite.sgp4(jd, fr)
+            if error_code != 0:
+                return {
+                    'success' : False,
+                    'message' : f'SGP4 error code: {error_code}',
+                    'time'    : time,
+                    'state'   : state_array,
+                    'coe'     : coe_time_series,
+                }
+            
+            # Transform TEME to J2000/GCRS
+            if to_j2000:
+                j2000_pos_vec, j2000_vel_vec = teme_to_j2000(teme_pos_vec, v_teme, jd + fr, debug=(i==0))
+                # Convert from km to m and km/s to m/s
+                pos_vec = np.array(j2000_pos_vec) * 1000.0  # km -> m
+                vel_vec = np.array(j2000_vel_vec) * 1000.0  # km/s -> m/s
+            else:
+                # Convert from km to m and km/s to m/s (TEME frame)
+                pos_vec = np.array(teme_pos_vec) * 1000.0  # km -> m
+                vel_vec = np.array(v_teme) * 1000.0  # km/s -> m/s
+            
+            # Store state
+            state_array[0:3, i] = pos_vec
+            state_array[3:6, i] = vel_vec
+            
+            # Compute osculating elements
+            coe = OrbitConverter.pv_to_coe(
+                pos_vec,
+                vel_vec,
+                gp=PHYSICALCONSTANTS.EARTH.GP,
+            )
+            for key in coe_time_series.keys():
+                if coe[key] is not None:
+                    coe_time_series[key][i] = coe[key]
         
-        # Get Julian date
-        jd, fr = jday(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second + dt.microsecond/1e6)
-        
-        # Propagate
-        error_code, teme_pos_vec, v_teme = satellite.sgp4(jd, fr)
-        if error_code != 0:
-            return {
-                'success' : False,
-                'message' : f'SGP4 error code: {error_code}',
-                'time'    : time_array,
-                'state'   : state_array,
-                'coe'     : coe_time_series,
-            }
-        
-        # Transform TEME to J2000/GCRS
-        if to_j2000:
-            j2000_pos_vec, j2000_vel_vec = teme_to_j2000(teme_pos_vec, v_teme, jd + fr, debug=(i==0))
-        
-        # Convert from km to m and km/s to m/s
-        j2000_pos_vec = np.array(j2000_pos_vec) * 1000.0  # km -> m
-        j2000_vel_vec = np.array(j2000_vel_vec) * 1000.0  # km/s -> m/s
-        
-        # Store state (TEME frame - approximately inertial for short propagations)
-        state_array[0:3, i] = j2000_pos_vec
-        state_array[3:6, i] = j2000_vel_vec
-        
-        # Compute osculating elements
-        coe = OrbitConverter.pv_to_coe(
-            j2000_pos_vec,
-            j2000_vel_vec,
-            gp=PHYSICALCONSTANTS.EARTH.GP,
-          )
-        for key in coe_time_series.keys():
-            coe_time_series[key][i] = coe[key]
-    
-    return {
-        'success': True,
-        'message': 'SGP4 propagation successful',
-        'time': time_array,
-        'state': state_array,
-        'final_state': state_array[:, -1],
-        'coe': coe_time_series,
-    }
+        return {
+            'success': True,
+            'message': 'SGP4 propagation successful',
+            'time': time,
+            'state': state_array,
+            'final_state': state_array[:, -1],
+            'coe': coe_time_series,
+        }
+    except Exception as e:
+        return {
+            'success' : False,
+            'message' : str(e),
+            'time'    : [],
+            'state'   : [],
+            'coe'     : [],
+        }
 
 
 def get_tle_initial_state(

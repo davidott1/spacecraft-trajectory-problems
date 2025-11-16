@@ -450,7 +450,7 @@ def plot_time_series_error(
   return fig
 
 
-def plot_time_series_error(result_ref, result_comp, epoch=None, title="Time Series Error"):
+def plot_time_series_error(result_ref, result_comp, epoch=None, title="Time Series Error", use_ric=True):
     """
     Create time series error plots between reference and comparison trajectories
     
@@ -464,6 +464,8 @@ def plot_time_series_error(result_ref, result_comp, epoch=None, title="Time Seri
         Reference epoch for time axis
     title : str
         Title for the figure
+    use_ric : bool
+        If True, transform to RIC frame. If False, use XYZ inertial frame.
     """
     # Use plot_time_s for both datasets
     time_ref = result_ref['plot_time_s']
@@ -485,58 +487,75 @@ def plot_time_series_error(result_ref, result_comp, epoch=None, title="Time Seri
     # Create figure with subplots matching the grid structure
     fig = plt.figure(figsize=(18, 10))
     
-    # Compute RIC frame errors
     time = time_ref
-    pos_error_ric = np.zeros((3, len(time_ref)))
-    vel_error_ric = np.zeros((3, len(time_ref)))
     
-    for i in range(len(time_ref)):
-        # Reference position and velocity
-        r_ref = state_ref[0:3, i]
-        v_ref = state_ref[3:6, i]
+    if use_ric:
+        # Compute RIC frame errors
+        pos_error_ric = np.zeros((3, len(time_ref)))
+        vel_error_ric = np.zeros((3, len(time_ref)))
         
-        # Compute RIC frame unit vectors
-        r_hat = r_ref / np.linalg.norm(r_ref)  # Radial
-        h_vec = np.cross(r_ref, v_ref)
-        h_hat = h_vec / np.linalg.norm(h_vec)  # Cross-track (normal)
-        i_hat = np.cross(h_hat, r_hat)         # In-track
+        for i in range(len(time_ref)):
+            # Reference position and velocity
+            r_ref = state_ref[0:3, i]
+            v_ref = state_ref[3:6, i]
+            
+            # Compute RIC frame unit vectors
+            r_hat = r_ref / np.linalg.norm(r_ref)  # Radial
+            h_vec = np.cross(r_ref, v_ref)
+            h_hat = h_vec / np.linalg.norm(h_vec)  # Cross-track (normal)
+            i_hat = np.cross(h_hat, r_hat)         # In-track
+            
+            # Rotation matrix from inertial to RIC
+            R_inertial_to_ric = np.array([r_hat, i_hat, h_hat])
+            
+            # Compute errors in inertial frame
+            pos_error_inertial = state_comp[0:3, i] - state_ref[0:3, i]
+            vel_error_inertial = state_comp[3:6, i] - state_ref[3:6, i]
+            
+            # Transform errors to RIC frame
+            pos_error_ric[:, i] = R_inertial_to_ric @ pos_error_inertial
+            vel_error_ric[:, i] = R_inertial_to_ric @ vel_error_inertial
         
-        # Rotation matrix from inertial to RIC
-        R_inertial_to_ric = np.array([r_hat, i_hat, h_hat])
-        
-        # Compute errors in inertial frame
-        pos_error_inertial = state_comp[0:3, i] - state_ref[0:3, i]
-        vel_error_inertial = state_comp[3:6, i] - state_ref[3:6, i]
-        
-        # Transform errors to RIC frame
-        pos_error_ric[:, i] = R_inertial_to_ric @ pos_error_inertial
-        vel_error_ric[:, i] = R_inertial_to_ric @ vel_error_inertial
+        pos_error = pos_error_ric
+        vel_error = vel_error_ric
+        pos_labels = ['Radial', 'In-track', 'Cross-track']
+        vel_labels = ['Radial', 'In-track', 'Cross-track']
+        pos_ylabel = 'Position Error (RIC)\n[m]'
+        vel_ylabel = 'Velocity Error (RIC)\n[m/s]'
+    else:
+        # Use XYZ inertial frame errors
+        pos_error = state_comp[0:3, :] - state_ref[0:3, :]
+        vel_error = state_comp[3:6, :] - state_ref[3:6, :]
+        pos_labels = ['X', 'Y', 'Z']
+        vel_labels = ['X', 'Y', 'Z']
+        pos_ylabel = 'Position Error (XYZ)\n[m]'
+        vel_ylabel = 'Velocity Error (XYZ)\n[m/s]'
     
     # Calculate error magnitudes
-    pos_error_mag = np.linalg.norm(pos_error_ric, axis=0)
-    vel_error_mag = np.linalg.norm(vel_error_ric, axis=0)
+    pos_error_mag = np.linalg.norm(pos_error, axis=0)
+    vel_error_mag = np.linalg.norm(vel_error, axis=0)
     
-    # LEFT SIDE: Position and Velocity Errors in RIC frame
+    # LEFT SIDE: Position and Velocity Errors
     # Plot position error vs time (spans rows 0-2, column 0)
     ax_pos = plt.subplot2grid((6, 2), (0, 0), rowspan=3)
-    ax_pos.plot(time, pos_error_ric[0, :], 'r-', label='Radial', linewidth=1.5)
-    ax_pos.plot(time, pos_error_ric[1, :], 'g-', label='In-track', linewidth=1.5)
-    ax_pos.plot(time, pos_error_ric[2, :], 'b-', label='Cross-track', linewidth=1.5)
+    ax_pos.plot(time, pos_error[0, :], 'r-', label=pos_labels[0], linewidth=1.5)
+    ax_pos.plot(time, pos_error[1, :], 'g-', label=pos_labels[1], linewidth=1.5)
+    ax_pos.plot(time, pos_error[2, :], 'b-', label=pos_labels[2], linewidth=1.5)
     ax_pos.plot(time, pos_error_mag, 'k-', label='Magnitude', linewidth=2)
     ax_pos.tick_params(labelbottom=False)
-    ax_pos.set_ylabel('Position Error (RIC)\n[m]')
+    ax_pos.set_ylabel(pos_ylabel)
     ax_pos.legend()
     ax_pos.grid(True)
     ax_pos.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
 
     # Plot velocity error vs time (spans rows 3-5, column 0)
     ax_vel = plt.subplot2grid((6, 2), (3, 0), rowspan=3, sharex=ax_pos)
-    ax_vel.plot(time, vel_error_ric[0, :], 'r-', label='Radial', linewidth=1.5)
-    ax_vel.plot(time, vel_error_ric[1, :], 'g-', label='In-track', linewidth=1.5)
-    ax_vel.plot(time, vel_error_ric[2, :], 'b-', label='Cross-track', linewidth=1.5)
+    ax_vel.plot(time, vel_error[0, :], 'r-', label=vel_labels[0], linewidth=1.5)
+    ax_vel.plot(time, vel_error[1, :], 'g-', label=vel_labels[1], linewidth=1.5)
+    ax_vel.plot(time, vel_error[2, :], 'b-', label=vel_labels[2], linewidth=1.5)
     ax_vel.plot(time, vel_error_mag, 'k-', label='Magnitude', linewidth=2)
     ax_vel.set_xlabel('Time\n[s]')
-    ax_vel.set_ylabel('Velocity Error (RIC)\n[m/s]')
+    ax_vel.set_ylabel(vel_ylabel)
     ax_vel.legend()
     ax_vel.grid(True)
     ax_vel.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
@@ -613,37 +632,18 @@ def plot_time_series_error(result_ref, result_comp, epoch=None, title="Time Seri
 
     # Add UTC time axis if epoch is provided
     if epoch is not None:
-        # Only add UTC time to top row axes
-        top_row_axes = [ax_pos, ax_sma]
-        
-        for ax in top_row_axes:
-            # Create secondary x-axis
-            ax2 = ax.twiny()
-            ax2.set_xlim(ax.get_xlim())
-            
-            # Get tick positions in seconds and filter to only positive values
-            tick_positions_sec = ax.get_xticks()
-            
-            # Filter out negative ticks and ticks beyond our data range
-            valid_ticks = tick_positions_sec[(tick_positions_sec >= 0) & (tick_positions_sec <= 86400)]
-            
-            # If we don't have enough valid ticks, create our own
-            if len(valid_ticks) < 2:
-                valid_ticks = np.linspace(0, 86400, 7)  # Every 4 hours
-            
-            # Convert directly from seconds to UTC datetime
-            utc_times = [epoch + timedelta(seconds=float(t)) for t in valid_ticks]
-            
-            # Format UTC time labels
-            time_labels = [t.strftime('%m/%d %H:%M') for t in utc_times]
-            
-            ax2.set_xticks(valid_ticks)
-            ax2.set_xticklabels(time_labels, rotation=45, ha='left', fontsize=8)
-            ax2.set_xlabel('UTC Time', fontsize=9)
-            
-            # Position the secondary axis at the top
-            ax2.xaxis.set_label_position('top')
-            ax2.xaxis.tick_top()
+        ax_top = ax_pos.twiny()
+        ax_top.set_xlim(ax_pos.get_xlim())
+        ticks = ax_pos.get_xticks()
+        valid = ticks[(ticks >= 0) & (ticks <= time_ref[-1])]
+        if len(valid) < 2:
+            valid = np.linspace(0, time_ref[-1], 7)
+        labels = [(epoch + timedelta(seconds=float(t))).strftime('%m/%d %H:%M') for t in valid]
+        ax_top.set_xticks(valid)
+        ax_top.set_xticklabels(labels, rotation=45, ha='left', fontsize=8)
+        ax_top.set_xlabel('UTC Time', fontsize=9)
+        ax_top.xaxis.set_label_position('top')
+        ax_top.xaxis.tick_top()
 
     # Align y-axis labels
     fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_argp, ax_ta])

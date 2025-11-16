@@ -17,13 +17,13 @@ import requests
 from astropy.time import Time
 import sys
 import numpy as np
+from src.constants import CONVERTER
 
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 # Add src to path to import constants
 sys.path.insert(0, str(PROJECT_ROOT / 'two_body_high_fidelity' / 'src'))
-from src.constants import CONVERTER
 
 # Output directory
 OUTPUT_DIR = PROJECT_ROOT / 'data' / 'ephems'
