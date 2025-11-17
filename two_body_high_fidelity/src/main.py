@@ -24,10 +24,10 @@ Usage:
 Example:
   python -m src.main 25544 2025-10-01T00:00:00 2025-10-02T00:00:00
 """
+import argparse
 import matplotlib.pyplot as plt
 import numpy             as np
 import spiceypy          as spice
-import argparse
 
 from pathlib         import Path
 from scipy.integrate import solve_ivp
@@ -53,23 +53,29 @@ SUPPORTED_OBJECTS = {
   }
 }
 
-def main(norad_id, start_time_str, end_time_str):
+def main(
+  norad_id       : str,
+  start_time_str : str,
+  end_time_str   : str,
+) -> None:
   """
-  Propagate an orbit using a high-fidelity dynamics model.
-  Initial state derived from TLE, then propagated with detailed force models.
-  Compare with SGP4 and JPL Horizons ephemeris.
+  Propagate an orbit using a high-fidelity dynamics model. Initial state derived from TLE, then
+  propagated with detailed force models. Compare with SGP4 and JPL Horizons ephemeris.
   """
-  #### INPUT ####
 
+  # STEP 0: Process inputs and setup
+
+  # Validate norad id input
   if norad_id not in SUPPORTED_OBJECTS:
     raise ValueError(f"NORAD ID {norad_id} is not supported. Supported IDs: {list(SUPPORTED_OBJECTS.keys())}")
 
-  obj_props = SUPPORTED_OBJECTS[norad_id]
-  tle_line1_iss = obj_props['tle_line1']
-  tle_line2_iss = obj_props['tle_line2']
-  
+  # Extract TLE lines
+  obj_props        = SUPPORTED_OBJECTS[norad_id]
+  tle_line1_object = obj_props['tle_line1']
+  tle_line2_object = obj_props['tle_line2']
+
   # Parse TLE epoch
-  satellite    = Satrec.twoline2rv(tle_line1_iss, tle_line2_iss)
+  satellite    = Satrec.twoline2rv(tle_line1_object, tle_line2_object)
   tle_epoch_jd = satellite.jdsatepoch + satellite.jdsatepochF
   tle_epoch_dt = datetime(2000, 1, 1, 12, 0, 0) + timedelta(days=tle_epoch_jd - 2451545.0)
   
@@ -79,18 +85,18 @@ def main(norad_id, start_time_str, end_time_str):
   delta_time      = (target_end_dt - target_start_dt).total_seconds()
   
   # Integration time bounds (seconds from TLE epoch)
-  integ_time_o = (target_start_dt - tle_epoch_dt).total_seconds()
-  integ_time_f = integ_time_o + delta_time
+  integ_time_o     = (target_start_dt - tle_epoch_dt).total_seconds()
+  integ_time_f     = integ_time_o + delta_time
   delta_integ_time = integ_time_f - integ_time_o
   
   print(f"\nPropagation Time Span:")
-  print(f"  TLE epoch:     {tle_epoch_dt.isoformat()} UTC")
-  print(f"  Target start:  {target_start_dt.isoformat()} UTC")
-  print(f"  Target end:    {target_end_dt.isoformat()} UTC")
-  print(f"  Time offset from TLE epoch: {integ_time_o/3600:.2f} hours ({integ_time_o:.1f} seconds)")
-  print(f"  Propagation duration: {delta_integ_time/3600:.2f} hours")
+  print(f"  TLE epoch                  : {tle_epoch_dt.isoformat()} UTC")
+  print(f"  Target start               : {target_start_dt.isoformat()} UTC")
+  print(f"  Target end                 : {target_end_dt.isoformat()} UTC")
+  print(f"  Time offset from TLE epoch : {integ_time_o/3600:.2f} hours ({integ_time_o:.1f} seconds)")
+  print(f"  Propagation duration       : {delta_integ_time/3600:.2f} hours")
   
-  # ISS properties (approximate)
+  # ISS properties
   mass      = obj_props['mass']
   cd        = obj_props['cd']
   area_drag = obj_props['area_drag']
@@ -99,16 +105,14 @@ def main(norad_id, start_time_str, end_time_str):
   output_dir = Path('./output/figures')
   output_dir.mkdir(parents=True, exist_ok=True)
   
-  project_root = Path(__file__).parent.parent
-  data_folder = project_root / 'data'
+  project_root    = Path(__file__).parent.parent
+  data_folderpath = project_root / 'data'
   
   # Horizons ephemeris file (dynamically named)
-  start_str = target_start_dt.strftime('%Y%m%dT%H%M%SZ')
-  end_str = target_end_dt.strftime('%Y%m%dT%H%M%SZ')
-  horizons_file = data_folder / 'ephems' / f"horizons_ephem_{norad_id}_{obj_props['name'].lower()}_{start_str}_{end_str}_1m.csv"
+  start_str     = target_start_dt.strftime('%Y%m%dT%H%M%SZ')
+  end_str       = target_end_dt.strftime('%Y%m%dT%H%M%SZ')
+  horizons_file = data_folderpath / 'ephems' / f"horizons_ephem_{norad_id}_{obj_props['name'].lower()}_{start_str}_{end_str}_1m.csv"
   
-  #### END INPUT ####
-
   print("\n" + "="*60)
   print("ISS Orbit Propagation")
   print("="*60)
@@ -163,13 +167,13 @@ def main(norad_id, start_time_str, end_time_str):
   
   # Step 2: Get initial state from TLE using SGP4
   print("\nStep 2: Converting TLE to initial Cartesian state...")
-  print(f"  TLE Line 1: {tle_line1_iss}")
-  print(f"  TLE Line 2: {tle_line2_iss}")
-  
+  print(f"  TLE Line 1: {tle_line1_object}")
+  print(f"  TLE Line 2: {tle_line2_object}")
+
   # Propagate TLE to target start time to get position/velocity
   result_tle_initial = propagate_tle(
-    tle_line1  = tle_line1_iss,
-    tle_line2  = tle_line2_iss,
+    tle_line1  = tle_line1_object,
+    tle_line2  = tle_line2_object,
     time_o     = integ_time_o,
     time_f     = integ_time_o,  # Just get initial state at target start time
     num_points = 1,
@@ -227,7 +231,7 @@ def main(norad_id, start_time_str, end_time_str):
   # Use spiceypy to do the proper conversion
   
   # Load leap seconds kernel first (minimal kernel set for time conversion)
-  spice_kernels_folderpath = data_folder          / 'spice_kernels'
+  spice_kernels_folderpath = data_folderpath          / 'spice_kernels'
   lsk_path                 = spice_kernels_folderpath / 'naif0012.tls'
   spice.furnsh(str(lsk_path))
   
@@ -323,8 +327,8 @@ def main(norad_id, start_time_str, end_time_str):
     sgp4_eval_times = result_horizons['plot_time_s'] + integ_time_o
     
     result_sgp4_at_horizons = propagate_tle(
-      tle_line1  = tle_line1_iss,
-      tle_line2  = tle_line2_iss,
+      tle_line1  = tle_line1_object,
+      tle_line2  = tle_line2_object,
       time_o     = sgp4_eval_times[0],  # These are now ignored when t_eval is provided
       time_f     = sgp4_eval_times[-1], # These are now ignored when t_eval is provided
       num_points = len(sgp4_eval_times), # This is now ignored when t_eval is provided
@@ -338,21 +342,6 @@ def main(norad_id, start_time_str, end_time_str):
       
       # Create plotting time array (seconds from target start time)
       result_sgp4_at_horizons['plot_time_s'] = result_sgp4_at_horizons['time'] - integ_time_o
-      
-      # Debug: Verify time alignment
-      print(f"\n  DEBUG - Time alignment check:")
-      print(f"    Horizons first 5 plot times: {result_horizons['plot_time_s'][:5]}")
-      print(f"    SGP4 first 5 plot times: {result_sgp4_at_horizons['plot_time_s'][:5]}")
-      print(f"    Time difference: {result_sgp4_at_horizons['plot_time_s'][:5] - result_horizons['plot_time_s'][:5]}")
-      
-      # Debug: Check state values
-      print(f"\n  DEBUG - State comparison at first time point:")
-      print(f"    Horizons pos [km]: {result_horizons['state'][0:3, 0]/1e3}")
-      print(f"    SGP4 pos [km]: {result_sgp4_at_horizons['state'][0:3, 0]/1e3}")
-      print(f"    Difference [km]: {(result_sgp4_at_horizons['state'][0:3, 0] - result_horizons['state'][0:3, 0])/1e3}")
-      print(f"    Horizons vel [m/s]: {result_horizons['state'][3:6, 0]}")
-      print(f"    SGP4 vel [m/s]: {result_sgp4_at_horizons['state'][3:6, 0]}")
-      print(f"    Difference [m/s]: {result_sgp4_at_horizons['state'][3:6, 0] - result_horizons['state'][3:6, 0]}")
       
       # Compute COEs for SGP4 data
       num_points_sgp4 = result_sgp4_at_horizons['state'].shape[1]
@@ -389,8 +378,8 @@ def main(norad_id, start_time_str, end_time_str):
   # Also do regular SGP4 propagation for standalone plots
   print("  Propagating SGP4 with regular time grid...")
   result_sgp4 = propagate_tle(
-    tle_line1  = tle_line1_iss,
-    tle_line2  = tle_line2_iss,
+    tle_line1  = tle_line1_object,
+    tle_line2  = tle_line2_object,
     time_o     = integ_time_o,
     time_f     = integ_time_f,
     num_points = 1000,
@@ -605,4 +594,8 @@ if __name__ == "__main__":
 
   args = parser.parse_args()
   
-  main(args.norad_id, args.start_time, args.end_time)
+  main(
+    args.norad_id,
+    args.start_time,
+    args.end_time,
+  )
