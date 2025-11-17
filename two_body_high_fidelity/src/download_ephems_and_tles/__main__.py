@@ -2,12 +2,12 @@
 Download ephemeris and TLE data for any satellite by NORAD ID
 
 Usage:
-  python -m src.download_data <norad_id> <start_time> <end_time> [step]
+  python -m src.download_ephems_and_tles <norad_id> <start_time> <end_time> [step]
   
 Example:
-  python -m src.download_data 25544 "2025-10-01" "2025-10-08"
-  python -m src.download_data 25544 "2025-10-01T00:00:00Z" "2025-10-02T00:00:00Z" 1m
-  python -m src.download_data 25544 "2025-10-01 00:00" "2025-10-08 00:00"
+  python -m src.download_ephems_and_tles 25544 "2025-10-01" "2025-10-08"
+  python -m src.download_ephems_and_tles 25544 "2025-10-01T00:00:00Z" "2025-10-02T00:00:00Z" 1m
+  python -m src.download_ephems_and_tles 25544 "2025-10-01 00:00" "2025-10-08 00:00"
 """
 
 import requests
@@ -23,7 +23,7 @@ from astropy                import units as u
 from typing                 import List, Dict, Tuple, Optional, Union
 
 # Project root directory:
-#   /local_absolute_path/two_body_high_fidelity/src/download_data/__main__.py
+#   /local_absolute_path/two_body_high_fidelity/src/download_ephems_and_tles/__main__.py
 #   ->
 #   /local_absolute_path/two_body_high_fidelity/
 PROJECT_ROOT = Path(__file__).parent.parent.parent 
@@ -31,7 +31,8 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 from src.model.constants import CONVERTER
 from src.utility.parse import parse_time
 
-OUTPUT_DIR = PROJECT_ROOT / 'data' / 'ephems'
+EPHEM_OUTPUT_DIR = PROJECT_ROOT / 'data' / 'ephems'
+TLE_OUTPUT_DIR   = PROJECT_ROOT / 'data' / 'tles'
 
 
 def get_satellite_name(
@@ -379,16 +380,17 @@ def download_ephems_and_tles(
   Dict:
     Dictionary with file paths and data.
   """
-  # Create output directory
-  OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
+  # Create output directories
+  EPHEM_OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
+  TLE_OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
   
   sat_name            = get_satellite_name(norad_id)
   start_timestamp_str = start_time.strftime('%Y%m%dT%H%M%SZ')
   end_timestamp_str   = end_time.strftime('%Y%m%dT%H%M%SZ')
   
   # Define output file paths
-  horizons_file    = OUTPUT_DIR / f'horizons_ephem_{norad_id}_{sat_name}_{start_timestamp_str}_{end_timestamp_str}_{step}.csv'
-  tle_history_file = OUTPUT_DIR / f'celestrak_tles_{norad_id}_{sat_name}_{start_timestamp_str}_{end_timestamp_str}.txt'
+  horizons_file    = EPHEM_OUTPUT_DIR / f'horizons_ephem_{norad_id}_{sat_name}_{start_timestamp_str}_{end_timestamp_str}_{step}.csv'
+  tle_history_file = TLE_OUTPUT_DIR / f'celestrak_tles_{norad_id}_{sat_name}_{start_timestamp_str}_{end_timestamp_str}.txt'
   
   horizons_status = "skipped"
   tle_status      = "skipped"
@@ -397,7 +399,8 @@ def download_ephems_and_tles(
   print("="*80)
   print(f"Processing data for {sat_name.upper()} (NORAD {norad_id})")
   print(f"Time range: {start_time} to {end_time}")
-  print(f"Output directory: {OUTPUT_DIR}")
+  print(f"Ephemeris output folderpath: {EPHEM_OUTPUT_DIR}")
+  print(f"TLEs output folderpath:      {TLE_OUTPUT_DIR}")
   print("="*80)
   
   # Download HORIZONS ephemeris
@@ -464,11 +467,11 @@ def parse_command_line_args() -> Tuple[int, datetime, datetime, str]:
     If arguments are invalid.
   """
   if len(sys.argv) < 4:
-    print("Usage: python -m two_body_high_fidelity.src.download_data <norad_id> <start_time> <end_time> [step]")
+    print("Usage: python -m src.download_ephems_and_tles <norad_id> <start_time> <end_time> [step]")
     print("\nExample:")
-    print('  python -m two_body_high_fidelity.src.download_data 25544 "2025-10-01" "2025-10-08"')
-    print('  python -m two_body_high_fidelity.src.download_data 25544 "2025-10-01T00:00:00Z" "2025-10-08T00:00:00Z" 1m')
-    print('  python -m two_body_high_fidelity.src.download_data 25544 "2025-10-01 00:00" "2025-10-08 00:00"')
+    print('  python -m src.download_ephems_and_tles 25544 "2025-10-01" "2025-10-08"')
+    print('  python -m src.download_ephems_and_tles 25544 "2025-10-01T00:00:00Z" "2025-10-02T00:00:00Z" 1m')
+    print('  python -m src.download_ephems_and_tles 25544 "2025-10-01 00:00" "2025-10-08 00:00"')
     print("\nTime format (UTC assumed):")
     print("  YYYY-MM-DD")
     print("  YYYY-MM-DD HH:MM")
