@@ -65,6 +65,7 @@ def compute_orbital_elements(df):
     
     return pd.DataFrame(elements)
 
+
 def load_tle_data(filepath):
     """
     Load TLE data from file with multiple TLEs.
@@ -86,6 +87,7 @@ def load_tle_data(filepath):
                 tles.append((line1, line2))
     
     return tles
+
 
 def propagate_tle_to_times(
     tle_line1,
@@ -129,6 +131,7 @@ def propagate_tle_to_times(
         })
     
     return pd.DataFrame(results)
+
 
 def propagate_all_tles_and_select_best(
   tles,
@@ -180,6 +183,7 @@ def propagate_all_tles_and_select_best(
         })
     return pd.DataFrame(results)
 
+
 def get_tle_epoch_states(
     tles : list[tuple[str, str]]
 ) -> pd.DataFrame:
@@ -220,6 +224,7 @@ def get_tle_epoch_states(
         })
     
     return pd.DataFrame(results)
+
 
 def get_best_tle_indices(horizons_df, tles):
     """
@@ -265,6 +270,7 @@ def get_best_tle_indices(horizons_df, tles):
         })
     
     return pd.DataFrame(results)
+
 
 def plot_horizons_vs_tle_with_index(horizons_df, tle_df, tle_epochs_df=None, tles=None):
     """Plot ISS position and velocity comparing Horizons and TLE data, with TLE index markers."""
@@ -399,6 +405,7 @@ def plot_horizons_vs_tle_with_index(horizons_df, tle_df, tle_epochs_df=None, tle
     
     return fig
 
+
 def _stitch_segments_deg(angle_deg_array: np.ndarray, segment_ids: np.ndarray) -> np.ndarray:
     """
     Make angle sequence continuous across segment (TLE) switches by adding/subtracting 360 deg
@@ -416,6 +423,7 @@ def _stitch_segments_deg(angle_deg_array: np.ndarray, segment_ids: np.ndarray) -
                 out[i] += 360
         prev_val = out[i]
     return out
+
 
 def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None, tle_epochs_df=None):
     """
@@ -562,6 +570,7 @@ def plot_orbital_elements_tle_comparison(horizons_oe_df, tle_oe_df, tles=None, t
     
     return fig
 
+
 def plot_position_velocity_errors(horizons_df, tle_df, tles=None, tle_epochs_df=None):
     """Plot position and velocity errors between Horizons and TLE data, with TLE index markers."""
     fig, axes = plt.subplots(3, 1, figsize=(14, 8), sharex=True,
@@ -659,6 +668,7 @@ def plot_position_velocity_errors(horizons_df, tle_df, tles=None, tle_epochs_df=
     plt.tight_layout(rect=(0, 0.03, 1, 0.97))
     
     return fig
+
 
 def plot_orbital_element_errors(horizons_oe_df, tle_oe_df, tles=None, tle_epochs_df=None):
     """Plot orbital element errors between Horizons and TLE data, with TLE index markers."""
@@ -839,6 +849,7 @@ def plot_orbital_element_errors(horizons_oe_df, tle_oe_df, tles=None, tle_epochs
 
     return fig
 
+
 def plot_true_longitude_error(horizons_oe_df, tle_oe_df, tles=None, tle_epochs_df=None):
     """
     Plot combined angular error (RAAN + ArgP + TA) which represents true longitude error.
@@ -966,11 +977,12 @@ def plot_true_longitude_error(horizons_oe_df, tle_oe_df, tles=None, tle_epochs_d
     
     return fig
 
+
 def main():
     # Define file paths
-    base_path = Path(__file__).parent.parent.parent.parent / 'data'
-    horizons_file = base_path / 'ephems' / 'horizons_ephem_25544_iss_20251001_20251008_1m.csv'
-    tle_file      = base_path / 'ephems' / 'celestrak_tles_25544_iss_20251001_20251008.txt'
+    base_path = Path(__file__).parent.parent.parent / 'data'
+    horizons_file = base_path / 'ephems' / 'horizons_ephem_25544_iss_20251001T000000Z_20251008T000000Z_1m.csv'
+    tle_file      = base_path / 'tles'   / 'celestrak_tles_25544_iss_20251001T000000Z_20251008T000000Z.txt'
     
     # Define output directory
     output_folderpath = Path(__file__).parent.parent.parent / 'output' / 'figures'

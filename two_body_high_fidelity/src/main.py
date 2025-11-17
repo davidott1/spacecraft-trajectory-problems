@@ -1,9 +1,38 @@
+"""
+High-Fidelity Orbit Propagator
+
+Description:
+  This script propagates the orbit of a satellite using a high-fidelity numerical
+  integration model. It takes a NORAD ID, a start time, and an end time as input.
+  The initial state is derived from a hardcoded Two-Line Element (TLE) set.
+
+  The propagation includes the following forces:
+  - Earth's gravity (including J2, J3, J4 zonal harmonics)
+  - Atmospheric drag
+  - Third-body gravity from the Sun and Moon
+
+  The script performs the following steps:
+  1. Loads a reference ephemeris from JPL Horizons (if available).
+  2. Derives an initial state from the TLE for the specified start time.
+  3. Propagates the orbit using the high-fidelity model.
+  4. Propagates the orbit using the SGP4 model for comparison.
+  5. Generates and saves plots comparing the trajectories and their errors.
+
+Usage:
+  python -m src.main <norad_id> <start_time> <end_time>
+
+Example:
+  python -m src.main 25544 2025-10-01T00:00:00 2025-10-02T00:00:00
+"""
 import matplotlib.pyplot as plt
 import numpy             as np
 import spiceypy          as spice
+import argparse
 
 from pathlib         import Path
 from scipy.integrate import solve_ivp
+from datetime        import datetime, timedelta
+from sgp4.api        import Satrec
 
 from src.plot.trajectory             import plot_3d_trajectories, plot_time_series, plot_3d_error, plot_time_series_error
 from src.propagation.propagator      import propagate_state_numerical_integration
@@ -12,30 +41,41 @@ from src.propagation.horizons_loader import load_horizons_ephemeris
 from src.model.dynamics              import Acceleration, OrbitConverter
 from src.model.constants             import PHYSICALCONSTANTS, CONVERTER
 
-def main():
+# Define supported objects and their properties
+SUPPORTED_OBJECTS = {
+  '25544': {
+    'name'      : 'ISS',
+    'tle_line1' : "1 25544U 98067A   25274.11280702  .00018412  00000-0  33478-3 0  9995",
+    'tle_line2' : "2 25544  51.6324 142.0598 0001038 182.7689 177.3294 15.49574764531593",
+    'mass'      : 420000.0,    # ISS mass [kg] (approximate)
+    'cd'        : 2.2,         # drag coefficient [-]
+    'area_drag' : 1000.0,      # cross-sectional area [m²] (approximate)
+  }
+}
+
+def main(norad_id, start_time_str, end_time_str):
   """
-  Propagate ISS orbit using high-fidelity dynamics model.
+  Propagate an orbit using a high-fidelity dynamics model.
   Initial state derived from TLE, then propagated with detailed force models.
   Compare with SGP4 and JPL Horizons ephemeris.
   """
   #### INPUT ####
 
-  # ISS TLE (example - update with current TLE)
-  tle_line1_iss = "1 25544U 98067A   25274.11280702  .00018412  00000-0  33478-3 0  9995"
-  tle_line2_iss = "2 25544  51.6324 142.0598 0001038 182.7689 177.3294 15.49574764531593"
+  if norad_id not in SUPPORTED_OBJECTS:
+    raise ValueError(f"NORAD ID {norad_id} is not supported. Supported IDs: {list(SUPPORTED_OBJECTS.keys())}")
 
-  # Define exact propagation time span: Oct 1, 2025 00:00:00 to Oct 2, 2025 00:00:00 UTC
-  from datetime import datetime, timedelta
-  from sgp4.api import Satrec
+  obj_props = SUPPORTED_OBJECTS[norad_id]
+  tle_line1_iss = obj_props['tle_line1']
+  tle_line2_iss = obj_props['tle_line2']
   
   # Parse TLE epoch
-  satellite = Satrec.twoline2rv(tle_line1_iss, tle_line2_iss)
+  satellite    = Satrec.twoline2rv(tle_line1_iss, tle_line2_iss)
   tle_epoch_jd = satellite.jdsatepoch + satellite.jdsatepochF
   tle_epoch_dt = datetime(2000, 1, 1, 12, 0, 0) + timedelta(days=tle_epoch_jd - 2451545.0)
   
-  # Target propagation start/end times
-  target_start_dt = datetime(2025, 10, 1, 0, 0, 0)
-  target_end_dt   = datetime(2025, 10, 2, 0, 0, 0)
+  # Target propagation start/end times from arguments
+  target_start_dt = datetime.fromisoformat(start_time_str)
+  target_end_dt   = datetime.fromisoformat(end_time_str)
   delta_time      = (target_end_dt - target_start_dt).total_seconds()
   
   # Integration time bounds (seconds from TLE epoch)
@@ -51,16 +91,21 @@ def main():
   print(f"  Propagation duration: {delta_integ_time/3600:.2f} hours")
   
   # ISS properties (approximate)
-  mass      = 420000.0    # ISS mass [kg] (approximate)
-  cd        = 2.2         # drag coefficient [-]
-  area_drag = 1000.0      # cross-sectional area [m²] (approximate)
+  mass      = obj_props['mass']
+  cd        = obj_props['cd']
+  area_drag = obj_props['area_drag']
   
   # Output directory for figures
   output_dir = Path('./output/figures')
   output_dir.mkdir(parents=True, exist_ok=True)
   
-  # Horizons ephemeris file
-  horizons_file = Path('/Users/davidottesen/github/spacecraft-trajectory-problems/data/ephems/horizons_ephem_25544_iss_20251001_20251008_1m.csv')
+  project_root = Path(__file__).parent.parent
+  data_folder = project_root / 'data'
+  
+  # Horizons ephemeris file (dynamically named)
+  start_str = target_start_dt.strftime('%Y%m%dT%H%M%SZ')
+  end_str = target_end_dt.strftime('%Y%m%dT%H%M%SZ')
+  horizons_file = data_folder / 'ephems' / f"horizons_ephem_{norad_id}_{obj_props['name'].lower()}_{start_str}_{end_str}_1m.csv"
   
   #### END INPUT ####
 
@@ -182,7 +227,8 @@ def main():
   # Use spiceypy to do the proper conversion
   
   # Load leap seconds kernel first (minimal kernel set for time conversion)
-  lsk_path = Path('/Users/davidottesen/github/spacecraft-trajectory-problems/data/spice_kernels/naif0012.tls')
+  spice_kernels_folderpath = data_folder          / 'spice_kernels'
+  lsk_path                 = spice_kernels_folderpath / 'naif0012.tls'
   spice.furnsh(str(lsk_path))
   
   # Convert UTC datetime to ET seconds past J2000
@@ -210,7 +256,7 @@ def main():
     enable_third_body       = True,
     third_body_use_spice    = True,
     third_body_bodies       = ['SUN', 'MOON'],
-    spice_kernel_folderpath = '/Users/davidottesen/github/spacecraft-trajectory-problems/data/spice_kernels',
+    spice_kernel_folderpath = str(spice_kernels_folderpath),
   )
   
   # Step 4: Propagate with high-fidelity model
@@ -552,4 +598,11 @@ def main():
 
 
 if __name__ == "__main__":
-  main()
+  parser = argparse.ArgumentParser(description="Run high-fidelity orbit propagation.")
+  parser.add_argument('norad_id'   , type=str, help="NORAD Catalog ID of the satellite (e.g., '25544' for ISS).")
+  parser.add_argument('start_time' , type=str, help="Start time for propagation in ISO format (e.g., '2025-10-01T00:00:00').")
+  parser.add_argument('end_time'   , type=str, help="End time for propagation in ISO format (e.g., '2025-10-02T00:00:00').")
+
+  args = parser.parse_args()
+  
+  main(args.norad_id, args.start_time, args.end_time)
