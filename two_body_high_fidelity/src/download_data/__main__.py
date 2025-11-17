@@ -2,12 +2,12 @@
 Download ephemeris and TLE data for any satellite by NORAD ID
 
 Usage:
-  python -m two_body_high_fidelity.src.download_data <norad_id> <start_time> <end_time> [step]
+  python -m src.download_data <norad_id> <start_time> <end_time> [step]
   
 Example:
-  python -m two_body_high_fidelity.src.download_data 25544 "2025-10-01" "2025-10-08"
-  python -m two_body_high_fidelity.src.download_data 25544 "2025-10-01T00:00:00Z" "2025-10-08T00:00:00Z" 1m
-  python -m two_body_high_fidelity.src.download_data 25544 "2025-10-01 00:00" "2025-10-08 00:00"
+  python -m src.download_data 25544 "2025-10-01" "2025-10-08"
+  python -m src.download_data 25544 "2025-10-01T00:00:00Z" "2025-10-02T00:00:00Z" 1m
+  python -m src.download_data 25544 "2025-10-01 00:00" "2025-10-08 00:00"
 """
 
 import requests
@@ -19,6 +19,7 @@ from pathlib                import Path
 from datetime               import datetime, timedelta
 from astropy.time           import Time, TimeDelta
 from astropy.table          import Table
+from astropy                import units as u
 from typing                 import List, Dict, Tuple, Optional, Union
 
 # Project root directory:
@@ -105,7 +106,7 @@ def download_tle_for_satellite(
             tle_year = 2000 + tle_year if tle_year < 57 else 1900 + tle_year
             tle_day_of_year = float(tle_epoch_str[2:])
             
-            tle_epoch_time = Time(f"{tle_year}-01-01", format='iso') + TimeDelta(tle_day_of_year - 1, unit='day') # type: ignore
+            tle_epoch_time = Time(f"{tle_year}-01-01", format='iso') + TimeDelta((tle_day_of_year - 1) * u.day) # type: ignore
             epoch_jd = tle_epoch_time.jd
             
             print(f"Downloaded TLE for NORAD {norad_id}")
@@ -198,7 +199,7 @@ def download_historical_tles(
         tle_year        = int(tle_epoch_str[0:2])
         tle_year        = 2000 + tle_year if tle_year < 57 else 1900 + tle_year
         tle_day_of_year = float(tle_epoch_str[2:])
-        tle_epoch_time  = Time(f"{tle_year}-01-01", format='iso') + TimeDelta(tle_day_of_year - 1, unit='day')
+        tle_epoch_time  = Time(f"{tle_year}-01-01", format='iso') + TimeDelta((tle_day_of_year - 1) * u.day) # type: ignore
         
         # Store TLE data
         tle_data.append({
@@ -389,6 +390,9 @@ def download_satellite_data(
   horizons_file    = OUTPUT_DIR / f'horizons_ephem_{norad_id}_{sat_name}_{start_timestamp_str}_{end_timestamp_str}_{step}.csv'
   tle_history_file = OUTPUT_DIR / f'celestrak_tles_{norad_id}_{sat_name}_{start_timestamp_str}_{end_timestamp_str}.txt'
   
+  horizons_status = "skipped"
+  tle_status      = "skipped"
+  
   print()
   print("="*80)
   print(f"Processing data for {sat_name.upper()} (NORAD {norad_id})")
@@ -411,6 +415,7 @@ def download_satellite_data(
       step        = step,
       output_file = horizons_file
     )
+    horizons_status = "downloaded"
   
   # Download TLE history
   print("\n" + "="*80)
@@ -426,14 +431,13 @@ def download_satellite_data(
       end_time    = end_time,
       output_file = tle_history_file
     )
+    tle_status = "downloaded"
   
   print("\n" + "="*80)
   print("PROCESSING COMPLETE")
   print("="*80)
-  print(f"HORIZONS file:")
-  print(f"  {horizons_file}")
-  print(f"TLE history file:")
-  print(f"  {tle_history_file}")
+  print(f"HORIZONS file    : {horizons_status}")
+  print(f"TLE history file : {tle_status}")
   print()
   
   return {
