@@ -53,10 +53,11 @@ SUPPORTED_OBJECTS = {
   }
 }
 
+
 def parse_and_validate_inputs(
-  norad_id: str,
-  start_time_str: str,
-  end_time_str: str,
+  norad_id       : str,
+  start_time_str : str,
+  end_time_str   : str,
 ) -> dict:
   """
   Parse and validate input parameters for orbit propagation.
@@ -137,27 +138,27 @@ def parse_and_validate_inputs(
   }
 
 def setup_paths_and_files(
-  norad_id: str,
-  obj_name: str,
-  target_start_dt: datetime,
-  target_end_dt: datetime,
+  norad_id        : str,
+  obj_name        : str,
+  target_start_dt : datetime,
+  target_end_dt   : datetime,
 ) -> dict:
   """
   Set up all required folder paths and file names for the propagation.
   
   Args:
-    norad_id: NORAD catalog ID of the satellite
-    obj_name: Name of the object (e.g., 'ISS')
-    target_start_dt: Target start time as datetime
-    target_end_dt: Target end time as datetime
+    norad_id        : NORAD catalog ID of the satellite
+    obj_name        : Name of the object (e.g., 'ISS')
+    target_start_dt : Target start time as datetime
+    target_end_dt   : Target end time as datetime
   
   Returns:
     Dictionary containing:
-      - output_folderpath: Path to output directory for figures
-      - data_folderpath: Path to data directory
-      - spice_kernels_folderpath: Path to SPICE kernels directory
-      - horizons_filepath: Path to Horizons ephemeris file
-      - lsk_filepath: Path to leap seconds kernel file
+      - output_folderpath        : Path to output directory for figures
+      - data_folderpath          : Path to data directory
+      - spice_kernels_folderpath : Path to SPICE kernels directory
+      - horizons_filepath        : Path to Horizons ephemeris file
+      - lsk_filepath             : Path to leap seconds kernel file
   """
   # Output directory for figures
   output_folderpath = Path('./output/figures')
@@ -169,21 +170,165 @@ def setup_paths_and_files(
   
   # SPICE kernels path
   spice_kernels_folderpath = data_folderpath / 'spice_kernels'
-  lsk_filepath = spice_kernels_folderpath / 'naif0012.tls'
+  lsk_filepath             = spice_kernels_folderpath / 'naif0012.tls'
   
   # Horizons ephemeris file (dynamically named)
-  start_str = target_start_dt.strftime('%Y%m%dT%H%M%SZ')
-  end_str = target_end_dt.strftime('%Y%m%dT%H%M%SZ')
+  start_str         = target_start_dt.strftime('%Y%m%dT%H%M%SZ')
+  end_str           = target_end_dt.strftime('%Y%m%dT%H%M%SZ')
   horizons_filename = f"horizons_ephem_{norad_id}_{obj_name.lower()}_{start_str}_{end_str}_1m.csv"
   horizons_filepath = data_folderpath / 'ephems' / horizons_filename
   
   return {
-    'output_folderpath': output_folderpath,
-    'data_folderpath': data_folderpath,
-    'spice_kernels_folderpath': spice_kernels_folderpath,
-    'horizons_filepath': horizons_filepath,
-    'lsk_filepath': lsk_filepath,
+    'output_folderpath'        : output_folderpath,
+    'spice_kernels_folderpath' : spice_kernels_folderpath,
+    'horizons_filepath'        : horizons_filepath,
+    'lsk_filepath'             : lsk_filepath,
   }
+
+def load_spice_files(
+  lsk_filepath: Path,
+):
+  """
+  Load required data files, e.g., SPICE kernels.
+  
+  Args:
+    lsk_filepath: Path to the leap seconds kernel file.
+  """
+  # Load leap seconds kernel first (minimal kernel set for time conversion)
+  spice.furnsh(str(lsk_filepath))
+
+def process_horizons_result(result_horizons):
+  """
+  Process and enrich Horizons ephemeris result:
+    - Log basic info
+    - Create plot_time_s
+    - Compute and attach COE time series
+  Returns:
+    - Enriched result_horizons dict if success
+    - None if failure
+  """
+  if result_horizons and result_horizons.get('success'):
+    print(f"  ✓ Horizons ephemeris loaded!")
+    print(f"  Epoch            : {result_horizons['epoch'].isoformat()} UTC")
+    print(f"  Number of points : {len(result_horizons['time'])}")
+    print(f"  Time span        : {result_horizons['time'][0]:.1f} to {result_horizons['time'][-1]:.1f} seconds")
+
+    # Create plot_time_s for seconds-based, zero-start plotting time
+    result_horizons['plot_time_s'] = result_horizons['time']
+
+    # Compute classical orbital elements for Horizons data
+    num_points = result_horizons['state'].shape[1]
+    result_horizons['coe'] = {
+      'sma'  : np.zeros(num_points),
+      'ecc'  : np.zeros(num_points),
+      'inc'  : np.zeros(num_points),
+      'raan' : np.zeros(num_points),
+      'argp' : np.zeros(num_points),
+      'ma'   : np.zeros(num_points),
+      'ta'   : np.zeros(num_points),
+      'ea'   : np.zeros(num_points),
+    }
+
+    for i in range(num_points):
+      pos_vec = result_horizons['state'][0:3, i]
+      vel_vec = result_horizons['state'][3:6, i]
+      coe = OrbitConverter.pv_to_coe(
+        pos_vec,
+        vel_vec,
+        PHYSICALCONSTANTS.EARTH.GP,
+      )
+      for key in result_horizons['coe'].keys():
+        if coe[key] is not None:
+          result_horizons['coe'][key][i] = coe[key]
+
+    return result_horizons
+
+  # Failure path
+  msg = result_horizons.get('message') if isinstance(result_horizons, dict) else 'No result returned'
+  print(f"  ✗ Horizons loading failed: {msg}")
+  return None
+
+def compute_initial_state_from_tle(
+  tle_line1    : str,
+  tle_line2    : str,
+  integ_time_o : float,
+  to_j2000     : bool  = True,
+):
+  """
+  Compute initial Cartesian state from a TLE using SGP4 at the provided integration start time.
+  Prints step info and TLE lines. Raises RuntimeError on failure.
+  Returns:
+    np.ndarray: 6x1 state vector [m, m, m, m/s, m/s, m/s]
+  """
+  print("\nStep 2: Converting TLE to initial Cartesian state...")
+  print(f"  TLE Line 1: {tle_line1}")
+  print(f"  TLE Line 2: {tle_line2}")
+
+  result_tle_initial = propagate_tle(
+    tle_line1  = tle_line1,
+    tle_line2  = tle_line2,
+    time_o     = integ_time_o,
+    time_f     = integ_time_o,  # just get initial state at target start time
+    num_points = 1,
+    to_j2000   = to_j2000,
+  )
+  if not result_tle_initial['success']:
+    raise RuntimeError(f"Failed to get initial state from TLE: {result_tle_initial['message']}")
+
+  initial_state = result_tle_initial['state'][:, 0]
+
+  # Include requested prints
+  print(f"  Initial Pos {integ_time_o} : [{initial_state[0]:.3f}, {initial_state[1]:.3f}, {initial_state[2]:.3f}] m")
+  print(f"  Initial Vel {integ_time_o} : [{initial_state[3]:.3f}, {initial_state[4]:.3f}, {initial_state[5]:.3f}] m/s")
+
+  return initial_state
+
+def compare_initial_state_with_horizons(
+  tle_initial_state    : np.ndarray,
+  result_horizons      : dict,
+  use_horizons_initial : bool = True,
+) -> np.ndarray:
+  """
+  Compare TLE-derived initial state with Horizons initial state (if available),
+  print diagnostics, and optionally select Horizons state as the initial state.
+  Returns the selected initial state.
+  """
+  # Compare with Horizons initial state if available
+  if result_horizons and result_horizons.get('success'):
+    horizons_initial = result_horizons['state'][:, 0]
+    print(f"\n  Horizons initial position: [{horizons_initial[0]:.3f}, {horizons_initial[1]:.3f}, {horizons_initial[2]:.3f}] m")
+    print(  f"  Horizons initial velocity: [{horizons_initial[3]:.3f}, {horizons_initial[4]:.3f}, {horizons_initial[5]:.3f}] m/s")
+
+    initial_pos_diff = np.linalg.norm(tle_initial_state[0:3] - horizons_initial[0:3])
+    initial_vel_diff = np.linalg.norm(tle_initial_state[3:6] - horizons_initial[3:6])
+    print(f"\n  Initial position difference (TLE vs Horizons): {initial_pos_diff:.3f} m")
+    print(f"  Initial velocity difference (TLE vs Horizons): {initial_vel_diff:.3f} m/s")
+    
+    # Detailed component-wise differences
+    print(f"\n  Component-wise differences (TLE - Horizons):")
+    print(f"    Delta Pos-X: {(tle_initial_state[0] - horizons_initial[0]):>.3f} m")
+    print(f"    Delta Pos-Y: {(tle_initial_state[1] - horizons_initial[1]):>.3f} m")
+    print(f"    Delta Pos-Z: {(tle_initial_state[2] - horizons_initial[2]):>.3f} m")
+    print(f"    Delta Vel-X: {(tle_initial_state[3] - horizons_initial[3]):>.3f} m/s")
+    print(f"    Delta Vel-Y: {(tle_initial_state[4] - horizons_initial[4]):>.3f} m/s")
+    print(f"    Delta Vel-Z: {(tle_initial_state[5] - horizons_initial[5]):>.3f} m/s")
+    
+    # Check magnitudes
+    print(f"\n  Magnitude comparison:")
+    print(f"         TLE Pos Mag : {np.linalg.norm(tle_initial_state[0:3]):>.3f} m")
+    print(f"    Horizons Pos Mag : {np.linalg.norm( horizons_initial[0:3]):>.3f} m")
+    print(f"         TLE Vel Mag : {np.linalg.norm(tle_initial_state[3:6]):>.3f} m/s")
+    print(f"    Horizons Vel Mag : {np.linalg.norm( horizons_initial[3:6]):>.3f} m/s")
+
+    # Option to use Horizons initial state vs. TLE-derived state
+    if use_horizons_initial:
+      print("\n  ✓ Using Horizons initial state for high-fidelity propagation")
+      return horizons_initial
+    else:
+      pass
+  
+  print("\n  Using TLE-derived initial state for high-fidelity propagation")
+  return tle_initial_state
 
 def main(
   norad_id       : str,
@@ -198,7 +343,6 @@ def main(
   # STEP 0: Process inputs and setup
   inputs = parse_and_validate_inputs(norad_id, start_time_str, end_time_str)
   
-  # Extract
   obj_props        = inputs['obj_props']
   tle_line1_object = inputs['tle_line1']
   tle_line2_object = inputs['tle_line2']
@@ -214,138 +358,55 @@ def main(
   area_drag        = inputs['area_drag']
 
   # Set up paths and files
-  paths = setup_paths_and_files(
-    norad_id=norad_id,
-    obj_name=obj_props['name'],
-    target_start_dt=target_start_dt,
-    target_end_dt=target_end_dt,
+  folderpaths_filepaths = setup_paths_and_files(
+    norad_id        = norad_id,
+    obj_name        = obj_props['name'],
+    target_start_dt = target_start_dt,
+    target_end_dt   = target_end_dt,
   )
-  
-  output_folderpath = paths['output_folderpath']
-  data_folderpath = paths['data_folderpath']
-  spice_kernels_folderpath = paths['spice_kernels_folderpath']
-  horizons_filepath = paths['horizons_filepath']
-  lsk_filepath = paths['lsk_filepath']
-  
-  print("\n" + "="*60)
-  print("ISS Orbit Propagation")
-  print("="*60)
-  
-  # Step 1: Load Horizons ephemeris (reference truth)
-  print("\nStep 1: Loading JPL Horizons ephemeris (reference truth)...")
-  print(f"  File path: {horizons_filepath}")
-  print(f"  File exists: {horizons_filepath.exists()}")
+
+  output_folderpath        = folderpaths_filepaths['output_folderpath']
+  spice_kernels_folderpath = folderpaths_filepaths['spice_kernels_folderpath']
+  horizons_filepath        = folderpaths_filepaths['horizons_filepath']
+  lsk_filepath             = folderpaths_filepaths['lsk_filepath']
+
+  # Load spice files
+  load_spice_files(lsk_filepath)
+
+  # Load Horizons ephemeris
+  print("\nStep 1: Loading JPL Horizons ephemeris ...")
+  print(f"  File path   : {horizons_filepath}")
+  print(f"  File exists : {horizons_filepath.exists()}")
   print(f"  Requesting data from {target_start_dt} to {target_end_dt}")
   
-  # Load Horizons data for exact time range Oct 1 00:00 to Oct 2 00:00
+  # Load Horizons data
   result_horizons = load_horizons_ephemeris(
     filepath = str(horizons_filepath),
     start_dt = target_start_dt,
     end_dt   = target_end_dt,
   )
-  
-  if result_horizons['success']:
-    print(f"  ✓ Horizons ephemeris loaded!")
-    print(f"  Epoch: {result_horizons['epoch'].isoformat()} UTC")
-    print(f"  Number of points: {len(result_horizons['time'])}")
-    print(f"  Time span: {result_horizons['time'][0]:.1f} to {result_horizons['time'][-1]:.1f} seconds")
-    
-    # The time array already starts at 0 from target_start_dt
-    result_horizons['plot_time_s'] = result_horizons['time']
-    
-    # Compute COEs for Horizons data
-    num_points = result_horizons['state'].shape[1]
-    result_horizons['coe'] = {
-      'sma'  : np.zeros(num_points),
-      'ecc'  : np.zeros(num_points),
-      'inc'  : np.zeros(num_points),
-      'raan' : np.zeros(num_points),
-      'argp' : np.zeros(num_points),
-      'ma'   : np.zeros(num_points),
-      'ta'   : np.zeros(num_points),
-      'ea'   : np.zeros(num_points),
-    }
-    
-    for i in range(num_points):
-      coe = OrbitConverter.pv_to_coe(
-        result_horizons['state'][0:3, i],
-        result_horizons['state'][3:6, i],
-        PHYSICALCONSTANTS.EARTH.GP
-      )
-      for key in result_horizons['coe'].keys():
-        if coe[key] is not None:
-          result_horizons['coe'][key][i] = coe[key]
-  else:
-    print(f"  ✗ Horizons loading failed: {result_horizons['message']}")
-    result_horizons = None
-  
-  # Step 2: Get initial state from TLE using SGP4
-  print("\nStep 2: Converting TLE to initial Cartesian state...")
-  print(f"  TLE Line 1: {tle_line1_object}")
-  print(f"  TLE Line 2: {tle_line2_object}")
 
-  # Propagate TLE to target start time to get position/velocity
-  result_tle_initial = propagate_tle(
-    tle_line1  = tle_line1_object,
-    tle_line2  = tle_line2_object,
-    time_o     = integ_time_o,
-    time_f     = integ_time_o,  # Just get initial state at target start time
-    num_points = 1,
-    to_j2000   = True,    # Convert from TEME to J2000
+  # If valid, process Horizons data
+  result_horizons = process_horizons_result(result_horizons)
+
+  # Step 2: Get initial state from TLE using SGP4
+  tle_initial_state = compute_initial_state_from_tle(
+    tle_line1    = tle_line1_object,
+    tle_line2    = tle_line2_object,
+    integ_time_o = integ_time_o,
+    to_j2000     = True,
   )
-  if not result_tle_initial['success']:
-    raise RuntimeError(f"Failed to get initial state from TLE: {result_tle_initial['message']}")
-  
-  initial_state = result_tle_initial['state'][:, 0]
-  
-  print(f"  Initial position (Oct 1 00:00 UTC): [{initial_state[0]/1e3:.3f}, {initial_state[1]/1e3:.3f}, {initial_state[2]/1e3:.3f}] km")
-  print(f"  Initial velocity (Oct 1 00:00 UTC): [{initial_state[3]/1e3:.3f}, {initial_state[4]/1e3:.3f}, {initial_state[5]/1e3:.3f}] km/s")
-  
-  # Compare with Horizons initial state if available
-  if result_horizons and result_horizons['success']:
-    horizons_initial = result_horizons['state'][:, 0]
-    print(f"\n  Horizons initial position: [{horizons_initial[0]/1e3:.3f}, {horizons_initial[1]/1e3:.3f}, {horizons_initial[2]/1e3:.3f}] km")
-    print(f"  Horizons initial velocity: [{horizons_initial[3]/1e3:.3f}, {horizons_initial[4]/1e3:.3f}, {horizons_initial[5]/1e3:.3f}] km/s")
-    
-    initial_pos_diff = np.linalg.norm(initial_state[0:3] - horizons_initial[0:3]) / 1e3
-    initial_vel_diff = np.linalg.norm(initial_state[3:6] - horizons_initial[3:6])
-    print(f"\n  Initial position difference (TLE vs Horizons): {initial_pos_diff:.3f} km")
-    print(f"  Initial velocity difference (TLE vs Horizons): {initial_vel_diff:.3f} m/s")
-    
-    # Detailed component-wise differences
-    print(f"\n  Component-wise differences (TLE - Horizons):")
-    print(f"    ΔX: {(initial_state[0] - horizons_initial[0])/1e3:.3f} km")
-    print(f"    ΔY: {(initial_state[1] - horizons_initial[1])/1e3:.3f} km")
-    print(f"    ΔZ: {(initial_state[2] - horizons_initial[2])/1e3:.3f} km")
-    print(f"    ΔVx: {(initial_state[3] - horizons_initial[3]):.3f} m/s")
-    print(f"    ΔVy: {(initial_state[4] - horizons_initial[4]):.3f} m/s")
-    print(f"    ΔVz: {(initial_state[5] - horizons_initial[5]):.3f} m/s")
-    
-    # Check magnitudes
-    print(f"\n  Magnitude comparison:")
-    print(f"    TLE position magnitude: {np.linalg.norm(initial_state[0:3])/1e3:.3f} km")
-    print(f"    Horizons position magnitude: {np.linalg.norm(horizons_initial[0:3])/1e3:.3f} km")
-    print(f"    TLE velocity magnitude: {np.linalg.norm(initial_state[3:6])/1e3:.3f} km/s")
-    print(f"    Horizons velocity magnitude: {np.linalg.norm(horizons_initial[3:6])/1e3:.3f} km/s")
-    
-    # Option to use Horizons initial state instead
-    use_horizons_initial = True  # Set to True to use Horizons initial state for fair dynamics comparison
-    if use_horizons_initial:
-      print("\n  ✓ Using Horizons initial state for high-fidelity propagation")
-      initial_state = horizons_initial
-    else:
-      print("\n  Using TLE-derived initial state for high-fidelity propagation")
-  
+
+  # Compare with Horizons initial state
+  initial_state = compare_initial_state_with_horizons(
+    tle_initial_state    = tle_initial_state,
+    result_horizons      = result_horizons, # type: ignore
+    use_horizons_initial = True,
+  )
+
   # Step 3: Set up high-fidelity dynamics model
   print("\nStep 3: Setting up high-fidelity dynamics model ...")
   print(f"  Including: Two-body gravity, J2, J3, J4, Atmospheric drag, Third-body (Sun/Moon)")
-  
-  # Convert target_start_dt to ET seconds for SPICE
-  # SPICE needs ET (Ephemeris Time), not UTC
-  # Use spiceypy to do the proper conversion
-  
-  # Load leap seconds kernel first (minimal kernel set for time conversion)
-  spice.furnsh(str(lsk_filepath))
   
   # Convert UTC datetime to ET seconds past J2000
   utc_str = target_start_dt.strftime('%Y-%m-%dT%H:%M:%S')
