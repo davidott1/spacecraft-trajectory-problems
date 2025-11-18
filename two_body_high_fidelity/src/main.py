@@ -53,29 +53,52 @@ SUPPORTED_OBJECTS = {
   }
 }
 
-def main(
-  norad_id       : str,
-  start_time_str : str,
-  end_time_str   : str,
-) -> None:
+def parse_and_validate_inputs(
+  norad_id: str,
+  start_time_str: str,
+  end_time_str: str,
+) -> dict:
   """
-  Propagate an orbit using a high-fidelity dynamics model. Initial state derived from TLE, then
-  propagated with detailed force models. Compare with SGP4 and JPL Horizons ephemeris.
+  Parse and validate input parameters for orbit propagation.
+  
+  Args:
+    norad_id: NORAD catalog ID of the satellite
+    start_time_str: Start time in ISO format (e.g., '2025-10-01T00:00:00')
+    end_time_str: End time in ISO format (e.g., '2025-10-02T00:00:00')
+  
+  Returns:
+    Dictionary containing:
+      - obj_props: Object properties from SUPPORTED_OBJECTS
+      - tle_line1: TLE line 1
+      - tle_line2: TLE line 2
+      - tle_epoch_dt: TLE epoch as datetime
+      - tle_epoch_jd: TLE epoch as Julian date
+      - target_start_dt: Target start time as datetime
+      - target_end_dt: Target end time as datetime
+      - delta_time: Propagation duration in seconds
+      - integ_time_o: Start time offset from TLE epoch in seconds
+      - integ_time_f: End time offset from TLE epoch in seconds
+      - delta_integ_time: Integration time span in seconds
+      - mass: Satellite mass in kg
+      - cd: Drag coefficient
+      - area_drag: Drag area in m²
+  
+  Raises:
+    ValueError: If NORAD ID is not supported
   """
-
-  # STEP 0: Process inputs and setup
-
   # Validate norad id input
   if norad_id not in SUPPORTED_OBJECTS:
     raise ValueError(f"NORAD ID {norad_id} is not supported. Supported IDs: {list(SUPPORTED_OBJECTS.keys())}")
 
+  # Get object properties
+  obj_props = SUPPORTED_OBJECTS[norad_id]
+
   # Extract TLE lines
-  obj_props        = SUPPORTED_OBJECTS[norad_id]
-  tle_line1_object = obj_props['tle_line1']
-  tle_line2_object = obj_props['tle_line2']
+  tle_line1 = obj_props['tle_line1']
+  tle_line2 = obj_props['tle_line2']
 
   # Parse TLE epoch
-  satellite    = Satrec.twoline2rv(tle_line1_object, tle_line2_object)
+  satellite    = Satrec.twoline2rv(tle_line1, tle_line2)
   tle_epoch_jd = satellite.jdsatepoch + satellite.jdsatepochF
   tle_epoch_dt = datetime(2000, 1, 1, 12, 0, 0) + timedelta(days=tle_epoch_jd - 2451545.0)
   
@@ -96,22 +119,113 @@ def main(
   print(f"  Time offset from TLE epoch : {integ_time_o/3600:.2f} hours ({integ_time_o:.1f} seconds)")
   print(f"  Propagation duration       : {delta_integ_time/3600:.2f} hours")
   
-  # ISS properties
-  mass      = obj_props['mass']
-  cd        = obj_props['cd']
-  area_drag = obj_props['area_drag']
+  return {
+    'obj_props'        : obj_props,
+    'tle_line1'        : tle_line1,
+    'tle_line2'        : tle_line2,
+    'tle_epoch_dt'     : tle_epoch_dt,
+    'tle_epoch_jd'     : tle_epoch_jd,
+    'target_start_dt'  : target_start_dt,
+    'target_end_dt'    : target_end_dt,
+    'delta_time'       : delta_time,
+    'integ_time_o'     : integ_time_o,
+    'integ_time_f'     : integ_time_f,
+    'delta_integ_time' : delta_integ_time,
+    'mass'             : obj_props['mass'],
+    'cd'               : obj_props['cd'],
+    'area_drag'        : obj_props['area_drag'],
+  }
+
+def setup_paths_and_files(
+  norad_id: str,
+  obj_name: str,
+  target_start_dt: datetime,
+  target_end_dt: datetime,
+) -> dict:
+  """
+  Set up all required folder paths and file names for the propagation.
   
+  Args:
+    norad_id: NORAD catalog ID of the satellite
+    obj_name: Name of the object (e.g., 'ISS')
+    target_start_dt: Target start time as datetime
+    target_end_dt: Target end time as datetime
+  
+  Returns:
+    Dictionary containing:
+      - output_folderpath: Path to output directory for figures
+      - data_folderpath: Path to data directory
+      - spice_kernels_folderpath: Path to SPICE kernels directory
+      - horizons_filepath: Path to Horizons ephemeris file
+      - lsk_filepath: Path to leap seconds kernel file
+  """
   # Output directory for figures
-  output_dir = Path('./output/figures')
-  output_dir.mkdir(parents=True, exist_ok=True)
+  output_folderpath = Path('./output/figures')
+  output_folderpath.mkdir(parents=True, exist_ok=True)
   
+  # Project and data paths
   project_root    = Path(__file__).parent.parent
   data_folderpath = project_root / 'data'
   
+  # SPICE kernels path
+  spice_kernels_folderpath = data_folderpath / 'spice_kernels'
+  lsk_filepath = spice_kernels_folderpath / 'naif0012.tls'
+  
   # Horizons ephemeris file (dynamically named)
-  start_str     = target_start_dt.strftime('%Y%m%dT%H%M%SZ')
-  end_str       = target_end_dt.strftime('%Y%m%dT%H%M%SZ')
-  horizons_file = data_folderpath / 'ephems' / f"horizons_ephem_{norad_id}_{obj_props['name'].lower()}_{start_str}_{end_str}_1m.csv"
+  start_str = target_start_dt.strftime('%Y%m%dT%H%M%SZ')
+  end_str = target_end_dt.strftime('%Y%m%dT%H%M%SZ')
+  horizons_filename = f"horizons_ephem_{norad_id}_{obj_name.lower()}_{start_str}_{end_str}_1m.csv"
+  horizons_filepath = data_folderpath / 'ephems' / horizons_filename
+  
+  return {
+    'output_folderpath': output_folderpath,
+    'data_folderpath': data_folderpath,
+    'spice_kernels_folderpath': spice_kernels_folderpath,
+    'horizons_filepath': horizons_filepath,
+    'lsk_filepath': lsk_filepath,
+  }
+
+def main(
+  norad_id       : str,
+  start_time_str : str,
+  end_time_str   : str,
+) -> None:
+  """
+  Propagate an orbit using a high-fidelity dynamics model. Initial state derived from TLE, then
+  propagated with detailed force models. Compare with SGP4 and JPL Horizons ephemeris.
+  """
+
+  # STEP 0: Process inputs and setup
+  inputs = parse_and_validate_inputs(norad_id, start_time_str, end_time_str)
+  
+  # Extract
+  obj_props        = inputs['obj_props']
+  tle_line1_object = inputs['tle_line1']
+  tle_line2_object = inputs['tle_line2']
+  tle_epoch_dt     = inputs['tle_epoch_dt']
+  target_start_dt  = inputs['target_start_dt']
+  target_end_dt    = inputs['target_end_dt']
+  delta_time       = inputs['delta_time']
+  integ_time_o     = inputs['integ_time_o']
+  integ_time_f     = inputs['integ_time_f']
+  delta_integ_time = inputs['delta_integ_time']
+  mass             = inputs['mass']
+  cd               = inputs['cd']
+  area_drag        = inputs['area_drag']
+
+  # Set up paths and files
+  paths = setup_paths_and_files(
+    norad_id=norad_id,
+    obj_name=obj_props['name'],
+    target_start_dt=target_start_dt,
+    target_end_dt=target_end_dt,
+  )
+  
+  output_folderpath = paths['output_folderpath']
+  data_folderpath = paths['data_folderpath']
+  spice_kernels_folderpath = paths['spice_kernels_folderpath']
+  horizons_filepath = paths['horizons_filepath']
+  lsk_filepath = paths['lsk_filepath']
   
   print("\n" + "="*60)
   print("ISS Orbit Propagation")
@@ -119,13 +233,13 @@ def main(
   
   # Step 1: Load Horizons ephemeris (reference truth)
   print("\nStep 1: Loading JPL Horizons ephemeris (reference truth)...")
-  print(f"  File path: {horizons_file}")
-  print(f"  File exists: {horizons_file.exists()}")
+  print(f"  File path: {horizons_filepath}")
+  print(f"  File exists: {horizons_filepath.exists()}")
   print(f"  Requesting data from {target_start_dt} to {target_end_dt}")
   
   # Load Horizons data for exact time range Oct 1 00:00 to Oct 2 00:00
   result_horizons = load_horizons_ephemeris(
-    filepath = str(horizons_file),
+    filepath = str(horizons_filepath),
     start_dt = target_start_dt,
     end_dt   = target_end_dt,
   )
@@ -231,9 +345,7 @@ def main(
   # Use spiceypy to do the proper conversion
   
   # Load leap seconds kernel first (minimal kernel set for time conversion)
-  spice_kernels_folderpath = data_folderpath          / 'spice_kernels'
-  lsk_path                 = spice_kernels_folderpath / 'naif0012.tls'
-  spice.furnsh(str(lsk_path))
+  spice.furnsh(str(lsk_filepath))
   
   # Convert UTC datetime to ET seconds past J2000
   utc_str = target_start_dt.strftime('%Y-%m-%dT%H:%M:%S')
@@ -429,36 +541,36 @@ def main(
   if result_horizons and result_horizons['success']:
     fig1 = plot_3d_trajectories(result_horizons)
     fig1.suptitle('ISS Orbit - JPL Horizons Ephemeris', fontsize=16)
-    fig1.savefig(output_dir / 'iss_horizons_3d.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_dir / 'iss_horizons_3d.png'}")
+    fig1.savefig(output_folderpath / 'iss_horizons_3d.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_horizons_3d.png'}")
     
     fig2 = plot_time_series(result_horizons, epoch=target_start_dt)
     fig2.suptitle('ISS Orbit - JPL Horizons Time Series', fontsize=16)
-    fig2.savefig(output_dir / 'iss_horizons_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_dir / 'iss_horizons_timeseries.png'}")
+    fig2.savefig(output_folderpath / 'iss_horizons_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_horizons_timeseries.png'}")
   
   # High-fidelity plots (second)
   fig3 = plot_3d_trajectories(result_hifi)
   fig3.suptitle('ISS Orbit - High-Fidelity Propagation', fontsize=16)
-  fig3.savefig(output_dir / 'iss_hifi_3d.png', dpi=300, bbox_inches='tight')
-  print(f"  Saved: {output_dir / 'iss_hifi_3d.png'}")
+  fig3.savefig(output_folderpath / 'iss_hifi_3d.png', dpi=300, bbox_inches='tight')
+  print(f"  Saved: {output_folderpath / 'iss_hifi_3d.png'}")
   
   fig4 = plot_time_series(result_hifi, epoch=target_start_dt)
   fig4.suptitle('ISS Orbit - High-Fidelity Time Series', fontsize=16)
-  fig4.savefig(output_dir / 'iss_hifi_timeseries.png', dpi=300, bbox_inches='tight')
-  print(f"  Saved: {output_dir / 'iss_hifi_timeseries.png'}")
+  fig4.savefig(output_folderpath / 'iss_hifi_timeseries.png', dpi=300, bbox_inches='tight')
+  print(f"  Saved: {output_folderpath / 'iss_hifi_timeseries.png'}")
   
   # SGP4 plots (third)
   if result_sgp4['success']:
     fig5 = plot_3d_trajectories(result_sgp4)
     fig5.suptitle('ISS Orbit - SGP4 Propagation', fontsize=16)
-    fig5.savefig(output_dir / 'iss_sgp4_3d.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_dir / 'iss_sgp4_3d.png'}")
+    fig5.savefig(output_folderpath / 'iss_sgp4_3d.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_sgp4_3d.png'}")
     
     fig6 = plot_time_series(result_sgp4, epoch=target_start_dt)
     fig6.suptitle('ISS Orbit - SGP4 Time Series', fontsize=16)
-    fig6.savefig(output_dir / 'iss_sgp4_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_dir / 'iss_sgp4_timeseries.png'}")
+    fig6.savefig(output_folderpath / 'iss_sgp4_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_sgp4_timeseries.png'}")
   
   # SGP4 at Horizons time points plots
   if result_sgp4_at_horizons and result_sgp4_at_horizons['success']:
@@ -467,14 +579,14 @@ def main(
     # 3D trajectory plot
     fig_sgp4_hz_3d = plot_3d_trajectories(result_sgp4_at_horizons)
     fig_sgp4_hz_3d.suptitle('ISS Orbit - SGP4 at Horizons Times', fontsize=16)
-    fig_sgp4_hz_3d.savefig(output_dir / 'iss_sgp4_at_horizons_3d.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_dir / 'iss_sgp4_at_horizons_3d.png'}")
+    fig_sgp4_hz_3d.savefig(output_folderpath / 'iss_sgp4_at_horizons_3d.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_sgp4_at_horizons_3d.png'}")
     
     # Time series plot
     fig_sgp4_hz_ts = plot_time_series(result_sgp4_at_horizons, epoch=target_start_dt)
     fig_sgp4_hz_ts.suptitle('ISS Orbit - SGP4 at Horizons Times - Time Series', fontsize=16)
-    fig_sgp4_hz_ts.savefig(output_dir / 'iss_sgp4_at_horizons_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_dir / 'iss_sgp4_at_horizons_timeseries.png'}")
+    fig_sgp4_hz_ts.savefig(output_folderpath / 'iss_sgp4_at_horizons_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_sgp4_at_horizons_timeseries.png'}")
     
     # Error plots comparing SGP4 to Horizons
     if result_horizons and result_horizons['success']:
@@ -483,14 +595,14 @@ def main(
       # 3D error plot
       fig_sgp4_err_3d = plot_3d_error(result_horizons, result_sgp4_at_horizons)
       fig_sgp4_err_3d.suptitle('ISS Orbit Error: Horizons vs SGP4', fontsize=16)
-      fig_sgp4_err_3d.savefig(output_dir / 'iss_sgp4_error_3d.png', dpi=300, bbox_inches='tight')
-      print(f"  Saved: {output_dir / 'iss_sgp4_error_3d.png'}")
+      fig_sgp4_err_3d.savefig(output_folderpath / 'iss_sgp4_error_3d.png', dpi=300, bbox_inches='tight')
+      print(f"  Saved: {output_folderpath / 'iss_sgp4_error_3d.png'}")
       
       # Time series error plot (RIC frame)
       fig_sgp4_err_ts = plot_time_series_error(result_horizons, result_sgp4_at_horizons, epoch=target_start_dt, use_ric=False)
       fig_sgp4_err_ts.suptitle('ISS XYZ Position/Velocity Errors: Horizons vs SGP4', fontsize=16)
-      fig_sgp4_err_ts.savefig(output_dir / 'iss_sgp4_error_timeseries.png', dpi=300, bbox_inches='tight')
-      print(f"  Saved: {output_dir / 'iss_sgp4_error_timeseries.png'}")
+      fig_sgp4_err_ts.savefig(output_folderpath / 'iss_sgp4_error_timeseries.png', dpi=300, bbox_inches='tight')
+      print(f"  Saved: {output_folderpath / 'iss_sgp4_error_timeseries.png'}")
       
       # Compute and display SGP4 error statistics
       pos_error_sgp4_km = np.linalg.norm(result_sgp4_at_horizons['state'][0:3, :] - result_horizons['state'][0:3, :], axis=0) / 1e3
@@ -533,8 +645,8 @@ def main(
       ax2.axhline(y=0, color='k', linestyle='--', alpha=0.5)
       
       fig_sgp4_growth.tight_layout()
-      fig_sgp4_growth.savefig(output_dir / 'iss_sgp4_error_growth.png', dpi=300, bbox_inches='tight')
-      print(f"  Saved: {output_dir / 'iss_sgp4_error_growth.png'}")
+      fig_sgp4_growth.savefig(output_folderpath / 'iss_sgp4_error_growth.png', dpi=300, bbox_inches='tight')
+      print(f"  Saved: {output_folderpath / 'iss_sgp4_error_growth.png'}")
   
   # Create error comparison plots if both Horizons and high-fidelity are available
   if result_horizons and result_horizons['success'] and result_hifi['success']:
@@ -553,14 +665,14 @@ def main(
     # Position and velocity error plots
     fig_err_3d = plot_3d_error(result_horizons, result_hifi)
     fig_err_3d.suptitle('ISS Orbit Error: Horizons vs High-Fidelity', fontsize=16)
-    fig_err_3d.savefig(output_dir / 'iss_error_3d.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_dir / 'iss_error_3d.png'}")
+    fig_err_3d.savefig(output_folderpath / 'iss_error_3d.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_error_3d.png'}")
     
     # Time series error plots
     fig_err_ts = plot_time_series_error(result_horizons, result_hifi, epoch=target_start_dt)
     fig_err_ts.suptitle('ISS RIC Position/Velocity Errors: Horizons vs High-Fidelity', fontsize=16)
-    fig_err_ts.savefig(output_dir / 'iss_error_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_dir / 'iss_error_timeseries.png'}")
+    fig_err_ts.savefig(output_folderpath / 'iss_error_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_error_timeseries.png'}")
     
     # Compute and display error statistics
     pos_error_km = np.linalg.norm(result_hifi['state'][0:3, :] - result_horizons['state'][0:3, :], axis=0) / 1e3
@@ -580,7 +692,7 @@ def main(
         u_error_deg = u_error_rad * CONVERTER.DEG_PER_RAD
         print(f"  Arg of latitude error - Mean: {np.mean(u_error_deg):.3f}°, RMS: {np.sqrt(np.mean(u_error_deg**2)):.3f}°, Max: {np.max(np.abs(u_error_deg)):.3f}°")
 
-  print(f"\nAll figures saved to: {output_dir}")
+  print(f"\nAll figures saved to: {output_folderpath}")
   plt.show()
   
   return result_hifi
