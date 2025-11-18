@@ -62,30 +62,24 @@ def parse_and_validate_inputs(
   """
   Parse and validate input parameters for orbit propagation.
   
-  Args:
-    norad_id: NORAD catalog ID of the satellite
-    start_time_str: Start time in ISO format (e.g., '2025-10-01T00:00:00')
-    end_time_str: End time in ISO format (e.g., '2025-10-02T00:00:00')
+  Input:
+  ------
+    norad_id : str
+      NORAD catalog ID of the satellite.
+    start_time_str : str
+      Start time in ISO format (e.g., '2025-10-01T00:00:00').
+    end_time_str : str
+      End time in ISO format (e.g., '2025-10-02T00:00:00').
   
-  Returns:
-    Dictionary containing:
-      - obj_props: Object properties from SUPPORTED_OBJECTS
-      - tle_line1: TLE line 1
-      - tle_line2: TLE line 2
-      - tle_epoch_dt: TLE epoch as datetime
-      - tle_epoch_jd: TLE epoch as Julian date
-      - target_start_dt: Target start time as datetime
-      - target_end_dt: Target end time as datetime
-      - delta_time: Propagation duration in seconds
-      - integ_time_o: Start time offset from TLE epoch in seconds
-      - integ_time_f: End time offset from TLE epoch in seconds
-      - delta_integ_time: Integration time span in seconds
-      - mass: Satellite mass in kg
-      - cd: Drag coefficient
-      - area_drag: Drag area in m²
+  Output:
+  -------
+    dict
+      A dictionary containing parsed and calculated propagation parameters.
   
   Raises:
-    ValueError: If NORAD ID is not supported
+  -------
+    ValueError
+      If NORAD ID is not supported.
   """
   # Validate norad id input
   if norad_id not in SUPPORTED_OBJECTS:
@@ -146,19 +140,22 @@ def setup_paths_and_files(
   """
   Set up all required folder paths and file names for the propagation.
   
-  Args:
-    norad_id        : NORAD catalog ID of the satellite
-    obj_name        : Name of the object (e.g., 'ISS')
-    target_start_dt : Target start time as datetime
-    target_end_dt   : Target end time as datetime
+  Input:
+  ------
+    norad_id : str
+      NORAD catalog ID of the satellite.
+    obj_name : str
+      Name of the object (e.g., 'ISS').
+    target_start_dt : datetime
+      Target start time as a datetime object.
+    target_end_dt : datetime
+      Target end time as a datetime object.
   
-  Returns:
-    Dictionary containing:
-      - output_folderpath        : Path to output directory for figures
-      - data_folderpath          : Path to data directory
-      - spice_kernels_folderpath : Path to SPICE kernels directory
-      - horizons_filepath        : Path to Horizons ephemeris file
-      - lsk_filepath             : Path to leap seconds kernel file
+  Output:
+  -------
+    dict
+      A dictionary containing paths to output, data, SPICE kernels,
+      Horizons ephemeris, and leap seconds files.
   """
   # Output directory for figures
   output_folderpath = Path('./output/figures')
@@ -191,21 +188,39 @@ def load_spice_files(
   """
   Load required data files, e.g., SPICE kernels.
   
-  Args:
-    lsk_filepath: Path to the leap seconds kernel file.
+  Input:
+  ------
+    lsk_filepath : Path
+      Path to the leap seconds kernel file.
   """
   # Load leap seconds kernel first (minimal kernel set for time conversion)
   spice.furnsh(str(lsk_filepath))
 
-def process_horizons_result(result_horizons):
+def process_horizons_result(
+  result_horizons : dict,
+) -> dict:
   """
-  Process and enrich Horizons ephemeris result:
-    - Log basic info
-    - Create plot_time_s
-    - Compute and attach COE time series
-  Returns:
-    - Enriched result_horizons dict if success
-    - None if failure
+  Processes and enriches the result dictionary from `load_horizons_ephemeris`.
+
+  This function performs the following actions if the Horizons data loading was successful:
+  1. Logs basic information about the loaded ephemeris (epoch, number of points, time span).
+  2. Creates a `plot_time_s` array, which is a time vector in seconds starting from zero.
+  3. Computes the classical orbital elements (COE) for each state vector in the ephemeris
+     and adds them to the dictionary under the 'coe' key.
+
+  If the loading was not successful, it prints a failure message.
+
+  Input:
+  ------
+    result_horizons : dict
+      The dictionary returned by `load_horizons_ephemeris`. It should contain
+      'success', 'time', and 'state' keys.
+
+  Output:
+  -------
+    dict | None
+      An enriched dictionary with 'plot_time_s' and 'coe' keys if processing
+      is successful. Returns `None` if the input indicates a failure.
   """
   if result_horizons and result_horizons.get('success'):
     print(f"  ✓ Horizons ephemeris loaded!")
@@ -255,10 +270,31 @@ def compute_initial_state_from_tle(
   to_j2000     : bool  = True,
 ):
   """
-  Compute initial Cartesian state from a TLE using SGP4 at the provided integration start time.
-  Prints step info and TLE lines. Raises RuntimeError on failure.
-  Returns:
-    np.ndarray: 6x1 state vector [m, m, m, m/s, m/s, m/s]
+  Compute initial Cartesian state from a TLE using SGP4.
+  
+  This function computes the initial Cartesian state from a TLE at the provided
+  integration start time. It prints step info and TLE lines.
+  
+  Input:
+  ------
+    tle_line1 : str
+      The first line of the TLE.
+    tle_line2 : str
+      The second line of the TLE.
+    integ_time_o : float
+      The start time of the integration in seconds from the TLE epoch.
+    to_j2000 : bool
+      Flag to indicate if the output state should be in the J2000 frame.
+  
+  Output:
+  -------
+    np.ndarray
+      A 6x1 state vector [m, m, m, m/s, m/s, m/s].
+  
+  Raises:
+  -------
+    RuntimeError
+      If SGP4 propagation fails to produce an initial state.
   """
   print("\nStep 2: Converting TLE to initial Cartesian state...")
   print(f"  TLE Line 1: {tle_line1}")
@@ -289,9 +325,25 @@ def compare_initial_state_with_horizons(
   use_horizons_initial : bool = True,
 ) -> np.ndarray:
   """
-  Compare TLE-derived initial state with Horizons initial state (if available),
-  print diagnostics, and optionally select Horizons state as the initial state.
-  Returns the selected initial state.
+  Compare TLE-derived initial state with Horizons initial state.
+  
+  This function compares the TLE-derived initial state with the Horizons initial
+  state (if available), prints diagnostics, and optionally selects the Horizons
+  state as the initial state for propagation.
+  
+  Input:
+  ------
+    tle_initial_state : np.ndarray
+      The 6x1 initial state vector derived from the TLE.
+    result_horizons : dict
+      The dictionary containing Horizons ephemeris data.
+    use_horizons_initial : bool
+      If True, use the Horizons initial state instead of the TLE-derived one.
+  
+  Output:
+  -------
+    np.ndarray
+      The selected 6x1 initial state vector.
   """
   # Compare with Horizons initial state if available
   if result_horizons and result_horizons.get('success'):
@@ -330,17 +382,59 @@ def compare_initial_state_with_horizons(
   print("\n  Using TLE-derived initial state for high-fidelity propagation")
   return tle_initial_state
 
+def get_et_j2000_from_utc(
+  utc_dt : datetime,
+) -> float:
+  """
+  Convert a UTC datetime object to Ephemeris Time (ET) in seconds past J2000.
+  
+  Input:
+  ------
+    utc_dt : datetime
+      The UTC datetime to convert.
+    
+  Output:
+  -------
+    et_float : float
+      The corresponding Ephemeris Time (ET) in seconds past J2000.
+  """
+
+  utc_str = utc_dt.strftime('%Y-%m-%dT%H:%M:%S')
+  et_float = spice.str2et(utc_str)
+  print(f"  Target start UTC : {utc_str}")
+  print(f"  Target start ET  : {et_float:.3f} seconds past J2000")
+
+  return et_float
+
 def main(
   norad_id       : str,
   start_time_str : str,
   end_time_str   : str,
 ) -> None:
   """
-  Propagate an orbit using a high-fidelity dynamics model. Initial state derived from TLE, then
-  propagated with detailed force models. Compare with SGP4 and JPL Horizons ephemeris.
+  Main function to run the high-fidelity orbit propagation.
+  
+  This function propagates an orbit using a high-fidelity dynamics model. The
+  initial state is derived from a TLE, then propagated with detailed force
+  models. The result is compared with SGP4 and JPL Horizons ephemeris.
+  
+  Input:
+  ------
+    norad_id : str
+      NORAD catalog ID of the satellite.
+    start_time_str : str
+      Start time for propagation in ISO format.
+    end_time_str : str
+      End time for propagation in ISO format.
+  
+  Output:
+  -------
+    None
   """
+  # --- Configuration ---
+  use_spice = True  # Master flag to enable/disable all SPICE-related functionality
 
-  # STEP 0: Process inputs and setup
+  # Process inputs and setup
   inputs = parse_and_validate_inputs(norad_id, start_time_str, end_time_str)
   
   obj_props        = inputs['obj_props']
@@ -370,8 +464,9 @@ def main(
   horizons_filepath        = folderpaths_filepaths['horizons_filepath']
   lsk_filepath             = folderpaths_filepaths['lsk_filepath']
 
-  # Load spice files
-  load_spice_files(lsk_filepath)
+  # Load spice files if SPICE is enabled
+  if use_spice:
+    load_spice_files(lsk_filepath)
 
   # Load Horizons ephemeris
   print("\nStep 1: Loading JPL Horizons ephemeris ...")
@@ -386,18 +481,16 @@ def main(
     end_dt   = target_end_dt,
   )
 
-  # If valid, process Horizons data
+  # Process Horizons data
   result_horizons = process_horizons_result(result_horizons)
 
-  # Step 2: Get initial state from TLE using SGP4
+  # Compute initial state from TLE and compare with Horizons
   tle_initial_state = compute_initial_state_from_tle(
     tle_line1    = tle_line1_object,
     tle_line2    = tle_line2_object,
     integ_time_o = integ_time_o,
     to_j2000     = True,
   )
-
-  # Compare with Horizons initial state
   initial_state = compare_initial_state_with_horizons(
     tle_initial_state    = tle_initial_state,
     result_horizons      = result_horizons, # type: ignore
@@ -408,19 +501,14 @@ def main(
   print("\nStep 3: Setting up high-fidelity dynamics model ...")
   print(f"  Including: Two-body gravity, J2, J3, J4, Atmospheric drag, Third-body (Sun/Moon)")
   
-  # Convert UTC datetime to ET seconds past J2000
-  utc_str = target_start_dt.strftime('%Y-%m-%dT%H:%M:%S')
-  et_j2000_time_o = spice.str2et(utc_str)
-  
-  print(f"  Target start UTC: {utc_str}")
-  print(f"  Target start ET seconds from J2000: {et_j2000_time_o:.3f}")
-  
-  # Clear kernels (they'll be reloaded in Acceleration init)
-  spice.kclear()
+  # Convert UTC datetime to ET seconds past J2000 if SPICE is enabled
+  et_float_time_o = 0.0
+  if use_spice:
+    et_float_time_o = get_et_j2000_from_utc(target_start_dt)
   
   acceleration = Acceleration(
     gp                      = PHYSICALCONSTANTS.EARTH.GP,
-    et_j2000_time_o         = et_j2000_time_o,
+    et_float_time_o         = et_float_time_o,
     time_o                  = integ_time_o,
     j2                      = PHYSICALCONSTANTS.EARTH.J2,
     j3                      = PHYSICALCONSTANTS.EARTH.J3,
@@ -431,7 +519,7 @@ def main(
     cd                      = cd,
     area_drag               = area_drag,
     enable_third_body       = True,
-    third_body_use_spice    = True,
+    third_body_use_spice    = use_spice,
     third_body_bodies       = ['SUN', 'MOON'],
     spice_kernel_folderpath = str(spice_kernels_folderpath),
   )
@@ -593,11 +681,6 @@ def main(
   # Create plots
   print("\nGenerating and saving plots...")
   
-  # Debug: Check what epoch we're passing
-  print(f"\nDEBUG - Epoch being passed to plots: {target_start_dt.isoformat()} UTC")
-  print(f"DEBUG - First time value in result_hifi['plot_time_s']: {result_hifi['plot_time_s'][0]} seconds")
-  print(f"DEBUG - Expected first UTC time: {(target_start_dt + timedelta(seconds=result_hifi['plot_time_s'][0])).isoformat()}")
-  
   # Horizons plots (first)
   if result_horizons and result_horizons['success']:
     fig1 = plot_3d_trajectories(result_horizons)
@@ -713,16 +796,6 @@ def main(
   if result_horizons and result_horizons['success'] and result_hifi['success']:
     print("\nGenerating error comparison plots...")
     
-    # First, let's debug the states at a few time points
-    print("\nDebug: Comparing states at key time points")
-    for idx in [0, len(result_hifi['time'])//2, -1]:
-      t = result_hifi['plot_time_s'][idx]
-      print(f"\n  At t = {t/3600:.2f} hours:")
-      print(f"    Hi-Fi pos: [{result_hifi['state'][0,idx]/1e3:.3f}, {result_hifi['state'][1,idx]/1e3:.3f}, {result_hifi['state'][2,idx]/1e3:.3f}] km")
-      print(f"    Horiz pos: [{result_horizons['state'][0,idx]/1e3:.3f}, {result_horizons['state'][1,idx]/1e3:.3f}, {result_horizons['state'][2,idx]/1e3:.3f}] km")
-      pos_diff = np.linalg.norm(result_hifi['state'][0:3,idx] - result_horizons['state'][0:3,idx]) / 1e3
-      print(f"    Position difference: {pos_diff:.3f} km")
-    
     # Position and velocity error plots
     fig_err_3d = plot_3d_error(result_horizons, result_hifi)
     fig_err_3d.suptitle('ISS Orbit Error: Horizons vs High-Fidelity', fontsize=16)
@@ -756,17 +829,31 @@ def main(
   print(f"\nAll figures saved to: {output_folderpath}")
   plt.show()
   
+  # Unload all SPICE kernels if they were loaded
+  if use_spice:
+    spice.kclear()
+  
   return result_hifi
 
 
-if __name__ == "__main__":
+def parse_command_line_arguments() -> argparse.Namespace:
+  """
+  Parse command-line arguments for the orbit propagation script.
+  
+  Output:
+  -------
+    argparse.Namespace
+      An object containing the parsed arguments (norad_id, start_time, end_time).
+  """
   parser = argparse.ArgumentParser(description="Run high-fidelity orbit propagation.")
   parser.add_argument('norad_id'   , type=str, help="NORAD Catalog ID of the satellite (e.g., '25544' for ISS).")
   parser.add_argument('start_time' , type=str, help="Start time for propagation in ISO format (e.g., '2025-10-01T00:00:00').")
   parser.add_argument('end_time'   , type=str, help="End time for propagation in ISO format (e.g., '2025-10-02T00:00:00').")
+  return parser.parse_args()
 
-  args = parser.parse_args()
-  
+
+if __name__ == "__main__":
+  args = parse_command_line_arguments()
   main(
     args.norad_id,
     args.start_time,

@@ -340,13 +340,6 @@ class ThirdBodyGravity:
                 f"  - pck/pck00010.tpc"
             )
         
-        # Load leap second kernel
-        lsk_file = kernel_folderpath / 'naif0012.tls'
-        if lsk_file.exists():
-            spice.furnsh(str(lsk_file))
-        else:
-            raise FileNotFoundError(f"LSK file not found: {lsk_file}")
-        
         # Load planetary ephemeris
         spk_files = list(kernel_folderpath.glob('de*.bsp'))
         if spk_files:
@@ -549,16 +542,6 @@ class ThirdBodyGravity:
 
         return acc_vec
     
-    def __del__(self):
-        """
-        Unload SPICE kernels on cleanup
-        """
-        if self.use_spice:
-            try:
-                spice.kclear()
-            except:
-                pass
-
 
 class Gravity:
     """
@@ -940,7 +923,7 @@ class Acceleration:
     def __init__(
         self,
         gp                      : float,
-        et_j2000_time_o         : float = 0.0,
+        time_et_o               : float = 0.0,
         time_o                  : float = 0.0,
         j2                      : float = 0.0,
         j3                      : float = 0.0,
@@ -965,8 +948,8 @@ class Acceleration:
         ------
         gp : float
             Gravitational parameter of central body [m³/s²]
-        et_j2000_time_o : float
-            ET seconds from J2000 at the initial time [s]
+        time_et_o : float
+            Ephemeris Time (ET) seconds from J2000 at the initial time [s]
         time_o : float
             Initial time in integrator's time system [s]
         j2, j3, j4 : float
@@ -997,7 +980,7 @@ class Acceleration:
             Cross-sectional area for SRP [m²]
         """
         # Compute ET offset internally
-        et_offset = et_j2000_time_o - time_o
+        et_offset = time_et_o - time_o
         
         # Create acceleration component instances
         self.gravity = Gravity(
