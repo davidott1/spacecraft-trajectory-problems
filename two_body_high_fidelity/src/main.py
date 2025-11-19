@@ -253,8 +253,7 @@ def process_horizons_result(
         PHYSICALCONSTANTS.EARTH.GP,
       )
       for key in result_horizons['coe'].keys():
-        if coe[key] is not None:
-          result_horizons['coe'][key][i] = coe[key]
+        result_horizons['coe'][key][i] = coe[key]
 
     return result_horizons
 
@@ -406,6 +405,89 @@ def get_et_j2000_from_utc(
 
   return et_float
 
+def propagate_sgp4_at_horizons_grid(
+  result_horizons : dict,
+  integ_time_o    : float,
+  tle_line1       : str,
+  tle_line2       : str,
+) -> dict | None:
+  """
+  Propagate SGP4 on the same time grid as the Horizons ephemeris.
+  
+  This function takes a Horizons result dictionary and propagates a TLE using
+  SGP4 at the exact time points from the Horizons data. It then enriches the
+  SGP4 result with time arrays and classical orbital elements.
+  
+  Input:
+  ------
+    result_horizons : dict
+      The processed dictionary from JPL Horizons, containing 'success', 'plot_time_s'.
+    integ_time_o : float
+      The start time of the integration in seconds from the TLE epoch.
+    tle_line1 : str
+      The first line of the TLE.
+    tle_line2 : str
+      The second line of the TLE.
+      
+  Output:
+  -------
+    dict | None
+      An enriched dictionary with SGP4 results, or None if propagation fails.
+  """
+  # Propagate SGP4 at Horizons time points for direct comparison
+  if not (result_horizons and result_horizons.get('success')):
+    return None
+    
+  print("  Propagating SGP4 at Horizons ephemeris time points ...")
+  
+  # Convert Horizons plot_time_s to integration times for SGP4
+  sgp4_eval_times = result_horizons['plot_time_s'] + integ_time_o
+  
+  result_sgp4_at_horizons = propagate_tle(
+    tle_line1  = tle_line1,
+    tle_line2  = tle_line2,
+    to_j2000   = True,
+    t_eval     = sgp4_eval_times,
+  )
+  
+  if not result_sgp4_at_horizons['success']:
+    print(f"  ✗ SGP4 propagation at Horizons times failed: {result_sgp4_at_horizons['message']}")
+    return None
+
+  # Store integration time (seconds from TLE epoch)
+  result_sgp4_at_horizons['integ_time_s'] = result_sgp4_at_horizons['time']
+  
+  # Create plotting time array (seconds from target start time)
+  result_sgp4_at_horizons['plot_time_s'] = result_sgp4_at_horizons['time'] - integ_time_o
+  
+  # Compute COEs for SGP4 data
+  num_points_sgp4 = result_sgp4_at_horizons['state'].shape[1]
+  result_sgp4_at_horizons['coe'] = {
+    'sma'  : np.zeros(num_points_sgp4),
+    'ecc'  : np.zeros(num_points_sgp4),
+    'inc'  : np.zeros(num_points_sgp4),
+    'raan' : np.zeros(num_points_sgp4),
+    'argp' : np.zeros(num_points_sgp4),
+    'ma'   : np.zeros(num_points_sgp4),
+    'ta'   : np.zeros(num_points_sgp4),
+    'ea'   : np.zeros(num_points_sgp4),
+  }
+  
+  for i in range(num_points_sgp4):
+    coe = OrbitConverter.pv_to_coe(
+      result_sgp4_at_horizons['state'][0:3, i],
+      result_sgp4_at_horizons['state'][3:6, i],
+      PHYSICALCONSTANTS.EARTH.GP
+    )
+    for key in result_sgp4_at_horizons['coe'].keys():
+      result_sgp4_at_horizons['coe'][key][i] = coe[key]
+  
+  print(f"  ✓ SGP4 propagation at Horizons times successful!")
+  print(f"  Number of points: {num_points_sgp4}")
+  print(f"  Time span: {result_sgp4_at_horizons['plot_time_s'][0]:.1f} to {result_sgp4_at_horizons['plot_time_s'][-1]:.1f} seconds")
+  
+  return result_sgp4_at_horizons
+
 def main(
   norad_id       : str,
   start_time_str : str,
@@ -497,18 +579,19 @@ def main(
     use_horizons_initial = True,
   )
 
-  # Step 3: Set up high-fidelity dynamics model
-  print("\nStep 3: Setting up high-fidelity dynamics model ...")
+  # Set up high-fidelity dynamics model
+  print("\n Setting up high-fidelity dynamics model ...")
   print(f"  Including: Two-body gravity, J2, J3, J4, Atmospheric drag, Third-body (Sun/Moon)")
   
   # Convert UTC datetime to ET seconds past J2000 if SPICE is enabled
-  et_float_time_o = 0.0
+  time_et_o = 0.0
   if use_spice:
-    et_float_time_o = get_et_j2000_from_utc(target_start_dt)
+    time_et_o = get_et_j2000_from_utc(target_start_dt)
   
+  # Define acceleration model
   acceleration = Acceleration(
     gp                      = PHYSICALCONSTANTS.EARTH.GP,
-    et_float_time_o         = et_float_time_o,
+    time_et_o               = time_et_o,
     time_o                  = integ_time_o,
     j2                      = PHYSICALCONSTANTS.EARTH.J2,
     j3                      = PHYSICALCONSTANTS.EARTH.J3,
@@ -524,8 +607,8 @@ def main(
     spice_kernel_folderpath = str(spice_kernels_folderpath),
   )
   
-  # Step 4: Propagate with high-fidelity model
-  print("\nStep 4: Propagating orbit with high-fidelity model using numerical integration ...")
+  # Propagate with high-fidelity model
+  print("\n Propagating orbit with high-fidelity model using numerical integration ...")
   print(f"  Time span: {target_start_dt} to {target_end_dt} UTC ({delta_time/3600:.1f} hours)")
   
   # Use Horizons time grid for high-fidelity propagation
@@ -549,18 +632,8 @@ def main(
       gp                  = PHYSICALCONSTANTS.EARTH.GP,
     )
   else:
-    # Fallback to regular grid if Horizons not available
-    result_hifi = propagate_state_numerical_integration(
-      initial_state       = initial_state,
-      time_o              = integ_time_o,
-      time_f              = integ_time_f,
-      dynamics            = acceleration,
-      method              = 'DOP853',
-      rtol                = 1e-12,
-      atol                = 1e-12,
-      get_coe_time_series = True,
-      gp                  = PHYSICALCONSTANTS.EARTH.GP,
-    )
+    # If Horizons data is not available, error analysis is not possible.
+    raise RuntimeError("Horizons ephemeris is required for high-fidelity propagation and error analysis, but it failed to load.")
   
   if result_hifi['success']:
     print(f"  ✓ Propagation successful!")
@@ -575,91 +648,18 @@ def main(
     print(f"  Plotting time range (from Oct 1 00:00): {result_hifi['plot_time_s'][0]:.1f} to {result_hifi['plot_time_s'][-1]:.1f} seconds")
   else:
     print(f"  ✗ Propagation failed: {result_hifi['message']}")
-    return result_hifi
+    return result_hifi # type: ignore
   
-  # Step 5: Propagating with SGP4 for comparison
-  print("\nStep 5: Propagating with SGP4 for comparison...")
-  
-  # First, propagate SGP4 at Horizons time points for direct comparison
-  if result_horizons and result_horizons['success']:
-    print("  Propagating SGP4 at Horizons ephemeris time points...")
-    
-    # Convert Horizons plot_time_s to integration times for SGP4
-    sgp4_eval_times = result_horizons['plot_time_s'] + integ_time_o
-    
-    result_sgp4_at_horizons = propagate_tle(
-      tle_line1  = tle_line1_object,
-      tle_line2  = tle_line2_object,
-      time_o     = sgp4_eval_times[0],  # These are now ignored when t_eval is provided
-      time_f     = sgp4_eval_times[-1], # These are now ignored when t_eval is provided
-      num_points = len(sgp4_eval_times), # This is now ignored when t_eval is provided
-      to_j2000   = True,
-      t_eval     = sgp4_eval_times,  # Pass exact evaluation times
-    )
-    
-    if result_sgp4_at_horizons['success']:
-      # Store integration time (seconds from TLE epoch)
-      result_sgp4_at_horizons['integ_time_s'] = result_sgp4_at_horizons['time']
-      
-      # Create plotting time array (seconds from target start time)
-      result_sgp4_at_horizons['plot_time_s'] = result_sgp4_at_horizons['time'] - integ_time_o
-      
-      # Compute COEs for SGP4 data
-      num_points_sgp4 = result_sgp4_at_horizons['state'].shape[1]
-      result_sgp4_at_horizons['coe'] = {
-        'sma'  : np.zeros(num_points_sgp4),
-        'ecc'  : np.zeros(num_points_sgp4),
-        'inc'  : np.zeros(num_points_sgp4),
-        'raan' : np.zeros(num_points_sgp4),
-        'argp' : np.zeros(num_points_sgp4),
-        'ma'   : np.zeros(num_points_sgp4),
-        'ta'   : np.zeros(num_points_sgp4),
-        'ea'   : np.zeros(num_points_sgp4),
-      }
-      
-      for i in range(num_points_sgp4):
-        coe = OrbitConverter.pv_to_coe(
-          result_sgp4_at_horizons['state'][0:3, i],
-          result_sgp4_at_horizons['state'][3:6, i],
-          PHYSICALCONSTANTS.EARTH.GP
-        )
-        for key in result_sgp4_at_horizons['coe'].keys():
-          if coe[key] is not None:
-            result_sgp4_at_horizons['coe'][key][i] = coe[key]
-      
-      print(f"  ✓ SGP4 propagation at Horizons times successful!")
-      print(f"  Number of points: {num_points_sgp4}")
-      print(f"  Time span: {result_sgp4_at_horizons['plot_time_s'][0]:.1f} to {result_sgp4_at_horizons['plot_time_s'][-1]:.1f} seconds")
-    else:
-      print(f"  ✗ SGP4 propagation at Horizons times failed: {result_sgp4_at_horizons['message']}")
-      result_sgp4_at_horizons = None
-  else:
-    result_sgp4_at_horizons = None
-  
-  # Also do regular SGP4 propagation for standalone plots
-  print("  Propagating SGP4 with regular time grid...")
-  result_sgp4 = propagate_tle(
-    tle_line1  = tle_line1_object,
-    tle_line2  = tle_line2_object,
-    time_o     = integ_time_o,
-    time_f     = integ_time_f,
-    num_points = 1000,
-    to_j2000   = True,
+  # Propagating with SGP4 for comparison
+  print("\nPropagating with SGP4 for comparison ...")
+  result_sgp4_at_horizons = propagate_sgp4_at_horizons_grid(
+    result_horizons = result_horizons,
+    integ_time_o    = integ_time_o,
+    tle_line1       = tle_line1_object,
+    tle_line2       = tle_line2_object,
   )
   
-  if result_sgp4['success']:
-    # Store integration time (seconds from TLE epoch)
-    result_sgp4['integ_time_s'] = result_sgp4['time']
-    print(f"  SGP4 integration time (from TLE epoch): [{result_sgp4['integ_time_s'][0]:.1f}, {result_sgp4['integ_time_s'][-1]:.1f}] seconds")
-    
-    # Create plotting time array (seconds from target start time)
-    result_sgp4['plot_time_s'] = result_sgp4['time'] - integ_time_o
-    print(f"  SGP4 plotting time (from Oct 1 00:00): [{result_sgp4['plot_time_s'][0]:.1f}, {result_sgp4['plot_time_s'][-1]:.1f}] seconds")
-    print(f"  ✓ SGP4 propagation successful!")
-  else:
-    print(f"  ✗ SGP4 propagation failed: {result_sgp4['message']}")
-  
-  # Step 6: Display results and create plots
+  # Display results and create plots
   print("\n" + "="*60)
   print("Results Summary")
   print("="*60)
@@ -668,8 +668,8 @@ def main(
   if result_horizons and result_horizons['success']:
     print(f"  Horizons:      {result_horizons['plot_time_s'][0]:.1f} to {result_horizons['plot_time_s'][-1]:.1f} seconds")
   print(f"  High-fidelity: {result_hifi['plot_time_s'][0]:.1f} to {result_hifi['plot_time_s'][-1]:.1f} seconds")
-  if result_sgp4['success']:
-    print(f"  SGP4:          {result_sgp4['plot_time_s'][0]:.1f} to {result_sgp4['plot_time_s'][-1]:.1f} seconds")
+  if result_sgp4_at_horizons and result_sgp4_at_horizons['success']:
+    print(f"  SGP4:          {result_sgp4_at_horizons['plot_time_s'][0]:.1f} to {result_sgp4_at_horizons['plot_time_s'][-1]:.1f} seconds")
   
   # Print final orbital elements (high-fidelity)
   final_alt_km = (np.linalg.norm(result_hifi['state'][0:3, -1]) - PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR) / 1e3
@@ -704,30 +704,18 @@ def main(
   fig4.savefig(output_folderpath / 'iss_hifi_timeseries.png', dpi=300, bbox_inches='tight')
   print(f"  Saved: {output_folderpath / 'iss_hifi_timeseries.png'}")
   
-  # SGP4 plots (third)
-  if result_sgp4['success']:
-    fig5 = plot_3d_trajectories(result_sgp4)
-    fig5.suptitle('ISS Orbit - SGP4 Propagation', fontsize=16)
-    fig5.savefig(output_folderpath / 'iss_sgp4_3d.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_folderpath / 'iss_sgp4_3d.png'}")
-    
-    fig6 = plot_time_series(result_sgp4, epoch=target_start_dt)
-    fig6.suptitle('ISS Orbit - SGP4 Time Series', fontsize=16)
-    fig6.savefig(output_folderpath / 'iss_sgp4_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_folderpath / 'iss_sgp4_timeseries.png'}")
-  
   # SGP4 at Horizons time points plots
   if result_sgp4_at_horizons and result_sgp4_at_horizons['success']:
     print("\nGenerating SGP4 at Horizons time points plots...")
     
     # 3D trajectory plot
-    fig_sgp4_hz_3d = plot_3d_trajectories(result_sgp4_at_horizons)
+    fig_sgp4_hz_3d = plot_3d_trajectories(result_sgp4_hz)
     fig_sgp4_hz_3d.suptitle('ISS Orbit - SGP4 at Horizons Times', fontsize=16)
     fig_sgp4_hz_3d.savefig(output_folderpath / 'iss_sgp4_at_horizons_3d.png', dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_folderpath / 'iss_sgp4_at_horizons_3d.png'}")
     
     # Time series plot
-    fig_sgp4_hz_ts = plot_time_series(result_sgp4_at_horizons, epoch=target_start_dt)
+    fig_sgp4_hz_ts = plot_time_series(result_sgp4_hz, epoch=target_start_dt)
     fig_sgp4_hz_ts.suptitle('ISS Orbit - SGP4 at Horizons Times - Time Series', fontsize=16)
     fig_sgp4_hz_ts.savefig(output_folderpath / 'iss_sgp4_at_horizons_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_folderpath / 'iss_sgp4_at_horizons_timeseries.png'}")
