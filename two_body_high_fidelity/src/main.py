@@ -59,6 +59,7 @@ def parse_and_validate_inputs(
   norad_id       : str,
   start_time_str : str,
   end_time_str   : str,
+  use_spice      : bool = True,
 ) -> dict:
   """
   Parse and validate input parameters for orbit propagation.
@@ -71,6 +72,8 @@ def parse_and_validate_inputs(
       Start time in ISO format (e.g., '2025-10-01T00:00:00').
     end_time_str : str
       End time in ISO format (e.g., '2025-10-02T00:00:00').
+    use_spice : bool
+      Flag to enable/disable SPICE usage.
   
   Output:
   -------
@@ -130,7 +133,24 @@ def parse_and_validate_inputs(
     'mass'             : obj_props['mass'],
     'cd'               : obj_props['cd'],
     'area_drag'        : obj_props['area_drag'],
+    'use_spice'        : use_spice,
   }
+
+def get_config(inputs: dict) -> SimpleNamespace:
+  """
+  Create configuration object from inputs dictionary.
+  
+  Input:
+  ------
+    inputs : dict
+      Dictionary of input parameters.
+      
+  Output:
+  -------
+    SimpleNamespace
+      Configuration object.
+  """
+  return SimpleNamespace(**inputs)
 
 def setup_paths_and_files(
   norad_id        : str,
@@ -184,18 +204,26 @@ def setup_paths_and_files(
   }
 
 def load_spice_files(
-  lsk_filepath: Path,
-):
+  use_spice                : bool,
+  spice_kernels_folderpath : Path,
+  lsk_filepath             : Path,
+) -> None:
   """
   Load required data files, e.g., SPICE kernels.
   
   Input:
   ------
+    use_spice : bool
+      Flag to enable/disable SPICE usage.
+    spice_kernels_folderpath : Path
+      Path to the SPICE kernels folder.
     lsk_filepath : Path
       Path to the leap seconds kernel file.
   """
-  # Load leap seconds kernel first (minimal kernel set for time conversion)
-  spice.furnsh(str(lsk_filepath))
+  if use_spice:
+    print(f"\nLoading SPICE kernels from: {spice_kernels_folderpath}")
+    # Load leap seconds kernel first (minimal kernel set for time conversion)
+    spice.furnsh(str(lsk_filepath))
 
 def process_horizons_result(
   result_horizons : dict,
@@ -714,6 +742,7 @@ def main(
   norad_id       : str,
   start_time_str : str,
   end_time_str   : str,
+  use_spice      : bool = True,
 ) -> None:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -730,18 +759,16 @@ def main(
       Start time for propagation in ISO format.
     end_time_str : str
       End time for propagation in ISO format.
+    use_spice : bool
+      Flag to enable/disable SPICE usage.
   
   Output:
   -------
     None
   """
-  # Configuration
-  use_spice = True  # Master flag to enable/disable all SPICE-related functionality
-
   # Process inputs and setup
-  inputs_dict = parse_and_validate_inputs(norad_id, start_time_str, end_time_str)
-  # Convert to SimpleNamespace for cleaner dot-notation access
-  config      = SimpleNamespace(**inputs_dict)
+  inputs_dict = parse_and_validate_inputs(norad_id, start_time_str, end_time_str, use_spice)
+  config      = get_config(inputs_dict)
 
   # Set up paths and files
   output_folderpath, spice_kernels_folderpath, horizons_filepath, lsk_filepath = get_simulation_paths(
@@ -752,8 +779,7 @@ def main(
   )
 
   # Load spice files if SPICE is enabled
-  if use_spice:
-    load_spice_files(lsk_filepath)
+  load_spice_files(config.use_spice, spice_kernels_folderpath, lsk_filepath)
 
   # Get Horizons ephemeris
   result_horizons = get_horizons_ephemeris(
@@ -782,7 +808,7 @@ def main(
     mass                     = config.mass,
     cd                       = config.cd,
     area_drag                = config.area_drag,
-    use_spice                = use_spice,
+    use_spice                = config.use_spice,
     spice_kernels_folderpath = spice_kernels_folderpath,
     result_horizons          = result_horizons, # type: ignore
     tle_line1                = config.tle_line1,
@@ -948,7 +974,7 @@ def main(
   plt.show()
   
   # Unload all SPICE kernels if they were loaded
-  if use_spice:
+  if config.use_spice:
     spice.kclear()
   
   return result_hifi
@@ -961,12 +987,17 @@ def parse_command_line_arguments() -> argparse.Namespace:
   Output:
   -------
     argparse.Namespace
-      An object containing the parsed arguments (norad_id, start_time, end_time).
+      An object containing the parsed arguments (norad_id, start_time, end_time, use_spice).
   """
   parser = argparse.ArgumentParser(description="Run high-fidelity orbit propagation.")
   parser.add_argument('norad_id'   , type=str, help="NORAD Catalog ID of the satellite (e.g., '25544' for ISS).")
   parser.add_argument('start_time' , type=str, help="Start time for propagation in ISO format (e.g., '2025-10-01T00:00:00').")
   parser.add_argument('end_time'   , type=str, help="End time for propagation in ISO format (e.g., '2025-10-02T00:00:00').")
+  
+  # Optional arguments
+  parser.add_argument('--no-spice', dest='use_spice', action='store_false', help="Disable SPICE functionality (enabled by default).")
+  parser.set_defaults(use_spice=True)
+  
   return parser.parse_args()
 
 
@@ -976,4 +1007,5 @@ if __name__ == "__main__":
     args.norad_id,
     args.start_time,
     args.end_time,
+    args.use_spice,
   )
