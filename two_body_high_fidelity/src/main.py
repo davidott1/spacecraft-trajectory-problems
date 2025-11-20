@@ -262,6 +262,46 @@ def process_horizons_result(
   print(f"  ✗ Horizons loading failed: {msg}")
   return None
 
+def get_horizons_ephemeris(
+  horizons_filepath : Path,
+  target_start_dt   : datetime,
+  target_end_dt     : datetime,
+) -> dict | None:
+  """
+  Load and process JPL Horizons ephemeris.
+  
+  Input:
+  ------
+    horizons_filepath : Path
+      Path to the Horizons ephemeris file.
+    target_start_dt : datetime
+      Start time for data request.
+    target_end_dt : datetime
+      End time for data request.
+      
+  Output:
+  -------
+    dict | None
+      Processed Horizons result dictionary, or None if loading failed.
+  """
+  # Load Horizons ephemeris
+  print("\n Loading JPL Horizons ephemeris ...")
+  print(f"  File path   : {horizons_filepath}")
+  print(f"  File exists : {horizons_filepath.exists()}")
+  print(f"  Requesting data from {target_start_dt} to {target_end_dt}")
+  
+  # Load Horizons data
+  result_horizons = load_horizons_ephemeris(
+    filepath = str(horizons_filepath),
+    start_dt = target_start_dt,
+    end_dt   = target_end_dt,
+  )
+
+  # Process Horizons data
+  result_horizons = process_horizons_result(result_horizons)
+  
+  return result_horizons
+
 def get_initial_state(
   tle_line1            : str,
   tle_line2            : str,
@@ -295,7 +335,16 @@ def get_initial_state(
   """
   print("\n Determining initial Cartesian state ...")
   
-  # Compute state from TLE
+  # 1. Use Horizons if available and requested
+  if use_horizons_initial and result_horizons and result_horizons.get('success'):
+    horizons_initial_state = result_horizons['state'][:, 0]
+    print(f"  ✓ Using Horizons initial state")
+    print(f"  Horizons initial position: [{horizons_initial_state[0]:.3f}, {horizons_initial_state[1]:.3f}, {horizons_initial_state[2]:.3f}] m")
+    print(f"  Horizons initial velocity: [{horizons_initial_state[3]:.3f}, {horizons_initial_state[4]:.3f}, {horizons_initial_state[5]:.3f}] m/s")
+    return horizons_initial_state
+
+  # 2. Fallback to TLE
+  print(f"  Using TLE-derived initial state")
   print(f"  TLE Line 1: {tle_line1}")
   print(f"  TLE Line 2: {tle_line2}")
 
@@ -311,35 +360,9 @@ def get_initial_state(
     raise RuntimeError(f"Failed to get initial state from TLE: {result_tle_initial['message']}")
 
   tle_initial_state = result_tle_initial['state'][:, 0]
-  
   print(f"  TLE Initial Pos {integ_time_o} : [{tle_initial_state[0]:.3f}, {tle_initial_state[1]:.3f}, {tle_initial_state[2]:.3f}] m")
   print(f"  TLE Initial Vel {integ_time_o} : [{tle_initial_state[3]:.3f}, {tle_initial_state[4]:.3f}, {tle_initial_state[5]:.3f}] m/s")
 
-  # Compare with Horizons if available
-  if result_horizons and result_horizons.get('success'):
-    horizons_initial = result_horizons['state'][:, 0]
-    print(f"\n  Horizons initial position: [{horizons_initial[0]:.3f}, {horizons_initial[1]:.3f}, {horizons_initial[2]:.3f}] m")
-    print(  f"  Horizons initial velocity: [{horizons_initial[3]:.3f}, {horizons_initial[4]:.3f}, {horizons_initial[5]:.3f}] m/s")
-
-    initial_pos_diff = np.linalg.norm(tle_initial_state[0:3] - horizons_initial[0:3])
-    initial_vel_diff = np.linalg.norm(tle_initial_state[3:6] - horizons_initial[3:6])
-    print(f"\n  Initial position difference (TLE vs Horizons): {initial_pos_diff:.3f} m")
-    print(f"  Initial velocity difference (TLE vs Horizons): {initial_vel_diff:.3f} m/s")
-    
-    # Detailed component-wise differences
-    print(f"\n  Component-wise differences (TLE - Horizons):")
-    print(f"    Delta Pos-X: {(tle_initial_state[0] - horizons_initial[0]):>.3f} m")
-    print(f"    Delta Pos-Y: {(tle_initial_state[1] - horizons_initial[1]):>.3f} m")
-    print(f"    Delta Pos-Z: {(tle_initial_state[2] - horizons_initial[2]):>.3f} m")
-    print(f"    Delta Vel-X: {(tle_initial_state[3] - horizons_initial[3]):>.3f} m/s")
-    print(f"    Delta Vel-Y: {(tle_initial_state[4] - horizons_initial[4]):>.3f} m/s")
-    print(f"    Delta Vel-Z: {(tle_initial_state[5] - horizons_initial[5]):>.3f} m/s")
-    
-    if use_horizons_initial:
-      print("\n  ✓ Using Horizons initial state for high-fidelity propagation")
-      return horizons_initial
-
-  print("\n  Using TLE-derived initial state for high-fidelity propagation")
   return tle_initial_state
 
 def get_et_j2000_from_utc(
@@ -646,6 +669,46 @@ def run_propagations(
   
   return result_hifi, result_sgp4_at_horizons
 
+def get_simulation_paths(
+  norad_id        : str,
+  obj_name        : str,
+  target_start_dt : datetime,
+  target_end_dt   : datetime,
+) -> tuple[Path, Path, Path, Path]:
+  """
+  Get paths for output, SPICE kernels, Horizons ephemeris, and leap seconds.
+  
+  Input:
+  ------
+    norad_id : str
+      NORAD ID.
+    obj_name : str
+      Object name.
+    target_start_dt : datetime
+      Start time.
+    target_end_dt : datetime
+      End time.
+      
+  Output:
+  -------
+    tuple[Path, Path, Path, Path]
+      (output_folderpath, spice_kernels_folderpath, horizons_filepath, lsk_filepath)
+  """
+  # Set up paths and files
+  folderpaths_filepaths = setup_paths_and_files(
+    norad_id        = norad_id,
+    obj_name        = obj_name,
+    target_start_dt = target_start_dt,
+    target_end_dt   = target_end_dt,
+  )
+  
+  return (
+    folderpaths_filepaths['output_folderpath'],
+    folderpaths_filepaths['spice_kernels_folderpath'],
+    folderpaths_filepaths['horizons_filepath'],
+    folderpaths_filepaths['lsk_filepath'],
+  )
+
 def main(
   norad_id       : str,
   start_time_str : str,
@@ -692,49 +755,35 @@ def main(
   area_drag        = inputs['area_drag']
 
   # Set up paths and files
-  folderpaths_filepaths = setup_paths_and_files(
+  output_folderpath, spice_kernels_folderpath, horizons_filepath, lsk_filepath = get_simulation_paths(
     norad_id        = norad_id,
     obj_name        = obj_props['name'],
     target_start_dt = target_start_dt,
     target_end_dt   = target_end_dt,
   )
-  
-  output_folderpath        = folderpaths_filepaths['output_folderpath']
-  spice_kernels_folderpath = folderpaths_filepaths['spice_kernels_folderpath']
-  horizons_filepath        = folderpaths_filepaths['horizons_filepath']
-  lsk_filepath             = folderpaths_filepaths['lsk_filepath']
 
   # Load spice files if SPICE is enabled
   if use_spice:
     load_spice_files(lsk_filepath)
 
-  # Load Horizons ephemeris
-  print("\nStep 1: Loading JPL Horizons ephemeris ...")
-  print(f"  File path   : {horizons_filepath}")
-  print(f"  File exists : {horizons_filepath.exists()}")
-  print(f"  Requesting data from {target_start_dt} to {target_end_dt}")
-  
-  # Load Horizons data
-  result_horizons = load_horizons_ephemeris(
-    filepath = str(horizons_filepath),
-    start_dt = target_start_dt,
-    end_dt   = target_end_dt,
+  # Get Horizons ephemeris
+  result_horizons = get_horizons_ephemeris(
+    horizons_filepath = horizons_filepath,
+    target_start_dt   = target_start_dt,
+    target_end_dt     = target_end_dt,
   )
 
-  # Process Horizons data
-  result_horizons = process_horizons_result(result_horizons)
-
-  # Compute initial state from TLE and compare with Horizons
+  # Determine initial state (from Horizons if available, else TLE)
   initial_state = get_initial_state(
     tle_line1            = tle_line1_object,
     tle_line2            = tle_line2_object,
     integ_time_o         = integ_time_o,
-    result_horizons      = result_horizons, # type: ignore
+    result_horizons      = result_horizons,
     use_horizons_initial = True,
     to_j2000             = True,
   )
 
-  # Run propagations
+  # Run propagations: high-fidelity and SGP4 at Horizons times
   result_hifi, result_sgp4_at_horizons = run_propagations(
     initial_state            = initial_state,
     integ_time_o             = integ_time_o,
