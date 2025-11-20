@@ -33,6 +33,7 @@ from pathlib         import Path
 from scipy.integrate import solve_ivp
 from datetime        import datetime, timedelta
 from sgp4.api        import Satrec
+from types           import SimpleNamespace
 
 from src.plot.trajectory             import plot_3d_trajectories, plot_time_series, plot_3d_error, plot_time_series_error
 from src.propagation.propagator      import propagate_state_numerical_integration
@@ -738,28 +739,16 @@ def main(
   use_spice = True  # Master flag to enable/disable all SPICE-related functionality
 
   # Process inputs and setup
-  inputs = parse_and_validate_inputs(norad_id, start_time_str, end_time_str)
-  
-  obj_props        = inputs['obj_props']
-  tle_line1_object = inputs['tle_line1']
-  tle_line2_object = inputs['tle_line2']
-  tle_epoch_dt     = inputs['tle_epoch_dt']
-  target_start_dt  = inputs['target_start_dt']
-  target_end_dt    = inputs['target_end_dt']
-  delta_time       = inputs['delta_time']
-  integ_time_o     = inputs['integ_time_o']
-  integ_time_f     = inputs['integ_time_f']
-  delta_integ_time = inputs['delta_integ_time']
-  mass             = inputs['mass']
-  cd               = inputs['cd']
-  area_drag        = inputs['area_drag']
+  inputs_dict = parse_and_validate_inputs(norad_id, start_time_str, end_time_str)
+  # Convert to SimpleNamespace for cleaner dot-notation access
+  config      = SimpleNamespace(**inputs_dict)
 
   # Set up paths and files
   output_folderpath, spice_kernels_folderpath, horizons_filepath, lsk_filepath = get_simulation_paths(
     norad_id        = norad_id,
-    obj_name        = obj_props['name'],
-    target_start_dt = target_start_dt,
-    target_end_dt   = target_end_dt,
+    obj_name        = config.obj_props['name'],
+    target_start_dt = config.target_start_dt,
+    target_end_dt   = config.target_end_dt,
   )
 
   # Load spice files if SPICE is enabled
@@ -769,15 +758,15 @@ def main(
   # Get Horizons ephemeris
   result_horizons = get_horizons_ephemeris(
     horizons_filepath = horizons_filepath,
-    target_start_dt   = target_start_dt,
-    target_end_dt     = target_end_dt,
+    target_start_dt   = config.target_start_dt,
+    target_end_dt     = config.target_end_dt,
   )
 
   # Determine initial state (from Horizons if available, else TLE)
   initial_state = get_initial_state(
-    tle_line1            = tle_line1_object,
-    tle_line2            = tle_line2_object,
-    integ_time_o         = integ_time_o,
+    tle_line1            = config.tle_line1,
+    tle_line2            = config.tle_line2,
+    integ_time_o         = config.integ_time_o,
     result_horizons      = result_horizons,
     use_horizons_initial = True,
     to_j2000             = True,
@@ -786,18 +775,18 @@ def main(
   # Run propagations: high-fidelity and SGP4 at Horizons times
   result_hifi, result_sgp4_at_horizons = run_propagations(
     initial_state            = initial_state,
-    integ_time_o             = integ_time_o,
-    integ_time_f             = integ_time_f,
-    target_start_dt          = target_start_dt,
-    target_end_dt            = target_end_dt,
-    mass                     = mass,
-    cd                       = cd,
-    area_drag                = area_drag,
+    integ_time_o             = config.integ_time_o,
+    integ_time_f             = config.integ_time_f,
+    target_start_dt          = config.target_start_dt,
+    target_end_dt            = config.target_end_dt,
+    mass                     = config.mass,
+    cd                       = config.cd,
+    area_drag                = config.area_drag,
     use_spice                = use_spice,
     spice_kernels_folderpath = spice_kernels_folderpath,
     result_horizons          = result_horizons, # type: ignore
-    tle_line1                = tle_line1_object,
-    tle_line2                = tle_line2_object,
+    tle_line1                = config.tle_line1,
+    tle_line2                = config.tle_line2,
   )
   
   # Display results and create plots
@@ -829,7 +818,7 @@ def main(
     fig1.savefig(output_folderpath / 'iss_horizons_3d.png', dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_folderpath / 'iss_horizons_3d.png'}")
     
-    fig2 = plot_time_series(result_horizons, epoch=target_start_dt)
+    fig2 = plot_time_series(result_horizons, epoch=config.target_start_dt)
     fig2.suptitle('ISS Orbit - JPL Horizons Time Series', fontsize=16)
     fig2.savefig(output_folderpath / 'iss_horizons_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_folderpath / 'iss_horizons_timeseries.png'}")
@@ -840,7 +829,7 @@ def main(
   fig3.savefig(output_folderpath / 'iss_hifi_3d.png', dpi=300, bbox_inches='tight')
   print(f"  Saved: {output_folderpath / 'iss_hifi_3d.png'}")
   
-  fig4 = plot_time_series(result_hifi, epoch=target_start_dt)
+  fig4 = plot_time_series(result_hifi, epoch=config.target_start_dt)
   fig4.suptitle('ISS Orbit - High-Fidelity Time Series', fontsize=16)
   fig4.savefig(output_folderpath / 'iss_hifi_timeseries.png', dpi=300, bbox_inches='tight')
   print(f"  Saved: {output_folderpath / 'iss_hifi_timeseries.png'}")
@@ -856,7 +845,7 @@ def main(
     print(f"  Saved: {output_folderpath / 'iss_sgp4_at_horizons_3d.png'}")
     
     # Time series plot
-    fig_sgp4_hz_ts = plot_time_series(result_sgp4_at_horizons, epoch=target_start_dt)
+    fig_sgp4_hz_ts = plot_time_series(result_sgp4_at_horizons, epoch=config.target_start_dt)
     fig_sgp4_hz_ts.suptitle('ISS Orbit - SGP4 at Horizons Times - Time Series', fontsize=16)
     fig_sgp4_hz_ts.savefig(output_folderpath / 'iss_sgp4_at_horizons_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_folderpath / 'iss_sgp4_at_horizons_timeseries.png'}")
@@ -872,7 +861,7 @@ def main(
       print(f"  Saved: {output_folderpath / 'iss_sgp4_error_3d.png'}")
       
       # Time series error plot (RIC frame)
-      fig_sgp4_err_ts = plot_time_series_error(result_horizons, result_sgp4_at_horizons, epoch=target_start_dt, use_ric=False)
+      fig_sgp4_err_ts = plot_time_series_error(result_horizons, result_sgp4_at_horizons, epoch=config.target_start_dt, use_ric=False)
       fig_sgp4_err_ts.suptitle('ISS XYZ Position/Velocity Errors: Horizons vs SGP4', fontsize=16)
       fig_sgp4_err_ts.savefig(output_folderpath / 'iss_sgp4_error_timeseries.png', dpi=300, bbox_inches='tight')
       print(f"  Saved: {output_folderpath / 'iss_sgp4_error_timeseries.png'}")
@@ -932,7 +921,7 @@ def main(
     print(f"  Saved: {output_folderpath / 'iss_error_3d.png'}")
     
     # Time series error plots
-    fig_err_ts = plot_time_series_error(result_horizons, result_hifi, epoch=target_start_dt)
+    fig_err_ts = plot_time_series_error(result_horizons, result_hifi, epoch=config.target_start_dt)
     fig_err_ts.suptitle('ISS RIC Position/Velocity Errors: Horizons vs High-Fidelity', fontsize=16)
     fig_err_ts.savefig(output_folderpath / 'iss_error_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_folderpath / 'iss_error_timeseries.png'}")
