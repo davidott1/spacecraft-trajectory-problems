@@ -262,17 +262,16 @@ def process_horizons_result(
   print(f"  ✗ Horizons loading failed: {msg}")
   return None
 
-def compute_initial_state_from_tle(
-  tle_line1    : str,
-  tle_line2    : str,
-  integ_time_o : float,
-  to_j2000     : bool  = True,
-):
+def get_initial_state(
+  tle_line1            : str,
+  tle_line2            : str,
+  integ_time_o         : float,
+  result_horizons      : dict | None,
+  use_horizons_initial : bool = True,
+  to_j2000             : bool = True,
+) -> np.ndarray:
   """
-  Compute initial Cartesian state from a TLE using SGP4.
-  
-  This function computes the initial Cartesian state from a TLE at the provided
-  integration start time. It prints step info and TLE lines.
+  Get initial Cartesian state from Horizons (if available) or TLE.
   
   Input:
   ------
@@ -282,6 +281,10 @@ def compute_initial_state_from_tle(
       The second line of the TLE.
     integ_time_o : float
       The start time of the integration in seconds from the TLE epoch.
+    result_horizons : dict | None
+      The dictionary containing Horizons ephemeris data.
+    use_horizons_initial : bool
+      If True and Horizons data is available, use it. Otherwise use TLE.
     to_j2000 : bool
       Flag to indicate if the output state should be in the J2000 frame.
   
@@ -289,13 +292,10 @@ def compute_initial_state_from_tle(
   -------
     np.ndarray
       A 6x1 state vector [m, m, m, m/s, m/s, m/s].
-  
-  Raises:
-  -------
-    RuntimeError
-      If SGP4 propagation fails to produce an initial state.
   """
-  print("\nStep 2: Converting TLE to initial Cartesian state...")
+  print("\n Determining initial Cartesian state ...")
+  
+  # Compute state from TLE
   print(f"  TLE Line 1: {tle_line1}")
   print(f"  TLE Line 2: {tle_line2}")
 
@@ -303,48 +303,19 @@ def compute_initial_state_from_tle(
     tle_line1  = tle_line1,
     tle_line2  = tle_line2,
     time_o     = integ_time_o,
-    time_f     = integ_time_o,  # just get initial state at target start time
+    time_f     = integ_time_o,
     num_points = 1,
     to_j2000   = to_j2000,
   )
   if not result_tle_initial['success']:
     raise RuntimeError(f"Failed to get initial state from TLE: {result_tle_initial['message']}")
 
-  initial_state = result_tle_initial['state'][:, 0]
-
-  # Include requested prints
-  print(f"  Initial Pos {integ_time_o} : [{initial_state[0]:.3f}, {initial_state[1]:.3f}, {initial_state[2]:.3f}] m")
-  print(f"  Initial Vel {integ_time_o} : [{initial_state[3]:.3f}, {initial_state[4]:.3f}, {initial_state[5]:.3f}] m/s")
-
-  return initial_state
-
-def compare_initial_state_with_horizons(
-  tle_initial_state    : np.ndarray,
-  result_horizons      : dict,
-  use_horizons_initial : bool = True,
-) -> np.ndarray:
-  """
-  Compare TLE-derived initial state with Horizons initial state.
+  tle_initial_state = result_tle_initial['state'][:, 0]
   
-  This function compares the TLE-derived initial state with the Horizons initial
-  state (if available), prints diagnostics, and optionally selects the Horizons
-  state as the initial state for propagation.
-  
-  Input:
-  ------
-    tle_initial_state : np.ndarray
-      The 6x1 initial state vector derived from the TLE.
-    result_horizons : dict
-      The dictionary containing Horizons ephemeris data.
-    use_horizons_initial : bool
-      If True, use the Horizons initial state instead of the TLE-derived one.
-  
-  Output:
-  -------
-    np.ndarray
-      The selected 6x1 initial state vector.
-  """
-  # Compare with Horizons initial state if available
+  print(f"  TLE Initial Pos {integ_time_o} : [{tle_initial_state[0]:.3f}, {tle_initial_state[1]:.3f}, {tle_initial_state[2]:.3f}] m")
+  print(f"  TLE Initial Vel {integ_time_o} : [{tle_initial_state[3]:.3f}, {tle_initial_state[4]:.3f}, {tle_initial_state[5]:.3f}] m/s")
+
+  # Compare with Horizons if available
   if result_horizons and result_horizons.get('success'):
     horizons_initial = result_horizons['state'][:, 0]
     print(f"\n  Horizons initial position: [{horizons_initial[0]:.3f}, {horizons_initial[1]:.3f}, {horizons_initial[2]:.3f}] m")
@@ -364,20 +335,10 @@ def compare_initial_state_with_horizons(
     print(f"    Delta Vel-Y: {(tle_initial_state[4] - horizons_initial[4]):>.3f} m/s")
     print(f"    Delta Vel-Z: {(tle_initial_state[5] - horizons_initial[5]):>.3f} m/s")
     
-    # Check magnitudes
-    print(f"\n  Magnitude comparison:")
-    print(f"         TLE Pos Mag : {np.linalg.norm(tle_initial_state[0:3]):>.3f} m")
-    print(f"    Horizons Pos Mag : {np.linalg.norm( horizons_initial[0:3]):>.3f} m")
-    print(f"         TLE Vel Mag : {np.linalg.norm(tle_initial_state[3:6]):>.3f} m/s")
-    print(f"    Horizons Vel Mag : {np.linalg.norm( horizons_initial[3:6]):>.3f} m/s")
-
-    # Option to use Horizons initial state vs. TLE-derived state
     if use_horizons_initial:
       print("\n  ✓ Using Horizons initial state for high-fidelity propagation")
       return horizons_initial
-    else:
-      pass
-  
+
   print("\n  Using TLE-derived initial state for high-fidelity propagation")
   return tle_initial_state
 
@@ -488,97 +449,52 @@ def propagate_sgp4_at_horizons_grid(
   
   return result_sgp4_at_horizons
 
-def main(
-  norad_id       : str,
-  start_time_str : str,
-  end_time_str   : str,
-) -> None:
+def run_high_fidelity_propagation(
+  initial_state            : np.ndarray,
+  integ_time_o             : float,
+  integ_time_f             : float,
+  target_start_dt          : datetime,
+  target_end_dt            : datetime,
+  mass                     : float,
+  cd                       : float,
+  area_drag                : float,
+  use_spice                : bool,
+  spice_kernels_folderpath : Path,
+  result_horizons          : dict,
+) -> dict:
   """
-  Main function to run the high-fidelity orbit propagation.
-  
-  This function propagates an orbit using a high-fidelity dynamics model. The
-  initial state is derived from a TLE, then propagated with detailed force
-  models. The result is compared with SGP4 and JPL Horizons ephemeris.
+  Configure and run the high-fidelity numerical propagator.
   
   Input:
   ------
-    norad_id : str
-      NORAD catalog ID of the satellite.
-    start_time_str : str
-      Start time for propagation in ISO format.
-    end_time_str : str
-      End time for propagation in ISO format.
-  
+    initial_state : np.ndarray
+      Initial state vector [x, y, z, vx, vy, vz].
+    integ_time_o : float
+      Integration start time (seconds from TLE epoch).
+    integ_time_f : float
+      Integration end time (seconds from TLE epoch).
+    target_start_dt : datetime
+      Target start datetime.
+    target_end_dt : datetime
+      Target end datetime.
+    mass : float
+      Satellite mass [kg].
+    cd : float
+      Drag coefficient.
+    area_drag : float
+      Drag area [m^2].
+    use_spice : bool
+      Whether to use SPICE for third-body ephemerides.
+    spice_kernels_folderpath : Path
+      Path to SPICE kernels folder.
+    result_horizons : dict
+      Result from Horizons loader (used for time grid).
+      
   Output:
   -------
-    None
+    dict
+      Propagation result dictionary.
   """
-  # --- Configuration ---
-  use_spice = True  # Master flag to enable/disable all SPICE-related functionality
-
-  # Process inputs and setup
-  inputs = parse_and_validate_inputs(norad_id, start_time_str, end_time_str)
-  
-  obj_props        = inputs['obj_props']
-  tle_line1_object = inputs['tle_line1']
-  tle_line2_object = inputs['tle_line2']
-  tle_epoch_dt     = inputs['tle_epoch_dt']
-  target_start_dt  = inputs['target_start_dt']
-  target_end_dt    = inputs['target_end_dt']
-  delta_time       = inputs['delta_time']
-  integ_time_o     = inputs['integ_time_o']
-  integ_time_f     = inputs['integ_time_f']
-  delta_integ_time = inputs['delta_integ_time']
-  mass             = inputs['mass']
-  cd               = inputs['cd']
-  area_drag        = inputs['area_drag']
-
-  # Set up paths and files
-  folderpaths_filepaths = setup_paths_and_files(
-    norad_id        = norad_id,
-    obj_name        = obj_props['name'],
-    target_start_dt = target_start_dt,
-    target_end_dt   = target_end_dt,
-  )
-
-  output_folderpath        = folderpaths_filepaths['output_folderpath']
-  spice_kernels_folderpath = folderpaths_filepaths['spice_kernels_folderpath']
-  horizons_filepath        = folderpaths_filepaths['horizons_filepath']
-  lsk_filepath             = folderpaths_filepaths['lsk_filepath']
-
-  # Load spice files if SPICE is enabled
-  if use_spice:
-    load_spice_files(lsk_filepath)
-
-  # Load Horizons ephemeris
-  print("\nStep 1: Loading JPL Horizons ephemeris ...")
-  print(f"  File path   : {horizons_filepath}")
-  print(f"  File exists : {horizons_filepath.exists()}")
-  print(f"  Requesting data from {target_start_dt} to {target_end_dt}")
-  
-  # Load Horizons data
-  result_horizons = load_horizons_ephemeris(
-    filepath = str(horizons_filepath),
-    start_dt = target_start_dt,
-    end_dt   = target_end_dt,
-  )
-
-  # Process Horizons data
-  result_horizons = process_horizons_result(result_horizons)
-
-  # Compute initial state from TLE and compare with Horizons
-  tle_initial_state = compute_initial_state_from_tle(
-    tle_line1    = tle_line1_object,
-    tle_line2    = tle_line2_object,
-    integ_time_o = integ_time_o,
-    to_j2000     = True,
-  )
-  initial_state = compare_initial_state_with_horizons(
-    tle_initial_state    = tle_initial_state,
-    result_horizons      = result_horizons, # type: ignore
-    use_horizons_initial = True,
-  )
-
   # Set up high-fidelity dynamics model
   print("\n Setting up high-fidelity dynamics model ...")
   print(f"  Including: Two-body gravity, J2, J3, J4, Atmospheric drag, Third-body (Sun/Moon)")
@@ -608,6 +524,7 @@ def main(
   )
   
   # Propagate with high-fidelity model
+  delta_time = (target_end_dt - target_start_dt).total_seconds()
   print("\n Propagating orbit with high-fidelity model using numerical integration ...")
   print(f"  Time span: {target_start_dt} to {target_end_dt} UTC ({delta_time/3600:.1f} hours)")
   
@@ -648,15 +565,190 @@ def main(
     print(f"  Plotting time range (from Oct 1 00:00): {result_hifi['plot_time_s'][0]:.1f} to {result_hifi['plot_time_s'][-1]:.1f} seconds")
   else:
     print(f"  ✗ Propagation failed: {result_hifi['message']}")
-    return result_hifi # type: ignore
   
-  # Propagating with SGP4 for comparison
+  return result_hifi
+
+def run_propagations(
+  initial_state            : np.ndarray,
+  integ_time_o             : float,
+  integ_time_f             : float,
+  target_start_dt          : datetime,
+  target_end_dt            : datetime,
+  mass                     : float,
+  cd                       : float,
+  area_drag                : float,
+  use_spice                : bool,
+  spice_kernels_folderpath : Path,
+  result_horizons          : dict,
+  tle_line1                : str,
+  tle_line2                : str,
+) -> tuple[dict, dict | None]:
+  """
+  Run high-fidelity and SGP4 propagations.
+  
+  Input:
+  ------
+    initial_state : np.ndarray
+      Initial state vector.
+    integ_time_o : float
+      Integration start time.
+    integ_time_f : float
+      Integration end time.
+    target_start_dt : datetime
+      Target start datetime.
+    target_end_dt : datetime
+      Target end datetime.
+    mass : float
+      Satellite mass.
+    cd : float
+      Drag coefficient.
+    area_drag : float
+      Drag area.
+    use_spice : bool
+      Whether to use SPICE.
+    spice_kernels_folderpath : Path
+      Path to SPICE kernels.
+    result_horizons : dict
+      Horizons ephemeris result.
+    tle_line1 : str
+      TLE line 1.
+    tle_line2 : str
+      TLE line 2.
+      
+  Output:
+  -------
+    tuple[dict, dict | None]
+      Tuple containing (result_hifi, result_sgp4_at_horizons).
+  """
+  # Propagate: run high-fidelity propagation at Horizons time points for comparison
+  result_hifi = run_high_fidelity_propagation(
+    initial_state            = initial_state,
+    integ_time_o             = integ_time_o,
+    integ_time_f             = integ_time_f,
+    target_start_dt          = target_start_dt,
+    target_end_dt            = target_end_dt,
+    mass                     = mass,
+    cd                       = cd,
+    area_drag                = area_drag,
+    use_spice                = use_spice,
+    spice_kernels_folderpath = spice_kernels_folderpath,
+    result_horizons          = result_horizons,
+  )
+  
+  # Propagate: run SGP4 at Horizons time points for comparison
   print("\nPropagating with SGP4 for comparison ...")
   result_sgp4_at_horizons = propagate_sgp4_at_horizons_grid(
     result_horizons = result_horizons,
     integ_time_o    = integ_time_o,
-    tle_line1       = tle_line1_object,
-    tle_line2       = tle_line2_object,
+    tle_line1       = tle_line1,
+    tle_line2       = tle_line2,
+  )
+  
+  return result_hifi, result_sgp4_at_horizons
+
+def main(
+  norad_id       : str,
+  start_time_str : str,
+  end_time_str   : str,
+) -> None:
+  """
+  Main function to run the high-fidelity orbit propagation.
+  
+  This function propagates an orbit using a high-fidelity dynamics model. The
+  initial state is derived from a TLE, then propagated with detailed force
+  models. The result is compared with SGP4 and JPL Horizons ephemeris.
+  
+  Input:
+  ------
+    norad_id : str
+      NORAD catalog ID of the satellite.
+    start_time_str : str
+      Start time for propagation in ISO format.
+    end_time_str : str
+      End time for propagation in ISO format.
+  
+  Output:
+  -------
+    None
+  """
+  # Configuration
+  use_spice = True  # Master flag to enable/disable all SPICE-related functionality
+
+  # Process inputs and setup
+  inputs = parse_and_validate_inputs(norad_id, start_time_str, end_time_str)
+  
+  obj_props        = inputs['obj_props']
+  tle_line1_object = inputs['tle_line1']
+  tle_line2_object = inputs['tle_line2']
+  tle_epoch_dt     = inputs['tle_epoch_dt']
+  target_start_dt  = inputs['target_start_dt']
+  target_end_dt    = inputs['target_end_dt']
+  delta_time       = inputs['delta_time']
+  integ_time_o     = inputs['integ_time_o']
+  integ_time_f     = inputs['integ_time_f']
+  delta_integ_time = inputs['delta_integ_time']
+  mass             = inputs['mass']
+  cd               = inputs['cd']
+  area_drag        = inputs['area_drag']
+
+  # Set up paths and files
+  folderpaths_filepaths = setup_paths_and_files(
+    norad_id        = norad_id,
+    obj_name        = obj_props['name'],
+    target_start_dt = target_start_dt,
+    target_end_dt   = target_end_dt,
+  )
+  
+  output_folderpath        = folderpaths_filepaths['output_folderpath']
+  spice_kernels_folderpath = folderpaths_filepaths['spice_kernels_folderpath']
+  horizons_filepath        = folderpaths_filepaths['horizons_filepath']
+  lsk_filepath             = folderpaths_filepaths['lsk_filepath']
+
+  # Load spice files if SPICE is enabled
+  if use_spice:
+    load_spice_files(lsk_filepath)
+
+  # Load Horizons ephemeris
+  print("\nStep 1: Loading JPL Horizons ephemeris ...")
+  print(f"  File path   : {horizons_filepath}")
+  print(f"  File exists : {horizons_filepath.exists()}")
+  print(f"  Requesting data from {target_start_dt} to {target_end_dt}")
+  
+  # Load Horizons data
+  result_horizons = load_horizons_ephemeris(
+    filepath = str(horizons_filepath),
+    start_dt = target_start_dt,
+    end_dt   = target_end_dt,
+  )
+
+  # Process Horizons data
+  result_horizons = process_horizons_result(result_horizons)
+
+  # Compute initial state from TLE and compare with Horizons
+  initial_state = get_initial_state(
+    tle_line1            = tle_line1_object,
+    tle_line2            = tle_line2_object,
+    integ_time_o         = integ_time_o,
+    result_horizons      = result_horizons, # type: ignore
+    use_horizons_initial = True,
+    to_j2000             = True,
+  )
+
+  # Run propagations
+  result_hifi, result_sgp4_at_horizons = run_propagations(
+    initial_state            = initial_state,
+    integ_time_o             = integ_time_o,
+    integ_time_f             = integ_time_f,
+    target_start_dt          = target_start_dt,
+    target_end_dt            = target_end_dt,
+    mass                     = mass,
+    cd                       = cd,
+    area_drag                = area_drag,
+    use_spice                = use_spice,
+    spice_kernels_folderpath = spice_kernels_folderpath,
+    result_horizons          = result_horizons, # type: ignore
+    tle_line1                = tle_line1_object,
+    tle_line2                = tle_line2_object,
   )
   
   # Display results and create plots
@@ -709,13 +801,13 @@ def main(
     print("\nGenerating SGP4 at Horizons time points plots...")
     
     # 3D trajectory plot
-    fig_sgp4_hz_3d = plot_3d_trajectories(result_sgp4_hz)
+    fig_sgp4_hz_3d = plot_3d_trajectories(result_sgp4_at_horizons)
     fig_sgp4_hz_3d.suptitle('ISS Orbit - SGP4 at Horizons Times', fontsize=16)
     fig_sgp4_hz_3d.savefig(output_folderpath / 'iss_sgp4_at_horizons_3d.png', dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_folderpath / 'iss_sgp4_at_horizons_3d.png'}")
     
     # Time series plot
-    fig_sgp4_hz_ts = plot_time_series(result_sgp4_hz, epoch=target_start_dt)
+    fig_sgp4_hz_ts = plot_time_series(result_sgp4_at_horizons, epoch=target_start_dt)
     fig_sgp4_hz_ts.suptitle('ISS Orbit - SGP4 at Horizons Times - Time Series', fontsize=16)
     fig_sgp4_hz_ts.savefig(output_folderpath / 'iss_sgp4_at_horizons_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_folderpath / 'iss_sgp4_at_horizons_timeseries.png'}")
