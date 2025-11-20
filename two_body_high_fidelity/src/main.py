@@ -225,6 +225,20 @@ def load_spice_files(
     # Load leap seconds kernel first (minimal kernel set for time conversion)
     spice.furnsh(str(lsk_filepath))
 
+def unload_spice_files(
+  use_spice : bool,
+) -> None:
+  """
+  Unload all SPICE kernels if they were loaded.
+  
+  Input:
+  ------
+    use_spice : bool
+      Flag to enable/disable SPICE usage.
+  """
+  if use_spice:
+    spice.kclear()
+
 def process_horizons_result(
   result_horizons : dict,
 ) -> dict:
@@ -698,6 +712,268 @@ def run_propagations(
   
   return result_hifi, result_sgp4_at_horizons
 
+def print_results_summary(
+  result_horizons         : dict | None,
+  result_hifi             : dict,
+  result_sgp4_at_horizons : dict | None,
+) -> None:
+  """
+  Print a summary of the propagation results.
+  
+  Input:
+  ------
+    result_horizons : dict | None
+      Horizons ephemeris result.
+    result_hifi : dict
+      High-fidelity propagation result.
+    result_sgp4_at_horizons : dict | None
+      SGP4 propagation result.
+  """
+  print("\n" + "="*60)
+  print("Results Summary")
+  print("="*60)
+  
+  print("\nFinal time ranges for plotting:")
+  if result_horizons and result_horizons.get('success'):
+    print(f"  Horizons:      {result_horizons['plot_time_s'][0]:.1f} to {result_horizons['plot_time_s'][-1]:.1f} seconds")
+  
+  if result_hifi.get('success'):
+    print(f"  High-fidelity: {result_hifi['plot_time_s'][0]:.1f} to {result_hifi['plot_time_s'][-1]:.1f} seconds")
+  
+  if result_sgp4_at_horizons and result_sgp4_at_horizons.get('success'):
+    print(f"  SGP4:          {result_sgp4_at_horizons['plot_time_s'][0]:.1f} to {result_sgp4_at_horizons['plot_time_s'][-1]:.1f} seconds")
+  
+  # Print final orbital elements (high-fidelity)
+  if result_hifi.get('success'):
+    final_alt_km = (np.linalg.norm(result_hifi['state'][0:3, -1]) - PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR) / 1e3
+    print(f"\nFinal altitude (high-fidelity): {final_alt_km:.2f} km")
+    print(f"Final semi-major axis: {result_hifi['coe']['sma'][-1]/1e3:.2f} km")
+    print(f"Final eccentricity: {result_hifi['coe']['ecc'][-1]:.6f}")
+    print(f"Final inclination: {np.rad2deg(result_hifi['coe']['inc'][-1]):.4f}°")
+
+def generate_error_plots(
+  result_horizons         : dict | None,
+  result_hifi             : dict,
+  result_sgp4_at_horizons : dict | None,
+  target_start_dt         : datetime,
+  output_folderpath       : Path,
+) -> None:
+  """
+  Generate and save error comparison plots.
+  
+  Input:
+  ------
+    result_horizons : dict | None
+      Horizons ephemeris result.
+    result_hifi : dict
+      High-fidelity propagation result.
+    result_sgp4_at_horizons : dict | None
+      SGP4 propagation result.
+    target_start_dt : datetime
+      Simulation start time (for plot labels).
+    output_folderpath : Path
+      Directory to save plots.
+  """
+  # Error plots comparing SGP4 to Horizons
+  if result_horizons and result_horizons.get('success') and result_sgp4_at_horizons and result_sgp4_at_horizons.get('success'):
+    print("\nGenerating SGP4 vs Horizons error comparison plots...")
+    
+    # 3D error plot
+    fig_sgp4_err_3d = plot_3d_error(result_horizons, result_sgp4_at_horizons)
+    fig_sgp4_err_3d.suptitle('ISS Orbit Error: Horizons vs SGP4', fontsize=16)
+    fig_sgp4_err_3d.savefig(output_folderpath / 'iss_sgp4_error_3d.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_sgp4_error_3d.png'}")
+    
+    # Time series error plot (RIC frame)
+    fig_sgp4_err_ts = plot_time_series_error(result_horizons, result_sgp4_at_horizons, epoch=target_start_dt, use_ric=False)
+    fig_sgp4_err_ts.suptitle('ISS XYZ Position/Velocity Errors: Horizons vs SGP4', fontsize=16)
+    fig_sgp4_err_ts.savefig(output_folderpath / 'iss_sgp4_error_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_sgp4_error_timeseries.png'}")
+    
+    # Compute and display SGP4 error statistics
+    pos_error_sgp4_km = np.linalg.norm(result_sgp4_at_horizons['state'][0:3, :] - result_horizons['state'][0:3, :], axis=0) / 1e3
+    vel_error_sgp4_ms = np.linalg.norm(result_sgp4_at_horizons['state'][3:6, :] - result_horizons['state'][3:6, :], axis=0)
+    sma_error_sgp4_km = (result_sgp4_at_horizons['coe']['sma'] - result_horizons['coe']['sma']) / 1e3
+    
+    print("\nError Statistics (SGP4 vs Horizons):")
+    print(f"  Position error - Mean: {np.mean(pos_error_sgp4_km):.3f} km, Max: {np.max(pos_error_sgp4_km):.3f} km")
+    print(f"  Velocity error - Mean: {np.mean(vel_error_sgp4_ms):.3f} m/s, Max: {np.max(vel_error_sgp4_ms):.3f} m/s")
+    print(f"  SMA error - Mean: {np.mean(np.abs(sma_error_sgp4_km)):.3f} km, Max: {np.max(np.abs(sma_error_sgp4_km)):.3f} km")
+    
+    # Analyze error growth by removing initial offset
+    print(f"\nSGP4 Error Growth Analysis:")
+    print(f"  Initial position error (at Oct 1 00:00): {pos_error_sgp4_km[0]:.3f} km")
+    print(f"  Final position error (at Oct 2 00:00): {pos_error_sgp4_km[-1]:.3f} km")
+    print(f"  Error growth over 24 hours: {pos_error_sgp4_km[-1] - pos_error_sgp4_km[0]:.3f} km")
+    print(f"  Initial velocity error: {vel_error_sgp4_ms[0]:.3f} m/s")
+    print(f"  Final velocity error: {vel_error_sgp4_ms[-1]:.3f} m/s")
+    print(f"  Velocity error growth: {vel_error_sgp4_ms[-1] - vel_error_sgp4_ms[0]:.3f} m/s")
+    
+    # Create plot showing error growth (initial offset removed)
+    fig_sgp4_growth = plt.figure(figsize=(14, 8))
+    
+    # Position error growth subplot
+    ax1 = fig_sgp4_growth.add_subplot(2, 1, 1)
+    pos_error_growth = pos_error_sgp4_km - pos_error_sgp4_km[0]  # Remove initial offset
+    ax1.plot(result_horizons['plot_time_s']/3600, pos_error_growth, 'b-', linewidth=2)
+    ax1.set_ylabel('Position Error Growth [km]')
+    ax1.set_title('SGP4 vs Horizons: Error Growth (Initial Offset Removed)')
+    ax1.grid(True, alpha=0.3)
+    ax1.axhline(y=0, color='k', linestyle='--', alpha=0.5)
+    
+    # Velocity error growth subplot
+    ax2 = fig_sgp4_growth.add_subplot(2, 1, 2)
+    vel_error_growth = vel_error_sgp4_ms - vel_error_sgp4_ms[0]  # Remove initial offset
+    ax2.plot(result_horizons['plot_time_s']/3600, vel_error_growth, 'r-', linewidth=2)
+    ax2.set_xlabel('Time [hours]')
+    ax2.set_ylabel('Velocity Error Growth [m/s]')
+    ax2.grid(True, alpha=0.3)
+    ax2.axhline(y=0, color='k', linestyle='--', alpha=0.5)
+    
+    fig_sgp4_growth.tight_layout()
+    fig_sgp4_growth.savefig(output_folderpath / 'iss_sgp4_error_growth.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_sgp4_error_growth.png'}")
+
+  # Create error comparison plots if both Horizons and high-fidelity are available
+  if result_horizons and result_horizons.get('success') and result_hifi.get('success'):
+    print("\nGenerating error comparison plots...")
+    
+    # Position and velocity error plots
+    fig_err_3d = plot_3d_error(result_horizons, result_hifi)
+    fig_err_3d.suptitle('ISS Orbit Error: Horizons vs High-Fidelity', fontsize=16)
+    fig_err_3d.savefig(output_folderpath / 'iss_error_3d.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_error_3d.png'}")
+    
+    # Time series error plots
+    fig_err_ts = plot_time_series_error(result_horizons, result_hifi, epoch=target_start_dt)
+    fig_err_ts.suptitle('ISS RIC Position/Velocity Errors: Horizons vs High-Fidelity', fontsize=16)
+    fig_err_ts.savefig(output_folderpath / 'iss_error_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_error_timeseries.png'}")
+    
+    # Compute and display error statistics
+    pos_error_km = np.linalg.norm(result_hifi['state'][0:3, :] - result_horizons['state'][0:3, :], axis=0) / 1e3
+    vel_error_ms = np.linalg.norm(result_hifi['state'][3:6, :] - result_horizons['state'][3:6, :], axis=0)
+    sma_error_km = (result_hifi['coe']['sma'] - result_horizons['coe']['sma']) / 1e3
+    
+    print("\nError Statistics (High-Fidelity vs Horizons):")
+    print(f"  Position error - Mean: {np.mean(pos_error_km):.3f} km, Max: {np.max(pos_error_km):.3f} km")
+    print(f"  Velocity error - Mean: {np.mean(vel_error_ms):.3f} m/s, Max: {np.max(vel_error_ms):.3f} m/s")
+    print(f"  SMA error - Mean: {np.mean(np.abs(sma_error_km)):.3f} km, Max: {np.max(np.abs(sma_error_km)):.3f} km")
+    
+    # Also compute argument of latitude error statistics
+    if all(k in result_horizons['coe'] and k in result_hifi['coe'] for k in ['raan', 'argp', 'ta']):
+        u_ref = result_horizons['coe']['raan'] + result_horizons['coe']['argp'] + result_horizons['coe']['ta']
+        u_comp = result_hifi['coe']['raan'] + result_hifi['coe']['argp'] + result_hifi['coe']['ta']
+        u_error_rad = np.arctan2(np.sin(u_ref - u_comp), np.cos(u_ref - u_comp))
+        u_error_deg = u_error_rad * CONVERTER.DEG_PER_RAD
+        print(f"  Arg of latitude error - Mean: {np.mean(u_error_deg):.3f}°, RMS: {np.sqrt(np.mean(u_error_deg**2)):.3f}°, Max: {np.max(np.abs(u_error_deg)):.3f}°")
+
+def generate_3d_and_time_series_plots(
+  result_horizons         : dict | None,
+  result_hifi             : dict,
+  result_sgp4_at_horizons : dict | None,
+  target_start_dt         : datetime,
+  output_folderpath       : Path,
+) -> None:
+  """
+  Generate and save 3D trajectory and time series plots.
+  
+  Input:
+  ------
+    result_horizons : dict | None
+      Horizons ephemeris result.
+    result_hifi : dict
+      High-fidelity propagation result.
+    result_sgp4_at_horizons : dict | None
+      SGP4 propagation result.
+    target_start_dt : datetime
+      Simulation start time (for plot labels).
+    output_folderpath : Path
+      Directory to save plots.
+  """
+  # Horizons plots (first)
+  if result_horizons and result_horizons.get('success'):
+    fig1 = plot_3d_trajectories(result_horizons)
+    fig1.suptitle('ISS Orbit - JPL Horizons Ephemeris', fontsize=16)
+    fig1.savefig(output_folderpath / 'iss_horizons_3d.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_horizons_3d.png'}")
+    
+    fig2 = plot_time_series(result_horizons, epoch=target_start_dt)
+    fig2.suptitle('ISS Orbit - JPL Horizons Time Series', fontsize=16)
+    fig2.savefig(output_folderpath / 'iss_horizons_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_horizons_timeseries.png'}")
+  
+  # High-fidelity plots (second)
+  if result_hifi.get('success'):
+    fig3 = plot_3d_trajectories(result_hifi)
+    fig3.suptitle('ISS Orbit - High-Fidelity Propagation', fontsize=16)
+    fig3.savefig(output_folderpath / 'iss_hifi_3d.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_hifi_3d.png'}")
+    
+    fig4 = plot_time_series(result_hifi, epoch=target_start_dt)
+    fig4.suptitle('ISS Orbit - High-Fidelity Time Series', fontsize=16)
+    fig4.savefig(output_folderpath / 'iss_hifi_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_hifi_timeseries.png'}")
+  
+  # SGP4 at Horizons time points plots
+  if result_sgp4_at_horizons and result_sgp4_at_horizons.get('success'):
+    print("\nGenerating SGP4 at Horizons time points plots...")
+    
+    # 3D trajectory plot
+    fig_sgp4_hz_3d = plot_3d_trajectories(result_sgp4_at_horizons)
+    fig_sgp4_hz_3d.suptitle('ISS Orbit - SGP4 at Horizons Times', fontsize=16)
+    fig_sgp4_hz_3d.savefig(output_folderpath / 'iss_sgp4_at_horizons_3d.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_sgp4_at_horizons_3d.png'}")
+    
+    # Time series plot
+    fig_sgp4_hz_ts = plot_time_series(result_sgp4_at_horizons, epoch=target_start_dt)
+    fig_sgp4_hz_ts.suptitle('ISS Orbit - SGP4 at Horizons Times - Time Series', fontsize=16)
+    fig_sgp4_hz_ts.savefig(output_folderpath / 'iss_sgp4_at_horizons_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_sgp4_at_horizons_timeseries.png'}")
+
+def generate_plots(
+  result_horizons         : dict | None,
+  result_hifi             : dict,
+  result_sgp4_at_horizons : dict | None,
+  target_start_dt         : datetime,
+  output_folderpath       : Path,
+) -> None:
+  """
+  Generate and save all simulation plots.
+  
+  Input:
+  ------
+    result_horizons : dict | None
+      Horizons ephemeris result.
+    result_hifi : dict
+      High-fidelity propagation result.
+    result_sgp4_at_horizons : dict | None
+      SGP4 propagation result.
+    target_start_dt : datetime
+      Simulation start time (for plot labels).
+    output_folderpath : Path
+      Directory to save plots.
+  """
+  print("\nGenerating and saving plots...")
+  
+  # Generate 3D and time series plots
+  generate_3d_and_time_series_plots(
+    result_horizons         = result_horizons,
+    result_hifi             = result_hifi,
+    result_sgp4_at_horizons = result_sgp4_at_horizons,
+    target_start_dt         = target_start_dt,
+    output_folderpath       = output_folderpath,
+  )
+    
+  # Generate error plots
+  generate_error_plots(
+    result_horizons         = result_horizons,
+    result_hifi             = result_hifi,
+    result_sgp4_at_horizons = result_sgp4_at_horizons,
+    target_start_dt         = target_start_dt,
+    output_folderpath       = output_folderpath,
+  )
+
 def get_simulation_paths(
   norad_id        : str,
   obj_name        : str,
@@ -743,7 +1019,7 @@ def main(
   start_time_str : str,
   end_time_str   : str,
   use_spice      : bool = True,
-) -> None:
+) -> dict:
   """
   Main function to run the high-fidelity orbit propagation.
   
@@ -816,166 +1092,19 @@ def main(
   )
   
   # Display results and create plots
-  print("\n" + "="*60)
-  print("Results Summary")
-  print("="*60)
-  
-  print("\nFinal time ranges for plotting:")
-  if result_horizons and result_horizons['success']:
-    print(f"  Horizons:      {result_horizons['plot_time_s'][0]:.1f} to {result_horizons['plot_time_s'][-1]:.1f} seconds")
-  print(f"  High-fidelity: {result_hifi['plot_time_s'][0]:.1f} to {result_hifi['plot_time_s'][-1]:.1f} seconds")
-  if result_sgp4_at_horizons and result_sgp4_at_horizons['success']:
-    print(f"  SGP4:          {result_sgp4_at_horizons['plot_time_s'][0]:.1f} to {result_sgp4_at_horizons['plot_time_s'][-1]:.1f} seconds")
-  
-  # Print final orbital elements (high-fidelity)
-  final_alt_km = (np.linalg.norm(result_hifi['state'][0:3, -1]) - PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR) / 1e3
-  print(f"\nFinal altitude (high-fidelity): {final_alt_km:.2f} km")
-  print(f"Final semi-major axis: {result_hifi['coe']['sma'][-1]/1e3:.2f} km")
-  print(f"Final eccentricity: {result_hifi['coe']['ecc'][-1]:.6f}")
-  print(f"Final inclination: {np.rad2deg(result_hifi['coe']['inc'][-1]):.4f}°")
+  print_results_summary(result_horizons, result_hifi, result_sgp4_at_horizons)
   
   # Create plots
-  print("\nGenerating and saving plots...")
-  
-  # Horizons plots (first)
-  if result_horizons and result_horizons['success']:
-    fig1 = plot_3d_trajectories(result_horizons)
-    fig1.suptitle('ISS Orbit - JPL Horizons Ephemeris', fontsize=16)
-    fig1.savefig(output_folderpath / 'iss_horizons_3d.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_folderpath / 'iss_horizons_3d.png'}")
-    
-    fig2 = plot_time_series(result_horizons, epoch=config.target_start_dt)
-    fig2.suptitle('ISS Orbit - JPL Horizons Time Series', fontsize=16)
-    fig2.savefig(output_folderpath / 'iss_horizons_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_folderpath / 'iss_horizons_timeseries.png'}")
-  
-  # High-fidelity plots (second)
-  fig3 = plot_3d_trajectories(result_hifi)
-  fig3.suptitle('ISS Orbit - High-Fidelity Propagation', fontsize=16)
-  fig3.savefig(output_folderpath / 'iss_hifi_3d.png', dpi=300, bbox_inches='tight')
-  print(f"  Saved: {output_folderpath / 'iss_hifi_3d.png'}")
-  
-  fig4 = plot_time_series(result_hifi, epoch=config.target_start_dt)
-  fig4.suptitle('ISS Orbit - High-Fidelity Time Series', fontsize=16)
-  fig4.savefig(output_folderpath / 'iss_hifi_timeseries.png', dpi=300, bbox_inches='tight')
-  print(f"  Saved: {output_folderpath / 'iss_hifi_timeseries.png'}")
-  
-  # SGP4 at Horizons time points plots
-  if result_sgp4_at_horizons and result_sgp4_at_horizons['success']:
-    print("\nGenerating SGP4 at Horizons time points plots...")
-    
-    # 3D trajectory plot
-    fig_sgp4_hz_3d = plot_3d_trajectories(result_sgp4_at_horizons)
-    fig_sgp4_hz_3d.suptitle('ISS Orbit - SGP4 at Horizons Times', fontsize=16)
-    fig_sgp4_hz_3d.savefig(output_folderpath / 'iss_sgp4_at_horizons_3d.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_folderpath / 'iss_sgp4_at_horizons_3d.png'}")
-    
-    # Time series plot
-    fig_sgp4_hz_ts = plot_time_series(result_sgp4_at_horizons, epoch=config.target_start_dt)
-    fig_sgp4_hz_ts.suptitle('ISS Orbit - SGP4 at Horizons Times - Time Series', fontsize=16)
-    fig_sgp4_hz_ts.savefig(output_folderpath / 'iss_sgp4_at_horizons_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_folderpath / 'iss_sgp4_at_horizons_timeseries.png'}")
-    
-    # Error plots comparing SGP4 to Horizons
-    if result_horizons and result_horizons['success']:
-      print("\nGenerating SGP4 vs Horizons error comparison plots...")
-      
-      # 3D error plot
-      fig_sgp4_err_3d = plot_3d_error(result_horizons, result_sgp4_at_horizons)
-      fig_sgp4_err_3d.suptitle('ISS Orbit Error: Horizons vs SGP4', fontsize=16)
-      fig_sgp4_err_3d.savefig(output_folderpath / 'iss_sgp4_error_3d.png', dpi=300, bbox_inches='tight')
-      print(f"  Saved: {output_folderpath / 'iss_sgp4_error_3d.png'}")
-      
-      # Time series error plot (RIC frame)
-      fig_sgp4_err_ts = plot_time_series_error(result_horizons, result_sgp4_at_horizons, epoch=config.target_start_dt, use_ric=False)
-      fig_sgp4_err_ts.suptitle('ISS XYZ Position/Velocity Errors: Horizons vs SGP4', fontsize=16)
-      fig_sgp4_err_ts.savefig(output_folderpath / 'iss_sgp4_error_timeseries.png', dpi=300, bbox_inches='tight')
-      print(f"  Saved: {output_folderpath / 'iss_sgp4_error_timeseries.png'}")
-      
-      # Compute and display SGP4 error statistics
-      pos_error_sgp4_km = np.linalg.norm(result_sgp4_at_horizons['state'][0:3, :] - result_horizons['state'][0:3, :], axis=0) / 1e3
-      vel_error_sgp4_ms = np.linalg.norm(result_sgp4_at_horizons['state'][3:6, :] - result_horizons['state'][3:6, :], axis=0)
-      sma_error_sgp4_km = (result_sgp4_at_horizons['coe']['sma'] - result_horizons['coe']['sma']) / 1e3
-      
-      print("\nError Statistics (SGP4 vs Horizons):")
-      print(f"  Position error - Mean: {np.mean(pos_error_sgp4_km):.3f} km, Max: {np.max(pos_error_sgp4_km):.3f} km")
-      print(f"  Velocity error - Mean: {np.mean(vel_error_sgp4_ms):.3f} m/s, Max: {np.max(vel_error_sgp4_ms):.3f} m/s")
-      print(f"  SMA error - Mean: {np.mean(np.abs(sma_error_sgp4_km)):.3f} km, Max: {np.max(np.abs(sma_error_sgp4_km)):.3f} km")
-      
-      # Analyze error growth by removing initial offset
-      print(f"\nSGP4 Error Growth Analysis:")
-      print(f"  Initial position error (at Oct 1 00:00): {pos_error_sgp4_km[0]:.3f} km")
-      print(f"  Final position error (at Oct 2 00:00): {pos_error_sgp4_km[-1]:.3f} km")
-      print(f"  Error growth over 24 hours: {pos_error_sgp4_km[-1] - pos_error_sgp4_km[0]:.3f} km")
-      print(f"  Initial velocity error: {vel_error_sgp4_ms[0]:.3f} m/s")
-      print(f"  Final velocity error: {vel_error_sgp4_ms[-1]:.3f} m/s")
-      print(f"  Velocity error growth: {vel_error_sgp4_ms[-1] - vel_error_sgp4_ms[0]:.3f} m/s")
-      
-      # Create plot showing error growth (initial offset removed)
-      fig_sgp4_growth = plt.figure(figsize=(14, 8))
-      
-      # Position error growth subplot
-      ax1 = fig_sgp4_growth.add_subplot(2, 1, 1)
-      pos_error_growth = pos_error_sgp4_km - pos_error_sgp4_km[0]  # Remove initial offset
-      ax1.plot(result_horizons['plot_time_s']/3600, pos_error_growth, 'b-', linewidth=2)
-      ax1.set_ylabel('Position Error Growth [km]')
-      ax1.set_title('SGP4 vs Horizons: Error Growth (Initial Offset Removed)')
-      ax1.grid(True, alpha=0.3)
-      ax1.axhline(y=0, color='k', linestyle='--', alpha=0.5)
-      
-      # Velocity error growth subplot
-      ax2 = fig_sgp4_growth.add_subplot(2, 1, 2)
-      vel_error_growth = vel_error_sgp4_ms - vel_error_sgp4_ms[0]  # Remove initial offset
-      ax2.plot(result_horizons['plot_time_s']/3600, vel_error_growth, 'r-', linewidth=2)
-      ax2.set_xlabel('Time [hours]')
-      ax2.set_ylabel('Velocity Error Growth [m/s]')
-      ax2.grid(True, alpha=0.3)
-      ax2.axhline(y=0, color='k', linestyle='--', alpha=0.5)
-      
-      fig_sgp4_growth.tight_layout()
-      fig_sgp4_growth.savefig(output_folderpath / 'iss_sgp4_error_growth.png', dpi=300, bbox_inches='tight')
-      print(f"  Saved: {output_folderpath / 'iss_sgp4_error_growth.png'}")
-  
-  # Create error comparison plots if both Horizons and high-fidelity are available
-  if result_horizons and result_horizons['success'] and result_hifi['success']:
-    print("\nGenerating error comparison plots...")
-    
-    # Position and velocity error plots
-    fig_err_3d = plot_3d_error(result_horizons, result_hifi)
-    fig_err_3d.suptitle('ISS Orbit Error: Horizons vs High-Fidelity', fontsize=16)
-    fig_err_3d.savefig(output_folderpath / 'iss_error_3d.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_folderpath / 'iss_error_3d.png'}")
-    
-    # Time series error plots
-    fig_err_ts = plot_time_series_error(result_horizons, result_hifi, epoch=config.target_start_dt)
-    fig_err_ts.suptitle('ISS RIC Position/Velocity Errors: Horizons vs High-Fidelity', fontsize=16)
-    fig_err_ts.savefig(output_folderpath / 'iss_error_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_folderpath / 'iss_error_timeseries.png'}")
-    
-    # Compute and display error statistics
-    pos_error_km = np.linalg.norm(result_hifi['state'][0:3, :] - result_horizons['state'][0:3, :], axis=0) / 1e3
-    vel_error_ms = np.linalg.norm(result_hifi['state'][3:6, :] - result_horizons['state'][3:6, :], axis=0)
-    sma_error_km = (result_hifi['coe']['sma'] - result_horizons['coe']['sma']) / 1e3
-    
-    print("\nError Statistics (High-Fidelity vs Horizons):")
-    print(f"  Position error - Mean: {np.mean(pos_error_km):.3f} km, Max: {np.max(pos_error_km):.3f} km")
-    print(f"  Velocity error - Mean: {np.mean(vel_error_ms):.3f} m/s, Max: {np.max(vel_error_ms):.3f} m/s")
-    print(f"  SMA error - Mean: {np.mean(np.abs(sma_error_km)):.3f} km, Max: {np.max(np.abs(sma_error_km)):.3f} km")
-    
-    # Also compute argument of latitude error statistics
-    if all(k in result_horizons['coe'] and k in result_hifi['coe'] for k in ['raan', 'argp', 'ta']):
-        u_ref = result_horizons['coe']['raan'] + result_horizons['coe']['argp'] + result_horizons['coe']['ta']
-        u_comp = result_hifi['coe']['raan'] + result_hifi['coe']['argp'] + result_hifi['coe']['ta']
-        u_error_rad = np.arctan2(np.sin(u_ref - u_comp), np.cos(u_ref - u_comp))
-        u_error_deg = u_error_rad * CONVERTER.DEG_PER_RAD
-        print(f"  Arg of latitude error - Mean: {np.mean(u_error_deg):.3f}°, RMS: {np.sqrt(np.mean(u_error_deg**2)):.3f}°, Max: {np.max(np.abs(u_error_deg)):.3f}°")
-
-  print(f"\nAll figures saved to: {output_folderpath}")
-  plt.show()
+  generate_plots(
+    result_horizons         = result_horizons,
+    result_hifi             = result_hifi,
+    result_sgp4_at_horizons = result_sgp4_at_horizons,
+    target_start_dt         = config.target_start_dt,
+    output_folderpath       = output_folderpath,
+  )
   
   # Unload all SPICE kernels if they were loaded
-  if config.use_spice:
-    spice.kclear()
+  unload_spice_files(config.use_spice)
   
   return result_hifi
 
