@@ -1,84 +1,10 @@
 import numpy as np
 import math
-from sgp4.api            import Satrec, jday
-from datetime            import datetime, timedelta
-from astropy             import units as u
-from astropy.time        import Time as AstropyTime
-from astropy.coordinates import TEME, GCRS, CartesianRepresentation, CartesianDifferential
-from src.model.dynamics  import OrbitConverter
-from src.model.constants import PHYSICALCONSTANTS
-
-
-def teme_to_j2000(
-  teme_pos_vec : np.ndarray,
-  teme_vel_vec : np.ndarray,
-  jd_utc       : float,
-  units_pos    : str = 'm',
-  units_vel    : str = 'm/s'
-) -> tuple[np.ndarray, np.ndarray]:
-  """
-  Convert TEME (True Equator Mean Equinox) to J2000/GCRS using astropy.
-  
-  Input:
-  ------
-    teme_pos_vec : np.ndarray
-      Position in TEME frame [m].
-    teme_vel_vec : np.ndarray
-      Velocity in TEME frame [m/s].
-    jd_utc : float
-      Julian date in UTC scale (from SGP4).
-  
-  Output:
-  -------
-    tuple[np.ndarray, np.ndarray]
-      A tuple containing:
-      - gcrs_pos_vec: position in GCRS frame [m].
-      - gcrs_vel_vec: velocity in GCRS frame [m/s].
-  """
-  # Create astropy Time object from UTC
-  t = AstropyTime(jd_utc, format='jd', scale='utc')
-  
-  # Determine units
-  if units_pos.lower() == 'km':
-    u_du = u.km # type: ignore
-  else:
-    u_du = u.m # type: ignore
-  if units_vel.lower() == 'km/s':
-    u_vu = u.km / u.s # type: ignore
-  else:
-    u_vu = u.m / u.s # type: ignore
-
-  # Create CartesianRepresentation using position and velocity in TEME frame
-  cart_rep = CartesianRepresentation(
-    x = teme_pos_vec[0] * u_du,
-    y = teme_pos_vec[1] * u_du,
-    z = teme_pos_vec[2] * u_du,
-    differentials = CartesianDifferential(
-      d_x = teme_vel_vec[0] * u_vu,
-      d_y = teme_vel_vec[1] * u_vu,
-      d_z = teme_vel_vec[2] * u_vu,
-    )
-  )
-  
-  # Create a coordinate object in the TEME frame
-  teme_coord = TEME(cart_rep, obstime=t)
-  
-  # Transform the coordinates from the TEME frame to the GCRS (J2000) frame
-  gcrs_coord = teme_coord.transform_to(GCRS(obstime=t))
-  
-  # Extract the numerical position and velocity vectors from the GCRS frame object
-  gcrs_pos_vec = np.array([
-    gcrs_coord.cartesian.x.to(u_du).value,
-    gcrs_coord.cartesian.y.to(u_du).value,
-    gcrs_coord.cartesian.z.to(u_du).value,
-  ])
-  gcrs_vel_vec = np.array([
-    gcrs_coord.velocity.d_x.to(u_vu).value,
-    gcrs_coord.velocity.d_y.to(u_vu).value,
-    gcrs_coord.velocity.d_z.to(u_vu).value,
-  ])
-  
-  return gcrs_pos_vec, gcrs_vel_vec
+from sgp4.api                    import Satrec, jday
+from datetime                    import datetime, timedelta
+from src.model.dynamics          import OrbitConverter
+from src.model.constants         import PHYSICALCONSTANTS
+from src.model.frame_conversions import FrameConversions
 
 
 def modify_tle_bstar(
@@ -228,7 +154,7 @@ def propagate_tle(
         print(f"    JD: {jd + fr:.8f}")
       
       # Propagate
-      error_code, teme_pos_vec, v_teme = satellite.sgp4(jd, fr)
+      error_code, teme_pos_vec, teme_vel_vec = satellite.sgp4(jd, fr)
       if error_code != 0:
         return {
           'success' : False,
@@ -240,14 +166,12 @@ def propagate_tle(
       
       # Transform TEME to J2000/GCRS
       if to_j2000:
-        j2000_pos_vec, j2000_vel_vec = teme_to_j2000(teme_pos_vec, v_teme, jd + fr)
-        # Convert from km to m and km/s to m/s
+        j2000_pos_vec, j2000_vel_vec = FrameConversions.teme_to_j2000(teme_pos_vec, teme_vel_vec, jd + fr)
         pos_vec = np.array(j2000_pos_vec) * 1000.0  # km -> m
         vel_vec = np.array(j2000_vel_vec) * 1000.0  # km/s -> m/s
       else:
-        # Convert from km to m and km/s to m/s (TEME frame)
         pos_vec = np.array(teme_pos_vec) * 1000.0  # km -> m
-        vel_vec = np.array(v_teme) * 1000.0  # km/s -> m/s
+        vel_vec = np.array(teme_vel_vec) * 1000.0  # km/s -> m/s
       
       # Store state
       state_array[0:3, i] = pos_vec
@@ -333,7 +257,7 @@ def get_tle_initial_state(
   
   # Transform TEME to J2000/GCRS if requested
   if to_j2000:
-    j2000_pos_vec, j2000_vel_vec = teme_to_j2000(teme_pos_vec, teme_vel_vec, jd + fr, units_pos='m', units_vel='m/s')
+    j2000_pos_vec, j2000_vel_vec = FrameConversions.teme_to_j2000(teme_pos_vec, teme_vel_vec, jd + fr, units_pos='m', units_vel='m/s')
     pos_vec = np.array(j2000_pos_vec)
     vel_vec = np.array(j2000_vel_vec)
   else:
