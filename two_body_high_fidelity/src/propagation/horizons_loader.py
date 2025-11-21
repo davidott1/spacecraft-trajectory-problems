@@ -66,14 +66,14 @@ def load_horizons_ephemeris(
       
       # If first row contains unit strings, use it for detection and skip it
       if first_val in ['m', 'km', 'km/s', 'm/s']:
-        print(f"  Detected units in first data row: pos={first_val}")
+        print(f"  Detected units in first data row : pos={first_val}")
         if 'km' in first_val:
           pos_unit_multiplier = 1000.0  # km to m
           vel_unit_multiplier = 1000.0  # km/s to m/s
         df = pd.read_csv(filepath, skiprows=[1])  # Re-read, skipping units row
       # If second row contains unit strings, the first row is data
       elif second_val in ['m', 'km', 'km/s', 'm/s']:
-        print(f"  Detected units in second row: pos={second_val}")
+        print(f"  Detected units in second row : pos={second_val}")
         if 'km' in second_val:
           pos_unit_multiplier = 1000.0  # km to m
           vel_unit_multiplier = 1000.0  # km/s to m/s
@@ -155,12 +155,12 @@ def load_horizons_ephemeris(
     
     # Print diagnostics
     print(f"  Loaded {num_points} data points")
-    print(f"  Data time range: {datetimes.iloc[0]} to {datetimes.iloc[-1]}")
-    print(f"  First position: [{state[0,0]/1e3:.3f}, {state[1,0]/1e3:.3f}, {state[2,0]/1e3:.3f}] km")
-    print(f"  First velocity: [{state[3,0]/1e3:.3f}, {state[4,0]/1e3:.3f}, {state[5,0]/1e3:.3f}] km/s")
-    print(f"  Time range: {time[0]:.1f} to {time[-1]:.1f} seconds from epoch")
+    print(f"  Data time range  : {datetimes.iloc[0]} to {datetimes.iloc[-1]}")
+    print(f"  First position   : [{state[0,0]/1e3:.3f}, {state[1,0]/1e3:.3f}, {state[2,0]/1e3:.3f}] km")
+    print(f"  First velocity   : [{state[3,0]/1e3:.3f}, {state[4,0]/1e3:.3f}, {state[5,0]/1e3:.3f}] km/s")
+    print(f"  Time range       : {time[0]:.1f} to {time[-1]:.1f} seconds from epoch")
     if len(time) > 1:
-      print(f"  Time step: {time[1] - time[0]:.1f} seconds")
+      print(f"  Time step        : {time[1] - time[0]:.1f} seconds")
     
     return {
       'success'     : True,

@@ -34,6 +34,7 @@ from scipy.integrate import solve_ivp
 from datetime        import datetime, timedelta
 from sgp4.api        import Satrec
 from types           import SimpleNamespace
+from typing          import Optional
 
 from src.plot.trajectory             import plot_3d_trajectories, plot_time_series, plot_3d_error, plot_time_series_error
 from src.propagation.propagator      import propagate_state_numerical_integration
@@ -111,7 +112,7 @@ def parse_and_validate_inputs(
   integ_time_f     = integ_time_o + delta_time
   delta_integ_time = integ_time_f - integ_time_o
   
-  print(f"\nPropagation Time Span:")
+  print(f"\nPropagation Time Span")
   print(f"  TLE epoch                  : {tle_epoch_dt.isoformat()} UTC")
   print(f"  Target start               : {target_start_dt.isoformat()} UTC")
   print(f"  Target end                 : {target_end_dt.isoformat()} UTC")
@@ -221,7 +222,7 @@ def load_spice_files(
       Path to the leap seconds kernel file.
   """
   if use_spice:
-    print(f"\nLoading SPICE kernels from: {spice_kernels_folderpath}")
+    print(f"\nLoading SPICE kernels : {spice_kernels_folderpath}")
     # Load leap seconds kernel first (minimal kernel set for time conversion)
     spice.furnsh(str(lsk_filepath))
 
@@ -241,7 +242,7 @@ def unload_spice_files(
 
 def process_horizons_result(
   result_horizons : dict,
-) -> dict:
+) -> Optional[dict]:
   """
   Processes and enriches the result dictionary from `load_horizons_ephemeris`.
 
@@ -309,7 +310,7 @@ def get_horizons_ephemeris(
   horizons_filepath : Path,
   target_start_dt   : datetime,
   target_end_dt     : datetime,
-) -> dict | None:
+) -> Optional[dict]:
   """
   Load and process JPL Horizons ephemeris.
   
@@ -328,10 +329,10 @@ def get_horizons_ephemeris(
       Processed Horizons result dictionary, or None if loading failed.
   """
   # Load Horizons ephemeris
-  print("\n Loading JPL Horizons ephemeris ...")
-  print(f"  File path   : {horizons_filepath}")
-  print(f"  File exists : {horizons_filepath.exists()}")
-  print(f"  Requesting data from {target_start_dt} to {target_end_dt}")
+  print("\nLoad JPL Horizons ephemeris")
+  print(f"  File path          : {horizons_filepath}")
+  print(f"  File exists        : {horizons_filepath.exists()}")
+  print(f"  Requested Timespan : {target_start_dt} to {target_end_dt}")
   
   # Load Horizons data
   result_horizons = load_horizons_ephemeris(
@@ -349,7 +350,7 @@ def get_initial_state(
   tle_line1            : str,
   tle_line2            : str,
   integ_time_o         : float,
-  result_horizons      : dict | None,
+  result_horizons      : Optional[dict],
   use_horizons_initial : bool = True,
   to_j2000             : bool = True,
 ) -> np.ndarray:
@@ -437,7 +438,7 @@ def propagate_sgp4_at_horizons_grid(
   integ_time_o    : float,
   tle_line1       : str,
   tle_line2       : str,
-) -> dict | None:
+) -> Optional[dict]:
   """
   Propagate SGP4 on the same time grid as the Horizons ephemeris.
   
@@ -474,7 +475,7 @@ def propagate_sgp4_at_horizons_grid(
     tle_line1  = tle_line1,
     tle_line2  = tle_line2,
     to_j2000   = True,
-    t_eval     = sgp4_eval_times,
+    time_eval  = sgp4_eval_times,
   )
   
   if not result_sgp4_at_horizons['success']:
@@ -648,7 +649,7 @@ def run_propagations(
   result_horizons          : dict,
   tle_line1                : str,
   tle_line2                : str,
-) -> tuple[dict, dict | None]:
+) -> tuple[dict, Optional[dict]]:
   """
   Run high-fidelity and SGP4 propagations.
   
@@ -713,9 +714,9 @@ def run_propagations(
   return result_hifi, result_sgp4_at_horizons
 
 def print_results_summary(
-  result_horizons         : dict | None,
+  result_horizons         : Optional[dict],
   result_hifi             : dict,
-  result_sgp4_at_horizons : dict | None,
+  result_sgp4_at_horizons : Optional[dict],
 ) -> None:
   """
   Print a summary of the propagation results.
@@ -752,9 +753,9 @@ def print_results_summary(
     print(f"Final inclination: {np.rad2deg(result_hifi['coe']['inc'][-1]):.4f}°")
 
 def generate_error_plots(
-  result_horizons         : dict | None,
+  result_horizons         : Optional[dict],
   result_hifi             : dict,
-  result_sgp4_at_horizons : dict | None,
+  result_sgp4_at_horizons : Optional[dict],
   target_start_dt         : datetime,
   output_folderpath       : Path,
 ) -> None:
@@ -869,9 +870,9 @@ def generate_error_plots(
         print(f"  Arg of latitude error - Mean: {np.mean(u_error_deg):.3f}°, RMS: {np.sqrt(np.mean(u_error_deg**2)):.3f}°, Max: {np.max(np.abs(u_error_deg)):.3f}°")
 
 def generate_3d_and_time_series_plots(
-  result_horizons         : dict | None,
+  result_horizons         : Optional[dict],
   result_hifi             : dict,
-  result_sgp4_at_horizons : dict | None,
+  result_sgp4_at_horizons : Optional[dict],
   target_start_dt         : datetime,
   output_folderpath       : Path,
 ) -> None:
@@ -932,9 +933,9 @@ def generate_3d_and_time_series_plots(
     print(f"  Saved: {output_folderpath / 'iss_sgp4_at_horizons_timeseries.png'}")
 
 def generate_plots(
-  result_horizons         : dict | None,
+  result_horizons         : Optional[dict],
   result_hifi             : dict,
-  result_sgp4_at_horizons : dict | None,
+  result_sgp4_at_horizons : Optional[dict],
   target_start_dt         : datetime,
   output_folderpath       : Path,
 ) -> None:
