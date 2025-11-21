@@ -38,7 +38,7 @@ from typing          import Optional
 
 from src.plot.trajectory             import plot_3d_trajectories, plot_time_series, plot_3d_error, plot_time_series_error
 from src.propagation.propagator      import propagate_state_numerical_integration
-from src.propagation.tle_propagator  import propagate_tle
+from src.utility.tle_propagator      import propagate_tle
 from src.propagation.horizons_loader import load_horizons_ephemeris
 from src.model.dynamics              import Acceleration, OrbitConverter
 from src.model.constants             import PHYSICALCONSTANTS, CONVERTER
@@ -336,9 +336,9 @@ def get_horizons_ephemeris(
   
   # Load Horizons data
   result_horizons = load_horizons_ephemeris(
-    filepath = str(horizons_filepath),
-    start_dt = target_start_dt,
-    end_dt   = target_end_dt,
+    filepath      = str(horizons_filepath),
+    time_start_dt = target_start_dt,
+    time_end_dt   = target_end_dt,
   )
 
   # Process Horizons data
@@ -377,35 +377,36 @@ def get_initial_state(
     np.ndarray
       A 6x1 state vector [m, m, m, m/s, m/s, m/s].
   """
-  print("\n Determining initial Cartesian state ...")
+  print("\n Determine Initial Cartesian State")
   
   # 1. Use Horizons if available and requested
   if use_horizons_initial and result_horizons and result_horizons.get('success'):
     horizons_initial_state = result_horizons['state'][:, 0]
-    print(f"  ✓ Using Horizons initial state")
-    print(f"  Horizons initial position: [{horizons_initial_state[0]:.3f}, {horizons_initial_state[1]:.3f}, {horizons_initial_state[2]:.3f}] m")
-    print(f"  Horizons initial velocity: [{horizons_initial_state[3]:.3f}, {horizons_initial_state[4]:.3f}, {horizons_initial_state[5]:.3f}] m/s")
+    print(f"  Use Horizons Initial State")
+    print(f"    Position : [{horizons_initial_state[0]:.3f}, {horizons_initial_state[1]:.3f}, {horizons_initial_state[2]:.3f}] m")
+    print(f"    Velocity : [{horizons_initial_state[3]:.3f}, {horizons_initial_state[4]:.3f}, {horizons_initial_state[5]:.3f}] m/s")
     return horizons_initial_state
 
   # 2. Fallback to TLE
-  print(f"  Using TLE-derived initial state")
-  print(f"  TLE Line 1: {tle_line1}")
-  print(f"  TLE Line 2: {tle_line2}")
+  print(f"  Use TLE-derived Initial State")
+  print(f"    TLE Line 1 : {tle_line1}")
+  print(f"    TLE Line 2 : {tle_line2}")
 
   result_tle_initial = propagate_tle(
     tle_line1  = tle_line1,
     tle_line2  = tle_line2,
     time_o     = integ_time_o,
     time_f     = integ_time_o,
-    num_points = 1,
+    num_points = 1, # type: ignore
     to_j2000   = to_j2000,
   )
   if not result_tle_initial['success']:
     raise RuntimeError(f"Failed to get initial state from TLE: {result_tle_initial['message']}")
 
   tle_initial_state = result_tle_initial['state'][:, 0]
-  print(f"  TLE Initial Pos {integ_time_o} : [{tle_initial_state[0]:.3f}, {tle_initial_state[1]:.3f}, {tle_initial_state[2]:.3f}] m")
-  print(f"  TLE Initial Vel {integ_time_o} : [{tle_initial_state[3]:.3f}, {tle_initial_state[4]:.3f}, {tle_initial_state[5]:.3f}] m/s")
+  print(f"    Epoch      : {integ_time_o:.3f} s")
+  print(f"    Position   : [{tle_initial_state[0]:.3f}, {tle_initial_state[1]:.3f}, {tle_initial_state[2]:.3f}] m")
+  print(f"    Velocity   : [{tle_initial_state[3]:.3f}, {tle_initial_state[4]:.3f}, {tle_initial_state[5]:.3f}] m/s")
 
   return tle_initial_state
 
