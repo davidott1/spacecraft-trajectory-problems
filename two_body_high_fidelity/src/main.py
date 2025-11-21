@@ -222,7 +222,7 @@ def load_spice_files(
       Path to the leap seconds kernel file.
   """
   if use_spice:
-    print(f"\nLoading SPICE kernels : {spice_kernels_folderpath}")
+    print(f"\nLoad SPICE kernels : {spice_kernels_folderpath}")
     # Load leap seconds kernel first (minimal kernel set for time conversion)
     spice.furnsh(str(lsk_filepath))
 
@@ -267,14 +267,13 @@ def process_horizons_result(
       is successful. Returns `None` if the input indicates a failure.
   """
   if result_horizons and result_horizons.get('success'):
-    print(f"  ✓ Horizons ephemeris loaded!")
-    print(f"  Epoch            : {result_horizons['epoch'].isoformat()} UTC")
-    print(f"  Number of points : {len(result_horizons['time'])}")
-    print(f"  Time span        : {result_horizons['time'][0]:.1f} to {result_horizons['time'][-1]:.1f} seconds")
+    print(f"  Epoch              : {result_horizons['time_o'].isoformat()} UTC")
+    print(f"  Number of points   : {len(result_horizons['delta_time'])}")
+    print(f"  Time span          : {result_horizons['delta_time'][0]:.1f} to {result_horizons['delta_time'][-1]:.1f} seconds")
 
     # Create plot_time_s for seconds-based, zero-start plotting time
-    result_horizons['plot_time_s'] = result_horizons['time']
-
+    result_horizons['plot_time_s'] = result_horizons['delta_time'] - result_horizons['delta_time'][0]
+    
     # Compute classical orbital elements for Horizons data
     num_points = result_horizons['state'].shape[1]
     result_horizons['coe'] = {
@@ -329,7 +328,7 @@ def get_horizons_ephemeris(
       Processed Horizons result dictionary, or None if loading failed.
   """
   # Load Horizons ephemeris
-  print("\nLoad JPL Horizons ephemeris")
+  print("\nLoad JPL Horizons Ephemeris")
   print(f"  File path          : {horizons_filepath}")
   print(f"  File exists        : {horizons_filepath.exists()}")
   print(f"  Requested Timespan : {target_start_dt} to {target_end_dt}")
@@ -377,14 +376,14 @@ def get_initial_state(
     np.ndarray
       A 6x1 state vector [m, m, m, m/s, m/s, m/s].
   """
-  print("\n Determine Initial Cartesian State")
+  print("\nDetermine Initial State")
   
   # 1. Use Horizons if available and requested
   if use_horizons_initial and result_horizons and result_horizons.get('success'):
     horizons_initial_state = result_horizons['state'][:, 0]
     print(f"  Use Horizons Initial State")
-    print(f"    Position : [{horizons_initial_state[0]:.3f}, {horizons_initial_state[1]:.3f}, {horizons_initial_state[2]:.3f}] m")
-    print(f"    Velocity : [{horizons_initial_state[3]:.3f}, {horizons_initial_state[4]:.3f}, {horizons_initial_state[5]:.3f}] m/s")
+    print(f"    Position : {horizons_initial_state[0]:>13.6e}  {horizons_initial_state[1]:>13.6e}  {horizons_initial_state[2]:>13.6e} m")
+    print(f"    Velocity : {horizons_initial_state[3]:>13.6e}  {horizons_initial_state[4]:>13.6e}  {horizons_initial_state[5]:>13.6e} m/s")
     return horizons_initial_state
 
   # 2. Fallback to TLE
@@ -414,24 +413,20 @@ def get_et_j2000_from_utc(
   utc_dt : datetime,
 ) -> float:
   """
-  Convert a UTC datetime object to Ephemeris Time (ET) in seconds past J2000.
+  Convert a UTC datetime object to Ephemeris Time (ET) (seconds past J2000).
   
   Input:
   ------
     utc_dt : datetime
       The UTC datetime to convert.
-    
+  
   Output:
   -------
     et_float : float
       The corresponding Ephemeris Time (ET) in seconds past J2000.
   """
-
-  utc_str = utc_dt.strftime('%Y-%m-%dT%H:%M:%S')
+  utc_str  = utc_dt.strftime('%Y-%m-%dT%H:%M:%S')
   et_float = spice.str2et(utc_str)
-  print(f"  Target start UTC : {utc_str}")
-  print(f"  Target start ET  : {et_float:.3f} seconds past J2000")
-
   return et_float
 
 def propagate_sgp4_at_horizons_grid(
@@ -564,13 +559,20 @@ def run_high_fidelity_propagation(
       Propagation result dictionary.
   """
   # Set up high-fidelity dynamics model
-  print("\n Setting up high-fidelity dynamics model ...")
-  print(f"  Including: Two-body gravity, J2, J3, J4, Atmospheric drag, Third-body (Sun/Moon)")
+  print("\nHigh-Fidelity Dynamics Model")
+  print(f"  Forces")
+  print(f"    Gravity")
+  print(f"      Two-Body")
+  print(f"      Zonal Harmonics: J2, J3, J4")
+  print(f"      Third-Body: Sun, Moon")
+  print(f"    Drag")
+  print(f"    Solar Radiation Pressure")
   
   # Convert UTC datetime to ET seconds past J2000 if SPICE is enabled
   time_et_o = 0.0
   if use_spice:
     time_et_o = get_et_j2000_from_utc(target_start_dt)
+  print(f"  Epoch : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC or {time_et_o:.3f} ET")
   
   # Define acceleration model
   acceleration = Acceleration(

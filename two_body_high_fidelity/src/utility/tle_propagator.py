@@ -147,13 +147,6 @@ def propagate_tle(
       # Get Julian date
       jd, fr = jday(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second + dt.microsecond/1e6)
       
-      # Debug output for first few time points
-      if i < 3 and time_eval is not None:
-        print(f"\n  DEBUG SGP4 propagation point {i}:")
-        print(f"    time_eval value: {t:.6f} seconds from TLE epoch")
-        print(f"    dt: {dt.isoformat()}")
-        print(f"    JD: {jd + fr:.8f}")
-      
       # Propagate
       error_code, teme_pos_vec, teme_vel_vec = satellite.sgp4(jd, fr)
       if error_code != 0:
