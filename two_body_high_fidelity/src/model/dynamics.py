@@ -354,8 +354,6 @@ class ThirdBodyGravity:
             spice.furnsh(str(pck_file))
         else:
             raise FileNotFoundError(f"PCK file not found: {pck_file}")
-        
-        print(f"SPICE kernels loaded from: {kernel_folderpath}")
     
     def _get_position_body_spice(
         self,

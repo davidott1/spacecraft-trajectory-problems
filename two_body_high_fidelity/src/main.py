@@ -30,6 +30,7 @@ Example:
     --include-spice
 """
 import argparse
+import sys
 import matplotlib.pyplot as plt
 import numpy             as np
 import spiceypy          as spice
@@ -231,7 +232,7 @@ def load_spice_files(
       Path to the leap seconds kernel file.
   """
   if use_spice:
-    print(f"\nLoad SPICE kernels : {spice_kernels_folderpath}")
+    print(f"\nLoad SPICE kernels: {spice_kernels_folderpath}")
     # Load leap seconds kernel first (minimal kernel set for time conversion)
     spice.furnsh(str(lsk_filepath))
 
@@ -577,21 +578,21 @@ def run_high_fidelity_propagation(
 
   # Set up high-fidelity dynamics model
   print("\nHigh-Fidelity Dynamics Model Configuration")
-  print(f"  Epoch : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC" + (f" ({time_et_o:.6f} ET)" if use_spice else ""))
+  print(f"  Epoch: {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC" + (f" ({time_et_o:.6f} ET)" if use_spice else ""))
   
-  print("  Summary of Enabled Forces:")
+  print("  Summary")
   print("    - Earth Gravity (Two-Body + J2, J3, J4)")
   if enable_third_body:
     print("    - Third-Body Gravity (Sun, Moon)")
   print("    - Atmospheric Drag")
   
-  print("  Details:")
-  print("    Gravity (Earth):")
+  print("  Details")
+  print("    Gravity (Earth)")
   print("      - Two-Body Point Mass")
   print("      - Zonal Harmonics: J2, J3, J4")
   
   if enable_third_body:
-    print("    Gravity (Third-Body):")
+    print("    Gravity (Third-Body)")
     print("      - Bodies: Sun, Moon")
     if use_spice:
         print("      - Ephemeris: SPICE (High Accuracy)")
@@ -599,7 +600,7 @@ def run_high_fidelity_propagation(
     else:
         print("      - Ephemeris: Analytical (Approximate)")
       
-  print("    Atmospheric Drag:")
+  print("    Atmospheric Drag")
   print("      - Model: Exponential Atmosphere")
   print(f"      - Parameters: Cd={cd}, Area={area_drag} m², Mass={mass} kg")
   
@@ -1159,6 +1160,11 @@ def parse_command_line_arguments() -> argparse.Namespace:
       An object containing the parsed arguments.
   """
   parser = argparse.ArgumentParser(description="Run high-fidelity orbit propagation.")
+  
+  # If no arguments provided, print help and exit
+  if len(sys.argv) == 1:
+    parser.print_help(sys.stderr)
+    sys.exit(1)
   
   # Object definition arguments
   parser.add_argument('--input-object-type', type=str, choices=['norad-id', 'norad_id', 'norad id'], required=True, help="Type of input object identifier.")
