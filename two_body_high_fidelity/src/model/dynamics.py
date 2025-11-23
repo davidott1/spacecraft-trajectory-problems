@@ -299,7 +299,7 @@ class ThirdBodyGravity:
         bodies : list of str
             Which bodies to include (default: ['sun', 'moon'])
         spice_kernel_folderpath : str
-            Path to SPICE kernel directory
+            Path to SPICE kernel folderpath
         """
         self.et_offset = et_offset
         self.time_o    = et_offset
@@ -326,14 +326,14 @@ class ThirdBodyGravity:
         import spiceypy as spice
 
         if kernel_folderpath is None:
-            # Default to a kernels directory in the project
+            # Default to a kernels folderpath in the project
             kernel_folderpath = Path(__file__).parent.parent.parent / 'data' / 'spice_kernels'
         
         kernel_folderpath = Path(kernel_folderpath)
         
         if not kernel_folderpath.exists():
             raise FileNotFoundError(
-                f"SPICE kernel directory not found: {kernel_folderpath}\n"
+                f"SPICE kernel folderpath not found: {kernel_folderpath}\n"
                 f"Please download kernels from https://naif.jpl.nasa.gov/pub/naif/generic_kernels/\n"
                 f"Required files:\n"
                 f"  - lsk/naif0012.tls\n"
@@ -585,7 +585,7 @@ class Gravity:
         third_body_bodies : list of str
             Which bodies to include (default: ['sun', 'moon'])
         spice_kernel_folderpath : str
-            Path to SPICE kernel directory
+            Path to SPICE kernel folderpath
         """
         # Two-body gravity
         self.two_body = TwoBodyGravity(
@@ -971,7 +971,7 @@ class Acceleration:
         third_body_bodies : list of str
             Which bodies to include (default: ['sun', 'moon'])
         spice_kernel_folderpath : str
-            Path to SPICE kernel directory
+            Path to SPICE kernel folderpath
         enable_srp : bool
             Enable solar radiation pressure (not yet implemented)
         cr : float

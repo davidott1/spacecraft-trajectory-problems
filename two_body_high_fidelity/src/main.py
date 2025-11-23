@@ -121,7 +121,7 @@ def parse_and_validate_inputs(
   integ_time_f     = integ_time_o + delta_time
   delta_integ_time = integ_time_f - integ_time_o
   
-  print(f"\nPropagation Time Span")
+  print(f"\nPropagation Timespan")
   print(f"  TLE epoch                  : {tle_epoch_dt.isoformat()} UTC")
   print(f"  Target start               : {target_start_dt.isoformat()} UTC")
   print(f"  Target end                 : {target_end_dt.isoformat()} UTC")
@@ -232,7 +232,20 @@ def load_spice_files(
       Path to the leap seconds kernel file.
   """
   if use_spice:
-    print(f"\nLoad SPICE kernels: {spice_kernels_folderpath}")
+    if not spice_kernels_folderpath.exists():
+      raise FileNotFoundError(f"SPICE kernels folder not found: {spice_kernels_folderpath}")
+    if not lsk_filepath.exists():
+      raise FileNotFoundError(f"SPICE leap seconds kernel not found: {lsk_filepath}")
+
+    try:
+      rel_path = spice_kernels_folderpath.relative_to(Path.cwd())
+      display_path = f"<project_folderpath>/{rel_path}"
+    except ValueError:
+      display_path = spice_kernels_folderpath
+
+    print(f"  Spice Kernels")
+    print(f"    - Folderpath : {display_path}")
+    
     # Load leap seconds kernel first (minimal kernel set for time conversion)
     spice.furnsh(str(lsk_filepath))
 
@@ -277,9 +290,9 @@ def process_horizons_result(
       is successful. Returns `None` if the input indicates a failure.
   """
   if result_horizons and result_horizons.get('success'):
-    print(f"  Epoch              : {result_horizons['time_o'].isoformat()} UTC")
-    print(f"  Number of points   : {len(result_horizons['delta_time'])}")
-    print(f"  Time span          : {result_horizons['delta_time'][0]:.1f} to {result_horizons['delta_time'][-1]:.1f} seconds")
+    print(f"    - Epoch    : {result_horizons['time_o'].isoformat()} UTC")
+    print(f"    - Points   : {len(result_horizons['delta_time'])}")
+    print(f"    - Timespan : {result_horizons['delta_time'][0]:.1f} to {result_horizons['delta_time'][-1]:.1f} seconds")
 
     # Create plot_time_s for seconds-based, zero-start plotting time
     result_horizons['plot_time_s'] = result_horizons['delta_time'] - result_horizons['delta_time'][0]
@@ -312,7 +325,7 @@ def process_horizons_result(
 
   # Failure path
   msg = result_horizons.get('message') if isinstance(result_horizons, dict) else 'No result returned'
-  print(f"  ✗ Horizons loading failed: {msg}")
+  print(f"    - Horizons loading failed: {msg}")
   return None
 
 def get_horizons_ephemeris(
@@ -338,10 +351,15 @@ def get_horizons_ephemeris(
       Processed Horizons result dictionary, or None if loading failed.
   """
   # Load Horizons ephemeris
-  print("\nLoad JPL Horizons Ephemeris")
-  print(f"  File path          : {horizons_filepath}")
-  print(f"  File exists        : {horizons_filepath.exists()}")
-  print(f"  Requested Timespan : {target_start_dt} to {target_end_dt}")
+  try:
+    rel_path = horizons_filepath.relative_to(Path.cwd())
+    display_path = f"<project_folderpath>/{rel_path}"
+  except ValueError:
+    display_path = horizons_filepath
+
+  print("  JPL Horizons Ephemeris")
+  print(f"    - Filepath : {display_path}")
+  print(f"    - Timespan : {target_start_dt} to {target_end_dt}")
   
   # Load Horizons data
   result_horizons = load_horizons_ephemeris(
@@ -386,7 +404,7 @@ def get_initial_state(
     np.ndarray
       A 6x1 state vector [m, m, m, m/s, m/s, m/s].
   """
-  print("\nDetermine Initial State")
+  print("\nInitial State")
   
   # 1. Use Horizons if available and requested
   if use_horizons_initial and result_horizons and result_horizons.get('success'):
@@ -518,7 +536,7 @@ def propagate_sgp4_at_horizons_grid(
   
   print(f"  ✓ SGP4 propagation at Horizons times successful!")
   print(f"  Number of points: {num_points_sgp4}")
-  print(f"  Time span: {result_sgp4_at_horizons['plot_time_s'][0]:.1f} to {result_sgp4_at_horizons['plot_time_s'][-1]:.1f} seconds")
+  print(f"  Timespan: {result_sgp4_at_horizons['plot_time_s'][0]:.1f} to {result_sgp4_at_horizons['plot_time_s'][-1]:.1f} seconds")
   
   return result_sgp4_at_horizons
 
@@ -593,16 +611,16 @@ def run_high_fidelity_propagation(
   
   if enable_third_body:
     print("    Gravity (Third-Body)")
-    print("      - Bodies: Sun, Moon")
+    print("      - Bodies    : Sun, Moon")
     if use_spice:
-        print("      - Ephemeris: SPICE (High Accuracy)")
-        print(f"      - Note: SPICE kernels loaded for third-body ephemerides.")
+        print("      - Ephemeris : SPICE (High Accuracy)")
+        print(f"      - Note      : SPICE kernels loaded for third-body ephemerides.")
     else:
-        print("      - Ephemeris: Analytical (Approximate)")
+        print("      - Ephemeris : Analytical (Approximate)")
       
   print("    Atmospheric Drag")
-  print("      - Model: Exponential Atmosphere")
-  print(f"      - Parameters: Cd={cd}, Area={area_drag} m², Mass={mass} kg")
+  print( "      - Model      : Exponential Atmosphere")
+  print(f"      - Parameters : Cd={cd}, Area={area_drag} m², Mass={mass} kg")
   
   # Define acceleration model
   acceleration = Acceleration(
@@ -626,16 +644,17 @@ def run_high_fidelity_propagation(
   # Propagate with high-fidelity model
   delta_time = (target_end_dt - target_start_dt).total_seconds()
   print("\nPropagation Using High-Fidelity Model")
-  print(f"  Time : Start    : {target_start_dt} UTC")
-  print(f"       : End      : {  target_end_dt} UTC")
-  print(f"       : Duration : {delta_time/3600:.1f} h")
+  print(f"  Time")
+  print(f"    - Start    : {target_start_dt} UTC")
+  print(f"    - End      : {target_end_dt} UTC")
+  print(f"    - Duration : {delta_time/3600:.1f} h")
   
   # Use Horizons time grid for high-fidelity propagation
   if result_horizons and result_horizons['success']:
     # Convert Horizons plot_time_s (seconds from target_start) to integration time (seconds from TLE epoch)
     horizons_integ_times = result_horizons['plot_time_s'] + integ_time_o
-    print(f"       : Grid     : {len(horizons_integ_times)} points from Horizons ephemeris")
-    print(f"       : Step     : {result_horizons['plot_time_s'][1] - result_horizons['plot_time_s'][0]:.1f} s")
+    print(f"    - Grid     : {len(horizons_integ_times)} points from Horizons ephemeris")
+    print(f"    - Step     : {result_horizons['plot_time_s'][1] - result_horizons['plot_time_s'][0]:.1f} s")
     
     result_hifi = propagate_state_numerical_integration(
       initial_state       = initial_state,
@@ -657,11 +676,9 @@ def run_high_fidelity_propagation(
   if result_hifi['success']:
     # Store integration time (seconds from TLE epoch)
     result_hifi['integ_time_s'] = result_hifi['time']
-    print(f"  Integration time range (from TLE epoch): {result_hifi['integ_time_s'][0]:.1f} to {result_hifi['integ_time_s'][-1]:.1f} s")
     
     # Create plotting time array (seconds from target start time)
     result_hifi['plot_time_s'] = result_hifi['time'] - integ_time_o
-    print(f"  Plotting time range (from Oct 1 00:00): {result_hifi['plot_time_s'][0]:.1f} to {result_hifi['plot_time_s'][-1]:.1f} s")
   else:
     print(f"  ✗ Propagation failed: {result_hifi['message']}")
   
@@ -1093,6 +1110,9 @@ def main(
     target_start_dt = config.target_start_dt,
     target_end_dt   = config.target_end_dt,
   )
+
+  print("\nLoad Files")
+  print(f"  Project Folderpath : {Path.cwd()}")
 
   # Load spice files if SPICE is enabled
   load_spice_files(config.use_spice, spice_kernels_folderpath, lsk_filepath)
