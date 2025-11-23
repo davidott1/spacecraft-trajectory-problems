@@ -107,7 +107,6 @@ Sources:
 """
 
 import numpy as np
-import spiceypy as spice
 from pathlib import Path
 from typing import Optional
 import warnings
@@ -324,6 +323,8 @@ class ThirdBodyGravity:
         - SPK (Planetary Ephemeris): de430.bsp or de440.bsp
         - PCK (Planetary Constants): pck00010.tpc
         """
+        import spiceypy as spice
+
         if kernel_folderpath is None:
             # Default to a kernels directory in the project
             kernel_folderpath = Path(__file__).parent.parent.parent / 'data' / 'spice_kernels'
@@ -380,6 +381,7 @@ class ThirdBodyGravity:
             Position vector [m]
         """
         if self.use_spice:
+            import spiceypy as spice
             # SPICE state relative to Earth
             state, _ = spice.spkez(
                 targ   = self._get_naif_id(body_name),

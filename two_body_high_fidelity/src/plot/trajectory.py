@@ -233,8 +233,8 @@ def plot_3d_error(
   # Interpolate comparison result to reference time points
   from scipy.interpolate import interp1d
   
-  time_ref = result_ref['time']
-  time_cmp = result_cmp['time']
+  time_ref  = result_ref['delta_time']
+  time_cmp  = result_cmp['time']
   state_cmp = result_cmp['state']
   
   # Interpolate each state component

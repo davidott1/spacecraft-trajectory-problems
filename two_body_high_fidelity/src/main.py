@@ -19,10 +19,15 @@ Description:
   5. Generates and saves plots comparing the trajectories and their errors.
 
 Usage:
-  python -m src.main <norad_id> <start_time> <end_time>
+  python -m src.main --input-object-type norad-id --norad-id <id> --timespan <start> <end> [options]
 
 Example:
-  python -m src.main 25544 2025-10-01T00:00:00 2025-10-02T00:00:00
+  python -m src.main \
+    --input-object-type norad-id \
+    --norad-id 25544 \
+    --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00 \
+    --include-third-body \
+    --include-spice
 """
 import argparse
 import matplotlib.pyplot as plt
@@ -57,10 +62,11 @@ SUPPORTED_OBJECTS = {
 
 
 def parse_and_validate_inputs(
-  norad_id       : str,
-  start_time_str : str,
-  end_time_str   : str,
-  use_spice      : bool = True,
+  norad_id          : str,
+  start_time_str    : str,
+  end_time_str      : str,
+  use_spice         : bool = False,
+  enable_third_body : bool = False,
 ) -> dict:
   """
   Parse and validate input parameters for orbit propagation.
@@ -75,6 +81,8 @@ def parse_and_validate_inputs(
       End time in ISO format (e.g., '2025-10-02T00:00:00').
     use_spice : bool
       Flag to enable/disable SPICE usage.
+    enable_third_body : bool
+      Flag to enable/disable third-body gravity.
   
   Output:
   -------
@@ -135,6 +143,7 @@ def parse_and_validate_inputs(
     'cd'               : obj_props['cd'],
     'area_drag'        : obj_props['area_drag'],
     'use_spice'        : use_spice,
+    'enable_third_body': enable_third_body,
   }
 
 def get_config(inputs: dict) -> SimpleNamespace:
@@ -522,6 +531,7 @@ def run_high_fidelity_propagation(
   cd                       : float,
   area_drag                : float,
   use_spice                : bool,
+  enable_third_body        : bool,
   spice_kernels_folderpath : Path,
   result_horizons          : dict,
 ) -> dict:
@@ -548,6 +558,8 @@ def run_high_fidelity_propagation(
       Drag area [m^2].
     use_spice : bool
       Whether to use SPICE for third-body ephemerides.
+    enable_third_body : bool
+      Whether to enable third-body gravity.
     spice_kernels_folderpath : Path
       Path to SPICE kernels folder.
     result_horizons : dict
@@ -558,21 +570,38 @@ def run_high_fidelity_propagation(
     dict
       Propagation result dictionary.
   """
-  # Set up high-fidelity dynamics model
-  print("\nHigh-Fidelity Dynamics Model")
-  print(f"  Forces")
-  print(f"    Gravity")
-  print(f"      Two-Body")
-  print(f"      Zonal Harmonics: J2, J3, J4")
-  print(f"      Third-Body: Sun, Moon")
-  print(f"    Drag")
-  print(f"    Solar Radiation Pressure")
-  
   # Convert UTC datetime to ET seconds past J2000 if SPICE is enabled
   time_et_o = 0.0
   if use_spice:
     time_et_o = get_et_j2000_from_utc(target_start_dt)
-  print(f"  Epoch : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC or {time_et_o:.3f} ET")
+
+  # Set up high-fidelity dynamics model
+  print("\nHigh-Fidelity Dynamics Model Configuration")
+  print(f"  Epoch : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC" + (f" ({time_et_o:.6f} ET)" if use_spice else ""))
+  
+  print("  Summary of Enabled Forces:")
+  print("    - Earth Gravity (Two-Body + J2, J3, J4)")
+  if enable_third_body:
+    print("    - Third-Body Gravity (Sun, Moon)")
+  print("    - Atmospheric Drag")
+  
+  print("  Details:")
+  print("    Gravity (Earth):")
+  print("      - Two-Body Point Mass")
+  print("      - Zonal Harmonics: J2, J3, J4")
+  
+  if enable_third_body:
+    print("    Gravity (Third-Body):")
+    print("      - Bodies: Sun, Moon")
+    if use_spice:
+        print("      - Ephemeris: SPICE (High Accuracy)")
+        print(f"      - Note: SPICE kernels loaded for third-body ephemerides.")
+    else:
+        print("      - Ephemeris: Analytical (Approximate)")
+      
+  print("    Atmospheric Drag:")
+  print("      - Model: Exponential Atmosphere")
+  print(f"      - Parameters: Cd={cd}, Area={area_drag} m², Mass={mass} kg")
   
   # Define acceleration model
   acceleration = Acceleration(
@@ -587,7 +616,7 @@ def run_high_fidelity_propagation(
     enable_drag             = True,
     cd                      = cd,
     area_drag               = area_drag,
-    enable_third_body       = True,
+    enable_third_body       = enable_third_body,
     third_body_use_spice    = use_spice,
     third_body_bodies       = ['SUN', 'MOON'],
     spice_kernel_folderpath = str(spice_kernels_folderpath),
@@ -595,15 +624,17 @@ def run_high_fidelity_propagation(
   
   # Propagate with high-fidelity model
   delta_time = (target_end_dt - target_start_dt).total_seconds()
-  print("\n Propagating orbit with high-fidelity model using numerical integration ...")
-  print(f"  Time span: {target_start_dt} to {target_end_dt} UTC ({delta_time/3600:.1f} hours)")
+  print("\nPropagation Using High-Fidelity Model")
+  print(f"  Time : Start    : {target_start_dt} UTC")
+  print(f"       : End      : {  target_end_dt} UTC")
+  print(f"       : Duration : {delta_time/3600:.1f} h")
   
   # Use Horizons time grid for high-fidelity propagation
   if result_horizons and result_horizons['success']:
     # Convert Horizons plot_time_s (seconds from target_start) to integration time (seconds from TLE epoch)
     horizons_integ_times = result_horizons['plot_time_s'] + integ_time_o
-    print(f"  Using Horizons time grid: {len(horizons_integ_times)} points")
-    print(f"  Time step: {result_horizons['plot_time_s'][1] - result_horizons['plot_time_s'][0]:.1f} seconds")
+    print(f"       : Grid     : {len(horizons_integ_times)} points from Horizons ephemeris")
+    print(f"       : Step     : {result_horizons['plot_time_s'][1] - result_horizons['plot_time_s'][0]:.1f} s")
     
     result_hifi = propagate_state_numerical_integration(
       initial_state       = initial_state,
@@ -623,16 +654,13 @@ def run_high_fidelity_propagation(
     raise RuntimeError("Horizons ephemeris is required for high-fidelity propagation and error analysis, but it failed to load.")
   
   if result_hifi['success']:
-    print(f"  ✓ Propagation successful!")
-    print(f"  Number of time steps: {len(result_hifi['time'])}")
-    
     # Store integration time (seconds from TLE epoch)
     result_hifi['integ_time_s'] = result_hifi['time']
-    print(f"  Integration time range (from TLE epoch): {result_hifi['integ_time_s'][0]:.1f} to {result_hifi['integ_time_s'][-1]:.1f} seconds")
+    print(f"  Integration time range (from TLE epoch): {result_hifi['integ_time_s'][0]:.1f} to {result_hifi['integ_time_s'][-1]:.1f} s")
     
     # Create plotting time array (seconds from target start time)
     result_hifi['plot_time_s'] = result_hifi['time'] - integ_time_o
-    print(f"  Plotting time range (from Oct 1 00:00): {result_hifi['plot_time_s'][0]:.1f} to {result_hifi['plot_time_s'][-1]:.1f} seconds")
+    print(f"  Plotting time range (from Oct 1 00:00): {result_hifi['plot_time_s'][0]:.1f} to {result_hifi['plot_time_s'][-1]:.1f} s")
   else:
     print(f"  ✗ Propagation failed: {result_hifi['message']}")
   
@@ -648,6 +676,7 @@ def run_propagations(
   cd                       : float,
   area_drag                : float,
   use_spice                : bool,
+  enable_third_body        : bool,
   spice_kernels_folderpath : Path,
   result_horizons          : dict,
   tle_line1                : str,
@@ -676,6 +705,8 @@ def run_propagations(
       Drag area.
     use_spice : bool
       Whether to use SPICE.
+    enable_third_body : bool
+      Whether to enable third-body gravity.
     spice_kernels_folderpath : Path
       Path to SPICE kernels.
     result_horizons : dict
@@ -701,6 +732,7 @@ def run_propagations(
     cd                       = cd,
     area_drag                = area_drag,
     use_spice                = use_spice,
+    enable_third_body        = enable_third_body,
     spice_kernels_folderpath = spice_kernels_folderpath,
     result_horizons          = result_horizons,
   )
@@ -1019,10 +1051,11 @@ def get_simulation_paths(
   )
 
 def main(
-  norad_id       : str,
-  start_time_str : str,
-  end_time_str   : str,
-  use_spice      : bool = True,
+  norad_id          : str,
+  start_time_str    : str,
+  end_time_str      : str,
+  use_spice         : bool = False,
+  enable_third_body : bool = False,
 ) -> dict:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -1041,13 +1074,15 @@ def main(
       End time for propagation in ISO format.
     use_spice : bool
       Flag to enable/disable SPICE usage.
+    enable_third_body : bool
+      Flag to enable/disable third-body gravity.
   
   Output:
   -------
     None
   """
   # Process inputs and setup
-  inputs_dict = parse_and_validate_inputs(norad_id, start_time_str, end_time_str, use_spice)
+  inputs_dict = parse_and_validate_inputs(norad_id, start_time_str, end_time_str, use_spice, enable_third_body)
   config      = get_config(inputs_dict)
 
   # Set up paths and files
@@ -1089,8 +1124,9 @@ def main(
     cd                       = config.cd,
     area_drag                = config.area_drag,
     use_spice                = config.use_spice,
+    enable_third_body        = config.enable_third_body,
     spice_kernels_folderpath = spice_kernels_folderpath,
-    result_horizons          = result_horizons, # type: ignore
+    result_horizons          = result_horizons,
     tle_line1                = config.tle_line1,
     tle_line2                = config.tle_line2,
   )
@@ -1120,25 +1156,41 @@ def parse_command_line_arguments() -> argparse.Namespace:
   Output:
   -------
     argparse.Namespace
-      An object containing the parsed arguments (norad_id, start_time, end_time, use_spice).
+      An object containing the parsed arguments.
   """
   parser = argparse.ArgumentParser(description="Run high-fidelity orbit propagation.")
-  parser.add_argument('norad_id'   , type=str, help="NORAD Catalog ID of the satellite (e.g., '25544' for ISS).")
-  parser.add_argument('start_time' , type=str, help="Start time for propagation in ISO format (e.g., '2025-10-01T00:00:00').")
-  parser.add_argument('end_time'   , type=str, help="End time for propagation in ISO format (e.g., '2025-10-02T00:00:00').")
+  
+  # Object definition arguments
+  parser.add_argument('--input-object-type', type=str, choices=['norad-id'], required=True, help="Type of input object identifier.")
+  parser.add_argument('--norad-id', type=str, help="NORAD Catalog ID of the satellite (e.g., '25544' for ISS).")
+  
+  # Time arguments
+  parser.add_argument('--timespan', nargs=2, metavar=('TIME_START', 'TIME_END'), required=True, help="Start and end time for propagation in ISO format (e.g., '2025-10-01T00:00:00 2025-10-02T00:00:00').")
   
   # Optional arguments
-  parser.add_argument('--no-spice', dest='use_spice', action='store_false', help="Disable SPICE functionality (enabled by default).")
-  parser.set_defaults(use_spice=True)
+  parser.add_argument('--include-spice', dest='use_spice', action='store_true', help="Enable SPICE functionality (disabled by default).")
+  parser.add_argument('--include-third-body', dest='enable_third_body', action='store_true', help="Enable third-body gravity (disabled by default).")
+  parser.set_defaults(use_spice=False, enable_third_body=False)
   
-  return parser.parse_args()
+  args = parser.parse_args()
+  
+  # Validate conditional arguments
+  if args.input_object_type == 'norad-id' and not args.norad_id:
+    parser.error("--norad-id is required when --input-object-type is 'norad-id'")
+  
+  # Unpack timespan
+  args.time_start = args.timespan[0]
+  args.time_end   = args.timespan[1]
+
+  return args
 
 
 if __name__ == "__main__":
   args = parse_command_line_arguments()
   main(
     args.norad_id,
-    args.start_time,
-    args.end_time,
+    args.time_start,
+    args.time_end,
     args.use_spice,
+    args.enable_third_body,
   )
