@@ -1161,7 +1161,7 @@ def parse_command_line_arguments() -> argparse.Namespace:
   parser = argparse.ArgumentParser(description="Run high-fidelity orbit propagation.")
   
   # Object definition arguments
-  parser.add_argument('--input-object-type', type=str, choices=['norad-id'], required=True, help="Type of input object identifier.")
+  parser.add_argument('--input-object-type', type=str, choices=['norad-id', 'norad_id', 'norad id'], required=True, help="Type of input object identifier.")
   parser.add_argument('--norad-id', type=str, help="NORAD Catalog ID of the satellite (e.g., '25544' for ISS).")
   
   # Time arguments
@@ -1174,8 +1174,11 @@ def parse_command_line_arguments() -> argparse.Namespace:
   
   args = parser.parse_args()
   
+  # Normalize input object type (handle hyphens and spaces)
+  args.input_object_type = args.input_object_type.replace('-', '_').replace(' ', '_')
+
   # Validate conditional arguments
-  if args.input_object_type == 'norad-id' and not args.norad_id:
+  if args.input_object_type == 'norad_id' and not args.norad_id:
     parser.error("--norad-id is required when --input-object-type is 'norad-id'")
   
   # Unpack timespan
