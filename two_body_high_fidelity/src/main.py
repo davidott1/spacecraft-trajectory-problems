@@ -9,6 +9,7 @@ Description:
   The propagation includes the following forces:
   - Earth's gravity (including J2, J3, J4 zonal harmonics)
   - Atmospheric drag
+  - Solar Radiation Pressure (SRP)
   - Third-body gravity from the Sun and Moon
 
   The script performs the following steps:
@@ -19,15 +20,41 @@ Description:
   5. Generates and saves plots comparing the trajectories and their errors.
 
 Usage:
-  python -m src.main --input-object-type norad-id --norad-id <id> --timespan <start> <end> [options]
 
-Example:
-  python -m src.main \
-    --input-object-type norad-id \
-    --norad-id 25544 \
-    --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00 \
-    --include-third-body \
-    --include-spice
+  Argument                     Required   Description
+  ---------------------------  --------   --------------------------------------------------
+  --input-object-type          Yes        Type of input object (e.g., norad-id)
+  --norad-id                   Yes*       NORAD ID (required for norad-id type)
+  --timespan                   Yes        Start and end time (ISO format)
+  --include-zonal-harmonics    No         Enable zonal harmonics
+  --zonal-harmonics            No         List of zonal harmonics: J2 (default), J3, and J4
+  --include-spice              No         Enable SPICE functionality
+  --include-third-body         No         Enable third-body gravity
+  --include-srp                No         Enable Solar Radiation Pressure
+
+  Example Commands:
+    python -m src.main \
+      --input-object-type <type> \
+      --norad-id <id> \
+      --timespan <start> <end> \
+      [--include-spice] \
+      [--include-third-body] \
+      [--include-srp] \
+      [--include-zonal-harmonics] \
+      [--zonal-harmonics <J2|J3|J4>]
+
+    python -m src.main \
+      --input-object-type norad-id \
+      --norad-id 25544 \
+      --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00 \
+      --include-zonal-harmonics \
+      --zonal-harmonics J2 J3 J4 \
+      --include-third-body \
+      --include-srp \
+      --include-spice
+
+
+    
 """
 import argparse
 import sys
@@ -58,16 +85,21 @@ SUPPORTED_OBJECTS = {
     'mass'      : 420000.0,    # ISS mass [kg] (approximate)
     'cd'        : 2.2,         # drag coefficient [-]
     'area_drag' : 1000.0,      # cross-sectional area [m²] (approximate)
+    'cr'        : 1.2,         # radiation pressure coefficient [-]
+    'area_srp'  : 1000.0,      # SRP cross-sectional area [m²] (approximate)
   }
 }
 
 
 def parse_and_validate_inputs(
-  norad_id          : str,
-  start_time_str    : str,
-  end_time_str      : str,
-  use_spice         : bool = False,
-  enable_third_body : bool = False,
+  norad_id               : str,
+  start_time_str         : str,
+  end_time_str           : str,
+  use_spice              : bool = False,
+  include_third_body     : bool = False,
+  include_zonal_harmonics: bool = False,
+  zonal_harmonics_list   : list = None,
+  include_srp            : bool = False,
 ) -> dict:
   """
   Parse and validate input parameters for orbit propagation.
@@ -82,8 +114,14 @@ def parse_and_validate_inputs(
       End time in ISO format (e.g., '2025-10-02T00:00:00').
     use_spice : bool
       Flag to enable/disable SPICE usage.
-    enable_third_body : bool
+    include_third_body : bool
       Flag to enable/disable third-body gravity.
+    include_zonal_harmonics : bool
+      Flag to enable/disable zonal harmonics.
+    zonal_harmonics_list : list
+      List of zonal harmonics to include (e.g., ['J2', 'J3']).
+    include_srp : bool
+      Flag to enable/disable Solar Radiation Pressure.
   
   Output:
   -------
@@ -143,8 +181,13 @@ def parse_and_validate_inputs(
     'mass'             : obj_props['mass'],
     'cd'               : obj_props['cd'],
     'area_drag'        : obj_props['area_drag'],
+    'cr'               : obj_props['cr'],
+    'area_srp'         : obj_props['area_srp'],
     'use_spice'        : use_spice,
-    'enable_third_body': enable_third_body,
+    'include_third_body'     : include_third_body,
+    'include_zonal_harmonics': include_zonal_harmonics,
+    'zonal_harmonics_list'   : zonal_harmonics_list if zonal_harmonics_list else [],
+    'include_srp'            : include_srp,
   }
 
 def get_config(inputs: dict) -> SimpleNamespace:
@@ -409,13 +452,13 @@ def get_initial_state(
   # 1. Use Horizons if available and requested
   if use_horizons_initial and result_horizons and result_horizons.get('success'):
     horizons_initial_state = result_horizons['state'][:, 0]
-    print(f"  Use Horizons Initial State")
+    print(f"  Horizons-Derived")
     print(f"    Position : {horizons_initial_state[0]:>13.6e}  {horizons_initial_state[1]:>13.6e}  {horizons_initial_state[2]:>13.6e} m")
     print(f"    Velocity : {horizons_initial_state[3]:>13.6e}  {horizons_initial_state[4]:>13.6e}  {horizons_initial_state[5]:>13.6e} m/s")
     return horizons_initial_state
 
   # 2. Fallback to TLE
-  print(f"  Use TLE-derived Initial State")
+  print(f"  TLE-Derived")
   print(f"    TLE Line 1 : {tle_line1}")
   print(f"    TLE Line 2 : {tle_line2}")
 
@@ -549,8 +592,13 @@ def run_high_fidelity_propagation(
   mass                     : float,
   cd                       : float,
   area_drag                : float,
+  cr                       : float,
+  area_srp                 : float,
   use_spice                : bool,
-  enable_third_body        : bool,
+  include_third_body       : bool,
+  include_zonal_harmonics  : bool,
+  zonal_harmonics_list     : list,
+  include_srp              : bool,
   spice_kernels_folderpath : Path,
   result_horizons          : dict,
 ) -> dict:
@@ -575,10 +623,20 @@ def run_high_fidelity_propagation(
       Drag coefficient.
     area_drag : float
       Drag area [m^2].
+    cr : float
+      Reflectivity coefficient.
+    area_srp : float
+      SRP area [m^2].
     use_spice : bool
       Whether to use SPICE for third-body ephemerides.
-    enable_third_body : bool
+    include_third_body : bool
       Whether to enable third-body gravity.
+    include_zonal_harmonics : bool
+      Whether to enable zonal harmonics.
+    zonal_harmonics_list : list
+      List of zonal harmonics to include.
+    include_srp : bool
+      Whether to enable Solar Radiation Pressure.
     spice_kernels_folderpath : Path
       Path to SPICE kernels folder.
     result_horizons : dict
@@ -594,48 +652,78 @@ def run_high_fidelity_propagation(
   if use_spice:
     time_et_o = get_et_j2000_from_utc(target_start_dt)
 
+  # Determine active zonal harmonics
+  j2_val = 0.0
+  j3_val = 0.0
+  j4_val = 0.0
+  active_harmonics = []
+
+  if include_zonal_harmonics:
+    if 'J2' in zonal_harmonics_list:
+      j2_val = PHYSICALCONSTANTS.EARTH.J2
+      active_harmonics.append('J2')
+    if 'J3' in zonal_harmonics_list:
+      j3_val = PHYSICALCONSTANTS.EARTH.J3
+      active_harmonics.append('J3')
+    if 'J4' in zonal_harmonics_list:
+      j4_val = PHYSICALCONSTANTS.EARTH.J4
+      active_harmonics.append('J4')
+
   # Set up high-fidelity dynamics model
   print("\nHigh-Fidelity Dynamics Model Configuration")
   print(f"  Epoch: {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC" + (f" ({time_et_o:.6f} ET)" if use_spice else ""))
   
   print("  Summary")
-  print("    - Earth Gravity (Two-Body + J2, J3, J4)")
-  if enable_third_body:
+  print(f"    - Earth Gravity (Two-Body{' + ' + ', '.join(active_harmonics) if active_harmonics else ''})")
+  if include_third_body:
     print("    - Third-Body Gravity (Sun, Moon)")
   print("    - Atmospheric Drag")
+  if include_srp:
+    print("    - Solar Radiation Pressure")
   
   print("  Details")
   print("    Gravity (Earth)")
   print("      - Two-Body Point Mass")
-  print("      - Zonal Harmonics: J2, J3, J4")
+  if active_harmonics:
+    print(f"      - Zonal Harmonics : {', '.join(active_harmonics)}")
+  else:
+    print("      - Zonal Harmonics : None")
   
-  if enable_third_body:
+  if include_third_body:
     print("    Gravity (Third-Body)")
     print("      - Bodies    : Sun, Moon")
     if use_spice:
-        print("      - Ephemeris : SPICE (High Accuracy)")
-        print(f"      - Note      : SPICE kernels loaded for third-body ephemerides.")
+      print("      - Ephemeris : SPICE (High Accuracy)")
+      print(f"      - Note      : SPICE kernels loaded for third-body ephemerides.")
     else:
-        print("      - Ephemeris : Analytical (Approximate)")
+      print("      - Ephemeris : Analytical (Approximate)")
       
   print("    Atmospheric Drag")
   print( "      - Model      : Exponential Atmosphere")
   print(f"      - Parameters : Cd={cd}, Area={area_drag} m², Mass={mass} kg")
+
+  if include_srp:
+    print("    Solar Radiation Pressure")
+    print( "      - Model      : Conical Shadow (Spherical Earth)")
+    print(f"      - Parameters : Cr={cr}, Area={area_srp} m²")
   
   # Define acceleration model
   acceleration = Acceleration(
     gp                      = PHYSICALCONSTANTS.EARTH.GP,
     time_et_o               = time_et_o,
     time_o                  = integ_time_o,
-    j2                      = PHYSICALCONSTANTS.EARTH.J2,
-    j3                      = PHYSICALCONSTANTS.EARTH.J3,
-    j4                      = PHYSICALCONSTANTS.EARTH.J4,
+    j2                      = j2_val,
+    j3                      = j3_val,
+    j4                      = j4_val,
     pos_ref                 = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR,
     mass                    = mass,
     enable_drag             = True,
     cd                      = cd,
     area_drag               = area_drag,
-    enable_third_body       = enable_third_body,
+    enable_srp              = include_srp,
+    cr                      = cr,
+    area_srp                = area_srp,
+    enable_third_body       = include_third_body,
     third_body_use_spice    = use_spice,
     third_body_bodies       = ['SUN', 'MOON'],
     spice_kernel_folderpath = str(spice_kernels_folderpath),
@@ -693,8 +781,13 @@ def run_propagations(
   mass                     : float,
   cd                       : float,
   area_drag                : float,
+  cr                       : float,
+  area_srp                 : float,
   use_spice                : bool,
-  enable_third_body        : bool,
+  include_third_body       : bool,
+  include_zonal_harmonics  : bool,
+  zonal_harmonics_list     : list,
+  include_srp              : bool,
   spice_kernels_folderpath : Path,
   result_horizons          : dict,
   tle_line1                : str,
@@ -721,10 +814,20 @@ def run_propagations(
       Drag coefficient.
     area_drag : float
       Drag area.
+    cr : float
+      Reflectivity coefficient.
+    area_srp : float
+      SRP area.
     use_spice : bool
       Whether to use SPICE.
-    enable_third_body : bool
+    include_third_body : bool
       Whether to enable third-body gravity.
+    include_zonal_harmonics : bool
+      Whether to enable zonal harmonics.
+    zonal_harmonics_list : list
+      List of zonal harmonics to include.
+    include_srp : bool
+      Whether to enable SRP.
     spice_kernels_folderpath : Path
       Path to SPICE kernels.
     result_horizons : dict
@@ -749,8 +852,13 @@ def run_propagations(
     mass                     = mass,
     cd                       = cd,
     area_drag                = area_drag,
+    cr                       = cr,
+    area_srp                 = area_srp,
     use_spice                = use_spice,
-    enable_third_body        = enable_third_body,
+    include_third_body       = include_third_body,
+    include_zonal_harmonics  = include_zonal_harmonics,
+    zonal_harmonics_list     = zonal_harmonics_list,
+    include_srp              = include_srp,
     spice_kernels_folderpath = spice_kernels_folderpath,
     result_horizons          = result_horizons,
   )
@@ -1069,11 +1177,14 @@ def get_simulation_paths(
   )
 
 def main(
-  norad_id          : str,
-  start_time_str    : str,
-  end_time_str      : str,
-  use_spice         : bool = False,
-  enable_third_body : bool = False,
+  norad_id               : str,
+  start_time_str         : str,
+  end_time_str           : str,
+  use_spice              : bool = False,
+  include_third_body     : bool = False,
+  include_zonal_harmonics: bool = False,
+  zonal_harmonics_list   : list = None,
+  include_srp            : bool = False,
 ) -> dict:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -1092,15 +1203,21 @@ def main(
       End time for propagation in ISO format.
     use_spice : bool
       Flag to enable/disable SPICE usage.
-    enable_third_body : bool
+    include_third_body : bool
       Flag to enable/disable third-body gravity.
+    include_zonal_harmonics : bool
+      Flag to enable/disable zonal harmonics.
+    zonal_harmonics_list : list
+      List of zonal harmonics to include.
+    include_srp : bool
+      Flag to enable/disable Solar Radiation Pressure.
   
   Output:
   -------
     None
   """
   # Process inputs and setup
-  inputs_dict = parse_and_validate_inputs(norad_id, start_time_str, end_time_str, use_spice, enable_third_body)
+  inputs_dict = parse_and_validate_inputs(norad_id, start_time_str, end_time_str, use_spice, include_third_body, include_zonal_harmonics, zonal_harmonics_list, include_srp)
   config      = get_config(inputs_dict)
 
   # Set up paths and files
@@ -1144,8 +1261,13 @@ def main(
     mass                     = config.mass,
     cd                       = config.cd,
     area_drag                = config.area_drag,
+    cr                       = config.cr,
+    area_srp                 = config.area_srp,
     use_spice                = config.use_spice,
-    enable_third_body        = config.enable_third_body,
+    include_third_body       = config.include_third_body,
+    include_zonal_harmonics  = config.include_zonal_harmonics,
+    zonal_harmonics_list     = config.zonal_harmonics_list,
+    include_srp              = config.include_srp,
     spice_kernels_folderpath = spice_kernels_folderpath,
     result_horizons          = result_horizons,
     tle_line1                = config.tle_line1,
@@ -1168,6 +1290,97 @@ def main(
   unload_spice_files(config.use_spice)
   
   return result_hifi
+
+
+def print_input_table(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+  """
+  Print a table of input arguments, their values, and status.
+  """
+  # Identify explicit actions from sys.argv order
+  explicit_actions = []
+  seen_dests = set()
+  
+  # Map option strings to actions for quick lookup
+  opt_map = {}
+  for action in parser._actions:
+    for opt in action.option_strings:
+      opt_map[opt] = action
+
+  # Scan sys.argv to find order of explicit arguments
+  for arg in sys.argv[1:]:
+    if arg.startswith('-'):
+      # Handle --opt=val syntax
+      opt_name = arg.split('=')[0]
+      if opt_name in opt_map:
+        action = opt_map[opt_name]
+        if action.dest not in seen_dests and action.dest != 'help':
+          explicit_actions.append(action)
+          seen_dests.add(action.dest)
+
+  # Add remaining actions (defaults or required ones not yet seen)
+  all_actions = [a for a in parser._actions if a.dest != 'help']
+  remaining_actions = [a for a in all_actions if a.dest not in seen_dests]
+  
+  # Combine lists
+  display_actions = explicit_actions + remaining_actions
+
+  # Prepare data for printing
+  rows = []
+  headers = ["Argument", "Value", "Default", "Explicit"]
+  col_widths = [len(h) for h in headers]
+  data_widths = [0] * len(headers)
+
+  for action in display_actions:
+    val = getattr(args, action.dest, None)
+    
+    # Determine if default
+    is_default = (val == action.default)
+    
+    # Determine if explicitly set
+    is_explicit = (action.dest in seen_dests) or action.required
+    
+    # Fallback check for explicit if not found in simple scan (e.g. abbreviations)
+    if not is_explicit:
+       for opt in action.option_strings:
+        for arg in sys.argv:
+          if arg == opt or arg.startswith(opt + "="):
+            is_explicit = True
+            break
+        if is_explicit:
+          break
+        
+    # Format value
+    if isinstance(val, list):
+      val_str = " ".join(map(str, val))
+    else:
+      val_str = str(val)
+      
+    if len(val_str) > 42:
+      val_str = val_str[:39] + "..."
+      
+    row = [action.dest, val_str, str(is_default), str(is_explicit)]
+    rows.append(row)
+    
+    # Update column widths
+    for i, item in enumerate(row):
+      col_widths[i] = max(col_widths[i], len(item))
+      data_widths[i] = max(data_widths[i], len(item))
+
+  # Print table
+  print("\nInput Configuration")
+  
+  # Print headers
+  header_fmt = f"  {{:<{col_widths[0]}}}    {{:<{col_widths[1]}}}    {{:<{col_widths[2]}}}    {{:<{col_widths[3]}}}"
+  print(header_fmt.format(*headers))
+  
+  # Print separators
+  sep_widths = [min(len(h), dw) for h, dw in zip(headers, data_widths)]
+  separators = ["-" * w for w in sep_widths]
+  print(header_fmt.format(*separators))
+  
+  # Print rows
+  for row in rows:
+    print(header_fmt.format(*row))
 
 
 def parse_command_line_arguments() -> argparse.Namespace:
@@ -1195,10 +1408,16 @@ def parse_command_line_arguments() -> argparse.Namespace:
   
   # Optional arguments
   parser.add_argument('--include-spice', dest='use_spice', action='store_true', help="Enable SPICE functionality (disabled by default).")
-  parser.add_argument('--include-third-body', dest='enable_third_body', action='store_true', help="Enable third-body gravity (disabled by default).")
-  parser.set_defaults(use_spice=False, enable_third_body=False)
+  parser.add_argument('--include-third-body', dest='include_third_body', action='store_true', help="Enable third-body gravity (disabled by default).")
+  parser.add_argument('--include-zonal-harmonics', dest='include_zonal_harmonics', action='store_true', help="Enable zonal harmonics (disabled by default).")
+  parser.add_argument('--zonal-harmonics', dest='zonal_harmonics_list', nargs='+', choices=['J2', 'J3', 'J4'], default=['J2'], help="List of zonal harmonics to include (default: J2).")
+  parser.add_argument('--include-srp', dest='include_srp', action='store_true', help="Enable Solar Radiation Pressure (disabled by default).")
+  parser.set_defaults(use_spice=False, include_third_body=False, include_zonal_harmonics=False, include_srp=False)
   
   args = parser.parse_args()
+  
+  # Print input summary
+  print_input_table(args, parser)
   
   # Normalize input object type (handle hyphens and spaces)
   args.input_object_type = args.input_object_type.replace('-', '_').replace(' ', '_')
@@ -1221,5 +1440,8 @@ if __name__ == "__main__":
     args.time_start,
     args.time_end,
     args.use_spice,
-    args.enable_third_body,
+    args.include_third_body,
+    args.include_zonal_harmonics,
+    args.zonal_harmonics_list,
+    args.include_srp,
   )
