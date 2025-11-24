@@ -76,7 +76,7 @@ from src.propagation.horizons_loader import load_horizons_ephemeris
 from src.model.dynamics              import Acceleration, OrbitConverter
 from src.model.constants             import PHYSICALCONSTANTS, CONVERTER
 
-# Define supported objects and their properties
+
 SUPPORTED_OBJECTS = {
   '25544': {
     'name'      : 'ISS',
@@ -92,9 +92,9 @@ SUPPORTED_OBJECTS = {
 
 
 def parse_and_validate_inputs(
+  input_object_type      : str,
   norad_id               : str,
-  start_time_str         : str,
-  end_time_str           : str,
+  timespan               : list,
   use_spice              : bool = False,
   include_third_body     : bool = False,
   include_zonal_harmonics: bool = False,
@@ -106,12 +106,12 @@ def parse_and_validate_inputs(
   
   Input:
   ------
+    input_object_type : str
+      Type of input object (e.g., norad-id).
     norad_id : str
       NORAD catalog ID of the satellite.
-    start_time_str : str
-      Start time in ISO format (e.g., '2025-10-01T00:00:00').
-    end_time_str : str
-      End time in ISO format (e.g., '2025-10-02T00:00:00').
+    timespan : list
+      Start and end time in ISO format (e.g., ['2025-10-01T00:00:00', '2025-10-02T00:00:00']).
     use_spice : bool
       Flag to enable/disable SPICE usage.
     include_third_body : bool
@@ -133,6 +133,21 @@ def parse_and_validate_inputs(
     ValueError
       If NORAD ID is not supported.
   """
+  # Normalize input object type
+  input_object_type = input_object_type.replace('-', '_').replace(' ', '_')
+
+  # Unpack timespan
+  start_time_str = timespan[0]
+  end_time_str   = timespan[1]
+
+  # Validate conditional arguments
+  if input_object_type == 'norad_id' and not norad_id:
+    raise ValueError("NORAD ID is required when input-object-type is 'norad-id'")
+
+  # Enforce dependencies: SRP requires SPICE
+  if include_srp:
+    use_spice = True
+
   # Validate norad id input
   if norad_id not in SUPPORTED_OBJECTS:
     raise ValueError(f"NORAD ID {norad_id} is not supported. Supported IDs: {list(SUPPORTED_OBJECTS.keys())}")
@@ -159,13 +174,6 @@ def parse_and_validate_inputs(
   integ_time_f     = integ_time_o + delta_time
   delta_integ_time = integ_time_f - integ_time_o
   
-  print(f"\nPropagation Timespan")
-  print(f"  TLE epoch                  : {tle_epoch_dt.isoformat()} UTC")
-  print(f"  Target start               : {target_start_dt.isoformat()} UTC")
-  print(f"  Target end                 : {target_end_dt.isoformat()} UTC")
-  print(f"  Time offset from TLE epoch : {integ_time_o/3600:.2f} hours ({integ_time_o:.1f} seconds)")
-  print(f"  Propagation duration       : {delta_integ_time/3600:.2f} hours")
-  
   return {
     'obj_props'               : obj_props,
     'tle_line1'               : tle_line1,
@@ -190,6 +198,7 @@ def parse_and_validate_inputs(
     'include_srp'             : include_srp,
   }
 
+
 def get_config(inputs: dict) -> SimpleNamespace:
   """
   Create configuration object from inputs dictionary.
@@ -205,6 +214,7 @@ def get_config(inputs: dict) -> SimpleNamespace:
       Configuration object.
   """
   return SimpleNamespace(**inputs)
+
 
 def setup_paths_and_files(
   norad_id        : str,
@@ -257,6 +267,7 @@ def setup_paths_and_files(
     'lsk_filepath'             : lsk_filepath,
   }
 
+
 def load_spice_files(
   use_spice                : bool,
   spice_kernels_folderpath : Path,
@@ -287,10 +298,11 @@ def load_spice_files(
       display_path = spice_kernels_folderpath
 
     print(f"  Spice Kernels")
-    print(f"    - Folderpath : {display_path}")
+    print(f"    Folderpath : {display_path}")
     
     # Load leap seconds kernel first (minimal kernel set for time conversion)
     spice.furnsh(str(lsk_filepath))
+
 
 def unload_spice_files(
   use_spice : bool,
@@ -305,6 +317,7 @@ def unload_spice_files(
   """
   if use_spice:
     spice.kclear()
+
 
 def process_horizons_result(
   result_horizons : dict,
@@ -333,9 +346,9 @@ def process_horizons_result(
       is successful. Returns `None` if the input indicates a failure.
   """
   if result_horizons and result_horizons.get('success'):
-    print(f"    - Epoch    : {result_horizons['time_o'].isoformat()} UTC")
-    print(f"    - Points   : {len(result_horizons['delta_time'])}")
-    print(f"    - Timespan : {result_horizons['delta_time'][0]:.1f} to {result_horizons['delta_time'][-1]:.1f} seconds")
+    print(f"    Epoch    : {result_horizons['time_o'].strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    print(f"    Points   : {len(result_horizons['delta_time'])}")
+    print(f"    Timespan : {result_horizons['delta_time'][0]:.1f} to {result_horizons['delta_time'][-1]:.1f} seconds")
 
     # Create plot_time_s for seconds-based, zero-start plotting time
     result_horizons['plot_time_s'] = result_horizons['delta_time'] - result_horizons['delta_time'][0]
@@ -371,6 +384,7 @@ def process_horizons_result(
   print(f"    - Horizons loading failed: {msg}")
   return None
 
+
 def get_horizons_ephemeris(
   horizons_filepath : Path,
   target_start_dt   : datetime,
@@ -401,8 +415,8 @@ def get_horizons_ephemeris(
     display_path = horizons_filepath
 
   print("  JPL Horizons Ephemeris")
-  print(f"    - Filepath : {display_path}")
-  print(f"    - Timespan : {target_start_dt} to {target_end_dt}")
+  print(f"    Filepath : {display_path}")
+  print(f"    Timespan : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC to {target_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
   
   # Load Horizons data
   result_horizons = load_horizons_ephemeris(
@@ -415,6 +429,7 @@ def get_horizons_ephemeris(
   result_horizons = process_horizons_result(result_horizons)
   
   return result_horizons
+
 
 def get_initial_state(
   tle_line1            : str,
@@ -453,6 +468,8 @@ def get_initial_state(
   if use_horizons_initial and result_horizons and result_horizons.get('success'):
     horizons_initial_state = result_horizons['state'][:, 0]
     print(f"  Horizons-Derived")
+    print(f"    Epoch    : {result_horizons['time_o'].strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    print(f"    Frame    : J2000")
     print(f"    Position : {horizons_initial_state[0]:>13.6e}  {horizons_initial_state[1]:>13.6e}  {horizons_initial_state[2]:>13.6e} m")
     print(f"    Velocity : {horizons_initial_state[3]:>13.6e}  {horizons_initial_state[4]:>13.6e}  {horizons_initial_state[5]:>13.6e} m/s")
     return horizons_initial_state
@@ -480,6 +497,7 @@ def get_initial_state(
 
   return tle_initial_state
 
+
 def get_et_j2000_from_utc(
   utc_dt : datetime,
 ) -> float:
@@ -499,6 +517,7 @@ def get_et_j2000_from_utc(
   utc_str  = utc_dt.strftime('%Y-%m-%dT%H:%M:%S')
   et_float = spice.str2et(utc_str)
   return et_float
+
 
 def propagate_sgp4_at_horizons_grid(
   result_horizons : dict,
@@ -533,8 +552,6 @@ def propagate_sgp4_at_horizons_grid(
   if not (result_horizons and result_horizons.get('success')):
     return None
     
-  print("  Propagating SGP4 at Horizons ephemeris time points ...")
-  
   # Convert Horizons plot_time_s to integration times for SGP4
   sgp4_eval_times = result_horizons['plot_time_s'] + integ_time_o
   
@@ -577,11 +594,21 @@ def propagate_sgp4_at_horizons_grid(
     for key in result_sgp4_at_horizons['coe'].keys():
       result_sgp4_at_horizons['coe'][key][i] = coe[key]
   
-  print(f"  ✓ SGP4 propagation at Horizons times successful!")
-  print(f"  Number of points: {num_points_sgp4}")
-  print(f"  Timespan: {result_sgp4_at_horizons['plot_time_s'][0]:.1f} to {result_sgp4_at_horizons['plot_time_s'][-1]:.1f} seconds")
+  # Calculate display values
+  target_start_dt = result_horizons['time_o']
+  tle_epoch_dt    = target_start_dt - timedelta(seconds=integ_time_o)
+  duration_s      = result_sgp4_at_horizons['plot_time_s'][-1]
+  target_end_dt   = target_start_dt + timedelta(seconds=duration_s)
+
+  print(f"  Time")
+  print(f"    Epoch    : {tle_epoch_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+  print(f"    Start    : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+  print(f"    End      : {target_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+  print(f"    Duration : {duration_s/3600:.1f} h")
+  print(f"    Grid     : {num_points_sgp4} points from Horizons ephemeris")
   
   return result_sgp4_at_horizons
+
 
 def run_high_fidelity_propagation(
   initial_state            : np.ndarray,
@@ -622,11 +649,11 @@ def run_high_fidelity_propagation(
     cd : float
       Drag coefficient.
     area_drag : float
-      Drag area [m^2].
+      Drag area [m²].
     cr : float
       Reflectivity coefficient.
     area_srp : float
-      SRP area [m^2].
+      SRP area [m²].
     use_spice : bool
       Whether to use SPICE for third-body ephemerides.
     include_third_body : bool
@@ -670,42 +697,42 @@ def run_high_fidelity_propagation(
       active_harmonics.append('J4')
 
   # Set up high-fidelity dynamics model
-  print("\nHigh-Fidelity Dynamics Model Configuration")
-  print(f"  Epoch: {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC" + (f" ({time_et_o:.6f} ET)" if use_spice else ""))
+  print("\nHigh-Fidelity Model: Configuration")
+  print(f"  Epoch : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC" + (f" ({time_et_o:.6f} ET)" if use_spice else ""))
   
   print("  Summary")
-  print(f"    - Earth Gravity (Two-Body{' + ' + ', '.join(active_harmonics) if active_harmonics else ''})")
+  print(f"    Earth Gravity (Two-Body{' + ' + ', '.join(active_harmonics) if active_harmonics else ''})")
   if include_third_body:
-    print("    - Third-Body Gravity (Sun, Moon)")
-  print("    - Atmospheric Drag")
+    print("    Third-Body Gravity (Sun, Moon)")
+  print("    Atmospheric Drag")
   if include_srp:
-    print("    - Solar Radiation Pressure")
+    print("    Solar Radiation Pressure")
   
   print("  Details")
   print("    Gravity (Earth)")
-  print("      - Two-Body Point Mass")
+  print("      Two-Body Point Mass")
   if active_harmonics:
-    print(f"      - Zonal Harmonics : {', '.join(active_harmonics)}")
+    print(f"      Zonal Harmonics : {', '.join(active_harmonics)}")
   else:
-    print("      - Zonal Harmonics : None")
+    print("      Zonal Harmonics : None")
   
   if include_third_body:
     print("    Gravity (Third-Body)")
-    print("      - Bodies    : Sun, Moon")
+    print("      Bodies    : Sun, Moon")
     if use_spice:
-      print("      - Ephemeris : SPICE (High Accuracy)")
-      print(f"      - Note      : SPICE kernels loaded for third-body ephemerides.")
+      print("      Ephemeris : SPICE (High Accuracy)")
+      print(f"      Note      : SPICE kernels loaded for third-body ephemerides.")
     else:
-      print("      - Ephemeris : Analytical (Approximate)")
+      print("      Ephemeris : Analytical (Approximate)")
       
   print("    Atmospheric Drag")
-  print( "      - Model      : Exponential Atmosphere")
-  print(f"      - Parameters : Cd={cd}, Area={area_drag} m², Mass={mass} kg")
+  print( "      Model      : Exponential Atmosphere")
+  print(f"      Parameters : Cd={cd}, Area_Drag={area_drag} m², Mass={mass} kg")
 
   if include_srp:
     print("    Solar Radiation Pressure")
-    print( "      - Model      : Conical Shadow (Spherical Earth)")
-    print(f"      - Parameters : Cr={cr}, Area={area_srp} m²")
+    print( "      Model      : Conical Shadow (Spherical Earth)")
+    print(f"      Parameters : Cr={cr}, Area_SRP={area_srp} m²")
   
   # Define acceleration model
   acceleration = Acceleration(
@@ -729,22 +756,22 @@ def run_high_fidelity_propagation(
     spice_kernel_folderpath = str(spice_kernels_folderpath),
   )
   
-  # Propagate with high-fidelity model
+  # Propagate times
   delta_time = (target_end_dt - target_start_dt).total_seconds()
-  print("\nPropagation Using High-Fidelity Model")
+  print("\nHigh-Fidelity Model: Propagation of Cartesian State")
   print(f"  Time")
-  print(f"    - Start    : {target_start_dt} UTC")
-  print(f"    - End      : {target_end_dt} UTC")
-  print(f"    - Duration : {delta_time/3600:.1f} h")
+  print(f"    Start    : {target_start_dt} UTC")
+  print(f"    End      : {target_end_dt} UTC")
+  print(f"    Duration : {delta_time/3600:.1f} h")
   
-  # Use Horizons time grid for high-fidelity propagation
+  # Propagate with high-fidelity model: use Horizons time grid
   if result_horizons and result_horizons['success']:
     # Convert Horizons plot_time_s (seconds from target_start) to integration time (seconds from TLE epoch)
     horizons_integ_times = result_horizons['plot_time_s'] + integ_time_o
-    print(f"    - Grid     : {len(horizons_integ_times)} points from Horizons ephemeris")
-    print(f"    - Step     : {result_horizons['plot_time_s'][1] - result_horizons['plot_time_s'][0]:.1f} s")
+    print(f"    Grid     : {len(horizons_integ_times)} points from Horizons ephemeris")
+    print(f"    Step     : {result_horizons['plot_time_s'][1] - result_horizons['plot_time_s'][0]:.1f} s")
     
-    result_hifi = propagate_state_numerical_integration(
+    result_high_fidelity = propagate_state_numerical_integration(
       initial_state       = initial_state,
       time_o              = integ_time_o,
       time_f              = integ_time_f,
@@ -761,16 +788,17 @@ def run_high_fidelity_propagation(
     # If Horizons data is not available, error analysis is not possible.
     raise RuntimeError("Horizons ephemeris is required for high-fidelity propagation and error analysis, but it failed to load.")
   
-  if result_hifi['success']:
+  if result_high_fidelity['success']:
     # Store integration time (seconds from TLE epoch)
-    result_hifi['integ_time_s'] = result_hifi['time']
+    result_high_fidelity['integ_time_s'] = result_high_fidelity['time']
     
     # Create plotting time array (seconds from target start time)
-    result_hifi['plot_time_s'] = result_hifi['time'] - integ_time_o
+    result_high_fidelity['plot_time_s'] = result_high_fidelity['time'] - integ_time_o
   else:
-    print(f"  ✗ Propagation failed: {result_hifi['message']}")
+    print(f"  Propagation failed: {result_high_fidelity['message']}")
   
-  return result_hifi
+  return result_high_fidelity
+
 
 def run_propagations(
   initial_state            : np.ndarray,
@@ -840,10 +868,10 @@ def run_propagations(
   Output:
   -------
     tuple[dict, dict | None]
-      Tuple containing (result_hifi, result_sgp4_at_horizons).
+      Tuple containing (result_high_fidelity, result_sgp4_at_horizons).
   """
   # Propagate: run high-fidelity propagation at Horizons time points for comparison
-  result_hifi = run_high_fidelity_propagation(
+  result_high_fidelity = run_high_fidelity_propagation(
     initial_state            = initial_state,
     integ_time_o             = integ_time_o,
     integ_time_f             = integ_time_f,
@@ -864,7 +892,7 @@ def run_propagations(
   )
   
   # Propagate: run SGP4 at Horizons time points for comparison
-  print("\nPropagating with SGP4 for comparison ...")
+  print("\nSGP4 Model: Propagation of TLE")
   result_sgp4_at_horizons = propagate_sgp4_at_horizons_grid(
     result_horizons = result_horizons,
     integ_time_o    = integ_time_o,
@@ -872,11 +900,12 @@ def run_propagations(
     tle_line2       = tle_line2,
   )
   
-  return result_hifi, result_sgp4_at_horizons
+  return result_high_fidelity, result_sgp4_at_horizons
+
 
 def print_results_summary(
   result_horizons         : Optional[dict],
-  result_hifi             : dict,
+  result_high_fidelity    : dict,
   result_sgp4_at_horizons : Optional[dict],
 ) -> None:
   """
@@ -886,36 +915,51 @@ def print_results_summary(
   ------
     result_horizons : dict | None
       Horizons ephemeris result.
-    result_hifi : dict
+    result_high_fidelity : dict
       High-fidelity propagation result.
     result_sgp4_at_horizons : dict | None
       SGP4 propagation result.
   """
-  print("\n" + "="*60)
-  print("Results Summary")
-  print("="*60)
+  print("\nResults Summary")
   
-  print("\nFinal time ranges for plotting:")
-  if result_horizons and result_horizons.get('success'):
-    print(f"  Horizons:      {result_horizons['plot_time_s'][0]:.1f} to {result_horizons['plot_time_s'][-1]:.1f} seconds")
-  
-  if result_hifi.get('success'):
-    print(f"  High-fidelity: {result_hifi['plot_time_s'][0]:.1f} to {result_hifi['plot_time_s'][-1]:.1f} seconds")
-  
-  if result_sgp4_at_horizons and result_sgp4_at_horizons.get('success'):
-    print(f"  SGP4:          {result_sgp4_at_horizons['plot_time_s'][0]:.1f} to {result_sgp4_at_horizons['plot_time_s'][-1]:.1f} seconds")
-  
-  # Print final orbital elements (high-fidelity)
-  if result_hifi.get('success'):
-    final_alt_km = (np.linalg.norm(result_hifi['state'][0:3, -1]) - PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR) / 1e3
-    print(f"\nFinal altitude (high-fidelity): {final_alt_km:.2f} km")
-    print(f"Final semi-major axis: {result_hifi['coe']['sma'][-1]/1e3:.2f} km")
-    print(f"Final eccentricity: {result_hifi['coe']['ecc'][-1]:.6f}")
-    print(f"Final inclination: {np.rad2deg(result_hifi['coe']['inc'][-1]):.4f}°")
+  # Print final Cartesian state and classical orbital elements (high-fidelity)
+  if result_high_fidelity.get('success'):
+    # Calculate final epoch
+    epoch_str = "n/a"
+    if result_horizons and result_horizons.get('success'):
+      final_dt = result_horizons['time_o'] + timedelta(seconds=result_high_fidelity['plot_time_s'][-1])
+      epoch_str = final_dt.strftime('%Y-%m-%d %H:%M:%S')
+
+    # Extract final state
+    pos_vec_f = result_high_fidelity['state'][0:3, -1]
+    vel_vec_f = result_high_fidelity['state'][3:6, -1]
+    
+    # Extract final COEs
+    sma  = result_high_fidelity['coe']['sma'][-1] / 1e3
+    ecc  = result_high_fidelity['coe']['ecc'][-1]
+    inc  = np.rad2deg(result_high_fidelity['coe']['inc'][-1])
+    raan = np.rad2deg(result_high_fidelity['coe']['raan'][-1])
+    argp = np.rad2deg(result_high_fidelity['coe']['argp'][-1])
+    ta   = np.rad2deg(result_high_fidelity['coe']['ta'][-1])
+
+    print(f"\nFinal State (High-Fidelity)")
+    print(f"  Epoch      : {epoch_str} UTC")
+    print(f"  Frame      : J2000")
+    print(f"  Cartesian State")
+    print(f"    Position : {pos_vec_f[0]:>13.6e}  {pos_vec_f[1]:>13.6e}  {pos_vec_f[2]:>13.6e} m")
+    print(f"    Velocity : {vel_vec_f[0]:>13.6e}  {vel_vec_f[1]:>13.6e}  {vel_vec_f[2]:>13.6e} m/s")
+    print(f"  Classical Orbital Elements")
+    print(f"    SMA      : {sma:.6f} km")
+    print(f"    ECC      : {ecc:.9f}")
+    print(f"    INC      : {inc:.6f} deg")
+    print(f"    RAAN     : {raan:.6f} deg")
+    print(f"    ARGP     : {argp:.6f} deg")
+    print(f"    TA       : {ta:.6f} deg")
+
 
 def generate_error_plots(
   result_horizons         : Optional[dict],
-  result_hifi             : dict,
+  result_high_fidelity    : dict,
   result_sgp4_at_horizons : Optional[dict],
   target_start_dt         : datetime,
   output_folderpath       : Path,
@@ -927,7 +971,7 @@ def generate_error_plots(
   ------
     result_horizons : dict | None
       Horizons ephemeris result.
-    result_hifi : dict
+    result_high_fidelity : dict
       High-fidelity propagation result.
     result_sgp4_at_horizons : dict | None
       SGP4 propagation result.
@@ -997,25 +1041,25 @@ def generate_error_plots(
     print(f"  Saved: {output_folderpath / 'iss_sgp4_error_growth.png'}")
 
   # Create error comparison plots if both Horizons and high-fidelity are available
-  if result_horizons and result_horizons.get('success') and result_hifi.get('success'):
+  if result_horizons and result_horizons.get('success') and result_high_fidelity.get('success'):
     print("\nGenerating error comparison plots...")
     
     # Position and velocity error plots
-    fig_err_3d = plot_3d_error(result_horizons, result_hifi)
+    fig_err_3d = plot_3d_error(result_horizons, result_high_fidelity)
     fig_err_3d.suptitle('ISS Orbit Error: Horizons vs High-Fidelity', fontsize=16)
     fig_err_3d.savefig(output_folderpath / 'iss_error_3d.png', dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_folderpath / 'iss_error_3d.png'}")
     
     # Time series error plots
-    fig_err_ts = plot_time_series_error(result_horizons, result_hifi, epoch=target_start_dt)
+    fig_err_ts = plot_time_series_error(result_horizons, result_high_fidelity, epoch=target_start_dt)
     fig_err_ts.suptitle('ISS RIC Position/Velocity Errors: Horizons vs High-Fidelity', fontsize=16)
     fig_err_ts.savefig(output_folderpath / 'iss_error_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_folderpath / 'iss_error_timeseries.png'}")
     
     # Compute and display error statistics
-    pos_error_km = np.linalg.norm(result_hifi['state'][0:3, :] - result_horizons['state'][0:3, :], axis=0) / 1e3
-    vel_error_ms = np.linalg.norm(result_hifi['state'][3:6, :] - result_horizons['state'][3:6, :], axis=0)
-    sma_error_km = (result_hifi['coe']['sma'] - result_horizons['coe']['sma']) / 1e3
+    pos_error_km = np.linalg.norm(result_high_fidelity['state'][0:3, :] - result_horizons['state'][0:3, :], axis=0) / 1e3
+    vel_error_ms = np.linalg.norm(result_high_fidelity['state'][3:6, :] - result_horizons['state'][3:6, :], axis=0)
+    sma_error_km = (result_high_fidelity['coe']['sma'] - result_horizons['coe']['sma']) / 1e3
     
     print("\nError Statistics (High-Fidelity vs Horizons):")
     print(f"  Position error - Mean: {np.mean(pos_error_km):.3f} km, Max: {np.max(pos_error_km):.3f} km")
@@ -1023,16 +1067,17 @@ def generate_error_plots(
     print(f"  SMA error - Mean: {np.mean(np.abs(sma_error_km)):.3f} km, Max: {np.max(np.abs(sma_error_km)):.3f} km")
     
     # Also compute argument of latitude error statistics
-    if all(k in result_horizons['coe'] and k in result_hifi['coe'] for k in ['raan', 'argp', 'ta']):
+    if all(k in result_horizons['coe'] and k in result_high_fidelity['coe'] for k in ['raan', 'argp', 'ta']):
         u_ref = result_horizons['coe']['raan'] + result_horizons['coe']['argp'] + result_horizons['coe']['ta']
-        u_comp = result_hifi['coe']['raan'] + result_hifi['coe']['argp'] + result_hifi['coe']['ta']
+        u_comp = result_high_fidelity['coe']['raan'] + result_high_fidelity['coe']['argp'] + result_high_fidelity['coe']['ta']
         u_error_rad = np.arctan2(np.sin(u_ref - u_comp), np.cos(u_ref - u_comp))
         u_error_deg = u_error_rad * CONVERTER.DEG_PER_RAD
         print(f"  Arg of latitude error - Mean: {np.mean(u_error_deg):.3f}°, RMS: {np.sqrt(np.mean(u_error_deg**2)):.3f}°, Max: {np.max(np.abs(u_error_deg)):.3f}°")
 
+
 def generate_3d_and_time_series_plots(
   result_horizons         : Optional[dict],
-  result_hifi             : dict,
+  result_high_fidelity    : dict,
   result_sgp4_at_horizons : Optional[dict],
   target_start_dt         : datetime,
   output_folderpath       : Path,
@@ -1044,7 +1089,7 @@ def generate_3d_and_time_series_plots(
   ------
     result_horizons : dict | None
       Horizons ephemeris result.
-    result_hifi : dict
+    result_high_fidelity : dict
       High-fidelity propagation result.
     result_sgp4_at_horizons : dict | None
       SGP4 propagation result.
@@ -1066,16 +1111,16 @@ def generate_3d_and_time_series_plots(
     print(f"  Saved: {output_folderpath / 'iss_horizons_timeseries.png'}")
   
   # High-fidelity plots (second)
-  if result_hifi.get('success'):
-    fig3 = plot_3d_trajectories(result_hifi)
+  if result_high_fidelity.get('success'):
+    fig3 = plot_3d_trajectories(result_high_fidelity)
     fig3.suptitle('ISS Orbit - High-Fidelity Propagation', fontsize=16)
-    fig3.savefig(output_folderpath / 'iss_hifi_3d.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_folderpath / 'iss_hifi_3d.png'}")
+    fig3.savefig(output_folderpath / 'iss_high_fidelity_3d.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_high_fidelity_3d.png'}")
     
-    fig4 = plot_time_series(result_hifi, epoch=target_start_dt)
+    fig4 = plot_time_series(result_high_fidelity, epoch=target_start_dt)
     fig4.suptitle('ISS Orbit - High-Fidelity Time Series', fontsize=16)
-    fig4.savefig(output_folderpath / 'iss_hifi_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_folderpath / 'iss_hifi_timeseries.png'}")
+    fig4.savefig(output_folderpath / 'iss_high_fidelity_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_folderpath / 'iss_high_fidelity_timeseries.png'}")
   
   # SGP4 at Horizons time points plots
   if result_sgp4_at_horizons and result_sgp4_at_horizons.get('success'):
@@ -1093,9 +1138,10 @@ def generate_3d_and_time_series_plots(
     fig_sgp4_hz_ts.savefig(output_folderpath / 'iss_sgp4_at_horizons_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_folderpath / 'iss_sgp4_at_horizons_timeseries.png'}")
 
+
 def generate_plots(
   result_horizons         : Optional[dict],
-  result_hifi             : dict,
+  result_high_fidelity    : dict,
   result_sgp4_at_horizons : Optional[dict],
   target_start_dt         : datetime,
   output_folderpath       : Path,
@@ -1107,7 +1153,7 @@ def generate_plots(
   ------
     result_horizons : dict | None
       Horizons ephemeris result.
-    result_hifi : dict
+    result_high_fidelity : dict
       High-fidelity propagation result.
     result_sgp4_at_horizons : dict | None
       SGP4 propagation result.
@@ -1116,12 +1162,12 @@ def generate_plots(
     output_folderpath : Path
       Directory to save plots.
   """
-  print("\nGenerating and saving plots...")
+  print("\nGenerate and Save Plots")
   
   # Generate 3D and time series plots
   generate_3d_and_time_series_plots(
     result_horizons         = result_horizons,
-    result_hifi             = result_hifi,
+    result_high_fidelity    = result_high_fidelity,
     result_sgp4_at_horizons = result_sgp4_at_horizons,
     target_start_dt         = target_start_dt,
     output_folderpath       = output_folderpath,
@@ -1130,11 +1176,12 @@ def generate_plots(
   # Generate error plots
   generate_error_plots(
     result_horizons         = result_horizons,
-    result_hifi             = result_hifi,
+    result_high_fidelity    = result_high_fidelity,
     result_sgp4_at_horizons = result_sgp4_at_horizons,
     target_start_dt         = target_start_dt,
     output_folderpath       = output_folderpath,
   )
+
 
 def get_simulation_paths(
   norad_id        : str,
@@ -1176,10 +1223,11 @@ def get_simulation_paths(
     folderpaths_filepaths['lsk_filepath'],
   )
 
+
 def main(
+  input_object_type       : str,
   norad_id                : str,
-  start_time_str          : str,
-  end_time_str            : str,
+  timespan                : list,
   use_spice               : bool = False,
   include_third_body      : bool = False,
   include_zonal_harmonics : bool = False,
@@ -1195,12 +1243,12 @@ def main(
   
   Input:
   ------
+    input_object_type : str
+      Type of input object.
     norad_id : str
       NORAD catalog ID of the satellite.
-    start_time_str : str
-      Start time for propagation in ISO format.
-    end_time_str : str
-      End time for propagation in ISO format.
+    timespan : list
+      Start and end time for propagation in ISO format.
     use_spice : bool
       Flag to enable/disable SPICE usage.
     include_third_body : bool
@@ -1217,7 +1265,7 @@ def main(
     None
   """
   # Process inputs and setup
-  inputs_dict = parse_and_validate_inputs(norad_id, start_time_str, end_time_str, use_spice, include_third_body, include_zonal_harmonics, zonal_harmonics_list, include_srp)
+  inputs_dict = parse_and_validate_inputs(input_object_type, norad_id, timespan, use_spice, include_third_body, include_zonal_harmonics, zonal_harmonics_list, include_srp)
   config      = get_config(inputs_dict)
 
   # Set up paths and files
@@ -1252,7 +1300,7 @@ def main(
   )
 
   # Run propagations: high-fidelity and SGP4 at Horizons times
-  result_hifi, result_sgp4_at_horizons = run_propagations(
+  result_high_fidelity, result_sgp4_at_horizons = run_propagations(
     initial_state            = initial_state,
     integ_time_o             = config.integ_time_o,
     integ_time_f             = config.integ_time_f,
@@ -1275,12 +1323,12 @@ def main(
   )
   
   # Display results and create plots
-  print_results_summary(result_horizons, result_hifi, result_sgp4_at_horizons)
+  print_results_summary(result_horizons, result_high_fidelity, result_sgp4_at_horizons)
   
   # Create plots
   generate_plots(
     result_horizons         = result_horizons,
-    result_hifi             = result_hifi,
+    result_high_fidelity    = result_high_fidelity,
     result_sgp4_at_horizons = result_sgp4_at_horizons,
     target_start_dt         = config.target_start_dt,
     output_folderpath       = output_folderpath,
@@ -1289,7 +1337,7 @@ def main(
   # Unload all SPICE kernels if they were loaded
   unload_spice_files(config.use_spice)
   
-  return result_hifi
+  return result_high_fidelity
 
 
 def print_input_table(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
@@ -1333,9 +1381,6 @@ def print_input_table(args: argparse.Namespace, parser: argparse.ArgumentParser)
   for action in display_actions:
     val = getattr(args, action.dest, None)
     
-    # Determine if default
-    is_default = (val == action.default)
-    
     # Determine if explicitly set
     is_explicit = (action.dest in seen_dests) or action.required
     
@@ -1357,8 +1402,14 @@ def print_input_table(args: argparse.Namespace, parser: argparse.ArgumentParser)
       
     if len(val_str) > 42:
       val_str = val_str[:39] + "..."
+
+    # Format default value
+    if isinstance(action.default, list):
+      default_str = " ".join(map(str, action.default))
+    else:
+      default_str = str(action.default)
       
-    row = [action.dest, val_str, str(is_default), str(is_explicit)]
+    row = [action.dest, val_str, default_str, str(is_explicit)]
     rows.append(row)
     
     # Update column widths
@@ -1374,8 +1425,7 @@ def print_input_table(args: argparse.Namespace, parser: argparse.ArgumentParser)
   print(header_fmt.format(*headers))
   
   # Print separators
-  sep_widths = [min(len(h), dw) for h, dw in zip(headers, data_widths)]
-  separators = ["-" * w for w in sep_widths]
+  separators = ["-" * w for w in col_widths]
   print(header_fmt.format(*separators))
   
   # Print rows
@@ -1407,11 +1457,13 @@ def parse_command_line_arguments() -> argparse.Namespace:
   parser.add_argument('--timespan', nargs=2, metavar=('TIME_START', 'TIME_END'), required=True, help="Start and end time for propagation in ISO format (e.g., '2025-10-01T00:00:00 2025-10-02T00:00:00').")
   
   # Optional arguments
-  parser.add_argument('--include-spice', dest='use_spice', action='store_true', help="Enable SPICE functionality (disabled by default).")
-  parser.add_argument('--include-third-body', dest='include_third_body', action='store_true', help="Enable third-body gravity (disabled by default).")
+  parser.add_argument('--include-spice'          , dest='use_spice'              , action='store_true', help="Enable SPICE functionality (disabled by default).")
+  parser.add_argument('--include-third-body'     , dest='include_third_body'     , action='store_true', help="Enable third-body gravity (disabled by default).")
   parser.add_argument('--include-zonal-harmonics', dest='include_zonal_harmonics', action='store_true', help="Enable zonal harmonics (disabled by default).")
-  parser.add_argument('--zonal-harmonics', dest='zonal_harmonics_list', nargs='+', choices=['J2', 'J3', 'J4'], default=['J2'], help="List of zonal harmonics to include (default: J2).")
-  parser.add_argument('--include-srp', dest='include_srp', action='store_true', help="Enable Solar Radiation Pressure (disabled by default).")
+  parser.add_argument('--zonal-harmonics'        , dest='zonal_harmonics_list'   , nargs='+', choices=['J2', 'J3', 'J4'], default=['J2'], help="List of zonal harmonics to include (default: J2).")
+  parser.add_argument('--include-srp'            , dest='include_srp'            , action='store_true', help="Enable Solar Radiation Pressure (disabled by default).")
+
+  # Set default values for optional flags
   parser.set_defaults(use_spice=False, include_third_body=False, include_zonal_harmonics=False, include_srp=False)
   
   args = parser.parse_args()
@@ -1419,26 +1471,15 @@ def parse_command_line_arguments() -> argparse.Namespace:
   # Print input summary
   print_input_table(args, parser)
   
-  # Normalize input object type (handle hyphens and spaces)
-  args.input_object_type = args.input_object_type.replace('-', '_').replace(' ', '_')
-
-  # Validate conditional arguments
-  if args.input_object_type == 'norad_id' and not args.norad_id:
-    parser.error("--norad-id is required when --input-object-type is 'norad-id'")
-  
-  # Unpack timespan
-  args.time_start = args.timespan[0]
-  args.time_end   = args.timespan[1]
-
   return args
 
 
 if __name__ == "__main__":
   args = parse_command_line_arguments()
   main(
+    args.input_object_type,
     args.norad_id,
-    args.time_start,
-    args.time_end,
+    args.timespan,
     args.use_spice,
     args.include_third_body,
     args.include_zonal_harmonics,
