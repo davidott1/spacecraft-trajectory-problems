@@ -172,6 +172,7 @@ class TwoBodyGravity:
     
     def oblate_j2(
         self,
+        time    : float,
         pos_vec : np.ndarray,
     ) -> np.ndarray:
         """
@@ -179,13 +180,26 @@ class TwoBodyGravity:
         
         Input:
         ------
+        time : float
+            Current time [s]
         pos_vec : np.ndarray
-            Position vector [m]
+            Position vector [m] in Inertial frame (J2000).
         
         Output:
         -------
         acc_vec : np.ndarray
             Acceleration vector [m/s²]
+
+        Notes:
+        ------
+        Technically, zonal harmonics are defined in the Body-Fixed frame.
+        However, Zonal harmonics (J2, J3...) are rotationally symmetric about the 
+        Z-axis (longitude independent). Therefore, the Earth's daily rotation (spin) 
+        does not affect the force, only the orientation of the Pole (Z-axis).
+        
+        This implementation assumes the Inertial Z-axis is aligned with the 
+        Body Z-axis (ignoring Precession/Nutation). Under this assumption, 
+        inertial coordinates can be used directly.
         """
         if self.j2 == 0.0:
             return np.zeros(3)
@@ -205,6 +219,7 @@ class TwoBodyGravity:
     
     def oblate_j3(
         self,
+        time    : float,
         pos_vec : np.ndarray,
     ) -> np.ndarray:
         """
@@ -212,13 +227,26 @@ class TwoBodyGravity:
         
         Input:
         ------
+        time : float
+            Current time [s]
         pos_vec : np.ndarray
-            Position vector [m]
+            Position vector [m] in Inertial frame (J2000).
         
         Output:
         -------
         acc_vec : np.ndarray
             Acceleration vector [m/s²]
+
+        Notes:
+        ------
+        Technically, zonal harmonics are defined in the Body-Fixed frame.
+        However, Zonal harmonics (J2, J3...) are rotationally symmetric about the 
+        Z-axis (longitude independent). Therefore, the Earth's daily rotation (spin) 
+        does not affect the force, only the orientation of the Pole (Z-axis).
+        
+        This implementation assumes the Inertial Z-axis is aligned with the 
+        Body Z-axis (ignoring Precession/Nutation). Under this assumption, 
+        inertial coordinates can be used directly.
         """
         if self.j3 == 0.0:
             return np.zeros(3)
@@ -239,6 +267,7 @@ class TwoBodyGravity:
     
     def oblate_j4(
         self,
+        time    : float,
         pos_vec : np.ndarray,
     ) -> np.ndarray:
         """
@@ -246,13 +275,26 @@ class TwoBodyGravity:
         
         Input:
         ------
+        time : float
+            Current time [s]
         pos_vec : np.ndarray
-            Position vector [m]
+            Position vector [m] in Inertial frame (J2000).
         
         Output:
         -------
         acc_vec : np.ndarray
             Acceleration vector [m/s²]
+
+        Notes:
+        ------
+        Technically, zonal harmonics are defined in the Body-Fixed frame.
+        However, Zonal harmonics (J2, J3...) are rotationally symmetric about the 
+        Z-axis (longitude independent). Therefore, the Earth's daily rotation (spin) 
+        does not affect the force, only the orientation of the Pole (Z-axis).
+        
+        This implementation assumes the Inertial Z-axis is aligned with the 
+        Body Z-axis (ignoring Precession/Nutation). Under this assumption, 
+        inertial coordinates can be used directly.
         """
         if self.j4 == 0.0:
             return np.zeros(3)
@@ -282,7 +324,6 @@ class ThirdBodyGravity:
     
     def __init__(
         self,
-        et_offset               : float = 0.0,
         use_spice               : bool  = True,
         bodies                  : list  = None,
         spice_kernel_folderpath : str   = None,
@@ -292,8 +333,6 @@ class ThirdBodyGravity:
         
         Input:
         ------
-        et_offset : float
-            Offset to convert integrator time to ET: et = et_offset + time [s]
         use_spice : bool
             Use SPICE ephemerides (True) or analytical approximations (False)
         bodies : list of str
@@ -301,8 +340,6 @@ class ThirdBodyGravity:
         spice_kernel_folderpath : str
             Path to SPICE kernel folderpath
         """
-        self.et_offset = et_offset
-        self.time_o    = et_offset
         self.bodies    = bodies if bodies else ['sun', 'moon']
         self.use_spice = use_spice
         
@@ -502,7 +539,7 @@ class ThirdBodyGravity:
         Input:
         ------
         time : float
-            Current time [s]
+            Current Ephemeris Time (ET) [s]
         pos_sat_vec : np.ndarray
             Satellite position vector [m]
         
@@ -512,7 +549,7 @@ class ThirdBodyGravity:
             Third-body acceleration [m/s²]
         """
         # Ephemeris time is seconds from J2000 epoch
-        et_seconds = self.et_offset + time
+        et_seconds = time
         
         # Compute acceleration for all bodies
         acc_vec = np.zeros(3)
@@ -560,7 +597,6 @@ class Gravity:
         j4                      : float = 0.0,
         pos_ref                 : float = 0.0,
         enable_third_body       : bool  = False,
-        et_offset               : float = 0.0,
         third_body_use_spice    : bool  = True,
         third_body_bodies       : list  = None,
         spice_kernel_folderpath : str   = None,
@@ -578,8 +614,6 @@ class Gravity:
             Reference radius for harmonic coefficients [m]
         enable_third_body : bool
             Enable Sun/Moon gravitational perturbations
-        et_offset : float
-            Offset to convert integrator time to ET: et = et_offset + time [s]
         third_body_use_spice : bool
             Use SPICE ephemerides (True) or analytical approximations (False)
         third_body_bodies : list of str
@@ -600,7 +634,6 @@ class Gravity:
         self.enable_third_body = enable_third_body
         if self.enable_third_body:
             self.third_body = ThirdBodyGravity(
-                et_offset               = et_offset,
                 use_spice               = third_body_use_spice,
                 bodies                  = third_body_bodies,
                 spice_kernel_folderpath = spice_kernel_folderpath,
@@ -619,7 +652,7 @@ class Gravity:
         Input:
         ------
         time : float
-            Current time [s]
+            Current Ephemeris Time (ET) [s]
         pos_vec : np.ndarray
             Position vector [m]
         
@@ -633,7 +666,7 @@ class Gravity:
         
         # Two-body contributions
         acc_vec += self.two_body_point_mass(pos_vec)
-        acc_vec += self.two_body_oblate(pos_vec)
+        acc_vec += self.two_body_oblate(time, pos_vec)
         
         # Third-body contributions
         if self.enable_third_body:
@@ -664,6 +697,7 @@ class Gravity:
     
     def two_body_oblate(
         self,
+        time    : float,
         pos_vec : np.ndarray,
     ) -> np.ndarray:
         """
@@ -671,6 +705,8 @@ class Gravity:
         
         Input:
         ------
+        time : float
+            Current time [s]
         pos_vec : np.ndarray
             Position vector [m]
         
@@ -679,9 +715,9 @@ class Gravity:
         acc_vec : np.ndarray
             Acceleration vector [m/s²]
         """
-        acc_vec  = self.two_body.oblate_j2(pos_vec)
-        acc_vec += self.two_body.oblate_j3(pos_vec)
-        acc_vec += self.two_body.oblate_j4(pos_vec)
+        acc_vec  = self.two_body.oblate_j2(time, pos_vec)
+        acc_vec += self.two_body.oblate_j3(time, pos_vec)
+        acc_vec += self.two_body.oblate_j4(time, pos_vec)
         return acc_vec
     
     def third_body_point_mass(
@@ -923,8 +959,6 @@ class Acceleration:
     def __init__(
         self,
         gp                      : float,
-        time_et_o               : float = 0.0,
-        time_o                  : float = 0.0,
         j2                      : float = 0.0,
         j3                      : float = 0.0,
         j4                      : float = 0.0,
@@ -948,11 +982,6 @@ class Acceleration:
         ------
         gp : float
             Gravitational parameter of central body [m³/s²]
-        time_et_o : float
-            Ephemeris Time (ET) seconds from J2000 corresponding to `time_o` [s]
-        time_o : float
-            The value of the integration time variable `t` corresponding to `time_et_o` [s].
-            This is used to compute the offset between simulation time and Ephemeris Time.
         j2, j3, j4 : float
             Harmonic coefficients for oblateness
         pos_ref : float
@@ -980,9 +1009,6 @@ class Acceleration:
         area_srp : float
             Cross-sectional area for SRP [m²]
         """
-        # Compute ET offset
-        et_offset = time_et_o - time_o
-        
         # Create acceleration component instances
         self.gravity = Gravity(
             gp                      = gp,
@@ -991,7 +1017,6 @@ class Acceleration:
             j4                      = j4,
             pos_ref                 = pos_ref,
             enable_third_body       = enable_third_body,
-            et_offset               = et_offset,
             third_body_use_spice    = third_body_use_spice,
             third_body_bodies       = third_body_bodies,
             spice_kernel_folderpath = spice_kernel_folderpath,
@@ -1029,7 +1054,7 @@ class Acceleration:
         Input:
         ------
         time : float
-            Current time [s]
+            Current Ephemeris Time (ET) [s]
         pos_vec : np.ndarray
             Position vector [m]
         vel_vec : np.ndarray
@@ -1088,7 +1113,7 @@ class GeneralStateEquationsOfMotion:
         Input:
         ------
         time : float
-            Current time [s]
+            Current Ephemeris Time (ET) [s]
         state_vec : np.ndarray
             Current state vector [pos, vel] [m, m/s]
         
@@ -1843,7 +1868,7 @@ class OrbitConverter:
       ma       : float,
       ecc      : float,
       tol      : float = 1e-13,
-      max_iter : int = 200,
+      max_iter : int   = 200,
     ) -> float:
       """
       Maps mean anomaly to eccentric anomaly using Newton-Raphson iteration for both 2D and 1D elliptic orbits.

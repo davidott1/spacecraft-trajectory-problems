@@ -356,11 +356,13 @@ def process_horizons_result(
       start_et = "N/A ET"
       end_et   = "N/A ET"
 
+    duration_s = result_horizons['delta_time'][-1] - result_horizons['delta_time'][0]
+
     print(f"      Actual")
-    print(f"        Start : {actual_start.strftime('%Y-%m-%d %H:%M:%S')} UTC ({start_et})")
-    print(f"        End   : {actual_end.strftime('%Y-%m-%d %H:%M:%S')} UTC ({end_et})")
-    print(f"    Points   : {len(result_horizons['delta_time'])}")
-    print(f"    Duration : {result_horizons['delta_time'][0]:.1f} to {result_horizons['delta_time'][-1]:.1f} seconds")
+    print(f"        Start    : {actual_start.strftime('%Y-%m-%d %H:%M:%S')} UTC ({start_et})")
+    print(f"        End      : {actual_end.strftime('%Y-%m-%d %H:%M:%S')} UTC ({end_et})")
+    print(f"        Duration : {duration_s:.1f} s")
+    print(f"        Grid     : {len(result_horizons['delta_time'])} points")
 
     # Create plot_time_s for seconds-based, zero-start plotting time
     result_horizons['plot_time_s'] = result_horizons['delta_time'] - result_horizons['delta_time'][0]
@@ -438,8 +440,11 @@ def get_horizons_ephemeris(
     start_et = "N/A ET"
     end_et   = "N/A ET"
 
-  print(f"        Start : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({start_et})")
-  print(f"        End   : {target_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({end_et})")
+  duration_s = (target_end_dt - target_start_dt).total_seconds()
+
+  print(f"        Start    : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({start_et})")
+  print(f"        End      : {target_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({end_et})")
+  print(f"        Duration : {duration_s:.1f} s")
   
   # Load Horizons data
   result_horizons = load_horizons_ephemeris(
@@ -490,8 +495,16 @@ def get_initial_state(
   # 1. Use Horizons if available and requested
   if use_horizons_initial and result_horizons and result_horizons.get('success'):
     horizons_initial_state = result_horizons['state'][:, 0]
+    
+    epoch_dt = result_horizons['time_o']
+    try:
+      epoch_et = get_et_j2000_from_utc(epoch_dt)
+      et_str   = f" ({epoch_et:.6f} ET)"
+    except:
+      et_str = ""
+
     print(f"  Horizons-Derived")
-    print(f"    Epoch    : {result_horizons['time_o'].strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    print(f"    Epoch    : {epoch_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC{et_str}")
     print(f"    Frame    : J2000")
     print(f"    Position : {horizons_initial_state[0]:>13.6e}  {horizons_initial_state[1]:>13.6e}  {horizons_initial_state[2]:>13.6e} m")
     print(f"    Velocity : {horizons_initial_state[3]:>13.6e}  {horizons_initial_state[4]:>13.6e}  {horizons_initial_state[5]:>13.6e} m/s")
@@ -633,8 +646,8 @@ def propagate_sgp4_at_horizons_grid(
   print(f"    Epoch    : {tle_epoch_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
   print(f"    Start    : {horizons_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC (Horizons Grid)")
   print(f"    End      : {grid_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
-  print(f"    Duration : {duration_s/3600:.1f} h")
-  print(f"    Grid     : {num_points_sgp4} points from Horizons ephemeris")
+  print(f"    Duration : {duration_s:.1f} s")
+  print(f"    Grid     : {num_points_sgp4} points (Horizons ephemeris)")
   
   return result_sgp4_at_horizons
 
@@ -710,28 +723,29 @@ def run_high_fidelity_propagation(
   # Determine Actual times if Horizons is available (for grid alignment)
   actual_start_dt = target_start_dt
   actual_end_dt   = target_end_dt
-  time_offset_s   = 0.0
   
   if result_horizons and result_horizons.get('success'):
       actual_start_dt = result_horizons['time_o']
       duration_horizons = result_horizons['plot_time_s'][-1]
       actual_end_dt = actual_start_dt + timedelta(seconds=duration_horizons)
-      time_offset_s = (actual_start_dt - target_start_dt).total_seconds()
 
-  # Calculate integration times based on Actual start
-  integ_time_o_actual = integ_time_o + time_offset_s
-  integ_time_f_actual = integ_time_o_actual + (actual_end_dt - actual_start_dt).total_seconds()
+  # Helper to get ET (or approx ET)
+  J2000_EPOCH = datetime(2000, 1, 1, 12, 0, 0)
+  def get_et(dt):
+      if use_spice:
+          try:
+              return get_et_j2000_from_utc(dt)
+          except:
+              pass
+      return (dt - J2000_EPOCH).total_seconds()
 
-  # Convert UTC datetime to ET seconds past J2000 if SPICE is enabled
-  # We calculate ETs for both Desired and Actual to support correct Acceleration init and display
-  time_et_o_desired = 0.0
-  time_et_f_desired = 0.0
-  time_et_o_actual  = 0.0
+  # Calculate Ephemeris Times (ET) for integration
+  time_et_o_actual = get_et(actual_start_dt)
+  time_et_f_actual = get_et(actual_end_dt)
   
-  if use_spice:
-    time_et_o_desired = get_et_j2000_from_utc(target_start_dt)
-    time_et_f_desired = get_et_j2000_from_utc(target_end_dt)
-    time_et_o_actual  = get_et_j2000_from_utc(actual_start_dt)
+  # Calculate ETs for display
+  time_et_o_desired = get_et(target_start_dt)
+  time_et_f_desired = get_et(target_end_dt)
 
   # Determine active zonal harmonics
   j2_val = 0.0
@@ -761,27 +775,19 @@ def run_high_fidelity_propagation(
 
   # Set up high-fidelity dynamics model
   print("  Configuration")
-  print( "    Time")
+  print( "    Timespan")
   print(f"      Desired")
-  print(f"        Start : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC" + (f" ({time_et_o_desired:.6f} ET)" if use_spice else ""))
-  print(f"        End   : {target_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC" + (f" ({time_et_f_desired:.6f} ET)" if use_spice else ""))
+  print(f"        Start    : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_o_desired:.6f} ET)")
+  print(f"        End      : {target_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_f_desired:.6f} ET)")
+  print(f"        Duration : {delta_time:.1f} s")
   
   if result_horizons and result_horizons.get('success'):
-      actual_start_et_str = ""
-      actual_end_et_str = ""
-      if use_spice:
-          try:
-            actual_start_et_str = f" ({time_et_o_actual:.6f} ET)"
-            actual_end_et_str   = f" ({get_et_j2000_from_utc(actual_end_dt):.6f} ET)"
-          except: pass
-
-      print(f"      Actual (Horizons Grid)")
-      print(f"        Start : {actual_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC{actual_start_et_str}")
-      print(f"        End   : {actual_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC{actual_end_et_str}")
-
-  print(f"      Duration : {delta_time/3600:.1f} h")
-  print(f"      Step     : {step_size:.1f} s")
-  print(f"      Grid     : {grid_points} points from Horizons ephemeris")
+      duration_actual = (actual_end_dt - actual_start_dt).total_seconds()
+      print(f"      Actual")
+      print(f"        Start    : {actual_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_o_actual:.6f} ET)")
+      print(f"        End      : {actual_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_f_actual:.6f} ET)")
+      print(f"        Duration : {duration_actual:.1f} s")
+      print(f"        Grid     : {grid_points} points")
   
   print("    Forces")
   print("      Gravity")
@@ -811,11 +817,8 @@ def run_high_fidelity_propagation(
     print(f"        Parameters : Cr={cr}, Area_SRP={area_srp} m²")
   
   # Define acceleration model
-  # Initialize with Actual times so dynamics reference matches initial state epoch
   acceleration = Acceleration(
     gp                      = PHYSICALCONSTANTS.EARTH.GP,
-    time_et_o               = time_et_o_actual,
-    time_o                  = integ_time_o_actual,
     j2                      = j2_val,
     j3                      = j3_val,
     j4                      = j4_val,
@@ -835,8 +838,12 @@ def run_high_fidelity_propagation(
   
   # Propagate with high-fidelity model: use Horizons time grid
   if result_horizons and result_horizons['success']:
-    # Convert Horizons plot_time_s (seconds from ACTUAL start) to integration time (seconds from TLE epoch)
-    horizons_integ_times = result_horizons['plot_time_s'] + integ_time_o_actual
+    # Convert Horizons plot_time_s (seconds from ACTUAL start) to ET
+    horizons_et_times = result_horizons['plot_time_s'] + time_et_o_actual
+    
+    # Update integration start/end times to match grid exactly (avoids floating point errors)
+    time_et_o_actual = horizons_et_times[0]
+    time_et_f_actual = horizons_et_times[-1]
   
     # Print numerical integration settings
     print("    Numerical Integration")
@@ -848,14 +855,14 @@ def run_high_fidelity_propagation(
     # Propagate
     result_high_fidelity = propagate_state_numerical_integration(
       initial_state       = initial_state,
-      time_o              = integ_time_o_actual, # Use Actual Start
-      time_f              = integ_time_f_actual, # Use Actual End
+      time_o              = time_et_o_actual, # Use Actual Start ET
+      time_f              = time_et_f_actual, # Use Actual End ET
       dynamics            = acceleration,
       method              = 'DOP853',
       rtol                = 1e-12,
       atol                = 1e-12,
       dense_output        = True,  # Enable dense output for exact time evaluation
-      t_eval              = horizons_integ_times,  # Evaluate at Horizons times (Actual)
+      t_eval              = horizons_et_times,  # Evaluate at Horizons times (Actual ET)
       get_coe_time_series = True,
       gp                  = PHYSICALCONSTANTS.EARTH.GP,
     )
@@ -865,11 +872,11 @@ def run_high_fidelity_propagation(
     raise RuntimeError("Horizons ephemeris is required for high-fidelity propagation and error analysis, but it failed to load.")
   
   if result_high_fidelity['success']:
-    # Store integration time (seconds from TLE epoch)
+    # Store integration time (ET)
     result_high_fidelity['integ_time_s'] = result_high_fidelity['time']
     
     # Create plotting time array (seconds from ACTUAL start time, to match Horizons plot_time_s)
-    result_high_fidelity['plot_time_s'] = result_high_fidelity['time'] - integ_time_o_actual
+    result_high_fidelity['plot_time_s'] = result_high_fidelity['time'] - time_et_o_actual
   else:
     print(f"  Propagation failed: {result_high_fidelity['message']}")
   
