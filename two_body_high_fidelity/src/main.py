@@ -506,8 +506,8 @@ def get_initial_state(
     print(f"  Horizons-Derived")
     print(f"    Epoch    : {epoch_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC{et_str}")
     print(f"    Frame    : J2000")
-    print(f"    Position : {horizons_initial_state[0]:>13.6e}  {horizons_initial_state[1]:>13.6e}  {horizons_initial_state[2]:>13.6e} m")
-    print(f"    Velocity : {horizons_initial_state[3]:>13.6e}  {horizons_initial_state[4]:>13.6e}  {horizons_initial_state[5]:>13.6e} m/s")
+    print(f"    Position : {horizons_initial_state[0]:>19.12e}  {horizons_initial_state[1]:>19.12e}  {horizons_initial_state[2]:>19.12e} m")
+    print(f"    Velocity : {horizons_initial_state[3]:>19.12e}  {horizons_initial_state[4]:>19.12e}  {horizons_initial_state[5]:>19.12e} m/s")
     return horizons_initial_state
 
   # 2. Fallback to TLE
@@ -527,9 +527,9 @@ def get_initial_state(
     raise RuntimeError(f"Failed to get initial state from TLE: {result_tle_initial['message']}")
 
   tle_initial_state = result_tle_initial['state'][:, 0]
-  print(f"    Epoch      : {integ_time_o:.3f} s")
-  print(f"    Position   : [{tle_initial_state[0]:.3f}, {tle_initial_state[1]:.3f}, {tle_initial_state[2]:.3f}] m")
-  print(f"    Velocity   : [{tle_initial_state[3]:.3f}, {tle_initial_state[4]:.3f}, {tle_initial_state[5]:.3f}] m/s")
+  print(f"    Epoch      : {integ_time_o:>19.12e} s")
+  print(f"    Position   : [{tle_initial_state[0]:>19.12e}, {tle_initial_state[1]:>19.12e}, {tle_initial_state[2]:>19.12e}] m")
+  print(f"    Velocity   : [{tle_initial_state[3]:>19.12e}, {tle_initial_state[4]:>19.12e}, {tle_initial_state[5]:>19.12e}] m/s")
 
   return tle_initial_state
 
@@ -638,16 +638,28 @@ def propagate_sgp4_at_horizons_grid(
       result_sgp4_at_horizons['coe'][key][i] = coe[key]
   
   # Calculate display values
-  tle_epoch_dt = target_start_dt - timedelta(seconds=integ_time_o)
-  duration_s   = result_horizons['plot_time_s'][-1]
-  grid_end_dt  = horizons_start_dt + timedelta(seconds=duration_s)
+  duration_actual_s = result_horizons['plot_time_s'][-1]
+  grid_end_dt       = horizons_start_dt + timedelta(seconds=duration_actual_s)
+  duration_desired_s = (target_end_dt - target_start_dt).total_seconds()
 
-  print(f"  Time")
-  print(f"    Epoch    : {tle_epoch_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
-  print(f"    Start    : {horizons_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC (Horizons Grid)")
-  print(f"    End      : {grid_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
-  print(f"    Duration : {duration_s:.1f} s")
-  print(f"    Grid     : {num_points_sgp4} points (Horizons ephemeris)")
+  # Helper for ET string
+  def get_et_str(dt):
+      try:
+          return f"{get_et_j2000_from_utc(dt):.6f} ET"
+      except:
+          return "N/A ET"
+
+  print(f"  Configuration")
+  print(f"    Timespan")
+  print(f"      Desired")
+  print(f"        Start    : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({get_et_str(target_start_dt)})")
+  print(f"        End      : {target_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({get_et_str(target_end_dt)})")
+  print(f"        Duration : {duration_desired_s:.1f} s")
+  print(f"      Actual")
+  print(f"        Start    : {horizons_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({get_et_str(horizons_start_dt)})")
+  print(f"        End      : {grid_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({get_et_str(grid_end_dt)})")
+  print(f"        Duration : {duration_actual_s:.1f} s")
+  print(f"        Grid     : {num_points_sgp4} points")
   
   return result_sgp4_at_horizons
 
@@ -828,12 +840,12 @@ def run_high_fidelity_propagation(
     cd                      = cd,
     area_drag               = area_drag,
     enable_srp              = include_srp,
-    cr                      = cr,
-    area_srp                = area_srp,
-    enable_third_body       = include_third_body,
-    third_body_use_spice    = use_spice,
-    third_body_bodies       = ['SUN', 'MOON'],
-    spice_kernel_folderpath = str(spice_kernels_folderpath),
+    cr                      : cr,
+    area_srp                : area_srp,
+    enable_third_body       : include_third_body,
+    third_body_use_spice    : use_spice,
+    third_body_bodies       : ['SUN', 'MOON'],
+    spice_kernel_folderpath : str(spice_kernels_folderpath),
   )
   
   # Propagate with high-fidelity model: use Horizons time grid
@@ -1020,7 +1032,7 @@ def print_results_summary(
     vel_vec_f = result_high_fidelity['state'][3:6, -1]
     
     # Extract final COEs
-    sma  = result_high_fidelity['coe']['sma'][-1] / 1e3
+    sma  = result_high_fidelity['coe']['sma'][-1]
     ecc  = result_high_fidelity['coe']['ecc'][-1]
     inc  = np.rad2deg(result_high_fidelity['coe']['inc'][-1])
     raan = np.rad2deg(result_high_fidelity['coe']['raan'][-1])
@@ -1028,18 +1040,18 @@ def print_results_summary(
     ta   = np.rad2deg(result_high_fidelity['coe']['ta'][-1])
 
     print(f"\nFinal State (High-Fidelity)")
-    print(f"  Epoch      : {epoch_str} UTC")
-    print(f"  Frame      : J2000")
+    print(f"  Epoch : {epoch_str} UTC")
+    print(f"  Frame : J2000")
     print(f"  Cartesian State")
-    print(f"    Position : {pos_vec_f[0]:>13.6e}  {pos_vec_f[1]:>13.6e}  {pos_vec_f[2]:>13.6e} m")
-    print(f"    Velocity : {vel_vec_f[0]:>13.6e}  {vel_vec_f[1]:>13.6e}  {vel_vec_f[2]:>13.6e} m/s")
+    print(f"    Position : {pos_vec_f[0]:>19.12e}  {pos_vec_f[1]:>19.12e}  {pos_vec_f[2]:>19.12e} m")
+    print(f"    Velocity : {vel_vec_f[0]:>19.12e}  {vel_vec_f[1]:>19.12e}  {vel_vec_f[2]:>19.12e} m/s")
     print(f"  Classical Orbital Elements")
-    print(f"    SMA      : {sma:.6f} km")
-    print(f"    ECC      : {ecc:.9f}")
-    print(f"    INC      : {inc:.6f} deg")
-    print(f"    RAAN     : {raan:.6f} deg")
-    print(f"    ARGP     : {argp:.6f} deg")
-    print(f"    TA       : {ta:.6f} deg")
+    print(f"    SMA  : { sma:>19.12e} m")
+    print(f"    ECC  : { ecc:>19.12e}")
+    print(f"    INC  : { inc:>19.12e} deg")
+    print(f"    RAAN : {raan:>19.12e} deg")
+    print(f"    ARGP : {argp:>19.12e} deg")
+    print(f"    TA   : {  ta:>19.12e} deg")
 
 
 def generate_error_plots(
@@ -1073,41 +1085,41 @@ def generate_error_plots(
     fig_sgp4_err_3d = plot_3d_error(result_horizons, result_sgp4_at_horizons)
     fig_sgp4_err_3d.suptitle('ISS Orbit Error: Horizons vs SGP4', fontsize=16)
     fig_sgp4_err_3d.savefig(output_folderpath / 'iss_sgp4_error_3d.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_folderpath / 'iss_sgp4_error_3d.png'}")
+    print(f"  {output_folderpath / 'iss_sgp4_error_3d.png'}")
     
     # Time series error plot (RIC frame)
     fig_sgp4_err_ts = plot_time_series_error(result_horizons, result_sgp4_at_horizons, epoch=target_start_dt, use_ric=False)
     fig_sgp4_err_ts.suptitle('ISS XYZ Position/Velocity Errors: Horizons vs SGP4', fontsize=16)
     fig_sgp4_err_ts.savefig(output_folderpath / 'iss_sgp4_error_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"  Saved: {output_folderpath / 'iss_sgp4_error_timeseries.png'}")
+    print(f"  {output_folderpath / 'iss_sgp4_error_timeseries.png'}")
     
     # Compute and display SGP4 error statistics
-    pos_error_sgp4_km = np.linalg.norm(result_sgp4_at_horizons['state'][0:3, :] - result_horizons['state'][0:3, :], axis=0) / 1e3
+    pos_error_sgp4_m = np.linalg.norm(result_sgp4_at_horizons['state'][0:3, :] - result_horizons['state'][0:3, :], axis=0)
     vel_error_sgp4_ms = np.linalg.norm(result_sgp4_at_horizons['state'][3:6, :] - result_horizons['state'][3:6, :], axis=0)
-    sma_error_sgp4_km = (result_sgp4_at_horizons['coe']['sma'] - result_horizons['coe']['sma']) / 1e3
+    sma_error_sgp4_m = (result_sgp4_at_horizons['coe']['sma'] - result_horizons['coe']['sma'])
     
     print("\nError Statistics (SGP4 vs Horizons):")
-    print(f"  Position error - Mean: {np.mean(pos_error_sgp4_km):.3f} km, Max: {np.max(pos_error_sgp4_km):.3f} km")
-    print(f"  Velocity error - Mean: {np.mean(vel_error_sgp4_ms):.3f} m/s, Max: {np.max(vel_error_sgp4_ms):.3f} m/s")
-    print(f"  SMA error - Mean: {np.mean(np.abs(sma_error_sgp4_km)):.3f} km, Max: {np.max(np.abs(sma_error_sgp4_km)):.3f} km")
+    print(f"  Position error - Mean : {np.mean(pos_error_sgp4_m):>19.12e} m, Max: {np.max(pos_error_sgp4_m):>19.12e} m")
+    print(f"  Velocity error - Mean : {np.mean(vel_error_sgp4_ms):>19.12e} m/s, Max: {np.max(vel_error_sgp4_ms):>19.12e} m/s")
+    print(f"       SMA error - Mean : {np.mean(np.abs(sma_error_sgp4_m)):>19.12e} m, Max: {np.max(np.abs(sma_error_sgp4_m)):>19.12e} m")
     
     # Analyze error growth by removing initial offset
     print(f"\nSGP4 Error Growth Analysis:")
-    print(f"  Initial position error (at Oct 1 00:00): {pos_error_sgp4_km[0]:.3f} km")
-    print(f"  Final position error (at Oct 2 00:00): {pos_error_sgp4_km[-1]:.3f} km")
-    print(f"  Error growth over 24 hours: {pos_error_sgp4_km[-1] - pos_error_sgp4_km[0]:.3f} km")
-    print(f"  Initial velocity error: {vel_error_sgp4_ms[0]:.3f} m/s")
-    print(f"  Final velocity error: {vel_error_sgp4_ms[-1]:.3f} m/s")
-    print(f"  Velocity error growth: {vel_error_sgp4_ms[-1] - vel_error_sgp4_ms[0]:.3f} m/s")
+    print(f"  Initial position error (at Oct 1 00:00) : {pos_error_sgp4_m[0]:>19.12e} m")
+    print(f"  Final position error (at Oct 2 00:00)   : {pos_error_sgp4_m[-1]:>19.12e} m")
+    print(f"  Error growth over 24 hours              : {pos_error_sgp4_m[-1] - pos_error_sgp4_m[0]:>19.12e} m")
+    print(f"  Initial velocity error                  : {vel_error_sgp4_ms[0]:>19.12e} m/s")
+    print(f"  Final velocity error                    : {vel_error_sgp4_ms[-1]:>19.12e} m/s")
+    print(f"  Velocity error growth: {vel_error_sgp4_ms[-1] - vel_error_sgp4_ms[0]:>19.12e} m/s")
     
     # Create plot showing error growth (initial offset removed)
     fig_sgp4_growth = plt.figure(figsize=(14, 8))
     
     # Position error growth subplot
     ax1 = fig_sgp4_growth.add_subplot(2, 1, 1)
-    pos_error_growth = pos_error_sgp4_km - pos_error_sgp4_km[0]  # Remove initial offset
+    pos_error_growth = pos_error_sgp4_m - pos_error_sgp4_m[0]  # Remove initial offset
     ax1.plot(result_horizons['plot_time_s']/3600, pos_error_growth, 'b-', linewidth=2)
-    ax1.set_ylabel('Position Error Growth [km]')
+    ax1.set_ylabel('Position Error Growth [m]')
     ax1.set_title('SGP4 vs Horizons: Error Growth (Initial Offset Removed)')
     ax1.grid(True, alpha=0.3)
     ax1.axhline(y=0, color='k', linestyle='--', alpha=0.5)
@@ -1142,14 +1154,14 @@ def generate_error_plots(
     print(f"  Saved: {output_folderpath / 'iss_error_timeseries.png'}")
     
     # Compute and display error statistics
-    pos_error_km = np.linalg.norm(result_high_fidelity['state'][0:3, :] - result_horizons['state'][0:3, :], axis=0) / 1e3
+    pos_error_m = np.linalg.norm(result_high_fidelity['state'][0:3, :] - result_horizons['state'][0:3, :], axis=0)
     vel_error_ms = np.linalg.norm(result_high_fidelity['state'][3:6, :] - result_horizons['state'][3:6, :], axis=0)
-    sma_error_km = (result_high_fidelity['coe']['sma'] - result_horizons['coe']['sma']) / 1e3
+    sma_error_m = (result_high_fidelity['coe']['sma'] - result_horizons['coe']['sma'])
     
     print("\nError Statistics (High-Fidelity vs Horizons):")
-    print(f"  Position error - Mean: {np.mean(pos_error_km):.3f} km, Max: {np.max(pos_error_km):.3f} km")
-    print(f"  Velocity error - Mean: {np.mean(vel_error_ms):.3f} m/s, Max: {np.max(vel_error_ms):.3f} m/s")
-    print(f"  SMA error - Mean: {np.mean(np.abs(sma_error_km)):.3f} km, Max: {np.max(np.abs(sma_error_km)):.3f} km")
+    print(f"  Position error - Mean: {np.mean(pos_error_m):>19.12e} m, Max: {np.max(pos_error_m):>19.12e} m")
+    print(f"  Velocity error - Mean: {np.mean(vel_error_ms):>19.12e} m/s, Max: {np.max(vel_error_ms):>19.12e} m/s")
+    print(f"  SMA error - Mean: {np.mean(np.abs(sma_error_m)):>19.12e} m, Max: {np.max(np.abs(sma_error_m)):>19.12e} m")
     
     # Also compute argument of latitude error statistics
     if all(k in result_horizons['coe'] and k in result_high_fidelity['coe'] for k in ['raan', 'argp', 'ta']):
@@ -1157,7 +1169,7 @@ def generate_error_plots(
         u_comp = result_high_fidelity['coe']['raan'] + result_high_fidelity['coe']['argp'] + result_high_fidelity['coe']['ta']
         u_error_rad = np.arctan2(np.sin(u_ref - u_comp), np.cos(u_ref - u_comp))
         u_error_deg = u_error_rad * CONVERTER.DEG_PER_RAD
-        print(f"  Arg of latitude error - Mean: {np.mean(u_error_deg):.3f}°, RMS: {np.sqrt(np.mean(u_error_deg**2)):.3f}°, Max: {np.max(np.abs(u_error_deg)):.3f}°")
+        print(f"  Arg of latitude error - Mean: {np.mean(u_error_deg):>19.12e}°, RMS: {np.sqrt(np.mean(u_error_deg**2)):>19.12e}°, Max: {np.max(np.abs(u_error_deg)):>19.12e}°")
 
 
 def generate_3d_and_time_series_plots(
