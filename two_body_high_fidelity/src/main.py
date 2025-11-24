@@ -524,6 +524,8 @@ def propagate_sgp4_at_horizons_grid(
   integ_time_o    : float,
   tle_line1       : str,
   tle_line2       : str,
+  target_start_dt : datetime,
+  target_end_dt   : datetime,
 ) -> Optional[dict]:
   """
   Propagate SGP4 on the same time grid as the Horizons ephemeris.
@@ -595,16 +597,14 @@ def propagate_sgp4_at_horizons_grid(
       result_sgp4_at_horizons['coe'][key][i] = coe[key]
   
   # Calculate display values
-  target_start_dt = result_horizons['time_o']
-  tle_epoch_dt    = target_start_dt - timedelta(seconds=integ_time_o)
-  duration_s      = result_sgp4_at_horizons['plot_time_s'][-1]
-  target_end_dt   = target_start_dt + timedelta(seconds=duration_s)
+  tle_epoch_dt = target_start_dt - timedelta(seconds=integ_time_o)
+  delta_time   = (target_end_dt - target_start_dt).total_seconds()
 
   print(f"  Time")
   print(f"    Epoch    : {tle_epoch_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
   print(f"    Start    : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
   print(f"    End      : {target_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
-  print(f"    Duration : {duration_s/3600:.1f} h")
+  print(f"    Duration : {delta_time/3600:.1f} h")
   print(f"    Grid     : {num_points_sgp4} points from Horizons ephemeris")
   
   return result_sgp4_at_horizons
@@ -674,10 +674,16 @@ def run_high_fidelity_propagation(
     dict
       Propagation result dictionary.
   """
+
+  # Display configuration
+  print("\nHigh-Fidelity Model")
+
   # Convert UTC datetime to ET seconds past J2000 if SPICE is enabled
   time_et_o = 0.0
+  time_et_f = 0.0
   if use_spice:
     time_et_o = get_et_j2000_from_utc(target_start_dt)
+    time_et_f = get_et_j2000_from_utc(target_end_dt)
 
   # Determine active zonal harmonics
   j2_val = 0.0
@@ -696,43 +702,50 @@ def run_high_fidelity_propagation(
       j4_val = PHYSICALCONSTANTS.EARTH.J4
       active_harmonics.append('J4')
 
+  # Calculate duration and grid info
+  delta_time = (target_end_dt - target_start_dt).total_seconds()
+  grid_points = 0
+  step_size = 0.0
+  if result_horizons and result_horizons.get('success'):
+    grid_points = len(result_horizons['plot_time_s'])
+    if grid_points > 1:
+      step_size = result_horizons['plot_time_s'][1] - result_horizons['plot_time_s'][0]
+
   # Set up high-fidelity dynamics model
-  print("\nHigh-Fidelity Model: Configuration")
-  print(f"  Epoch : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC" + (f" ({time_et_o:.6f} ET)" if use_spice else ""))
+  print("  Configuration")
+  print( "    Time")
+  print(f"      Start    : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC" + (f" ({time_et_o:.6f} ET)" if use_spice else ""))
+  print(f"      End      : {target_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC" + (f" ({time_et_f:.6f} ET)" if use_spice else ""))
+  print(f"      Duration : {delta_time/3600:.1f} h")
+  print(f"      Step     : {step_size:.1f} s")
+  print(f"      Grid     : {grid_points} points from Horizons ephemeris")
   
-  print("  Summary")
-  print(f"    Earth Gravity (Two-Body{' + ' + ', '.join(active_harmonics) if active_harmonics else ''})")
-  if include_third_body:
-    print("    Third-Body Gravity (Sun, Moon)")
-  print("    Atmospheric Drag")
-  if include_srp:
-    print("    Solar Radiation Pressure")
-  
-  print("  Details")
-  print("    Gravity (Earth)")
-  print("      Two-Body Point Mass")
+  print("    Forces")
+  print("      Gravity")
+  print("        Earth")
+  print("          Two-Body Point Mass")
   if active_harmonics:
-    print(f"      Zonal Harmonics : {', '.join(active_harmonics)}")
+    print(f"          Zonal Harmonics : {', '.join(active_harmonics)}")
   else:
-    print("      Zonal Harmonics : None")
+    print("          Zonal Harmonics : None")
   
   if include_third_body:
-    print("    Gravity (Third-Body)")
-    print("      Bodies    : Sun, Moon")
+    print("        Third-Body")
+    print("          Bodies    : Sun, Moon")
     if use_spice:
-      print("      Ephemeris : SPICE (High Accuracy)")
-      print(f"      Note      : SPICE kernels loaded for third-body ephemerides.")
+      print("          Ephemeris : SPICE (High Accuracy)")
+      print(f"          Note      : SPICE kernels loaded for third-body ephemerides.")
     else:
-      print("      Ephemeris : Analytical (Approximate)")
+      print("          Ephemeris : Analytical (Approximate)")
       
-  print("    Atmospheric Drag")
-  print( "      Model      : Exponential Atmosphere")
-  print(f"      Parameters : Cd={cd}, Area_Drag={area_drag} m², Mass={mass} kg")
+  print("      Atmospheric Drag")
+  print( "        Model      : Exponential Atmosphere")
+  print(f"        Parameters : Cd={cd}, Area_Drag={area_drag} m², Mass={mass} kg")
 
   if include_srp:
-    print("    Solar Radiation Pressure")
-    print( "      Model      : Conical Shadow (Spherical Earth)")
-    print(f"      Parameters : Cr={cr}, Area_SRP={area_srp} m²")
+    print("      Solar Radiation Pressure")
+    print( "        Model      : Conical Shadow (Spherical Earth)")
+    print(f"        Parameters : Cr={cr}, Area_SRP={area_srp} m²")
   
   # Define acceleration model
   acceleration = Acceleration(
@@ -756,21 +769,19 @@ def run_high_fidelity_propagation(
     spice_kernel_folderpath = str(spice_kernels_folderpath),
   )
   
-  # Propagate times
-  delta_time = (target_end_dt - target_start_dt).total_seconds()
-  print("\nHigh-Fidelity Model: Propagation of Cartesian State")
-  print(f"  Time")
-  print(f"    Start    : {target_start_dt} UTC")
-  print(f"    End      : {target_end_dt} UTC")
-  print(f"    Duration : {delta_time/3600:.1f} h")
-  
   # Propagate with high-fidelity model: use Horizons time grid
   if result_horizons and result_horizons['success']:
     # Convert Horizons plot_time_s (seconds from target_start) to integration time (seconds from TLE epoch)
     horizons_integ_times = result_horizons['plot_time_s'] + integ_time_o
-    print(f"    Grid     : {len(horizons_integ_times)} points from Horizons ephemeris")
-    print(f"    Step     : {result_horizons['plot_time_s'][1] - result_horizons['plot_time_s'][0]:.1f} s")
-    
+  
+    # Print numerical integration settings
+    print("    Numerical Integration")
+    print(f"      Method     : DOP853")
+    print(f"      Tolerances : rtol=1e-12, atol=1e-12")
+
+    print("\n  Compute")
+    print("    Numerical Integration Running ... ", end='', flush=True)
+    # Propagate
     result_high_fidelity = propagate_state_numerical_integration(
       initial_state       = initial_state,
       time_o              = integ_time_o,
@@ -784,6 +795,7 @@ def run_high_fidelity_propagation(
       get_coe_time_series = True,
       gp                  = PHYSICALCONSTANTS.EARTH.GP,
     )
+    print("Complete")
   else:
     # If Horizons data is not available, error analysis is not possible.
     raise RuntimeError("Horizons ephemeris is required for high-fidelity propagation and error analysis, but it failed to load.")
@@ -880,24 +892,26 @@ def run_propagations(
     mass                     = mass,
     cd                       = cd,
     area_drag                = area_drag,
-    cr                       = cr,
-    area_srp                 = area_srp,
-    use_spice                = use_spice,
-    include_third_body       = include_third_body,
-    include_zonal_harmonics  = include_zonal_harmonics,
-    zonal_harmonics_list     = zonal_harmonics_list,
-    include_srp              = include_srp,
-    spice_kernels_folderpath = spice_kernels_folderpath,
-    result_horizons          = result_horizons,
+    cr                       : cr,
+    area_srp                 : area_srp,
+    use_spice                : use_spice,
+    include_third_body       : include_third_body,
+    include_zonal_harmonics  : include_zonal_harmonics,
+    zonal_harmonics_list     : zonal_harmonics_list,
+    include_srp              : include_srp,
+    spice_kernels_folderpath : spice_kernels_folderpath,
+    result_horizons          : result_horizons,
   )
   
   # Propagate: run SGP4 at Horizons time points for comparison
-  print("\nSGP4 Model: Propagation of TLE")
+  print("\nSGP4 Model")
   result_sgp4_at_horizons = propagate_sgp4_at_horizons_grid(
     result_horizons = result_horizons,
     integ_time_o    = integ_time_o,
     tle_line1       = tle_line1,
     tle_line2       = tle_line2,
+    target_start_dt = target_start_dt,
+    target_end_dt   = target_end_dt,
   )
   
   return result_high_fidelity, result_sgp4_at_horizons
