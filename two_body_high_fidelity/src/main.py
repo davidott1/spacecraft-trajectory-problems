@@ -1052,7 +1052,7 @@ def print_results_summary(
     argp = np.rad2deg(result_high_fidelity['coe']['argp'][-1])
     ta   = np.rad2deg(result_high_fidelity['coe']['ta'][-1])
 
-    print(f"\n  Final State (High-Fidelity)")
+    print(f"  Final State (High-Fidelity)")
     print(f"    Epoch : {epoch_str}")
     print(f"    Frame : J2000")
     print(f"    Cartesian State")
