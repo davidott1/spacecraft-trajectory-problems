@@ -949,9 +949,10 @@ class Acceleration:
         gp : float
             Gravitational parameter of central body [m³/s²]
         time_et_o : float
-            Ephemeris Time (ET) seconds from J2000 at the initial time [s]
+            Ephemeris Time (ET) seconds from J2000 corresponding to `time_o` [s]
         time_o : float
-            Initial time in integrator's time system [s]
+            The value of the integration time variable `t` corresponding to `time_et_o` [s].
+            This is used to compute the offset between simulation time and Ephemeris Time.
         j2, j3, j4 : float
             Harmonic coefficients for oblateness
         pos_ref : float
