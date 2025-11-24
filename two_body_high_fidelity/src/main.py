@@ -167,27 +167,27 @@ def parse_and_validate_inputs(
   print(f"  Propagation duration       : {delta_integ_time/3600:.2f} hours")
   
   return {
-    'obj_props'        : obj_props,
-    'tle_line1'        : tle_line1,
-    'tle_line2'        : tle_line2,
-    'tle_epoch_dt'     : tle_epoch_dt,
-    'tle_epoch_jd'     : tle_epoch_jd,
-    'target_start_dt'  : target_start_dt,
-    'target_end_dt'    : target_end_dt,
-    'delta_time'       : delta_time,
-    'integ_time_o'     : integ_time_o,
-    'integ_time_f'     : integ_time_f,
-    'delta_integ_time' : delta_integ_time,
-    'mass'             : obj_props['mass'],
-    'cd'               : obj_props['cd'],
-    'area_drag'        : obj_props['area_drag'],
-    'cr'               : obj_props['cr'],
-    'area_srp'         : obj_props['area_srp'],
-    'use_spice'        : use_spice,
-    'include_third_body'     : include_third_body,
-    'include_zonal_harmonics': include_zonal_harmonics,
-    'zonal_harmonics_list'   : zonal_harmonics_list if zonal_harmonics_list else [],
-    'include_srp'            : include_srp,
+    'obj_props'               : obj_props,
+    'tle_line1'               : tle_line1,
+    'tle_line2'               : tle_line2,
+    'tle_epoch_dt'            : tle_epoch_dt,
+    'tle_epoch_jd'            : tle_epoch_jd,
+    'target_start_dt'         : target_start_dt,
+    'target_end_dt'           : target_end_dt,
+    'delta_time'              : delta_time,
+    'integ_time_o'            : integ_time_o,
+    'integ_time_f'            : integ_time_f,
+    'delta_integ_time'        : delta_integ_time,
+    'mass'                    : obj_props['mass'],
+    'cd'                      : obj_props['cd'],
+    'area_drag'               : obj_props['area_drag'],
+    'cr'                      : obj_props['cr'],
+    'area_srp'                : obj_props['area_srp'],
+    'use_spice'               : use_spice,
+    'include_third_body'      : include_third_body,
+    'include_zonal_harmonics' : include_zonal_harmonics,
+    'zonal_harmonics_list'    : zonal_harmonics_list if zonal_harmonics_list else [],
+    'include_srp'             : include_srp,
   }
 
 def get_config(inputs: dict) -> SimpleNamespace:
@@ -1177,14 +1177,14 @@ def get_simulation_paths(
   )
 
 def main(
-  norad_id               : str,
-  start_time_str         : str,
-  end_time_str           : str,
-  use_spice              : bool = False,
-  include_third_body     : bool = False,
-  include_zonal_harmonics: bool = False,
-  zonal_harmonics_list   : list = None,
-  include_srp            : bool = False,
+  norad_id                : str,
+  start_time_str          : str,
+  end_time_str            : str,
+  use_spice               : bool = False,
+  include_third_body      : bool = False,
+  include_zonal_harmonics : bool = False,
+  zonal_harmonics_list    : list = None,
+  include_srp             : bool = False,
 ) -> dict:
   """
   Main function to run the high-fidelity orbit propagation.
