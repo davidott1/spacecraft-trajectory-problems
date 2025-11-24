@@ -979,7 +979,7 @@ class Acceleration:
         area_srp : float
             Cross-sectional area for SRP [m²]
         """
-        # Compute ET offset internally
+        # Compute ET offset
         et_offset = time_et_o - time_o
         
         # Create acceleration component instances
