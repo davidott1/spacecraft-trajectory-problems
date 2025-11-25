@@ -55,3 +55,18 @@ def load_spice_files(
     
     # Load leap seconds kernel first (minimal kernel set for time conversion)
     spice.furnsh(str(lsk_filepath))
+
+
+def unload_spice_files(
+  use_spice : bool,
+) -> None:
+  """
+  Unload all SPICE kernels if they were loaded.
+  
+  Input:
+  ------
+    use_spice : bool
+      Flag to enable/disable SPICE usage.
+  """
+  if use_spice:
+    spice.kclear()
