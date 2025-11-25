@@ -1189,7 +1189,7 @@ def main(
     spice_kernels_folderpath = spice_kernels_folderpath,
     result_horizons          = result_horizons, # type: ignore
     tle_line1                = config.tle_line1,
-    tle_line2                : config.tle_line2,
+    tle_line2                = config.tle_line2,
   )
   
   # Display results and create plots
@@ -1329,7 +1329,7 @@ def parse_command_line_arguments() -> argparse.Namespace:
   # Optional arguments
   parser.add_argument('--include-spice'          , dest='use_spice'              , action='store_true', help="Enable SPICE functionality (disabled by default).")
   parser.add_argument('--include-third-body'     , dest='include_third_body'     , action='store_true', help="Enable third-body gravity (disabled by default).")
-  parser.add_argument('--include-zonal-harmonics' , dest='include_zonal_harmonics', action='store_true', help="Enable zonal harmonics (disabled by default).")
+  parser.add_argument('--include-zonal-harmonics', dest='include_zonal_harmonics', action='store_true', help="Enable zonal harmonics (disabled by default).")
   parser.add_argument('--zonal-harmonics'        , dest='zonal_harmonics_list'   , nargs='+', choices=['J2', 'J3', 'J4'], default=['J2'], help="List of zonal harmonics to include (default: J2).")
   parser.add_argument('--include-srp'            , dest='include_srp'            , action='store_true', help="Enable Solar Radiation Pressure (disabled by default).")
 
