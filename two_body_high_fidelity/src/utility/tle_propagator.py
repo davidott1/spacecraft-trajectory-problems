@@ -5,7 +5,7 @@ from datetime                    import datetime, timedelta
 from src.model.dynamics          import OrbitConverter
 from src.model.constants         import PHYSICALCONSTANTS
 from src.model.frame_conversions import FrameConversions
-from typing import Optional
+from typing                      import Optional
 
 
 def modify_tle_bstar(
@@ -237,7 +237,7 @@ def get_tle_initial_state(
   else:
     year += 1900
   
-  epoch_days = satellite.epochdays
+  epoch_days     = satellite.epochdays
   epoch_datetime = datetime(year, 1, 1) + timedelta(days=epoch_days - 1)
   
   jd, fr = jday(epoch_datetime.year, epoch_datetime.month, epoch_datetime.day,

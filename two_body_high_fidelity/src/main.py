@@ -72,23 +72,10 @@ from typing          import Optional
 from src.plot.trajectory             import plot_3d_trajectories, plot_time_series, plot_3d_error, plot_time_series_error
 from src.propagation.propagator      import propagate_state_numerical_integration
 from src.utility.tle_propagator      import propagate_tle
+from src.utility.loader              import load_supported_objects
 from src.propagation.horizons_loader import load_horizons_ephemeris
 from src.model.dynamics              import Acceleration, OrbitConverter
 from src.model.constants             import PHYSICALCONSTANTS, CONVERTER
-
-
-SUPPORTED_OBJECTS = {
-  '25544': {
-    'name'      : 'ISS',
-    'tle_line1' : "1 25544U 98067A   25274.11280702  .00018412  00000-0  33478-3 0  9995",
-    'tle_line2' : "2 25544  51.6324 142.0598 0001038 182.7689 177.3294 15.49574764531593",
-    'mass'      : 420000.0,    # ISS mass [kg] (approximate)
-    'cd'        : 2.2,         # drag coefficient [-]
-    'area_drag' : 1000.0,      # cross-sectional area [m²] (approximate)
-    'cr'        : 1.2,         # radiation pressure coefficient [-]
-    'area_srp'  : 1000.0,      # SRP cross-sectional area [m²] (approximate)
-  }
-}
 
 
 def parse_and_validate_inputs(
@@ -148,16 +135,19 @@ def parse_and_validate_inputs(
   if include_srp:
     use_spice = True
 
+  # Load supported objects
+  supported_objects = load_supported_objects()
+
   # Validate norad id input
-  if norad_id not in SUPPORTED_OBJECTS:
-    raise ValueError(f"NORAD ID {norad_id} is not supported. Supported IDs: {list(SUPPORTED_OBJECTS.keys())}")
+  if norad_id not in supported_objects:
+    raise ValueError(f"NORAD ID {norad_id} is not supported. Supported IDs: {list(supported_objects.keys())}")
 
   # Get object properties
-  obj_props = SUPPORTED_OBJECTS[norad_id]
+  obj_props = supported_objects[norad_id]
 
   # Extract TLE lines
-  tle_line1 = obj_props['tle_line1']
-  tle_line2 = obj_props['tle_line2']
+  tle_line1 = obj_props['tle']['line_1']
+  tle_line2 = obj_props['tle']['line_2']
 
   # Parse TLE epoch
   satellite    = Satrec.twoline2rv(tle_line1, tle_line2)
@@ -187,10 +177,10 @@ def parse_and_validate_inputs(
     'integ_time_f'            : integ_time_f,
     'delta_integ_time'        : delta_integ_time,
     'mass'                    : obj_props['mass'],
-    'cd'                      : obj_props['cd'],
-    'area_drag'               : obj_props['area_drag'],
-    'cr'                      : obj_props['cr'],
-    'area_srp'                : obj_props['area_srp'],
+    'cd'                      : obj_props['drag']['coeff'],
+    'area_drag'               : obj_props['drag']['area'],
+    'cr'                      : obj_props['srp']['coeff'],
+    'area_srp'                : obj_props['srp']['area'],
     'use_spice'               : use_spice,
     'include_third_body'      : include_third_body,
     'include_zonal_harmonics' : include_zonal_harmonics,
@@ -1330,7 +1320,7 @@ def main(
     input_object_type : str
       Type of input object.
     norad_id : str
-      NORAD catalog ID of the satellite.
+      NORAD Catalog ID of the satellite.
     timespan : list
       Start and end time for propagation in ISO format.
     use_spice : bool
