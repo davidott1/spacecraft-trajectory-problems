@@ -1,0 +1,7 @@
+# Data directories
+data/ephems/
+data/spice_kernels/
+data/tles/
+
+# Output directory
+output/
