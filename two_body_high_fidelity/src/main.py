@@ -56,6 +56,7 @@ Usage:
 
     
 """
+# region Imports
 import argparse
 import sys
 import matplotlib.pyplot as plt
@@ -72,228 +73,14 @@ from typing          import Optional
 from src.plot.trajectory             import plot_3d_trajectories, plot_time_series, plot_3d_error, plot_time_series_error
 from src.propagation.propagator      import propagate_state_numerical_integration
 from src.utility.tle_propagator      import propagate_tle
-from src.utility.loader              import load_supported_objects
+from src.utility.loader              import load_supported_objects, load_spice_files
+from src.config.parser               import parse_time, parse_and_validate_inputs, get_config, setup_paths_and_files
 from src.propagation.horizons_loader import load_horizons_ephemeris
 from src.model.dynamics              import Acceleration, OrbitConverter
 from src.model.constants             import PHYSICALCONSTANTS, CONVERTER
+# endregion
 
-
-def parse_and_validate_inputs(
-  input_object_type      : str,
-  norad_id               : str,
-  timespan               : list,
-  use_spice              : bool = False,
-  include_third_body     : bool = False,
-  include_zonal_harmonics: bool = False,
-  zonal_harmonics_list   : list = None,
-  include_srp            : bool = False,
-) -> dict:
-  """
-  Parse and validate input parameters for orbit propagation.
-  
-  Input:
-  ------
-    input_object_type : str
-      Type of input object (e.g., norad-id).
-    norad_id : str
-      NORAD catalog ID of the satellite.
-    timespan : list
-      Start and end time in ISO format (e.g., ['2025-10-01T00:00:00', '2025-10-02T00:00:00']).
-    use_spice : bool
-      Flag to enable/disable SPICE usage.
-    include_third_body : bool
-      Flag to enable/disable third-body gravity.
-    include_zonal_harmonics : bool
-      Flag to enable/disable zonal harmonics.
-    zonal_harmonics_list : list
-      List of zonal harmonics to include (e.g., ['J2', 'J3']).
-    include_srp : bool
-      Flag to enable/disable Solar Radiation Pressure.
-  
-  Output:
-  -------
-    dict
-      A dictionary containing parsed and calculated propagation parameters.
-  
-  Raises:
-  -------
-    ValueError
-      If NORAD ID is not supported.
-  """
-  # Normalize input object type
-  input_object_type = input_object_type.replace('-', '_').replace(' ', '_')
-
-  # Unpack timespan
-  start_time_str = timespan[0]
-  end_time_str   = timespan[1]
-
-  # Validate conditional arguments
-  if input_object_type == 'norad_id' and not norad_id:
-    raise ValueError("NORAD ID is required when input-object-type is 'norad-id'")
-
-  # Enforce dependencies: SRP requires SPICE
-  if include_srp:
-    use_spice = True
-
-  # Load supported objects
-  supported_objects = load_supported_objects()
-
-  # Validate norad id input
-  if norad_id not in supported_objects:
-    raise ValueError(f"NORAD ID {norad_id} is not supported. Supported IDs: {list(supported_objects.keys())}")
-
-  # Get object properties
-  obj_props = supported_objects[norad_id]
-
-  # Extract TLE lines
-  tle_line1 = obj_props['tle']['line_1']
-  tle_line2 = obj_props['tle']['line_2']
-
-  # Parse TLE epoch
-  satellite    = Satrec.twoline2rv(tle_line1, tle_line2)
-  tle_epoch_jd = satellite.jdsatepoch + satellite.jdsatepochF
-  tle_epoch_dt = datetime(2000, 1, 1, 12, 0, 0) + timedelta(days=tle_epoch_jd - 2451545.0)
-  
-  # Target propagation start/end times from arguments
-  target_start_dt = datetime.fromisoformat(start_time_str)
-  target_end_dt   = datetime.fromisoformat(end_time_str)
-  delta_time      = (target_end_dt - target_start_dt).total_seconds()
-  
-  # Integration time bounds (seconds from TLE epoch)
-  integ_time_o     = (target_start_dt - tle_epoch_dt).total_seconds()
-  integ_time_f     = integ_time_o + delta_time
-  delta_integ_time = integ_time_f - integ_time_o
-  
-  return {
-    'obj_props'               : obj_props,
-    'tle_line1'               : tle_line1,
-    'tle_line2'               : tle_line2,
-    'tle_epoch_dt'            : tle_epoch_dt,
-    'tle_epoch_jd'            : tle_epoch_jd,
-    'target_start_dt'         : target_start_dt,
-    'target_end_dt'           : target_end_dt,
-    'delta_time'              : delta_time,
-    'integ_time_o'            : integ_time_o,
-    'integ_time_f'            : integ_time_f,
-    'delta_integ_time'        : delta_integ_time,
-    'mass'                    : obj_props['mass'],
-    'cd'                      : obj_props['drag']['coeff'],
-    'area_drag'               : obj_props['drag']['area'],
-    'cr'                      : obj_props['srp']['coeff'],
-    'area_srp'                : obj_props['srp']['area'],
-    'use_spice'               : use_spice,
-    'include_third_body'      : include_third_body,
-    'include_zonal_harmonics' : include_zonal_harmonics,
-    'zonal_harmonics_list'    : zonal_harmonics_list if zonal_harmonics_list else [],
-    'include_srp'             : include_srp,
-  }
-
-
-def get_config(inputs: dict) -> SimpleNamespace:
-  """
-  Create configuration object from inputs dictionary.
-  
-  Input:
-  ------
-    inputs : dict
-      Dictionary of input parameters.
-      
-  Output:
-  -------
-    SimpleNamespace
-      Configuration object.
-  """
-  return SimpleNamespace(**inputs)
-
-
-def setup_paths_and_files(
-  norad_id        : str,
-  obj_name        : str,
-  target_start_dt : datetime,
-  target_end_dt   : datetime,
-) -> dict:
-  """
-  Set up all required folder paths and file names for the propagation.
-  
-  Input:
-  ------
-    norad_id : str
-      NORAD catalog ID of the satellite.
-    obj_name : str
-      Name of the object (e.g., 'ISS').
-    target_start_dt : datetime
-      Target start time as a datetime object.
-    target_end_dt : datetime
-      Target end time as a datetime object.
-  
-  Output:
-  -------
-    dict
-      A dictionary containing paths to output, data, SPICE kernels,
-      Horizons ephemeris, and leap seconds files.
-  """
-  # Output directory for figures
-  output_folderpath = Path('./output/figures')
-  output_folderpath.mkdir(parents=True, exist_ok=True)
-  
-  # Project and data paths
-  project_root    = Path(__file__).parent.parent
-  data_folderpath = project_root / 'data'
-  
-  # SPICE kernels path
-  spice_kernels_folderpath = data_folderpath / 'spice_kernels'
-  lsk_filepath             = spice_kernels_folderpath / 'naif0012.tls'
-  
-  # Horizons ephemeris file (dynamically named)
-  start_str         = target_start_dt.strftime('%Y%m%dT%H%M%SZ')
-  end_str           = target_end_dt.strftime('%Y%m%dT%H%M%SZ')
-  horizons_filename = f"horizons_ephem_{norad_id}_{obj_name.lower()}_{start_str}_{end_str}_1m.csv"
-  horizons_filepath = data_folderpath / 'ephems' / horizons_filename
-  
-  return {
-    'output_folderpath'        : output_folderpath,
-    'spice_kernels_folderpath' : spice_kernels_folderpath,
-    'horizons_filepath'        : horizons_filepath,
-    'lsk_filepath'             : lsk_filepath,
-  }
-
-
-def load_spice_files(
-  use_spice                : bool,
-  spice_kernels_folderpath : Path,
-  lsk_filepath             : Path,
-) -> None:
-  """
-  Load required data files, e.g., SPICE kernels.
-  
-  Input:
-  ------
-    use_spice : bool
-      Flag to enable/disable SPICE usage.
-    spice_kernels_folderpath : Path
-      Path to the SPICE kernels folder.
-    lsk_filepath : Path
-      Path to the leap seconds kernel file.
-  """
-  if use_spice:
-    if not spice_kernels_folderpath.exists():
-      raise FileNotFoundError(f"SPICE kernels folder not found: {spice_kernels_folderpath}")
-    if not lsk_filepath.exists():
-      raise FileNotFoundError(f"SPICE leap seconds kernel not found: {lsk_filepath}")
-
-    try:
-      rel_path = spice_kernels_folderpath.relative_to(Path.cwd())
-      display_path = f"<project_folderpath>/{rel_path}"
-    except ValueError:
-      display_path = spice_kernels_folderpath
-
-    print(f"  Spice Kernels")
-    print(f"    Folderpath : {display_path}")
-    
-    # Load leap seconds kernel first (minimal kernel set for time conversion)
-    spice.furnsh(str(lsk_filepath))
-
-
+# region Environment & Files
 def unload_spice_files(
   use_spice : bool,
 ) -> None:
@@ -307,8 +94,10 @@ def unload_spice_files(
   """
   if use_spice:
     spice.kclear()
+# endregion
 
 
+# region Horizons & State Loading
 def process_horizons_result(
   result_horizons : dict,
 ) -> Optional[dict]:
@@ -543,8 +332,10 @@ def get_et_j2000_from_utc(
   utc_str  = utc_dt.strftime('%Y-%m-%dT%H:%M:%S')
   et_float = spice.str2et(utc_str)
   return et_float
+# endregion
 
 
+# region Propagation Logic
 def propagate_sgp4_at_horizons_grid(
   result_horizons : dict,
   integ_time_o    : float,
@@ -967,10 +758,10 @@ def run_propagations(
   # Propagate: run high-fidelity propagation at Horizons time points for comparison
   result_high_fidelity = run_high_fidelity_propagation(
     initial_state            = initial_state,
-    integ_time_o             = integ_time_o,
-    integ_time_f             = integ_time_f,
-    target_start_dt          = target_start_dt,
-    target_end_dt            = target_end_dt,
+    integ_time_o             = config.integ_time_o,
+    integ_time_f             = config.integ_time_f,
+    target_start_dt          = config.target_start_dt,
+    target_end_dt            = config.target_end_dt,
     mass                     = mass,
     cd                       = cd,
     area_drag                = area_drag,
@@ -997,8 +788,10 @@ def run_propagations(
   )
   
   return result_high_fidelity, result_sgp4_at_horizons
+# endregion
 
 
+# region Output & Plotting
 def print_results_summary(
   result_horizons         : Optional[dict],
   result_high_fidelity    : dict,
@@ -1143,6 +936,7 @@ def generate_error_plots(
     fig_err_ts.savefig(output_folderpath / 'iss_error_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"      {output_folderpath / 'iss_error_timeseries.png'}")
 
+
 def generate_3d_and_time_series_plots(
   result_horizons         : Optional[dict],
   result_high_fidelity    : dict,
@@ -1255,8 +1049,10 @@ def generate_plots(
     target_start_dt         = target_start_dt,
     output_folderpath       = output_folderpath,
   )
+# endregion
 
 
+# region Main Execution
 def get_simulation_paths(
   norad_id        : str,
   obj_name        : str,
@@ -1391,9 +1187,9 @@ def main(
     zonal_harmonics_list     = config.zonal_harmonics_list,
     include_srp              = config.include_srp,
     spice_kernels_folderpath = spice_kernels_folderpath,
-    result_horizons          = result_horizons,
+    result_horizons          = result_horizons, # type: ignore
     tle_line1                = config.tle_line1,
-    tle_line2                = config.tle_line2,
+    tle_line2                : config.tle_line2,
   )
   
   # Display results and create plots
@@ -1533,7 +1329,7 @@ def parse_command_line_arguments() -> argparse.Namespace:
   # Optional arguments
   parser.add_argument('--include-spice'          , dest='use_spice'              , action='store_true', help="Enable SPICE functionality (disabled by default).")
   parser.add_argument('--include-third-body'     , dest='include_third_body'     , action='store_true', help="Enable third-body gravity (disabled by default).")
-  parser.add_argument('--include-zonal-harmonics', dest='include_zonal_harmonics', action='store_true', help="Enable zonal harmonics (disabled by default).")
+  parser.add_argument('--include-zonal-harmonics' , dest='include_zonal_harmonics', action='store_true', help="Enable zonal harmonics (disabled by default).")
   parser.add_argument('--zonal-harmonics'        , dest='zonal_harmonics_list'   , nargs='+', choices=['J2', 'J3', 'J4'], default=['J2'], help="List of zonal harmonics to include (default: J2).")
   parser.add_argument('--include-srp'            , dest='include_srp'            , action='store_true', help="Enable Solar Radiation Pressure (disabled by default).")
 
@@ -1560,3 +1356,4 @@ if __name__ == "__main__":
     args.zonal_harmonics_list,
     args.include_srp,
   )
+# endregion

@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 from typing import Optional
-from src.utility.parse import parse_time
+from src.utility.parser import parse_time
 
 
 def load_horizons_ephemeris(
