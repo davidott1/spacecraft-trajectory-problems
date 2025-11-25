@@ -1,6 +1,2 @@
 __pycache__/
 **/.DS_Store
-data/ephems/
-data/spice_kernels/
-data/tles/
-two_body_high_fidelity/output/
