@@ -758,10 +758,10 @@ def run_propagations(
   # Propagate: run high-fidelity propagation at Horizons time points for comparison
   result_high_fidelity = run_high_fidelity_propagation(
     initial_state            = initial_state,
-    integ_time_o             = config.integ_time_o,
-    integ_time_f             = config.integ_time_f,
-    target_start_dt          = config.target_start_dt,
-    target_end_dt            = config.target_end_dt,
+    integ_time_o             = integ_time_o,
+    integ_time_f             = integ_time_f,
+    target_start_dt          = target_start_dt,
+    target_end_dt            = target_end_dt,
     mass                     = mass,
     cd                       = cd,
     area_drag                = area_drag,
