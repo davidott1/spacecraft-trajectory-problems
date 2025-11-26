@@ -56,18 +56,15 @@ Usage:
 
     
 """
+from typing                            import Optional
 
-
-from pathlib                           import Path
 from src.plot.trajectory               import generate_plots
 from src.propagation.propagator        import run_propagations
-from src.load.loader                   import unload_files, load_files
+from src.input.loader                  import unload_files, load_files, get_horizons_ephemeris
 from src.utility.printer               import print_results_summary
-from src.load.parser                   import parse_command_line_arguments
-from src.load.configurer               import build_config
-from src.load.loader                   import get_horizons_ephemeris
+from src.input.cli                     import parse_command_line_arguments
+from src.input.configuration           import build_config
 from src.propagation.state_initializer import get_initial_state
-from typing                            import Optional
 
 
 def main(
