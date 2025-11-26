@@ -78,6 +78,7 @@ from src.config.parser               import parse_time, parse_and_validate_input
 from src.propagation.horizons_loader import load_horizons_ephemeris
 from src.model.dynamics              import Acceleration, OrbitConverter
 from src.model.constants             import PHYSICALCONSTANTS, CONVERTER
+from src.model.time_converter        import utc_to_et
 
 
 def process_horizons_result(
@@ -111,8 +112,8 @@ def process_horizons_result(
     actual_end   = actual_start + timedelta(seconds=result_horizons['delta_time'][-1])
     
     try:
-      start_et = f"{get_et_j2000_from_utc(actual_start):.6f} ET"
-      end_et   = f"{get_et_j2000_from_utc(actual_end):.6f} ET"
+      start_et = f"{utc_to_et(actual_start):.6f} ET"
+      end_et   = f"{utc_to_et(actual_end):.6f} ET"
     except:
       start_et = "N/A ET"
       end_et   = "N/A ET"
@@ -195,8 +196,8 @@ def get_horizons_ephemeris(
   print(f"      Desired")
   
   try:
-    start_et = f"{get_et_j2000_from_utc(target_start_dt):.6f} ET"
-    end_et   = f"{get_et_j2000_from_utc(target_end_dt):.6f} ET"
+    start_et = f"{utc_to_et(target_start_dt):.6f} ET"
+    end_et   = f"{utc_to_et(target_end_dt):.6f} ET"
   except:
     start_et = "N/A ET"
     end_et   = "N/A ET"
@@ -220,103 +221,12 @@ def get_horizons_ephemeris(
   return result_horizons
 
 
-def get_initial_state(
-  tle_line1            : str,
-  tle_line2            : str,
-  integ_time_o         : float,
-  result_horizons      : Optional[dict],
-  use_horizons_initial : bool = True,
-  to_j2000             : bool = True,
-) -> np.ndarray:
-  """
-  Get initial Cartesian state from Horizons (if available) or TLE.
-  
-  Input:
-  ------
-    tle_line1 : str
-      The first line of the TLE.
-    tle_line2 : str
-      The second line of the TLE.
-    integ_time_o : float
-      The start time of the integration in seconds from the TLE epoch.
-    result_horizons : dict | None
-      The dictionary containing Horizons ephemeris data.
-    use_horizons_initial : bool
-      If True and Horizons data is available, use it. Otherwise use TLE.
-    to_j2000 : bool
-      Flag to indicate if the output state should be in the J2000 frame.
-  
-  Output:
-  -------
-    np.ndarray
-      A 6x1 state vector [m, m, m, m/s, m/s, m/s].
-  """
-  print("\nInitial State")
-  
-  # 1. Use Horizons if available and requested
-  if use_horizons_initial and result_horizons and result_horizons.get('success'):
-    horizons_initial_state = result_horizons['state'][:, 0]
-    
-    epoch_dt = result_horizons['time_o']
-    try:
-      epoch_et = get_et_j2000_from_utc(epoch_dt)
-      et_str   = f" ({epoch_et:.6f} ET)"
-    except:
-      et_str = ""
-
-    print(f"  JPL-Horizons-Derived")
-    print(f"    Epoch    : {epoch_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC{et_str}")
-    print(f"    Frame    : J2000")
-    print(f"    Position : {horizons_initial_state[0]:>19.12e}  {horizons_initial_state[1]:>19.12e}  {horizons_initial_state[2]:>19.12e} m")
-    print(f"    Velocity : {horizons_initial_state[3]:>19.12e}  {horizons_initial_state[4]:>19.12e}  {horizons_initial_state[5]:>19.12e} m/s")
-    return horizons_initial_state
-
-  # 2. Fallback to TLE
-  print(f"  TLE-Derived")
-  print(f"    TLE Line 1 : {tle_line1}")
-  print(f"    TLE Line 2 : {tle_line2}")
-
-  result_tle_initial = propagate_tle(
-    tle_line1  = tle_line1,
-    tle_line2  = tle_line2,
-    time_o     = integ_time_o,
-    time_f     = integ_time_o,
-    num_points = 1, # type: ignore
-    to_j2000   = to_j2000,
-  )
-  if not result_tle_initial['success']:
-    raise RuntimeError(f"Failed to get initial state from TLE: {result_tle_initial['message']}")
-
-  tle_initial_state = result_tle_initial['state'][:, 0]
-  print(f"    Epoch      : {integ_time_o:>19.12e} s")
-  print(f"    Position   : [{tle_initial_state[0]:>19.12e}, {tle_initial_state[1]:>19.12e}, {tle_initial_state[2]:>19.12e}] m")
-  print(f"    Velocity   : [{tle_initial_state[3]:>19.12e}, {tle_initial_state[4]:>19.12e}, {tle_initial_state[5]:>19.12e}] m/s")
-
-  return tle_initial_state
 
 
-def get_et_j2000_from_utc(
-  utc_dt : datetime,
-) -> float:
-  """
-  Convert a UTC datetime object to Ephemeris Time (ET) (seconds past J2000).
-  
-  Input:
-  ------
-    utc_dt : datetime
-      The UTC datetime to convert.
-  
-  Output:
-  -------
-    et_float : float
-      The corresponding Ephemeris Time (ET) in seconds past J2000.
-  """
-  utc_str  = utc_dt.strftime('%Y-%m-%dT%H:%M:%S')
-  et_float = spice.str2et(utc_str)
-  return et_float
 
 
-# region Propagation Logic
+
+
 def propagate_sgp4_at_horizons_grid(
   result_horizons : dict,
   integ_time_o    : float,
@@ -369,7 +279,7 @@ def propagate_sgp4_at_horizons_grid(
   # Helper for ET string
   def get_et_str(dt):
       try:
-          return f"{get_et_j2000_from_utc(dt):.6f} ET"
+          return f"{utc_to_et(dt):.6f} ET"
       except:
           return "N/A ET"
 
@@ -517,7 +427,7 @@ def run_high_fidelity_propagation(
   def get_et(dt):
     if use_spice:
       try:
-        return get_et_j2000_from_utc(dt)
+        return utc_to_et(dt)
       except:
         pass
     return (dt - J2000_EPOCH).total_seconds()
@@ -769,10 +679,8 @@ def run_propagations(
   )
   
   return result_high_fidelity, result_sgp4_at_horizons
-# endregion
 
 
-# region Main Execution
 def get_simulation_paths(
   norad_id        : str,
   obj_name        : str,
@@ -1076,4 +984,3 @@ if __name__ == "__main__":
     args.zonal_harmonics_list,
     args.include_srp,
   )
-# endregion
