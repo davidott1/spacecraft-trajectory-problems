@@ -67,18 +67,19 @@ from src.utility.printer             import print_results_summary
 from src.config.parser               import parse_and_validate_inputs, get_config, get_simulation_paths, parse_command_line_arguments
 from src.propagation.horizons_loader import get_horizons_ephemeris
 from src.initialization.initializer  import get_initial_state
+from typing import Optional
 
 
 def main(
   input_object_type       : str,
   norad_id                : str,
   timespan                : list,
-  use_spice               : bool = False,
-  include_third_body      : bool = False,
-  include_zonal_harmonics : bool = False,
-  zonal_harmonics_list    : list = None,
-  include_srp             : bool = False,
-  use_horizons_initial    : bool = True,
+  use_spice               : bool           = False,
+  include_third_body      : bool           = False,
+  include_zonal_harmonics : bool           = False,
+  zonal_harmonics_list    : Optional[list] = None,
+  include_srp             : bool           = False,
+  use_horizons_initial    : bool           = True,
 ) -> dict:
   """
   Main function to run the high-fidelity orbit propagation.
