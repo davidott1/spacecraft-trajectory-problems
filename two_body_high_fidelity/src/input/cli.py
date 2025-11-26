@@ -1,6 +1,6 @@
 import argparse
 import sys
-from datetime           import datetime
+from datetime import datetime
 
 
 def parse_time(
@@ -13,6 +13,11 @@ def parse_time(
   - "YYYY-MM-DD" (e.g., "2025-10-01")
   - "YYYY-MM-DDTHH:MM:SS" (e.g., "2025-10-01T12:00:00")
   - "YYYY-MM-DD HH:MM:SS" (e.g., "2025-10-01 12:00:00")
+  
+  Input:
+  ------
+    time_str : str
+      Time string to parse.
   
   Output:
   -------
@@ -38,6 +43,13 @@ def print_input_table(
 ) -> None:
   """
   Print a table of input arguments, their values, and status.
+  
+  Input:
+  ------
+    args : argparse.Namespace
+      Parsed command-line arguments.
+    parser : argparse.ArgumentParser
+      The argument parser instance used.
   """
   # Identify explicit actions from sys.argv order
   explicit_actions = []
