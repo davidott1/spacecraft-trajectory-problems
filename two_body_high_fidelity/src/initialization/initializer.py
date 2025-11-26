@@ -1,4 +1,8 @@
 import numpy as np
+from typing import Optional
+
+from src.utility.tle_propagator import propagate_tle
+from src.model.time_converter    import utc_to_et
 
 
 def get_initial_state(
@@ -40,7 +44,7 @@ def get_initial_state(
     
     epoch_dt = result_horizons['time_o']
     try:
-      epoch_et = get_et_j2000_from_utc(epoch_dt)
+      epoch_et = utc_to_et(epoch_dt)
       et_str   = f" ({epoch_et:.6f} ET)"
     except:
       et_str = ""

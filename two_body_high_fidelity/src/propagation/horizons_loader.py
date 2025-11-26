@@ -5,11 +5,18 @@ Horizons Ephemeris Loader
 Load and process JPL Horizons ephemeris data for comparison with propagators.
 """
 
-import numpy as np
+import numpy  as np
 import pandas as pd
+
 from datetime import datetime
-from typing import Optional
-from src.config.parser import parse_time
+from typing   import Optional
+from pathlib  import Path
+from datetime import timedelta
+
+from src.model.time_converter import utc_to_et
+from src.model.dynamics       import OrbitConverter
+from src.model.constants      import PHYSICALCONSTANTS
+from src.config.parser        import parse_time
 
 
 def load_horizons_ephemeris(
@@ -151,3 +158,143 @@ def load_horizons_ephemeris(
       'delta_time' : [],
       'state'      : [],
     }
+
+
+def get_horizons_ephemeris(
+  horizons_filepath : Path,
+  target_start_dt   : datetime,
+  target_end_dt     : datetime,
+) -> Optional[dict]:
+  """
+  Load and process JPL Horizons ephemeris.
+  
+  Input:
+  ------
+    horizons_filepath : Path
+      Path to the Horizons ephemeris file.
+    target_start_dt : datetime
+      Start time for data request.
+    target_end_dt : datetime
+      End time for data request.
+      
+  Output:
+  -------
+    dict | None
+      Processed Horizons result dictionary, or None if loading failed.
+  """
+  # Load Horizons ephemeris
+  try:
+    rel_path = horizons_filepath.relative_to(Path.cwd())
+    display_path = f"<project_folderpath>/{rel_path}"
+  except ValueError:
+    display_path = horizons_filepath
+
+  print("  JPL Horizons Ephemeris")
+  print(f"    Filepath : {display_path}")
+  print(f"    Timespan")
+  print(f"      Desired")
+  
+  try:
+    start_et = f"{utc_to_et(target_start_dt):.6f} ET"
+    end_et   = f"{utc_to_et(target_end_dt):.6f} ET"
+  except:
+    start_et = "N/A ET"
+    end_et   = "N/A ET"
+
+  duration_s = (target_end_dt - target_start_dt).total_seconds()
+
+  print(f"        Start    : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({start_et})")
+  print(f"        End      : {target_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({end_et})")
+  print(f"        Duration : {duration_s:.1f} s")
+  
+  # Load Horizons data
+  result_horizons = load_horizons_ephemeris(
+    filepath      = str(horizons_filepath),
+    time_start_dt = target_start_dt,
+    time_end_dt   = target_end_dt,
+  )
+
+  # Process Horizons data
+  result_horizons = process_horizons_result(result_horizons)
+  
+  return result_horizons
+
+
+def process_horizons_result(
+  result_horizons : dict,
+) -> Optional[dict]:
+  """
+  Processes and enriches the result dictionary from `load_horizons_ephemeris`.
+
+  This function performs the following actions if the Horizons data loading was successful:
+  1. Logs basic information about the loaded ephemeris (epoch, number of points, time span).
+  2. Creates a `plot_time_s` array, which is a time vector in seconds starting from zero.
+  3. Computes the classical orbital elements (COE) for each state vector in the ephemeris
+     and adds them to the dictionary under the 'coe' key.
+
+  If the loading was not successful, it prints a failure message.
+
+  Input:
+  ------
+    result_horizons : dict
+      The dictionary returned by `load_horizons_ephemeris`. It should contain
+      'success', 'time', and 'state' keys.
+
+  Output:
+  -------
+    dict | None
+      An enriched dictionary with 'plot_time_s' and 'coe' keys if processing
+      is successful. Returns `None` if the input indicates a failure.
+  """
+  if result_horizons and result_horizons.get('success'):
+    actual_start = result_horizons['time_o']
+    actual_end   = actual_start + timedelta(seconds=result_horizons['delta_time'][-1])
+    
+    try:
+      start_et = f"{utc_to_et(actual_start):.6f} ET"
+      end_et   = f"{utc_to_et(actual_end):.6f} ET"
+    except:
+      start_et = "N/A ET"
+      end_et   = "N/A ET"
+
+    duration_s = result_horizons['delta_time'][-1] - result_horizons['delta_time'][0]
+
+    print(f"      Actual")
+    print(f"        Start    : {actual_start.strftime('%Y-%m-%d %H:%M:%S')} UTC ({start_et})")
+    print(f"        End      : {actual_end.strftime('%Y-%m-%d %H:%M:%S')} UTC ({end_et})")
+    print(f"        Duration : {duration_s:.1f} s")
+    print(f"        Grid     : {len(result_horizons['delta_time'])} points")
+
+    # Create plot_time_s for seconds-based, zero-start plotting time
+    result_horizons['plot_time_s'] = result_horizons['delta_time'] - result_horizons['delta_time'][0]
+    
+    # Compute classical orbital elements for Horizons data
+    num_points = result_horizons['state'].shape[1]
+    result_horizons['coe'] = {
+      'sma'  : np.zeros(num_points),
+      'ecc'  : np.zeros(num_points),
+      'inc'  : np.zeros(num_points),
+      'raan' : np.zeros(num_points),
+      'argp' : np.zeros(num_points),
+      'ma'   : np.zeros(num_points),
+      'ta'   : np.zeros(num_points),
+      'ea'   : np.zeros(num_points),
+    }
+
+    for i in range(num_points):
+      pos_vec = result_horizons['state'][0:3, i]
+      vel_vec = result_horizons['state'][3:6, i]
+      coe = OrbitConverter.pv_to_coe(
+        pos_vec,
+        vel_vec,
+        PHYSICALCONSTANTS.EARTH.GP,
+      )
+      for key in result_horizons['coe'].keys():
+        result_horizons['coe'][key][i] = coe[key]
+
+    return result_horizons
+
+  # Failure path
+  msg = result_horizons.get('message') if isinstance(result_horizons, dict) else 'No result returned'
+  print(f"    - Horizons loading failed: {msg}")
+  return None
