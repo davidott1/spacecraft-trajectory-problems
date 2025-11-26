@@ -72,15 +72,15 @@ from typing import Optional
 
 
 def main(
-  input_object_type       : str,
-  norad_id                : str,
-  timespan                : list,
-  use_spice               : bool           = False,
-  include_third_body      : bool           = False,
-  include_zonal_harmonics : bool           = False,
-  zonal_harmonics_list    : Optional[list] = None,
-  include_srp             : bool           = False,
-  use_horizons_initial    : bool           = True,
+  input_object_type          : str,
+  norad_id                   : str,
+  timespan                   : list,
+  use_spice                  : bool           = False,
+  include_third_body         : bool           = False,
+  include_zonal_harmonics    : bool           = False,
+  zonal_harmonics_list       : Optional[list] = None,
+  include_srp                : bool           = False,
+  use_horizons_initial_guess : bool           = True,
 ) -> dict:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -127,7 +127,7 @@ def main(
     include_zonal_harmonics,
     zonal_harmonics_list,
     include_srp,
-    use_horizons_initial,
+    use_horizons_initial_guess,
   )
 
   # Load files

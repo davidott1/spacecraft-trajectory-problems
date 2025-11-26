@@ -9,15 +9,15 @@ from src.load.parser    import parse_time
 
 
 def build_config(
-  input_object_type      : str,
-  norad_id               : str,
-  timespan               : list,
-  use_spice              : bool = False,
-  include_third_body     : bool = False,
-  include_zonal_harmonics: bool = False,
-  zonal_harmonics_list   : Optional[list] = None,
-  include_srp            : bool = False,
-  use_horizons_initial   : bool = True,
+  input_object_type          : str,
+  norad_id                   : str,
+  timespan                   : list,
+  use_spice                  : bool = False,
+  include_third_body         : bool = False,
+  include_zonal_harmonics    : bool = False,
+  zonal_harmonics_list       : Optional[list] = None,
+  include_srp                : bool = False,
+  use_horizons_initial_guess : bool = True,
 ) -> SimpleNamespace:
   """
   Parse, validate, and set up input parameters for orbit propagation.
@@ -40,7 +40,7 @@ def build_config(
       List of zonal harmonics to include (e.g., ['J2', 'J3']).
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
-    use_horizons_initial : bool
+    use_horizons_initial_guess : bool
       Flag to use Horizons for initial state.
   
   Output:
@@ -106,32 +106,32 @@ def build_config(
   )
   
   return SimpleNamespace(
-    obj_props                = obj_props,
-    tle_line1                = tle_line1,
-    tle_line2                = tle_line2,
-    tle_epoch_dt             = tle_epoch_dt,
-    tle_epoch_jd             = tle_epoch_jd,
-    target_start_dt          = target_start_dt,
-    target_end_dt            = target_end_dt,
-    delta_time               = delta_time,
-    integ_time_o             = integ_time_o,
-    integ_time_f             = integ_time_f,
-    delta_integ_time         = delta_integ_time,
-    mass                     = obj_props['mass'],
-    cd                       = obj_props['drag']['coeff'],
-    area_drag                = obj_props['drag']['area'],
-    cr                       = obj_props['srp']['coeff'],
-    area_srp                 = obj_props['srp']['area'],
-    use_spice                = use_spice,
-    include_third_body       = include_third_body,
-    include_zonal_harmonics  = include_zonal_harmonics,
-    zonal_harmonics_list     = zonal_harmonics_list if zonal_harmonics_list else [],
-    include_srp              = include_srp,
-    use_horizons_initial     = use_horizons_initial,
-    output_folderpath        = paths['output_folderpath'],
-    spice_kernels_folderpath = paths['spice_kernels_folderpath'],
-    horizons_filepath        = paths['horizons_filepath'],
-    lsk_filepath             = paths['lsk_filepath'],
+    obj_props                  = obj_props,
+    tle_line1                  = tle_line1,
+    tle_line2                  = tle_line2,
+    tle_epoch_dt               = tle_epoch_dt,
+    tle_epoch_jd               = tle_epoch_jd,
+    target_start_dt            = target_start_dt,
+    target_end_dt              = target_end_dt,
+    delta_time                 = delta_time,
+    integ_time_o               = integ_time_o,
+    integ_time_f               = integ_time_f,
+    delta_integ_time           = delta_integ_time,
+    mass                       = obj_props['mass'],
+    cd                         = obj_props['drag']['coeff'],
+    area_drag                  = obj_props['drag']['area'],
+    cr                         = obj_props['srp']['coeff'],
+    area_srp                   = obj_props['srp']['area'],
+    use_spice                  = use_spice,
+    include_third_body         = include_third_body,
+    include_zonal_harmonics    = include_zonal_harmonics,
+    zonal_harmonics_list       = zonal_harmonics_list if zonal_harmonics_list else [],
+    include_srp                = include_srp,
+    use_horizons_initial_guess = use_horizons_initial_guess,
+    output_folderpath          = paths['output_folderpath'],
+    spice_kernels_folderpath   = paths['spice_kernels_folderpath'],
+    horizons_filepath          = paths['horizons_filepath'],
+    lsk_filepath               = paths['lsk_filepath'],
   )
 
 
