@@ -4,18 +4,18 @@ Orbit Propagator
 
 Numerical integration of spacecraft equations of motion.
 """
-
-import numpy as np
 import math
-from datetime import datetime, timedelta
-from typing import Optional
-from pathlib import Path
-from scipy.integrate import solve_ivp
-from sgp4.api import Satrec, jday
+import numpy as np
 
-from src.model.dynamics import GeneralStateEquationsOfMotion, Acceleration, OrbitConverter
-from src.model.constants import PHYSICALCONSTANTS
-from src.model.time_converter import utc_to_et
+from datetime        import datetime, timedelta
+from typing          import Optional
+from pathlib         import Path
+from scipy.integrate import solve_ivp
+from sgp4.api        import Satrec, jday
+
+from src.model.dynamics          import GeneralStateEquationsOfMotion, Acceleration, OrbitConverter
+from src.model.constants         import PHYSICALCONSTANTS
+from src.model.time_converter    import utc_to_et
 from src.model.frame_conversions import FrameConversions
 
 def modify_tle_bstar(

@@ -1,7 +1,8 @@
 import numpy as np
+
 from typing import Optional
 
-from src.utility.tle_propagator import propagate_tle
+from src.propagation.propagator  import propagate_tle
 from src.model.time_converter    import utc_to_et
 
 
