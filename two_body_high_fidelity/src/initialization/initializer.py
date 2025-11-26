@@ -6,12 +6,12 @@ from src.model.time_converter    import utc_to_et
 
 
 def get_initial_state(
-  tle_line1            : str,
-  tle_line2            : str,
-  integ_time_o         : float,
-  result_horizons      : Optional[dict],
-  use_horizons_initial : bool = True,
-  to_j2000             : bool = True,
+  tle_line1                  : str,
+  tle_line2                  : str,
+  integ_time_o               : float,
+  result_horizons            : Optional[dict],
+  use_horizons_initial_guess : bool = True,
+  to_j2000                   : bool = True,
 ) -> np.ndarray:
   """
   Get initial Cartesian state from Horizons (if available) or TLE.
@@ -39,7 +39,7 @@ def get_initial_state(
   print("\nInitial State")
   
   # 1. Use Horizons if available and requested
-  if use_horizons_initial and result_horizons and result_horizons.get('success'):
+  if use_horizons_initial_guess and result_horizons and result_horizons.get('success'):
     horizons_initial_state = result_horizons['state'][:, 0]
     
     epoch_dt = result_horizons['time_o']

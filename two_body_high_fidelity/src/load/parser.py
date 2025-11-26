@@ -195,14 +195,14 @@ def parse_command_line_arguments(
   )
   parser.add_argument(
     '--use-horizons-initial-guess',
-    dest    = 'use_horizons_initial',
+    dest    = 'use_horizons_initial_guess',
     action  = 'store_true',
     default = True,
     help    = "Use Horizons ephemeris for initial state (default: True).",
   )
   parser.add_argument(
     '--use-tle-initial-guess',
-    dest   = 'use_horizons_initial',
+    dest   = 'use_horizons_initial_guess',
     action = 'store_false',
     help   = "Use TLE for initial state (disables --use-horizons-initial-guess).",
   )

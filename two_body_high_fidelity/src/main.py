@@ -58,7 +58,7 @@ Usage:
 """
 
 
-from pathlib         import Path
+from pathlib import Path
 
 from src.plot.trajectory             import generate_plots
 from src.propagation.propagator      import run_propagations
@@ -85,14 +85,15 @@ def main(
   """
   Main function to run the high-fidelity orbit propagation.
   
-  This function propagates an orbit using a high-fidelity dynamics model. The
-  initial state is derived from a TLE, then propagated with detailed force
-  models. The result is compared with SGP4 and JPL Horizons ephemeris.
+  This function orchestrates the orbit propagation process. It builds the
+  configuration, loads necessary data (SPICE kernels, ephemerides), determines
+  the initial state, runs the high-fidelity and SGP4 propagations, and finally
+  generates results and plots.
   
   Input:
   ------
     input_object_type : str
-      Type of input object.
+      Type of input object (e.g., 'norad-id').
     norad_id : str
       NORAD Catalog ID of the satellite.
     timespan : list
@@ -100,19 +101,21 @@ def main(
     use_spice : bool
       Flag to enable/disable SPICE usage.
     include_third_body : bool
-      Flag to enable/disable third-body gravity.
+      Flag to enable/disable third-body gravity forces.
     include_zonal_harmonics : bool
-      Flag to enable/disable zonal harmonics.
+      Flag to enable/disable zonal harmonic gravity terms.
     zonal_harmonics_list : list
-      List of zonal harmonics to include.
+      List of specific zonal harmonics to include (e.g., ['J2', 'J3', 'J4']).
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
     use_horizons_initial : bool
-      Flag to use Horizons for initial state (default: True).
+      Flag to use JPL Horizons ephemeris for the initial state vector.
+      If False, the TLE is used.
   
   Output:
   -------
-    None
+    dict
+      Dictionary containing the results of the high-fidelity propagation.
   """
   # Process inputs and setup
   config = build_config(
@@ -124,6 +127,7 @@ def main(
     include_zonal_harmonics,
     zonal_harmonics_list,
     include_srp,
+    use_horizons_initial,
   )
 
   # Load files
@@ -142,12 +146,12 @@ def main(
 
   # Determine initial state (from Horizons if available, else TLE)
   initial_state = get_initial_state(
-    tle_line1            = config.tle_line1,
-    tle_line2            = config.tle_line2,
-    integ_time_o         = config.integ_time_o,
-    result_horizons      = result_horizons_ephemeris,
-    use_horizons_initial = use_horizons_initial,
-    to_j2000             = True,
+    tle_line1                  = config.tle_line1,
+    tle_line2                  = config.tle_line2,
+    integ_time_o               = config.integ_time_o,
+    result_horizons            = result_horizons_ephemeris,
+    use_horizons_initial_guess = config.use_horizons_initial_guess,
+    to_j2000                   = True,
   )
 
   # Run propagations: high-fidelity and SGP4 at Horizons times
@@ -206,5 +210,5 @@ if __name__ == "__main__":
     args.include_zonal_harmonics,
     args.zonal_harmonics_list,
     args.include_srp,
-    args.use_horizons_initial,
+    args.use_horizons_initial_guess,
   )

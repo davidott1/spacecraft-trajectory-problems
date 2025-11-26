@@ -17,6 +17,7 @@ def build_config(
   include_zonal_harmonics: bool = False,
   zonal_harmonics_list   : Optional[list] = None,
   include_srp            : bool = False,
+  use_horizons_initial   : bool = True,
 ) -> SimpleNamespace:
   """
   Parse, validate, and set up input parameters for orbit propagation.
@@ -39,6 +40,8 @@ def build_config(
       List of zonal harmonics to include (e.g., ['J2', 'J3']).
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
+    use_horizons_initial : bool
+      Flag to use Horizons for initial state.
   
   Output:
   -------
@@ -124,6 +127,7 @@ def build_config(
     include_zonal_harmonics  = include_zonal_harmonics,
     zonal_harmonics_list     = zonal_harmonics_list if zonal_harmonics_list else [],
     include_srp              = include_srp,
+    use_horizons_initial     = use_horizons_initial,
     output_folderpath        = paths['output_folderpath'],
     spice_kernels_folderpath = paths['spice_kernels_folderpath'],
     horizons_filepath        = paths['horizons_filepath'],
