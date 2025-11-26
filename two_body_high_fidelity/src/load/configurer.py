@@ -4,7 +4,7 @@ from types              import SimpleNamespace
 from typing             import Optional
 from sgp4.api           import Satrec
 
-from src.utility.loader import load_supported_objects
+from src.load.loader    import load_supported_objects
 from src.load.parser    import parse_time
 
 

@@ -62,7 +62,7 @@ from pathlib         import Path
 
 from src.plot.trajectory             import generate_plots
 from src.propagation.propagator      import run_propagations
-from src.utility.loader              import unload_files, load_files
+from src.load.loader                 import unload_files, load_files
 from src.utility.printer             import print_results_summary
 from src.load.parser                 import parse_command_line_arguments
 from src.load.configurer             import build_config
