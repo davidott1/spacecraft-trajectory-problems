@@ -2,12 +2,12 @@
 Download ephemeris and TLE data for any satellite by NORAD ID
 
 Usage:
-  python -m src.download_ephems_and_tles <norad_id> <start_time> <end_time> [step]
+  python -m src.download.ephems_and_tles <norad_id> <start_time> <end_time> [step]
   
 Example:
-  python -m src.download_ephems_and_tles 25544 "2025-10-01" "2025-10-08"
-  python -m src.download_ephems_and_tles 25544 "2025-10-01T00:00:00Z" "2025-10-02T00:00:00Z" 1m
-  python -m src.download_ephems_and_tles 25544 "2025-10-01 00:00" "2025-10-08 00:00"
+  python -m src.download.ephems_and_tles 25544 "2025-10-01" "2025-10-08"
+  python -m src.download.ephems_and_tles 25544 "2025-10-01T00:00:00Z" "2025-10-02T00:00:00Z" 1m
+  python -m src.download.ephems_and_tles 25544 "2025-10-01 00:00" "2025-10-08 00:00"
 """
 
 import requests
@@ -29,7 +29,7 @@ from typing                 import List, Dict, Tuple, Optional, Union
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent 
 
 from src.model.constants import CONVERTER
-from src.utility.parse import parse_time
+from src.input.cli       import parse_time
 
 EPHEM_OUTPUT_DIR = PROJECT_ROOT / 'data' / 'ephems'
 TLE_OUTPUT_DIR   = PROJECT_ROOT / 'data' / 'tles'
@@ -469,11 +469,11 @@ def parse_command_line_args() -> Tuple[int, datetime, datetime, str]:
     If arguments are invalid.
   """
   if len(sys.argv) < 4:
-    print("Usage: python -m src.download_ephems_and_tles <norad_id> <start_time> <end_time> [step]")
+    print("Usage: python -m src.download.ephems_and_tles <norad_id> <start_time> <end_time> [step]")
     print("\nExample:")
-    print('  python -m src.download_ephems_and_tles 25544 "2025-10-01" "2025-10-08"')
-    print('  python -m src.download_ephems_and_tles 25544 "2025-10-01T00:00:00Z" "2025-10-02T00:00:00Z" 1m')
-    print('  python -m src.download_ephems_and_tles 25544 "2025-10-01 00:00" "2025-10-08 00:00"')
+    print('  python -m src.download.ephems_and_tles 25544 "2025-10-01" "2025-10-08"')
+    print('  python -m src.download.ephems_and_tles 25544 "2025-10-01T00:00:00Z" "2025-10-02T00:00:00Z" 1m')
+    print('  python -m src.download.ephems_and_tles 25544 "2025-10-01 00:00" "2025-10-08 00:00"')
     print("\nTime format (UTC assumed):")
     print("  YYYY-MM-DD")
     print("  YYYY-MM-DD HH:MM")

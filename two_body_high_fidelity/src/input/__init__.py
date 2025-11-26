@@ -1,6 +1,1 @@
-"""
-Input Package
-=============
-
-Handles command-line arguments, configuration setup, and data loading.
-"""
+# This file makes the 'input' directory a Python package.
