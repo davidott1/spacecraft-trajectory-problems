@@ -181,16 +181,15 @@ def main(
   print_results_summary(
     result_horizons_ephemeris,
     result_high_fidelity_propagation,
-    result_sgp4_propagation,
   )
   
   # Generate plots
   generate_plots(
-    result_horizons         = result_horizons_ephemeris,
-    result_high_fidelity    = result_high_fidelity_propagation,
-    result_sgp4_at_horizons = result_sgp4_propagation,
-    target_start_dt         = config.target_start_dt,
-    output_folderpath       = config.output_folderpath,
+    result_horizons      = result_horizons_ephemeris,
+    result_high_fidelity = result_high_fidelity_propagation,
+    result_sgp4          = result_sgp4_propagation,
+    target_start_dt      = config.target_start_dt,
+    output_folderpath    = config.output_folderpath,
   )
   
   # Unload all files (SPICE kernels)
