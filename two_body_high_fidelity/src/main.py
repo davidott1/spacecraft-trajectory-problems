@@ -62,7 +62,7 @@ from pathlib         import Path
 
 from src.plot.trajectory             import generate_plots
 from src.propagation.propagator      import run_propagations
-from src.utility.loader              import load_spice_files, unload_spice_files
+from src.utility.loader              import unload_files, load_files
 from src.utility.printer             import print_results_summary
 from src.config.parser               import parse_and_validate_inputs, get_config, get_simulation_paths, parse_command_line_arguments
 from src.propagation.horizons_loader import get_horizons_ephemeris
@@ -124,7 +124,7 @@ def main(
     zonal_harmonics_list,
     include_srp,
   )
-  config      = get_config(inputs_dict)
+  config = get_config(inputs_dict)
 
   # Set up paths and files
   output_folderpath, spice_kernels_folderpath, horizons_filepath, lsk_filepath = get_simulation_paths(
@@ -134,11 +134,8 @@ def main(
     target_end_dt   = config.target_end_dt,
   )
 
-  print("\nLoad Files")
-  print(f"  Project Folderpath : {Path.cwd()}")
-
-  # Load spice files if SPICE is enabled
-  load_spice_files(config.use_spice, spice_kernels_folderpath, lsk_filepath)
+  # Load files
+  load_files(config.use_spice, spice_kernels_folderpath, lsk_filepath)
 
   # Get Horizons ephemeris
   propagation_result_horizons = get_horizons_ephemeris(
@@ -197,7 +194,7 @@ def main(
   )
   
   # Unload all SPICE kernels if they were loaded
-  unload_spice_files(config.use_spice)
+  unload_files(config.use_spice)
   
   return propagation_result_high_fidelity
 

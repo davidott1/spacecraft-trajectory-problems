@@ -21,6 +21,51 @@ def load_supported_objects() -> dict:
   with open(config_path, 'r') as f:
     return yaml.safe_load(f)
 
+def load_files(
+  use_spice                : bool,
+  spice_kernels_folderpath : Path,
+  lsk_filepath             : Path,
+) -> None:
+  """
+  Load necessary files for the simulation, including SPICE kernels if enabled.
+  
+  Input:
+  ------
+    use_spice : bool
+      Flag to enable/disable SPICE usage.
+    spice_kernels_folderpath : Path
+      Path to the SPICE kernels folder.
+    lsk_filepath : Path
+      Path to the leap seconds kernel file.
+  
+  Output:
+  -------
+    None
+  """
+  print("\nLoad Files")
+  print(f"  Project Folderpath : {Path.cwd()}")
+
+  # Load spice files if SPICE is enabled
+  load_spice_files(use_spice, spice_kernels_folderpath, lsk_filepath)
+
+def unload_files(
+  use_spice: bool,
+) -> None:
+  """
+  Unload files that were loaded for the simulation, including SPICE kernels if enabled.
+  
+  Input:
+  ------
+    use_spice : bool
+      Flag to enable/disable SPICE usage.
+  
+  Output:
+  -------
+    None
+  """
+  # Unload SPICE files if SPICE was enabled
+  unload_spice_files(use_spice)
+
 def load_spice_files(
   use_spice                : bool,
   spice_kernels_folderpath : Path,
