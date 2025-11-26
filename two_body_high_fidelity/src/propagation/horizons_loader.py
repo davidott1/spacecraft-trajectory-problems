@@ -16,7 +16,7 @@ from datetime import timedelta
 from src.model.time_converter import utc_to_et
 from src.model.dynamics       import OrbitConverter
 from src.model.constants      import PHYSICALCONSTANTS
-from src.config.parser        import parse_time
+from src.load.parser          import parse_time
 
 
 def load_horizons_ephemeris(
