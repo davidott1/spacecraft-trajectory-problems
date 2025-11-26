@@ -56,6 +56,11 @@ def build_config(
   # Normalize input object type
   input_object_type = input_object_type.replace('-', '_').replace(' ', '_')
 
+  # Normalize initial state source
+  initial_state_source = initial_state_source.lower().replace('-', '_').replace(' ', '_')
+  if 'horizons' in initial_state_source:
+    initial_state_source = 'jpl_horizons'
+
   # Unpack timespan
   start_time_str = timespan[0]
   end_time_str   = timespan[1]
