@@ -58,7 +58,7 @@ def parse_time(
   raise ValueError(f"Cannot parse time string: {time_str}")
 
 
-def parse_and_validate_inputs(
+def build_config(
   input_object_type      : str,
   norad_id               : str,
   timespan               : list,
@@ -67,9 +67,9 @@ def parse_and_validate_inputs(
   include_zonal_harmonics: bool = False,
   zonal_harmonics_list   : Optional[list] = None,
   include_srp            : bool = False,
-) -> dict:
+) -> SimpleNamespace:
   """
-  Parse and validate input parameters for orbit propagation.
+  Parse, validate, and set up input parameters for orbit propagation.
   
   Input:
   ------
@@ -92,8 +92,8 @@ def parse_and_validate_inputs(
   
   Output:
   -------
-    dict
-      A dictionary containing parsed and calculated propagation parameters.
+    SimpleNamespace
+      Configuration object containing parsed and calculated propagation parameters.
   
   Raises:
   -------
@@ -144,46 +144,41 @@ def parse_and_validate_inputs(
   integ_time_f     = integ_time_o + delta_time
   delta_integ_time = integ_time_f - integ_time_o
   
-  return {
-    'obj_props'               : obj_props,
-    'tle_line1'               : tle_line1,
-    'tle_line2'               : tle_line2,
-    'tle_epoch_dt'            : tle_epoch_dt,
-    'tle_epoch_jd'            : tle_epoch_jd,
-    'target_start_dt'         : target_start_dt,
-    'target_end_dt'           : target_end_dt,
-    'delta_time'              : delta_time,
-    'integ_time_o'            : integ_time_o,
-    'integ_time_f'            : integ_time_f,
-    'delta_integ_time'        : delta_integ_time,
-    'mass'                    : obj_props['mass'],
-    'cd'                      : obj_props['drag']['coeff'],
-    'area_drag'               : obj_props['drag']['area'],
-    'cr'                      : obj_props['srp']['coeff'],
-    'area_srp'                : obj_props['srp']['area'],
-    'use_spice'               : use_spice,
-    'include_third_body'      : include_third_body,
-    'include_zonal_harmonics' : include_zonal_harmonics,
-    'zonal_harmonics_list'    : zonal_harmonics_list if zonal_harmonics_list else [],
-    'include_srp'             : include_srp,
-  }
-
-
-def get_config(inputs: dict) -> SimpleNamespace:
-  """
-  Create configuration object from inputs dictionary.
+  # Set up paths and files
+  paths = setup_paths_and_files(
+    norad_id        = norad_id,
+    obj_name        = obj_props['name'],
+    target_start_dt = target_start_dt,
+    target_end_dt   = target_end_dt,
+  )
   
-  Input:
-  ------
-    inputs : dict
-      Dictionary of input parameters.
-      
-  Output:
-  -------
-    SimpleNamespace
-      Configuration object.
-  """
-  return SimpleNamespace(**inputs)
+  return SimpleNamespace(
+    obj_props                = obj_props,
+    tle_line1                = tle_line1,
+    tle_line2                = tle_line2,
+    tle_epoch_dt             = tle_epoch_dt,
+    tle_epoch_jd             = tle_epoch_jd,
+    target_start_dt          = target_start_dt,
+    target_end_dt            = target_end_dt,
+    delta_time               = delta_time,
+    integ_time_o             = integ_time_o,
+    integ_time_f             = integ_time_f,
+    delta_integ_time         = delta_integ_time,
+    mass                     = obj_props['mass'],
+    cd                       = obj_props['drag']['coeff'],
+    area_drag                = obj_props['drag']['area'],
+    cr                       = obj_props['srp']['coeff'],
+    area_srp                 = obj_props['srp']['area'],
+    use_spice                = use_spice,
+    include_third_body       = include_third_body,
+    include_zonal_harmonics  = include_zonal_harmonics,
+    zonal_harmonics_list     = zonal_harmonics_list if zonal_harmonics_list else [],
+    include_srp              = include_srp,
+    output_folderpath        = paths['output_folderpath'],
+    spice_kernels_folderpath = paths['spice_kernels_folderpath'],
+    horizons_filepath        = paths['horizons_filepath'],
+    lsk_filepath             = paths['lsk_filepath'],
+  )
 
 
 def setup_paths_and_files(
@@ -237,47 +232,6 @@ def setup_paths_and_files(
     'horizons_filepath'        : horizons_filepath,
     'lsk_filepath'             : lsk_filepath,
   }
-
-
-def get_simulation_paths(
-  norad_id        : str,
-  obj_name        : str,
-  target_start_dt : datetime,
-  target_end_dt   : datetime,
-) -> tuple[Path, Path, Path, Path]:
-  """
-  Get paths for output, SPICE kernels, Horizons ephemeris, and leap seconds.
-  
-  Input:
-  ------
-    norad_id : str
-      NORAD ID.
-    obj_name : str
-      Object name.
-    target_start_dt : datetime
-      Start time.
-    target_end_dt : datetime
-      End time.
-      
-  Output:
-  -------
-    tuple[Path, Path, Path, Path]
-      (output_folderpath, spice_kernels_folderpath, horizons_filepath, lsk_filepath)
-  """
-  # Set up paths and files
-  folderpaths_filepaths = setup_paths_and_files(
-    norad_id        = norad_id,
-    obj_name        = obj_name,
-    target_start_dt = target_start_dt,
-    target_end_dt   = target_end_dt,
-  )
-  
-  return (
-    folderpaths_filepaths['output_folderpath'],
-    folderpaths_filepaths['spice_kernels_folderpath'],
-    folderpaths_filepaths['horizons_filepath'],
-    folderpaths_filepaths['lsk_filepath'],
-  )
 
 
 def print_input_table(

@@ -64,7 +64,7 @@ from src.plot.trajectory             import generate_plots
 from src.propagation.propagator      import run_propagations
 from src.utility.loader              import unload_files, load_files
 from src.utility.printer             import print_results_summary
-from src.config.parser               import parse_and_validate_inputs, get_config, get_simulation_paths, parse_command_line_arguments
+from src.config.parser               import build_config, parse_command_line_arguments
 from src.propagation.horizons_loader import get_horizons_ephemeris
 from src.initialization.initializer  import get_initial_state
 from typing import Optional
@@ -114,7 +114,7 @@ def main(
     None
   """
   # Process inputs and setup
-  inputs_dict = parse_and_validate_inputs(
+  config = build_config(
     input_object_type,
     norad_id,
     timespan,
@@ -124,22 +124,17 @@ def main(
     zonal_harmonics_list,
     include_srp,
   )
-  config = get_config(inputs_dict)
-
-  # Set up paths and files
-  output_folderpath, spice_kernels_folderpath, horizons_filepath, lsk_filepath = get_simulation_paths(
-    norad_id        = norad_id,
-    obj_name        = config.obj_props['name'],
-    target_start_dt = config.target_start_dt,
-    target_end_dt   = config.target_end_dt,
-  )
 
   # Load files
-  load_files(config.use_spice, spice_kernels_folderpath, lsk_filepath)
+  load_files(
+    config.use_spice,
+    config.spice_kernels_folderpath,
+    config.lsk_filepath,
+  )
 
   # Get Horizons ephemeris
-  propagation_result_horizons = get_horizons_ephemeris(
-    horizons_filepath = horizons_filepath,
+  result_horizons_ephemeris = get_horizons_ephemeris(
+    horizons_filepath = config.horizons_filepath,
     target_start_dt   = config.target_start_dt,
     target_end_dt     = config.target_end_dt,
   )
@@ -149,13 +144,13 @@ def main(
     tle_line1            = config.tle_line1,
     tle_line2            = config.tle_line2,
     integ_time_o         = config.integ_time_o,
-    result_horizons      = propagation_result_horizons,
+    result_horizons      = result_horizons_ephemeris,
     use_horizons_initial = use_horizons_initial,
     to_j2000             = True,
   )
 
   # Run propagations: high-fidelity and SGP4 at Horizons times
-  propagation_result_high_fidelity, propagation_result_sgp4 = run_propagations(
+  result_high_fidelity_propagation, result_sgp4_propagation = run_propagations(
     initial_state            = initial_state,
     integ_time_o             = config.integ_time_o,
     integ_time_f             = config.integ_time_f,
@@ -171,32 +166,32 @@ def main(
     include_zonal_harmonics  = config.include_zonal_harmonics,
     zonal_harmonics_list     = config.zonal_harmonics_list,
     include_srp              = config.include_srp,
-    spice_kernels_folderpath = spice_kernels_folderpath,
-    result_horizons          = propagation_result_horizons, # type: ignore
+    spice_kernels_folderpath = config.spice_kernels_folderpath,
+    result_horizons          = result_horizons_ephemeris, # type: ignore
     tle_line1                = config.tle_line1,
     tle_line2                = config.tle_line2,
   )
   
   # Display results and create plots
   print_results_summary(
-    propagation_result_horizons,
-    propagation_result_high_fidelity,
-    propagation_result_sgp4,
+    result_horizons_ephemeris,
+    result_high_fidelity_propagation,
+    result_sgp4_propagation,
   )
   
-  # Create plots
+  # Generate plots
   generate_plots(
-    result_horizons         = propagation_result_horizons,
-    result_high_fidelity    = propagation_result_high_fidelity,
-    result_sgp4_at_horizons = propagation_result_sgp4,
+    result_horizons         = result_horizons_ephemeris,
+    result_high_fidelity    = result_high_fidelity_propagation,
+    result_sgp4_at_horizons = result_sgp4_propagation,
     target_start_dt         = config.target_start_dt,
-    output_folderpath       = output_folderpath,
+    output_folderpath       = config.output_folderpath,
   )
   
-  # Unload all SPICE kernels if they were loaded
+  # Unload all files (SPICE kernels)
   unload_files(config.use_spice)
   
-  return propagation_result_high_fidelity
+  return result_high_fidelity_propagation
 
 
 if __name__ == "__main__":
