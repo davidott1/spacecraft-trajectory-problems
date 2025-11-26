@@ -7,7 +7,12 @@ def parse_time(
   time_str : str,
 ) -> datetime:
   """
-  Parse a time string in ISO format (e.g., '2025-10-01T00:00:00').
+  Parse a time string in ISO format.
+  
+  Accepted formats include:
+  - "YYYY-MM-DD" (e.g., "2025-10-01")
+  - "YYYY-MM-DDTHH:MM:SS" (e.g., "2025-10-01T12:00:00")
+  - "YYYY-MM-DD HH:MM:SS" (e.g., "2025-10-01 12:00:00")
   
   Output:
   -------
@@ -16,7 +21,14 @@ def parse_time(
   """
   try:
     return datetime.fromisoformat(time_str)
-  except ValueError as e:
+  except ValueError:
+    # Fallback for space separator if fromisoformat fails (older python versions)
+    # or other common formats
+    try:
+      return datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+      pass
+      
     raise ValueError(f"Cannot parse time string: {time_str}")
 
 

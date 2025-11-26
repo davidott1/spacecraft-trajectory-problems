@@ -1,11 +1,11 @@
-from pathlib            import Path
-from datetime           import datetime, timedelta
-from types              import SimpleNamespace
-from typing             import Optional
-from sgp4.api           import Satrec
+from pathlib  import Path
+from datetime import datetime, timedelta
+from types    import SimpleNamespace
+from typing   import Optional
+from sgp4.api import Satrec
 
-from src.input.loader   import load_supported_objects
-from src.input.cli      import parse_time
+from src.input.loader import load_supported_objects
+from src.input.cli    import parse_time
 
 
 def build_config(
