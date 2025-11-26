@@ -13,7 +13,7 @@ def build_config(
   norad_id             : str,
   timespan             : list,
   use_spice            : bool           = False,
-  include_third_body   : bool           = False,
+  third_bodies         : Optional[list] = None,
   zonal_harmonics      : Optional[list] = None,
   include_srp          : bool           = False,
   initial_state_source : str            = 'jpl_horizons',
@@ -31,8 +31,8 @@ def build_config(
       Start and end time in ISO format (e.g., ['2025-10-01T00:00:00', '2025-10-02T00:00:00']).
     use_spice : bool
       Flag to enable/disable SPICE usage.
-    include_third_body : bool
-      Flag to enable/disable third-body gravity.
+    third_bodies : list | None
+      List of third bodies to include (e.g., ['SUN', 'MOON']). None if disabled.
     zonal_harmonics : list | None
       List of zonal harmonics to include (e.g., ['J2', 'J3']). None if disabled.
       Empty list [] implies default ['J2'].
@@ -58,6 +58,10 @@ def build_config(
   initial_state_source = initial_state_source.lower().replace('-', '_').replace(' ', '_')
   if 'horizons' in initial_state_source:
     initial_state_source = 'jpl_horizons'
+
+  # Handle third bodies logic
+  include_third_body = third_bodies is not None
+  third_bodies_list  = [b.upper() for b in third_bodies] if third_bodies is not None else []
 
   # Handle zonal harmonics logic
   include_zonal_harmonics = zonal_harmonics is not None
@@ -134,6 +138,7 @@ def build_config(
     area_srp                 = obj_props['srp']['area__m2'],
     use_spice                = use_spice,
     include_third_body       = include_third_body,
+    third_bodies_list        = third_bodies_list,
     include_zonal_harmonics  = include_zonal_harmonics,
     zonal_harmonics_list     = zonal_harmonics_list if zonal_harmonics_list else [],
     include_srp              = include_srp,

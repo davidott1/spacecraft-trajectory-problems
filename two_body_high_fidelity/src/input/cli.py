@@ -189,19 +189,22 @@ def parse_command_line_arguments(
     help    = "Enable SPICE functionality (disabled by default).",
   )
   parser.add_argument(
-    '--include-third-body',
-    dest    = 'include_third_body',
-    action  = 'store_true',
-    default = False,
-    help    = "Enable third-body gravity (disabled by default).",
+    '--third-bodies',
+    '--include-third-bodies',
+    dest    = 'third_bodies',
+    nargs   = '+', # Accepts 1 or more args.
+    choices = ['SUN', 'MOON', 'sun', 'moon'],
+    default = None,
+    help    = "Enable third-body gravity. Required args: SUN MOON (e.g. --third-bodies SUN).",
   )
   parser.add_argument(
+    '--zonal-harmonics',
     '--include-zonal-harmonics',
     dest    = 'zonal_harmonics',
-    nargs   = '*', # Accepts 0 or more args. If 0 (flag only), returns [].
+    nargs   = '+', # Accepts 1 or more args.
     choices = ['J2', 'J3', 'J4'],
     default = None,
-    help    = "Enable zonal harmonics. Optional args: J2 J3 J4 (default: J2 if flag present without args).",
+    help    = "Enable zonal harmonics. Required args: J2 J3 J4 (e.g. --zonal-harmonics J2).",
   )
   parser.add_argument(
     '--include-srp',

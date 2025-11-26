@@ -26,9 +26,9 @@ Usage:
   --input-object-type          Yes        Type of input object (e.g., norad-id)
   --norad-id                   Yes*       NORAD ID (required for norad-id type)
   --timespan                   Yes        Start and end time (ISO format)
-  --include-zonal-harmonics    No         Enable zonal harmonics (default J2 if no args provided)
+  --zonal-harmonics            No         Enable zonal harmonics (requires arguments e.g. J2)
   --include-spice              No         Enable SPICE functionality
-  --include-third-body         No         Enable third-body gravity
+  --third-bodies               No         Enable third-body gravity (requires arguments e.g. SUN)
   --include-srp                No         Enable Solar Radiation Pressure
 
   Example Commands:
@@ -37,16 +37,16 @@ Usage:
       --norad-id <id> \
       --timespan <start> <end> \
       [--include-spice] \
-      [--include-third-body] \
+      [--third-bodies SUN MOON] \
       [--include-srp] \
-      [--include-zonal-harmonics [J2 J3 J4]]
+      [--zonal-harmonics J2 J3 J4]
 
     python -m src.main \
       --input-object-type norad-id \
       --norad-id 25544 \
       --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00 \
-      --include-zonal-harmonics J2 J3 J4 \
-      --include-third-body \
+      --zonal-harmonics J2 J3 J4 \
+      --third-bodies SUN MOON \
       --include-srp \
       --include-spice
 
@@ -69,7 +69,7 @@ def main(
   norad_id                   : str,
   timespan                   : list,
   use_spice                  : bool           = False,
-  include_third_body         : bool           = False,
+  third_bodies               : Optional[list] = None,
   zonal_harmonics            : Optional[list] = None,
   include_srp                : bool           = False,
   initial_state_source       : str            = 'jpl_horizons',
@@ -92,8 +92,8 @@ def main(
       Start and end time for propagation in ISO format.
     use_spice : bool
       Flag to enable/disable SPICE usage.
-    include_third_body : bool
-      Flag to enable/disable third-body gravity forces.
+    third_bodies : list | None
+      List of third bodies to include (e.g., ['SUN', 'MOON']). None means disabled.
     zonal_harmonics : list | None
       List of specific zonal harmonics to include (e.g., ['J2', 'J3', 'J4']).
       None means disabled. Empty list means default (J2).
@@ -113,7 +113,7 @@ def main(
     norad_id,
     timespan,
     use_spice,
-    include_third_body,
+    third_bodies,
     zonal_harmonics,
     include_srp,
     initial_state_source,
@@ -157,6 +157,7 @@ def main(
     area_srp                 = config.area_srp,
     use_spice                = config.use_spice,
     include_third_body       = config.include_third_body,
+    third_bodies_list        = config.third_bodies_list,
     include_zonal_harmonics  = config.include_zonal_harmonics,
     zonal_harmonics_list     = config.zonal_harmonics_list,
     include_srp              = config.include_srp,
@@ -195,7 +196,7 @@ if __name__ == "__main__":
     args.norad_id,
     args.timespan,
     args.use_spice,
-    args.include_third_body,
+    args.third_bodies,
     args.zonal_harmonics,
     args.include_srp,
     args.initial_state_source,
