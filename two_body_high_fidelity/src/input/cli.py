@@ -206,17 +206,12 @@ def parse_command_line_arguments(
     help    = "Enable Solar Radiation Pressure (disabled by default).",
   )
   parser.add_argument(
-    '--use-horizons-initial-guess',
-    dest    = 'use_horizons_initial_guess',
-    action  = 'store_true',
-    default = True,
-    help    = "Use Horizons ephemeris for initial state (default: True).",
-  )
-  parser.add_argument(
-    '--use-tle-initial-guess',
-    dest   = 'use_horizons_initial_guess',
-    action = 'store_false',
-    help   = "Use TLE for initial state (disables --use-horizons-initial-guess).",
+    '--initial-state',
+    dest    = 'initial_state',
+    type    = str,
+    choices = ['horizons', 'jpl-horizons', 'jpl_horizons', 'jpl horizons', 'tle'],
+    default = 'horizons',
+    help    = "Source for initial state vector (default: horizons).",
   )
 
   # Parse arguments

@@ -76,7 +76,7 @@ def main(
   include_zonal_harmonics    : bool           = False,
   zonal_harmonics_list       : Optional[list] = None,
   include_srp                : bool           = False,
-  use_horizons_initial_guess : bool           = True,
+  initial_state_source       : str            = 'jpl_horizons',
 ) -> dict:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -104,9 +104,8 @@ def main(
       List of specific zonal harmonics to include (e.g., ['J2', 'J3', 'J4']).
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
-    use_horizons_initial : bool
-      Flag to use JPL Horizons ephemeris for the initial state vector.
-      If False, the TLE is used.
+    initial_state_source : str
+      Source for the initial state vector ('jpl_horizons' or 'tle').
   
   Output:
   -------
@@ -123,7 +122,7 @@ def main(
     include_zonal_harmonics,
     zonal_harmonics_list,
     include_srp,
-    use_horizons_initial_guess,
+    initial_state_source,
   )
 
   # Load files
@@ -205,5 +204,5 @@ if __name__ == "__main__":
     args.include_zonal_harmonics,
     args.zonal_harmonics_list,
     args.include_srp,
-    args.use_horizons_initial_guess,
+    args.initial_state,
   )
