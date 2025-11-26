@@ -141,12 +141,12 @@ def main(
 
   # Determine initial state (from Horizons if available, else TLE)
   initial_state = get_initial_state(
-    tle_line1                  = config.tle_line1,
-    tle_line2                  = config.tle_line2,
-    integ_time_o               = config.integ_time_o,
-    result_horizons            = result_horizons_ephemeris,
-    use_horizons_initial_guess = config.use_horizons_initial_guess,
-    to_j2000                   = True,
+    tle_line1            = config.tle_line1,
+    tle_line2            = config.tle_line2,
+    integ_time_o         = config.integ_time_o,
+    result_horizons      = result_horizons_ephemeris,
+    initial_state_source = config.initial_state_source,
+    to_j2000             = True,
   )
 
   # Run propagations: high-fidelity and SGP4 at Horizons times
@@ -204,5 +204,5 @@ if __name__ == "__main__":
     args.include_zonal_harmonics,
     args.zonal_harmonics_list,
     args.include_srp,
-    args.initial_state,
+    args.initial_state_source,
   )

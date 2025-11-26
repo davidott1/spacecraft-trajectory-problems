@@ -17,7 +17,7 @@ def build_config(
   include_zonal_harmonics    : bool = False,
   zonal_harmonics_list       : Optional[list] = None,
   include_srp                : bool = False,
-  initial_state_source       : str = 'horizons',
+  initial_state_source       : str = 'jpl_horizons',
 ) -> SimpleNamespace:
   """
   Parse, validate, and set up input parameters for orbit propagation.
@@ -41,7 +41,7 @@ def build_config(
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
     initial_state_source : str
-      Source for the initial state vector ('horizons' or 'tle').
+      Source for the initial state vector ('jpl_horizons' or 'tle').
   
   Output:
   -------
@@ -55,9 +55,6 @@ def build_config(
   """
   # Normalize input object type
   input_object_type = input_object_type.replace('-', '_').replace(' ', '_')
-
-  # Determine boolean flag for initial state
-  use_horizons_initial_guess = 'horizons' in initial_state_source.lower()
 
   # Unpack timespan
   start_time_str = timespan[0]
@@ -130,7 +127,7 @@ def build_config(
     include_zonal_harmonics    = include_zonal_harmonics,
     zonal_harmonics_list       = zonal_harmonics_list if zonal_harmonics_list else [],
     include_srp                = include_srp,
-    use_horizons_initial_guess = use_horizons_initial_guess,
+    initial_state_source       = initial_state_source,
     output_folderpath          = paths['output_folderpath'],
     spice_kernels_folderpath   = paths['spice_kernels_folderpath'],
     horizons_filepath          = paths['horizons_filepath'],

@@ -7,12 +7,12 @@ from src.model.time_converter    import utc_to_et
 
 
 def get_initial_state(
-  tle_line1                  : str,
-  tle_line2                  : str,
-  integ_time_o               : float,
-  result_horizons            : Optional[dict],
-  use_horizons_initial_guess : bool = True,
-  to_j2000                   : bool = True,
+  tle_line1            : str,
+  tle_line2            : str,
+  integ_time_o         : float,
+  result_horizons      : Optional[dict],
+  initial_state_source : str = 'jpl_horizons',
+  to_j2000             : bool = True,
 ) -> np.ndarray:
   """
   Get initial Cartesian state from Horizons (if available) or TLE.
@@ -27,8 +27,8 @@ def get_initial_state(
       The start time of the integration in seconds from the TLE epoch.
     result_horizons : dict | None
       The dictionary containing Horizons ephemeris data.
-    use_horizons_initial : bool
-      If True and Horizons data is available, use it. Otherwise use TLE.
+    initial_state_source : str
+      Source for the initial state ('jpl_horizons' or 'tle').
     to_j2000 : bool
       Flag to indicate if the output state should be in the J2000 frame.
   
@@ -39,8 +39,11 @@ def get_initial_state(
   """
   print("\nInitial State")
   
+  # Determine if we should use Horizons
+  use_horizons = 'jpl_horizons' in initial_state_source.lower()
+
   # 1. Use Horizons if available and requested
-  if use_horizons_initial_guess and result_horizons and result_horizons.get('success'):
+  if use_horizons and result_horizons and result_horizons.get('success'):
     horizons_initial_state = result_horizons['state'][:, 0]
     
     epoch_dt = result_horizons['time_o']

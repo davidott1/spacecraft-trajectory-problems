@@ -207,7 +207,8 @@ def parse_command_line_arguments(
   )
   parser.add_argument(
     '--initial-state',
-    dest    = 'initial_state',
+    '--initial-state-source',
+    dest    = 'initial_state_source',
     type    = str,
     choices = ['horizons', 'jpl-horizons', 'jpl_horizons', 'jpl horizons', 'tle'],
     default = 'horizons',
