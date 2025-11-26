@@ -414,21 +414,24 @@ def parse_command_line_arguments() -> argparse.Namespace:
   # Optional arguments
   parser.add_argument(
     '--include-spice',
-    dest   = 'use_spice',
-    action = 'store_true',
-    help   = "Enable SPICE functionality (disabled by default).",
+    dest    = 'use_spice',
+    action  = 'store_true',
+    default = False,
+    help    = "Enable SPICE functionality (disabled by default).",
   )
   parser.add_argument(
     '--include-third-body',
-    dest   = 'include_third_body',
-    action = 'store_true',
-    help   = "Enable third-body gravity (disabled by default).",
+    dest    = 'include_third_body',
+    action  = 'store_true',
+    default = False,
+    help    = "Enable third-body gravity (disabled by default).",
   )
   parser.add_argument(
     '--include-zonal-harmonics',
-    dest   = 'include_zonal_harmonics',
-    action = 'store_true',
-    help   = "Enable zonal harmonics (disabled by default).",
+    dest    = 'include_zonal_harmonics',
+    action  = 'store_true',
+    default = False,
+    help    = "Enable zonal harmonics (disabled by default).",
   )
   parser.add_argument(
     '--zonal-harmonics',
@@ -440,19 +443,25 @@ def parse_command_line_arguments() -> argparse.Namespace:
   )
   parser.add_argument(
     '--include-srp',
-    dest   = 'include_srp',
-    action = 'store_true',
-    help   = "Enable Solar Radiation Pressure (disabled by default).",
+    dest    = 'include_srp',
+    action  = 'store_true',
+    default = False,
+    help    = "Enable Solar Radiation Pressure (disabled by default).",
+  )
+  parser.add_argument(
+    '--use-horizons-initial-guess',
+    dest    = 'use_horizons_initial',
+    action  = 'store_true',
+    default = True,
+    help    = "Use Horizons ephemeris for initial state (default: True).",
+  )
+  parser.add_argument(
+    '--use-tle-initial-guess',
+    dest   = 'use_horizons_initial',
+    action = 'store_false',
+    help   = "Use TLE for initial state (disables --use-horizons-initial-guess).",
   )
 
-  # Set default values for optional flags
-  parser.set_defaults(
-    use_spice               = False,
-    include_third_body      = False,
-    include_zonal_harmonics = False,
-    include_srp             = False,
-  )
-  
   # Parse arguments
   args = parser.parse_args()
   

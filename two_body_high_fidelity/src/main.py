@@ -78,6 +78,7 @@ def main(
   include_zonal_harmonics : bool = False,
   zonal_harmonics_list    : list = None,
   include_srp             : bool = False,
+  use_horizons_initial    : bool = True,
 ) -> dict:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -104,6 +105,8 @@ def main(
       List of zonal harmonics to include.
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
+    use_horizons_initial : bool
+      Flag to use Horizons for initial state (default: True).
   
   Output:
   -------
@@ -140,7 +143,7 @@ def main(
     tle_line2            = config.tle_line2,
     integ_time_o         = config.integ_time_o,
     result_horizons      = result_horizons,
-    use_horizons_initial = True,
+    use_horizons_initial = use_horizons_initial,
     to_j2000             = True,
   )
 
@@ -196,4 +199,5 @@ if __name__ == "__main__":
     args.include_zonal_harmonics,
     args.zonal_harmonics_list,
     args.include_srp,
+    args.use_horizons_initial,
   )
