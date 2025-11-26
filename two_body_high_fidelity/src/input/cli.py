@@ -197,18 +197,11 @@ def parse_command_line_arguments(
   )
   parser.add_argument(
     '--include-zonal-harmonics',
-    dest    = 'include_zonal_harmonics',
-    action  = 'store_true',
-    default = False,
-    help    = "Enable zonal harmonics (disabled by default).",
-  )
-  parser.add_argument(
-    '--zonal-harmonics',
-    dest    = 'zonal_harmonics_list',
-    nargs   = '+',
+    dest    = 'zonal_harmonics',
+    nargs   = '*', # Accepts 0 or more args. If 0 (flag only), returns [].
     choices = ['J2', 'J3', 'J4'],
-    default = ['J2'],
-    help    = "List of zonal harmonics to include (default: J2).",
+    default = None,
+    help    = "Enable zonal harmonics. Optional args: J2 J3 J4 (default: J2 if flag present without args).",
   )
   parser.add_argument(
     '--include-srp',

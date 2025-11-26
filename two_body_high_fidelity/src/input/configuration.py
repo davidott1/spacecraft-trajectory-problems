@@ -9,15 +9,14 @@ from src.input.cli    import parse_time
 
 
 def build_config(
-  input_object_type          : str,
-  norad_id                   : str,
-  timespan                   : list,
-  use_spice                  : bool = False,
-  include_third_body         : bool = False,
-  include_zonal_harmonics    : bool = False,
-  zonal_harmonics_list       : Optional[list] = None,
-  include_srp                : bool = False,
-  initial_state_source       : str = 'jpl_horizons',
+  input_object_type    : str,
+  norad_id             : str,
+  timespan             : list,
+  use_spice            : bool           = False,
+  include_third_body   : bool           = False,
+  zonal_harmonics      : Optional[list] = None,
+  include_srp          : bool           = False,
+  initial_state_source : str            = 'jpl_horizons',
 ) -> SimpleNamespace:
   """
   Parse, validate, and set up input parameters for orbit propagation.
@@ -34,10 +33,9 @@ def build_config(
       Flag to enable/disable SPICE usage.
     include_third_body : bool
       Flag to enable/disable third-body gravity.
-    include_zonal_harmonics : bool
-      Flag to enable/disable zonal harmonics.
-    zonal_harmonics_list : list
-      List of zonal harmonics to include (e.g., ['J2', 'J3']).
+    zonal_harmonics : list | None
+      List of zonal harmonics to include (e.g., ['J2', 'J3']). None if disabled.
+      Empty list [] implies default ['J2'].
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
     initial_state_source : str
@@ -60,6 +58,13 @@ def build_config(
   initial_state_source = initial_state_source.lower().replace('-', '_').replace(' ', '_')
   if 'horizons' in initial_state_source:
     initial_state_source = 'jpl_horizons'
+
+  # Handle zonal harmonics logic
+  include_zonal_harmonics = zonal_harmonics is not None
+  if zonal_harmonics is not None and len(zonal_harmonics) == 0:
+    zonal_harmonics_list = ['J2']
+  else:
+    zonal_harmonics_list = zonal_harmonics
 
   # Unpack timespan
   start_time_str = timespan[0]
@@ -111,32 +116,32 @@ def build_config(
   )
   
   return SimpleNamespace(
-    obj_props                  = obj_props,
-    tle_line1                  = tle_line1,
-    tle_line2                  = tle_line2,
-    tle_epoch_dt               = tle_epoch_dt,
-    tle_epoch_jd               = tle_epoch_jd,
-    target_start_dt            = target_start_dt,
-    target_end_dt              = target_end_dt,
-    delta_time                 = delta_time,
-    integ_time_o               = integ_time_o,
-    integ_time_f               = integ_time_f,
-    delta_integ_time           = delta_integ_time,
-    mass                       = obj_props['mass__kg'],
-    cd                         = obj_props['drag']['coeff'],
-    area_drag                  = obj_props['drag']['area__m2'],
-    cr                         = obj_props['srp']['coeff'],
-    area_srp                   = obj_props['srp']['area__m2'],
-    use_spice                  = use_spice,
-    include_third_body         = include_third_body,
-    include_zonal_harmonics    = include_zonal_harmonics,
-    zonal_harmonics_list       = zonal_harmonics_list if zonal_harmonics_list else [],
-    include_srp                = include_srp,
-    initial_state_source       = initial_state_source,
-    output_folderpath          = paths['output_folderpath'],
-    spice_kernels_folderpath   = paths['spice_kernels_folderpath'],
-    horizons_filepath          = paths['horizons_filepath'],
-    lsk_filepath               = paths['lsk_filepath'],
+    obj_props                = obj_props,
+    tle_line1                = tle_line1,
+    tle_line2                = tle_line2,
+    tle_epoch_dt             = tle_epoch_dt,
+    tle_epoch_jd             = tle_epoch_jd,
+    target_start_dt          = target_start_dt,
+    target_end_dt            = target_end_dt,
+    delta_time               = delta_time,
+    integ_time_o             = integ_time_o,
+    integ_time_f             = integ_time_f,
+    delta_integ_time         = delta_integ_time,
+    mass                     = obj_props['mass__kg'],
+    cd                       = obj_props['drag']['coeff'],
+    area_drag                = obj_props['drag']['area__m2'],
+    cr                       = obj_props['srp']['coeff'],
+    area_srp                 = obj_props['srp']['area__m2'],
+    use_spice                = use_spice,
+    include_third_body       = include_third_body,
+    include_zonal_harmonics  = include_zonal_harmonics,
+    zonal_harmonics_list     = zonal_harmonics_list if zonal_harmonics_list else [],
+    include_srp              = include_srp,
+    initial_state_source     = initial_state_source,
+    output_folderpath        = paths['output_folderpath'],
+    spice_kernels_folderpath = paths['spice_kernels_folderpath'],
+    horizons_filepath        = paths['horizons_filepath'],
+    lsk_filepath             = paths['lsk_filepath'],
   )
 
 

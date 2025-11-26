@@ -26,8 +26,7 @@ Usage:
   --input-object-type          Yes        Type of input object (e.g., norad-id)
   --norad-id                   Yes*       NORAD ID (required for norad-id type)
   --timespan                   Yes        Start and end time (ISO format)
-  --include-zonal-harmonics    No         Enable zonal harmonics
-  --zonal-harmonics            No         List of zonal harmonics: J2 (default), J3, and J4
+  --include-zonal-harmonics    No         Enable zonal harmonics (default J2 if no args provided)
   --include-spice              No         Enable SPICE functionality
   --include-third-body         No         Enable third-body gravity
   --include-srp                No         Enable Solar Radiation Pressure
@@ -40,15 +39,13 @@ Usage:
       [--include-spice] \
       [--include-third-body] \
       [--include-srp] \
-      [--include-zonal-harmonics] \
-      [--zonal-harmonics <J2|J3|J4>]
+      [--include-zonal-harmonics [J2 J3 J4]]
 
     python -m src.main \
       --input-object-type norad-id \
       --norad-id 25544 \
       --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00 \
-      --include-zonal-harmonics \
-      --zonal-harmonics J2 J3 J4 \
+      --include-zonal-harmonics J2 J3 J4 \
       --include-third-body \
       --include-srp \
       --include-spice
@@ -73,8 +70,7 @@ def main(
   timespan                   : list,
   use_spice                  : bool           = False,
   include_third_body         : bool           = False,
-  include_zonal_harmonics    : bool           = False,
-  zonal_harmonics_list       : Optional[list] = None,
+  zonal_harmonics            : Optional[list] = None,
   include_srp                : bool           = False,
   initial_state_source       : str            = 'jpl_horizons',
 ) -> dict:
@@ -98,10 +94,9 @@ def main(
       Flag to enable/disable SPICE usage.
     include_third_body : bool
       Flag to enable/disable third-body gravity forces.
-    include_zonal_harmonics : bool
-      Flag to enable/disable zonal harmonic gravity terms.
-    zonal_harmonics_list : list
+    zonal_harmonics : list | None
       List of specific zonal harmonics to include (e.g., ['J2', 'J3', 'J4']).
+      None means disabled. Empty list means default (J2).
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
     initial_state_source : str
@@ -119,8 +114,7 @@ def main(
     timespan,
     use_spice,
     include_third_body,
-    include_zonal_harmonics,
-    zonal_harmonics_list,
+    zonal_harmonics,
     include_srp,
     initial_state_source,
   )
@@ -195,14 +189,14 @@ def main(
 
 if __name__ == "__main__":
   args = parse_command_line_arguments()
+  
   main(
     args.input_object_type,
     args.norad_id,
     args.timespan,
     args.use_spice,
     args.include_third_body,
-    args.include_zonal_harmonics,
-    args.zonal_harmonics_list,
+    args.zonal_harmonics,
     args.include_srp,
     args.initial_state_source,
   )

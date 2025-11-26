@@ -48,10 +48,6 @@ def load_files(
       Path to the SPICE kernels folder.
     lsk_filepath : Path
       Path to the leap seconds kernel file.
-  
-  Output:
-  -------
-    None
   """
   print("\nLoad Files")
   print(f"  Project Folderpath : {Path.cwd()}")
@@ -70,10 +66,6 @@ def unload_files(
   ------
     use_spice : bool
       Flag to enable/disable SPICE usage.
-  
-  Output:
-  -------
-    None
   """
   # Unload SPICE files if SPICE was enabled
   unload_spice_files(use_spice)
@@ -136,7 +128,7 @@ def load_horizons_ephemeris(
   time_end_dt   : Optional[datetime] = None,
 ) -> dict:
   """
-  Load ephemeris from a JPL Horizons CSV file.
+  Load ephemeris from a custom JPL Horizons .csv file produced by the download script module: src.download.ephems_and_tles
   
   Strictly expects:
   - Row 1  : Header (variable names)
