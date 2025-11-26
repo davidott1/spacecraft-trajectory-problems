@@ -69,14 +69,14 @@ def modify_tle_bstar(
 
 
 def propagate_tle(
-  tle_line1       : str,
-  tle_line2       : str,
-  time_o          : Optional[float] = None,
-  time_f          : Optional[float] = None,
-  num_points      : int  = 100,
-  time_eval       : Optional[np.ndarray] = None,
-  to_j2000        : bool = False,
-  disable_drag    : bool = False,
+  tle_line1    : str,
+  tle_line2    : str,
+  time_o       : Optional[float] = None,
+  time_f       : Optional[float] = None,
+  num_points   : int  = 100,
+  time_eval    : Optional[np.ndarray] = None,
+  to_j2000     : bool = False,
+  disable_drag : bool = False,
 ) -> dict:
   """
   Propagate orbit from TLE using SGP4.
