@@ -67,7 +67,7 @@ from src.utility.printer             import print_results_summary
 from src.load.parser                 import parse_command_line_arguments
 from src.load.configurer             import build_config
 from src.propagation.horizons_loader import get_horizons_ephemeris
-from src.initialization.initializer  import get_initial_state
+from src.model.initial_state_guesser import get_initial_state
 from typing import Optional
 
 
