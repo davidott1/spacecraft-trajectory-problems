@@ -41,7 +41,7 @@ def get_initial_state(
   
   # Determine if we should use Horizons
   use_horizons = 'jpl_horizons' in initial_state_source.lower()
-  breakpoint()
+
   # 1. Use Horizons if available and requested
   if use_horizons and result_horizons and result_horizons.get('success'):
     horizons_initial_state = result_horizons['state'][:, 0]
