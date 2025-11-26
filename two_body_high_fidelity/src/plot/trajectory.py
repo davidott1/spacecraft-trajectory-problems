@@ -2,20 +2,30 @@ import matplotlib.pyplot as plt
 import numpy             as np
 import datetime
 
-from mpl_toolkits.mplot3d import Axes3D
 from datetime             import timedelta
 from pathlib              import Path
 from typing               import Optional
+from matplotlib.figure    import Figure
 
 from src.plot.utility    import get_equal_limits
 from src.model.constants import CONVERTER, PHYSICALCONSTANTS
 
 
 def plot_3d_trajectories(
-  result: dict,
-):
+  result : dict,
+) -> Figure:
   """
   Plot 3D position and velocity trajectories in a 1x2 grid.
+  
+  Input:
+  ------
+    result : dict
+      Propagation result dictionary containing 'state' (6xN array).
+      
+  Output:
+  -------
+    matplotlib.figure.Figure
+      Figure object containing the 3D plots.
   """
   fig = plt.figure(figsize=(18,10))
   
@@ -71,17 +81,22 @@ def plot_3d_trajectories(
 
 def plot_time_series(
   result : dict,
-  epoch  : datetime = None,  # type: ignore
-):
+  epoch  : Optional[datetime.datetime] = None,
+) -> Figure:
   """
   Plot position and velocity components vs time in a 2x1 grid.
   
   Input:
   ------
-  result : dict
-      Propagation result dictionary.
-  epoch : datetime, optional
+    result : dict
+      Propagation result dictionary containing 'plot_time_s', 'state', and 'coe'.
+    epoch : datetime, optional
       Reference epoch for UTC time axis.
+      
+  Output:
+  -------
+    matplotlib.figure.Figure
+      Figure object containing the time series plots.
   """
   
   
@@ -219,17 +234,26 @@ def plot_time_series(
 
 
 def plot_3d_error(
-  result_ref: dict,
-  result_cmp: dict,
-  title: str = "Position and Velocity Error",
-):
+  result_ref : dict,
+  result_cmp : dict,
+  title      : str = "Position and Velocity Error",
+) -> Figure:
   """
   Plot 3D position and velocity error trajectories in a 1x2 grid.
   
   Input:
-      result_ref: Reference result (e.g., SGP4)
-      result_cmp: Comparison result (e.g., high-fidelity)
-      title: Plot title
+  ------
+    result_ref : dict
+      Reference result dictionary (e.g., SGP4).
+    result_cmp : dict
+      Comparison result dictionary (e.g., high-fidelity).
+    title : str
+      Plot title.
+      
+  Output:
+  -------
+    matplotlib.figure.Figure
+      Figure object containing the 3D error plots.
   """
   fig = plt.figure(figsize=(18,10))
   
@@ -285,190 +309,32 @@ def plot_3d_error(
 
 
 def plot_time_series_error(
-  result_ref: dict,
-  result_cmp: dict,
-  title: str = "Time Series Error",
-):
-  """
-  Plot position, velocity, and COE errors vs time.
-  
-  Input:
-      result_ref: Reference result (e.g., SGP4)
-      result_cmp: Comparison result (e.g., high-fidelity)
-      title: Plot title
-  """
-  fig = plt.figure(figsize=(18,10))
-  
-  # Interpolate comparison result to reference time points
-  from scipy.interpolate import interp1d
-  
-  time_ref  = result_ref['plot_time_s']
-  time_cmp  = result_cmp['plot_time_s']
-  state_cmp = result_cmp['state']
-  coe_cmp   = result_cmp['coe']
-  
-  # Interpolate state
-  state_cmp_interp = np.zeros((6, len(time_ref)))
-  for i in range(6):
-    interpolator = interp1d(time_cmp, state_cmp[i, :], kind='cubic', fill_value='extrapolate')
-    state_cmp_interp[i, :] = interpolator(time_ref)
-  
-  # Interpolate COEs
-  coe_cmp_interp = {}
-  for key in coe_cmp.keys():
-    interpolator = interp1d(time_cmp, coe_cmp[key], kind='cubic', fill_value='extrapolate')
-    coe_cmp_interp[key] = interpolator(time_ref)
-  
-  # Calculate errors in inertial frame (comparison - reference)
-  state_ref = result_ref['state']
-  pos_error_inertial = state_cmp_interp[0:3, :] - state_ref[0:3, :]
-  vel_error_inertial = state_cmp_interp[3:6, :] - state_ref[3:6, :]
-  
-  # Transform errors to RIC frame (using reference trajectory)
-  pos_error_ric = np.zeros((3, len(time_ref)))
-  vel_error_ric = np.zeros((3, len(time_ref)))
-  
-  for i in range(len(time_ref)):
-    # Reference position and velocity
-    r_ref = state_ref[0:3, i]
-    v_ref = state_ref[3:6, i]
-    
-    # Compute RIC frame unit vectors
-    r_hat = r_ref / np.linalg.norm(r_ref)  # Radial
-    h_vec = np.cross(r_ref, v_ref)
-    h_hat = h_vec / np.linalg.norm(h_vec)  # Normal (cross-track)
-    i_hat = np.cross(h_hat, r_hat)         # In-track
-    
-    # Rotation matrix from inertial to RIC
-    R_inertial_to_ric = np.array([r_hat, i_hat, h_hat])
-    
-    # Transform errors
-    pos_error_ric[:, i] = R_inertial_to_ric @ pos_error_inertial[:, i]
-    vel_error_ric[:, i] = R_inertial_to_ric @ vel_error_inertial[:, i]
-  
-  pos_error_mag = np.linalg.norm(pos_error_ric, axis=0)
-  vel_error_mag = np.linalg.norm(vel_error_ric, axis=0)
-  
-  coe_ref = result_ref['coe']
-  
-  # Plot position error in RIC frame (spans rows 0-2, column 0)
-  ax_pos = plt.subplot2grid((6, 2), (0, 0), rowspan=3)
-  ax_pos.plot(time_ref, pos_error_ric[0, :], 'r-', label='Radial', linewidth=1.5)
-  ax_pos.plot(time_ref, pos_error_ric[1, :], 'g-', label='In-track', linewidth=1.5)
-  ax_pos.plot(time_ref, pos_error_ric[2, :], 'b-', label='Cross-track', linewidth=1.5)
-  ax_pos.plot(time_ref, pos_error_mag, 'k-', label='Magnitude', linewidth=2)
-  ax_pos.tick_params(labelbottom=False)
-  ax_pos.set_ylabel('Position Error (RIC)\n[m]')
-  ax_pos.legend()
-  ax_pos.grid(True)
-  ax_pos.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
-  
-  # Plot velocity error in RIC frame (spans rows 3-5, column 0)
-  ax_vel = plt.subplot2grid((6, 2), (3, 0), rowspan=3, sharex=ax_pos)
-  ax_vel.plot(time_ref, vel_error_ric[0, :], 'r-', label='Radial', linewidth=1.5)
-  ax_vel.plot(time_ref, vel_error_ric[1, :], 'g-', label='In-track', linewidth=1.5)
-  ax_vel.plot(time_ref, vel_error_ric[2, :], 'b-', label='Cross-track', linewidth=1.5)
-  ax_vel.plot(time_ref, vel_error_mag, 'k-', label='Magnitude', linewidth=2)
-  ax_vel.set_xlabel('Time\n[s]')
-  ax_vel.set_ylabel('Velocity Error (RIC)\n[m/s]')
-  ax_vel.legend()
-  ax_vel.grid(True)
-  ax_vel.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
-  
-  # Plot SMA error (row 0, column 1)
-  ax_sma = plt.subplot2grid((6, 2), (0, 1), sharex=ax_pos)
-  if 'sma' in result_ref['coe'] and 'sma' in coe_cmp:
-      sma_error = result_ref['coe']['sma'] - coe_cmp['sma']
-      ax_sma.plot(time_ref, sma_error, 'b-', linewidth=1.5)
-  ax_sma.tick_params(labelbottom=False)
-  ax_sma.set_ylabel('SMA Error\n[m]')
-  ax_sma.grid(True)
-  ax_sma.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
-  
-  # Plot eccentricity error (row 1, column 1)
-  ax_ecc = plt.subplot2grid((6, 2), (1, 1), sharex=ax_pos)
-  if 'ecc' in result_ref['coe'] and 'ecc' in coe_cmp:
-      ecc_error = result_ref['coe']['ecc'] - coe_cmp['ecc']
-      ax_ecc.plot(time_ref, ecc_error, 'b-', linewidth=1.5)
-  ax_ecc.tick_params(labelbottom=False)
-  ax_ecc.set_ylabel('Eccentricity Error\n[-]')
-  ax_ecc.grid(True)
-  ax_ecc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
-  
-  # Plot inclination error (row 2, column 1)
-  ax_inc = plt.subplot2grid((6, 2), (2, 1), sharex=ax_pos)
-  if 'inc' in result_ref['coe'] and 'inc' in coe_cmp:
-      inc_error = (result_ref['coe']['inc'] - coe_cmp['inc']) * CONVERTER.DEG_PER_RAD
-      ax_inc.plot(time_ref, inc_error, 'b-', linewidth=1.5)
-  ax_inc.tick_params(labelbottom=False)
-  ax_inc.set_ylabel('Inclination Error\n[deg]')
-  ax_inc.grid(True)
-  ax_inc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
-  
-  # Plot RAAN error (row 3, column 1)
-  ax_raan = plt.subplot2grid((6, 2), (3, 1), sharex=ax_pos)
-  if 'raan' in result_ref['coe'] and 'raan' in coe_cmp:
-      # Handle angle wrapping for RAAN
-      raan_error_rad = np.arctan2(np.sin(result_ref['coe']['raan'] - coe_cmp['raan']), 
-                                   np.cos(result_ref['coe']['raan'] - coe_cmp['raan']))
-      raan_error = raan_error_rad * CONVERTER.DEG_PER_RAD
-      ax_raan.plot(time_ref, raan_error, 'b-', linewidth=1.5)
-  ax_raan.tick_params(labelbottom=False)
-  ax_raan.set_ylabel('RAAN Error\n[deg]')
-  ax_raan.grid(True)
-  ax_raan.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
-  
-  # Plot argument of perigee error (row 4, column 1)
-  ax_argp = plt.subplot2grid((6, 2), (4, 1), sharex=ax_pos)
-  if 'argp' in result_ref['coe'] and 'argp' in coe_cmp:
-      # Handle angle wrapping for ArgP
-      argp_error_rad = np.arctan2(np.sin(result_ref['coe']['argp'] - coe_cmp['argp']), 
-                                   np.cos(result_ref['coe']['argp'] - coe_cmp['argp']))
-      argp_error = argp_error_rad * CONVERTER.DEG_PER_RAD
-      ax_argp.plot(time_ref, argp_error, 'b-', linewidth=1.5)
-  ax_argp.tick_params(labelbottom=False)
-  ax_argp.set_ylabel('Argument of\nPerigee Error\n[deg]')
-  ax_argp.grid(True)
-  ax_argp.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
-  
-  # Plot true anomaly error vs time (row 5, column 1)
-  ax_ta = plt.subplot2grid((6, 2), (5, 1), sharex=ax_pos)
-  if 'ta' in result_ref['coe'] and 'ta' in coe_cmp:
-      # Handle angle wrapping for TA
-      ta_error_rad = np.arctan2(np.sin(result_ref['coe']['ta'] - coe_cmp['ta']), 
-                                 np.cos(result_ref['coe']['ta'] - coe_cmp['ta']))
-      ta_error = ta_error_rad * CONVERTER.DEG_PER_RAD
-      ax_ta.plot(time_ref, ta_error, 'b-', linewidth=1.5)
-  ax_ta.set_xlabel('Time\n[s]')
-  ax_ta.set_ylabel('True Anomaly\nError\n[deg]')
-  ax_ta.grid(True)
-  ax_ta.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
-
-  # Align y-axis labels
-  fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_argp, ax_ta])
-  fig.align_ylabels([ax_pos, ax_vel])
-  
-  fig.suptitle(title, fontsize=16)
-  plt.subplots_adjust(hspace=0.17, wspace=0.2)
-  return fig
-
-
-def plot_time_series_error(result_ref, result_comp, epoch=None, title="Time Series Error", use_ric=True):
+  result_ref  : dict, 
+  result_comp : dict, 
+  epoch       : Optional[datetime.datetime] = None, 
+  title       : str                         = "Time Series Error", 
+  use_ric     : bool                         = True
+) -> Figure:
     """
-    Create time series error plots between reference and comparison trajectories
+    Create time series error plots between reference and comparison trajectories.
     
-    Parameters:
-    -----------
-    result_ref : dict
-        Reference result dictionary with plot_time_s and state/coe
-    result_comp : dict
-        Comparison result dictionary with plot_time_s and state/coe
-    epoch : datetime or None
-        Reference epoch for time axis
-    title : str
-        Title for the figure
-    use_ric : bool
+    Input:
+    ------
+      result_ref : dict
+        Reference result dictionary with 'plot_time_s' and 'state'/'coe'.
+      result_comp : dict
+        Comparison result dictionary with 'plot_time_s' and 'state'/'coe'.
+      epoch : datetime, optional
+        Reference epoch for time axis.
+      title : str
+        Title for the figure.
+      use_ric : bool
         If True, transform to RIC frame. If False, use XYZ inertial frame.
+        
+    Output:
+    -------
+      matplotlib.figure.Figure
+        Figure object containing the time series error plots.
     """
     # Use plot_time_s for both datasets
     time_ref = result_ref['plot_time_s']
@@ -657,9 +523,27 @@ def plot_time_series_error(result_ref, result_comp, epoch=None, title="Time Seri
     return fig
 
 
-def plot_true_longitude_error(result_ref, result_comp, epoch=None):
+def plot_true_longitude_error(
+  result_ref  : dict, 
+  result_comp : dict, 
+  epoch       : Optional[datetime.datetime] = None
+) -> Figure:
     """
     Create position/velocity error plots in the RIC frame (reference = result_ref).
+    
+    Input:
+    ------
+      result_ref : dict
+        Reference result dictionary.
+      result_comp : dict
+        Comparison result dictionary.
+      epoch : datetime, optional
+        Reference epoch for UTC time axis.
+        
+    Output:
+    -------
+      matplotlib.figure.Figure
+        Figure object containing the RIC frame error plots.
     """
     time_ref = result_ref['plot_time_s']
     time_comp = result_comp['plot_time_s']
@@ -763,6 +647,10 @@ def generate_error_plots(
       Simulation start time (for plot labels).
     output_folderpath : Path
       Directory to save plots.
+      
+  Output:
+  -------
+    None
   """
   print("\n  Generate Error Plots")
 
@@ -850,6 +738,10 @@ def generate_3d_and_time_series_plots(
       Simulation start time (for plot labels).
     output_folderpath : Path
       Directory to save plots.
+      
+  Output:
+  -------
+    None
   """
   print("  Generate 3D-Trajectory and Time-Series Plots")
 
@@ -920,6 +812,10 @@ def generate_plots(
       Simulation start time (for plot labels).
     output_folderpath : Path
       Directory to save plots.
+      
+  Output:
+  -------
+    None
   """
   print("\nGenerate and Save Plots")
   
