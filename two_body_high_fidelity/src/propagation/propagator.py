@@ -13,10 +13,10 @@ from pathlib         import Path
 from scipy.integrate import solve_ivp
 from sgp4.api        import Satrec, jday
 
-from src.model.dynamics          import GeneralStateEquationsOfMotion, Acceleration, OrbitConverter
-from src.model.constants         import PHYSICALCONSTANTS
-from src.model.time_converter    import utc_to_et
-from src.model.frame_conversions import FrameConversions
+from src.model.dynamics        import GeneralStateEquationsOfMotion, Acceleration, OrbitConverter
+from src.model.constants       import PHYSICALCONSTANTS
+from src.model.time_converter  import utc_to_et
+from src.model.frame_converter import FrameConverter
 
 def modify_tle_bstar(
   tle_line1   : str,
@@ -170,7 +170,7 @@ def propagate_tle(
       
       # Transform TEME to J2000/GCRS
       if to_j2000:
-        j2000_pos_vec, j2000_vel_vec = FrameConversions.teme_to_j2000(teme_pos_vec, teme_vel_vec, jd + fr)
+        j2000_pos_vec, j2000_vel_vec = FrameConverter.teme_to_j2000(teme_pos_vec, teme_vel_vec, jd + fr)
         pos_vec = np.array(j2000_pos_vec) * 1000.0  # km -> m
         vel_vec = np.array(j2000_vel_vec) * 1000.0  # km/s -> m/s
       else:
@@ -261,7 +261,7 @@ def get_tle_initial_state(
   
   # Transform TEME to J2000/GCRS if requested
   if to_j2000:
-    j2000_pos_vec, j2000_vel_vec = FrameConversions.teme_to_j2000(teme_pos_vec, teme_vel_vec, jd + fr, units_pos='m', units_vel='m/s')
+    j2000_pos_vec, j2000_vel_vec = FrameConverter.teme_to_j2000(teme_pos_vec, teme_vel_vec, jd + fr, units_pos='m', units_vel='m/s')
     pos_vec = np.array(j2000_pos_vec)
     vel_vec = np.array(j2000_vel_vec)
   else:
@@ -273,114 +273,116 @@ def get_tle_initial_state(
 
 
 def propagate_state_numerical_integration(
-    initial_state       : np.ndarray,
-    time_o              : float,
-    time_f              : float,
-    dynamics            : Acceleration,
-    method              : str           = 'DOP853', # DOP853 RK45
-    rtol                : float         = 1e-12,
-    atol                : float         = 1e-12,
-    dense_output        : bool          = False,
-    t_eval              : Optional[np.ndarray] = None,
-    get_coe_time_series : bool          = False,
-    num_points          : Optional[int] = None,
-    gp                  : float         = PHYSICALCONSTANTS.EARTH.GP,
+  initial_state       : np.ndarray,
+  time_o              : float,
+  time_f              : float,
+  dynamics            : Acceleration,
+  method              : str                  = 'DOP853', # DOP853 RK45
+  rtol                : float                = 1e-12,
+  atol                : float                = 1e-12,
+  dense_output        : bool                 = False,
+  t_eval              : Optional[np.ndarray] = None,
+  get_coe_time_series : bool                 = False,
+  num_points          : Optional[int]        = None,
+  gp                  : float                = PHYSICALCONSTANTS.EARTH.GP,
 ) -> dict:
-    """
-    Propagate an orbit from initial cartesian state.
-    
-    Parameters:
-    -----------
-    initial_state : np.ndarray
-        Initial state vector [pos, vel] in meters and m/s
-    time_o : float
-        Initial time [s]
-    time_f : float
-        Final time [s]
-    dynamics : Acceleration
-        Acceleration model containing all force models
-    method : str
-        Integration method for scipy.solve_ivp (default: 'DOP853')
-    rtol : float
-        Relative tolerance for integration
-    atol : float
-        Absolute tolerance for integration
-    dense_output : bool
-        Enable dense output for interpolation
-    t_eval : np.ndarray, optional
-        Times at which to store the solution
-    get_coe_time_series : bool
-        If True, convert states to classical orbital elements
-    num_points : int, optional
-        Number of output points. If None, uses adaptive timesteps from solver.
-        If specified, solution is evaluated at uniformly spaced times.
-    gp : float, optional
-        Gravitational parameter for orbital element conversion [m³/s²]
-        If None, uses dynamics.gravity.two_body.gp
-    
-    Returns:
-    --------
-    dict : Dictionary containing:
-        - success : bool - Integration success flag
-        - message : str - Status message
-        - time : np.ndarray - Time array [s]
-        - state : np.ndarray - State history [6 x N]
-        - final_state : np.ndarray - Final state vector
-        - coe : dict - Classical orbital elements time series (if requested)
-    """
-    # Time span for integration
-    time_span = (time_o, time_f)
+  """
+  Propagate an orbit from initial cartesian state.
+  
+  Parameters:
+  -----------
+  initial_state : np.ndarray
+    Initial state vector [pos, vel] in meters and m/s
+  time_o : float
+    Initial time [s]
+  time_f : float
+    Final time [s]
+  dynamics : Acceleration
+    Acceleration model containing all force models
+  method : str
+    Integration method for scipy.solve_ivp (default: 'DOP853')
+  rtol : float
+    Relative tolerance for integration
+  atol : float
+    Absolute tolerance for integration
+  dense_output : bool
+    Enable dense output for interpolation
+  t_eval : np.ndarray, optional
+    Times at which to store the solution
+  get_coe_time_series : bool
+    If True, convert states to classical orbital elements
+  num_points : int, optional
+    Number of output points. If None, uses adaptive timesteps from solver.
+    If specified, solution is evaluated at uniformly spaced times.
+  gp : float, optional
+    Gravitational parameter for orbital element conversion [m³/s²]
+    If None, uses dynamics.gravity.two_body.gp
+  
+  Returns:
+  --------
+  dict : Dictionary containing:
+    - success : bool - Integration success flag
+    - message : str - Status message
+    - time : np.ndarray - Time array [s]
+    - state : np.ndarray - State history [6 x N]
+    - final_state : np.ndarray - Final state vector
+    - coe : dict - Classical orbital elements time series (if requested)
+  """
+  # Time span for integration
+  time_span = (time_o, time_f)
 
-    # Solve initial value problem
-    solution = solve_ivp(
-      fun          = GeneralStateEquationsOfMotion(dynamics).state_time_derivative,
-      t_span       = time_span,
-      y0           = initial_state,
-      method       = method,
-      rtol         = rtol,
-      atol         = atol,
-      dense_output = dense_output,
-      t_eval       = t_eval,
-    )
-    
-    # If num_points is specified, evaluate solution at uniform time grid
-    if num_points is not None:
-      t_eval     = np.linspace(time_o, time_f, num_points)
-      y_eval     = solution.sol(t_eval)
-      solution.t = t_eval
-      solution.y = y_eval
-    
-    # Convert all states to classical orbital elements
-    num_steps = solution.y.shape[1]
-    coe_time_series = {
-        'sma'  : np.zeros(num_steps),
-        'ecc'  : np.zeros(num_steps),
-        'inc'  : np.zeros(num_steps),
-        'raan' : np.zeros(num_steps),
-        'argp' : np.zeros(num_steps),
-        'ma'   : np.zeros(num_steps),
-        'ta'   : np.zeros(num_steps),
-        'ea'   : np.zeros(num_steps),
-    }
-    
-    if get_coe_time_series:
-      for i in range(num_steps):
-        pos = solution.y[0:3, i]
-        vel = solution.y[3:6, i]
-        
-        coe = OrbitConverter.pv_to_coe(pos, vel, gp)
-        for key in coe_time_series.keys():
-          if coe[key] is not None:
-            coe_time_series[key][i] = coe[key]
-    
-    return {
-        'success' : solution.success,
-        'message' : solution.message,
-        'time'    : solution.t,
-        'state'   : solution.y,
-        'state_f' : solution.y[:, -1],
-        'coe'     : coe_time_series,
-    }
+  # Solve initial value problem
+  solution = solve_ivp(
+    fun          = GeneralStateEquationsOfMotion(dynamics).state_time_derivative,
+    t_span       = time_span,
+    y0           = initial_state,
+    method       = method,
+    rtol         = rtol,
+    atol         = atol,
+    dense_output = dense_output,
+    t_eval       = t_eval,
+  )
+  
+  # If num_points is specified, evaluate solution at uniform time grid
+  if num_points is not None:
+    t_eval     = np.linspace(time_o, time_f, num_points)
+    y_eval     = solution.sol(t_eval)
+    solution.t = t_eval
+    solution.y = y_eval
+  
+  # Convert all states to classical orbital elements
+  num_steps = solution.y.shape[1]
+  coe_time_series = {
+    'sma'  : np.zeros(num_steps),
+    'ecc'  : np.zeros(num_steps),
+    'inc'  : np.zeros(num_steps),
+    'raan' : np.zeros(num_steps),
+    'argp' : np.zeros(num_steps),
+    'ma'   : np.zeros(num_steps),
+    'ta'   : np.zeros(num_steps),
+    'ea'   : np.zeros(num_steps),
+  }
+  
+  if get_coe_time_series:
+    for i in range(num_steps):
+      pos = solution.y[0:3, i]
+      vel = solution.y[3:6, i]
+      
+      coe = OrbitConverter.pv_to_coe(
+        pos, vel, gp
+      )
+      for key in coe_time_series.keys():
+        if coe[key] is not None:
+          coe_time_series[key][i] = coe[key]
+  
+  return {
+    'success' : solution.success,
+    'message' : solution.message,
+    'time'    : solution.t,
+    'state'   : solution.y,
+    'state_f' : solution.y[:, -1],
+    'coe'     : coe_time_series,
+  }
 
 
 def propagate_sgp4_at_horizons_grid(
@@ -427,8 +429,8 @@ def propagate_sgp4_at_horizons_grid(
   sgp4_eval_times = result_horizons['plot_time_s'] + integ_time_o + time_offset_s
   
   # Calculate display values
-  duration_actual_s = result_horizons['plot_time_s'][-1]
-  grid_end_dt       = horizons_start_dt + timedelta(seconds=duration_actual_s)
+  duration_actual_s  = result_horizons['plot_time_s'][-1]
+  grid_end_dt        = horizons_start_dt + timedelta(seconds=duration_actual_s)
   duration_desired_s = (target_end_dt - target_start_dt).total_seconds()
   num_points = len(sgp4_eval_times)
 
