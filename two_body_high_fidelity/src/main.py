@@ -114,7 +114,16 @@ def main(
     None
   """
   # Process inputs and setup
-  inputs_dict = parse_and_validate_inputs(input_object_type, norad_id, timespan, use_spice, include_third_body, include_zonal_harmonics, zonal_harmonics_list, include_srp)
+  inputs_dict = parse_and_validate_inputs(
+    input_object_type,
+    norad_id,
+    timespan,
+    use_spice,
+    include_third_body,
+    include_zonal_harmonics,
+    zonal_harmonics_list,
+    include_srp,
+  )
   config      = get_config(inputs_dict)
 
   # Set up paths and files
@@ -132,7 +141,7 @@ def main(
   load_spice_files(config.use_spice, spice_kernels_folderpath, lsk_filepath)
 
   # Get Horizons ephemeris
-  result_horizons = get_horizons_ephemeris(
+  propagation_result_horizons = get_horizons_ephemeris(
     horizons_filepath = horizons_filepath,
     target_start_dt   = config.target_start_dt,
     target_end_dt     = config.target_end_dt,
@@ -143,13 +152,13 @@ def main(
     tle_line1            = config.tle_line1,
     tle_line2            = config.tle_line2,
     integ_time_o         = config.integ_time_o,
-    result_horizons      = result_horizons,
+    result_horizons      = propagation_result_horizons,
     use_horizons_initial = use_horizons_initial,
     to_j2000             = True,
   )
 
   # Run propagations: high-fidelity and SGP4 at Horizons times
-  result_high_fidelity, result_sgp4_at_horizons = run_propagations(
+  propagation_result_high_fidelity, propagation_result_sgp4 = run_propagations(
     initial_state            = initial_state,
     integ_time_o             = config.integ_time_o,
     integ_time_f             = config.integ_time_f,
@@ -166,19 +175,23 @@ def main(
     zonal_harmonics_list     = config.zonal_harmonics_list,
     include_srp              = config.include_srp,
     spice_kernels_folderpath = spice_kernels_folderpath,
-    result_horizons          = result_horizons, # type: ignore
+    result_horizons          = propagation_result_horizons, # type: ignore
     tle_line1                = config.tle_line1,
     tle_line2                = config.tle_line2,
   )
   
   # Display results and create plots
-  print_results_summary(result_horizons, result_high_fidelity, result_sgp4_at_horizons)
+  print_results_summary(
+    propagation_result_horizons,
+    propagation_result_high_fidelity,
+    propagation_result_sgp4,
+  )
   
   # Create plots
   generate_plots(
-    result_horizons         = result_horizons,
-    result_high_fidelity    = result_high_fidelity,
-    result_sgp4_at_horizons = result_sgp4_at_horizons,
+    result_horizons         = propagation_result_horizons,
+    result_high_fidelity    = propagation_result_high_fidelity,
+    result_sgp4_at_horizons = propagation_result_sgp4,
     target_start_dt         = config.target_start_dt,
     output_folderpath       = output_folderpath,
   )
@@ -186,7 +199,7 @@ def main(
   # Unload all SPICE kernels if they were loaded
   unload_spice_files(config.use_spice)
   
-  return result_high_fidelity
+  return propagation_result_high_fidelity
 
 
 if __name__ == "__main__":

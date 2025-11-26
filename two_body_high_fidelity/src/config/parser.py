@@ -1,10 +1,14 @@
-from pathlib import Path
-from datetime import datetime, timedelta
-from types import SimpleNamespace
-from sgp4.api import Satrec
-from src.utility.loader import load_supported_objects
 import argparse
 import sys
+
+from pathlib            import Path
+from datetime           import datetime, timedelta
+from types              import SimpleNamespace
+from typing             import Optional
+from sgp4.api           import Satrec
+
+from src.utility.loader import load_supported_objects
+
 
 def parse_time(
   time_str : str,
@@ -61,7 +65,7 @@ def parse_and_validate_inputs(
   use_spice              : bool = False,
   include_third_body     : bool = False,
   include_zonal_harmonics: bool = False,
-  zonal_harmonics_list   : list = None,
+  zonal_harmonics_list   : Optional[list] = None,
   include_srp            : bool = False,
 ) -> dict:
   """
