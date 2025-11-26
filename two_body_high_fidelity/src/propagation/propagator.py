@@ -73,7 +73,7 @@ def propagate_tle(
   tle_line2       : str,
   time_o          : Optional[float] = None,
   time_f          : Optional[float] = None,
-  num_time_points : int  = 100,
+  num_points      : int  = 100,
   time_eval       : Optional[np.ndarray] = None,
   to_j2000        : bool = False,
   disable_drag    : bool = False,
@@ -91,7 +91,7 @@ def propagate_tle(
       Initial time in seconds from TLE epoch. Required if time_eval is not provided.
     time_f : float, optional
       Final time in seconds from TLE epoch. Required if time_eval is not provided.
-    num_time_points : int
+    num_points : int
       Number of output time points (ignored if time_eval is provided).
     time_eval : np.ndarray, optional
       Specific times to evaluate at (in seconds from TLE epoch).
@@ -131,22 +131,22 @@ def propagate_tle(
     
     # Generate time array
     if time_eval is not None:
-      time            = time_eval
-      num_time_points = len(time_eval)
+      time       = time_eval
+      num_points = len(time_eval)
     else:
-      time = np.linspace(time_o, time_f, num_time_points) # type: ignore
+      time = np.linspace(time_o, time_f, num_points) # type: ignore
     
     # Initialize arrays
-    state_array = np.zeros((6, num_time_points))
+    state_array = np.zeros((6, num_points))
     coe_time_series = {
-      'sma'  : np.zeros(num_time_points),
-      'ecc'  : np.zeros(num_time_points),
-      'inc'  : np.zeros(num_time_points),
-      'raan' : np.zeros(num_time_points),
-      'argp' : np.zeros(num_time_points),
-      'ma'   : np.zeros(num_time_points),
-      'ta'   : np.zeros(num_time_points),
-      'ea'   : np.zeros(num_time_points),
+      'sma'  : np.zeros(num_points),
+      'ecc'  : np.zeros(num_points),
+      'inc'  : np.zeros(num_points),
+      'raan' : np.zeros(num_points),
+      'argp' : np.zeros(num_points),
+      'ma'   : np.zeros(num_points),
+      'ta'   : np.zeros(num_points),
+      'ea'   : np.zeros(num_points),
     }
 
     # Propagate at each time step

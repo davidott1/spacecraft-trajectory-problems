@@ -70,7 +70,7 @@ def get_initial_state(
     tle_line2  = tle_line2,
     time_o     = integ_time_o,
     time_f     = integ_time_o,
-    num_points = 1, # type: ignore
+    num_points = 1,
     to_j2000   = to_j2000,
   )
   if not result_tle_initial['success']:
