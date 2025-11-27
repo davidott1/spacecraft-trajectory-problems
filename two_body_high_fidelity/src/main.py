@@ -4,7 +4,7 @@ High-Fidelity Orbit Propagator
 Description:
   This script propagates the orbit of a satellite using a high-fidelity numerical
   integration model. It takes a NORAD ID, a start time, and an end time as input.
-  The initial state is derived from a hardcoded Two-Line Element (TLE) set.
+  The initial state is derived from either JPL Horizons or a Two-Line Element (TLE) set.
 
   The propagation includes the following forces:
   - Earth's gravity (including J2, J3, J4 zonal harmonics)
@@ -14,7 +14,7 @@ Description:
 
   The script performs the following steps:
   1. Loads a reference ephemeris from JPL Horizons (if available).
-  2. Derives an initial state from the TLE for the specified start time.
+  2. Derives an initial state from the selected source for the specified start time.
   3. Propagates the orbit using the high-fidelity model.
   4. Propagates the orbit using the SGP4 model for comparison.
   5. Generates and saves plots comparing the trajectories and their errors.
@@ -26,29 +26,36 @@ Usage:
   --input-object-type          Yes        Type of input object (e.g., norad-id)
   --norad-id                   Yes*       NORAD ID (required for norad-id type)
   --timespan                   Yes        Start and end time (ISO format)
+  --initial-state-source       No         Source of initial state (jpl_horizons or tle)
   --zonal-harmonics            No         Enable zonal harmonics (requires arguments e.g. J2)
-  --include-spice              No         Enable SPICE functionality
-  --third-bodies               No         Enable third-body gravity (requires arguments e.g. SUN)
-  --include-srp                No         Enable Solar Radiation Pressure
+  --spice                      No         Enable SPICE functionality
+  --third-bodies               No         Enable third-body gravity (requires arguments e.g. sun)
+  --srp                        No         Enable Solar Radiation Pressure
+  
 
   Example Commands:
     python -m src.main \
       --input-object-type <type> \
       --norad-id <id> \
       --timespan <start> <end> \
-      [--include-spice] \
-      [--third-bodies SUN MOON] \
-      [--include-srp] \
-      [--zonal-harmonics J2 J3 J4]
+      [--initial-state-source jpl_horizons] \
+      [--zonal-harmonics J2 J3 J4] \
+      [--third-bodies sun moon] \
+      [--srp] \
+      [--spice]
+      
+      
 
     python -m src.main \
       --input-object-type norad-id \
       --norad-id 25544 \
       --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00 \
+      --initial-state-source jpl_horizons \
       --zonal-harmonics J2 J3 J4 \
-      --third-bodies SUN MOON \
-      --include-srp \
-      --include-spice
+      --third-bodies sun moon \
+      --srp \
+      --spice
+      
 """
 from typing                            import Optional
 
@@ -62,14 +69,14 @@ from src.propagation.state_initializer import get_initial_state
 
 
 def main(
-  input_object_type          : str,
-  norad_id                   : str,
-  timespan                   : list,
-  use_spice                  : bool           = False,
-  third_bodies               : Optional[list] = None,
-  zonal_harmonics            : Optional[list] = None,
-  include_srp                : bool           = False,
-  initial_state_source       : str            = 'jpl_horizons',
+  input_object_type    : str,
+  norad_id             : str,
+  timespan             : list,
+  use_spice            : bool           = False,
+  third_bodies         : Optional[list] = None,
+  zonal_harmonics      : Optional[list] = None,
+  include_srp          : bool           = False,
+  initial_state_source : str            = 'jpl_horizons',
 ) -> dict:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -180,12 +187,15 @@ def main(
   # Unload all files (SPICE kernels)
   unload_files(config.use_spice)
   
+  # Return high-fidelity propagation results
   return result_high_fidelity_propagation
 
 
 if __name__ == "__main__":
+  # Parse command-line arguments
   args = parse_command_line_arguments()
   
+  # Run main function
   main(
     args.input_object_type,
     args.norad_id,

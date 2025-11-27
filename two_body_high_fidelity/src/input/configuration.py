@@ -8,6 +8,37 @@ from src.input.loader import load_supported_objects
 from src.input.cli    import parse_time
 
 
+def normalize_input(
+  input_object_type    : str,
+  initial_state_source : str,
+) -> tuple[str, str]:
+  """
+  Normalize input strings for object type and initial state source.
+  
+  Input:
+  ------
+    input_object_type : str
+      Type of input object (e.g., 'norad-id').
+    initial_state_source : str
+      Source for the initial state vector (e.g., 'jpl-horizons').
+  
+  Output:
+  -------
+    tuple[str, str]
+      Normalized input object type and initial state source.
+  """
+  # Normalize input object type
+  input_object_type = input_object_type.replace('-', '_').replace(' ', '_')
+
+  # Normalize initial state source
+  initial_state_source = initial_state_source.lower().replace('-', '_').replace(' ', '_')
+  if 'horizons' in initial_state_source:
+    initial_state_source = 'jpl_horizons'
+  
+  # Return normalized values
+  return input_object_type, initial_state_source
+
+
 def build_config(
   input_object_type    : str,
   norad_id             : str,
@@ -51,17 +82,11 @@ def build_config(
     ValueError
       If NORAD ID is not supported.
   """
-  # Normalize input object type
-  input_object_type = input_object_type.replace('-', '_').replace(' ', '_')
-
-  # Normalize initial state source
-  initial_state_source = initial_state_source.lower().replace('-', '_').replace(' ', '_')
-  if 'horizons' in initial_state_source:
-    initial_state_source = 'jpl_horizons'
-
-  # Handle third bodies logic
-  include_third_body = third_bodies is not None
-  third_bodies_list  = [b.upper() for b in third_bodies] if third_bodies is not None else []
+  # Normalize inputs
+  input_object_type, initial_state_source = normalize_input(
+    input_object_type,
+    initial_state_source,
+  )
 
   # Handle zonal harmonics logic
   include_zonal_harmonics = zonal_harmonics is not None
@@ -69,6 +94,10 @@ def build_config(
     zonal_harmonics_list = ['J2']
   else:
     zonal_harmonics_list = zonal_harmonics
+
+  # Handle third bodies logic
+  include_third_body = third_bodies is not None
+  third_bodies_list  = [b.upper() for b in third_bodies] if third_bodies is not None else []
 
   # Unpack timespan
   start_time_str = timespan[0]
