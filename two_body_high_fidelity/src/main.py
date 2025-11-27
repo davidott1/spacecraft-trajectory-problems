@@ -133,15 +133,15 @@ def main(
   # Get Horizons ephemeris
   result_horizons_ephemeris = get_horizons_ephemeris(
     horizons_filepath = config.horizons_filepath,
-    target_start_dt   = config.target_start_dt,
-    target_end_dt     = config.target_end_dt,
+    target_start_dt   = config.desired_time_o_dt,
+    target_end_dt     = config.desired_time_f_dt,
   )
 
   # Determine initial state (from Horizons if available, else TLE)
   initial_state = get_initial_state(
-    tle_line1            = config.tle_line1,
-    tle_line2            = config.tle_line2,
-    target_epoch         = config.target_start_dt,
+    tle_line_1           = config.tle_line_1,
+    tle_line_2           = config.tle_line_2,
+    desired_time_o_dt    = config.desired_time_o_dt,
     result_horizons      = result_horizons_ephemeris,
     initial_state_source = config.initial_state_source,
     to_j2000             = True,
@@ -150,8 +150,8 @@ def main(
   # Run propagations: high-fidelity and SGP4 at Horizons times
   result_high_fidelity_propagation, result_sgp4_propagation = run_propagations(
     initial_state            = initial_state,
-    target_start_dt          = config.target_start_dt,
-    target_end_dt            = config.target_end_dt,
+    desired_time_o_dt        = config.desired_time_o_dt,
+    desired_time_f_dt        = config.desired_time_f_dt,
     mass                     = config.mass,
     cd                       = config.cd,
     area_drag                = config.area_drag,
@@ -165,8 +165,8 @@ def main(
     include_srp              = config.include_srp,
     spice_kernels_folderpath = config.spice_kernels_folderpath,
     result_horizons          = result_horizons_ephemeris, # type: ignore
-    tle_line1                = config.tle_line1,
-    tle_line2                = config.tle_line2,
+    tle_line_1               = config.tle_line_1,
+    tle_line_2               = config.tle_line_2,
   )
   
   # Display results and create plots
@@ -180,7 +180,7 @@ def main(
     result_horizons      = result_horizons_ephemeris,
     result_high_fidelity = result_high_fidelity_propagation,
     result_sgp4          = result_sgp4_propagation,
-    target_start_dt      = config.target_start_dt,
+    target_start_dt      = config.desired_time_o_dt,
     output_folderpath    = config.output_folderpath,
   )
   

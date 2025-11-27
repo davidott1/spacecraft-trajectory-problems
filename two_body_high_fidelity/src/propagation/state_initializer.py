@@ -9,9 +9,9 @@ from src.model.time_converter    import utc_to_et
 
 
 def get_initial_state(
-  tle_line1            : str,
-  tle_line2            : str,
-  target_epoch         : datetime,
+  tle_line_1           : str,
+  tle_line_2           : str,
+  desired_time_o_dt    : datetime,
   result_horizons      : Optional[dict],
   initial_state_source : str = 'jpl_horizons',
   to_j2000             : bool = True,
@@ -25,7 +25,7 @@ def get_initial_state(
       The first line of the TLE.
     tle_line2 : str
       The second line of the TLE.
-    target_epoch : datetime
+    desired_time_o_dt : datetime
       The start time of the integration.
     result_horizons : dict | None
       The dictionary containing Horizons ephemeris data.
@@ -64,21 +64,21 @@ def get_initial_state(
 
   # 2. Fallback to TLE
   print(f"  TLE-Derived")
-  print(f"    TLE Line 1 : {tle_line1}")
-  print(f"    TLE Line 2 : {tle_line2}")
+  print(f"    TLE Line 1 : {tle_line_1}")
+  print(f"    TLE Line 2 : {tle_line_2}")
 
   # Calculate integ_time_o (seconds from TLE epoch)
-  satellite = Satrec.twoline2rv(tle_line1, tle_line2)
+  satellite = Satrec.twoline2rv(tle_line_1, tle_line_2)
   year = satellite.epochyr
   if year < 57: year += 2000
   else: year += 1900
   epoch_days = satellite.epochdays
   tle_epoch_dt = datetime(year, 1, 1) + timedelta(days=epoch_days - 1)
-  integ_time_o = (target_epoch - tle_epoch_dt).total_seconds()
+  integ_time_o = (desired_time_o_dt - tle_epoch_dt).total_seconds()
 
   result_tle_initial = propagate_tle(
-    tle_line1  = tle_line1,
-    tle_line2  = tle_line2,
+    tle_line_1 = tle_line_1,
+    tle_line_2 = tle_line_2,
     time_o     = integ_time_o,
     time_f     = integ_time_o,
     num_points = 1,

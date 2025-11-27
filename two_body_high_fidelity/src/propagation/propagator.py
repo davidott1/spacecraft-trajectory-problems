@@ -21,8 +21,8 @@ from src.utility.tle_helper    import modify_tle_bstar, get_tle_satellite_and_tl
 
 
 def propagate_tle(
-  tle_line1    : str,
-  tle_line2    : str,
+  tle_line_1   : str,
+  tle_line_2   : str,
   time_o       : Optional[float] = None,
   time_f       : Optional[float] = None,
   num_points   : int  = 100,
@@ -35,9 +35,9 @@ def propagate_tle(
   
   Input:
   ------
-    tle_line1 : str
+    tle_line_1 : str
       First line of TLE.
-    tle_line2 : str
+    tle_line_2 : str
       Second line of TLE.
     time_o : float, optional
       Initial time in seconds from TLE epoch. Required if time_eval is not provided.
@@ -65,11 +65,11 @@ def propagate_tle(
 
   # Modify TLE to disable drag if requested
   if disable_drag:
-    tle_line1 = modify_tle_bstar(tle_line1, 0.0)
+    tle_line_1 = modify_tle_bstar(tle_line_1, 0.0)
   
   try:
     # Create satellite object and extract epoch
-    epoch_datetime, satellite = get_tle_satellite_and_tle_epoch(tle_line1, tle_line2)
+    epoch_datetime, satellite = get_tle_satellite_and_tle_epoch(tle_line_1, tle_line_2)
     
     # Generate time array
     if time_eval is not None:
@@ -154,8 +154,8 @@ def propagate_tle(
 
 
 def get_tle_initial_state(
-  tle_line1    : str,
-  tle_line2    : str,
+  tle_line_1    : str,
+  tle_line_2    : str,
   disable_drag : bool = False,
   to_j2000     : bool = True,
 ) -> np.ndarray:
@@ -164,9 +164,9 @@ def get_tle_initial_state(
   
   Input:
   ------
-    tle_line1 : str
+    tle_line_1 : str
       First line of TLE.
-    tle_line2 : str
+    tle_line_2 : str
       Second line of TLE.
     disable_drag : bool
       If True, set B* drag term to zero.
@@ -180,10 +180,10 @@ def get_tle_initial_state(
   """
   # Modify TLE to disable drag if requested
   if disable_drag:
-    tle_line1 = modify_tle_bstar(tle_line1, 0.0)
+    tle_line_1 = modify_tle_bstar(tle_line_1, 0.0)
   
   # Get satellite object and epoch
-  epoch_datetime, satellite = get_tle_satellite_and_tle_epoch(tle_line1, tle_line2)
+  epoch_datetime, satellite = get_tle_satellite_and_tle_epoch(tle_line_1, tle_line_2)
   
   # Get Julian date and fraction
   jd, fr = jday(
@@ -328,11 +328,11 @@ def propagate_state_numerical_integration(
 
 
 def propagate_sgp4(
-  result_horizons : dict,
-  tle_line1       : str,
-  tle_line2       : str,
-  target_start_dt : datetime,
-  target_end_dt   : datetime,
+  result_horizons   : dict,
+  tle_line_1        : str,
+  tle_line_2        : str,
+  desired_time_o_dt : datetime,
+  desired_time_f_dt : datetime,
 ) -> Optional[dict]:
   """
   Propagate SGP4 on the same time grid as the Horizons ephemeris.
@@ -345,14 +345,14 @@ def propagate_sgp4(
   ------
     result_horizons : dict
       The processed dictionary from JPL Horizons, containing 'success', 'plot_time_s'.
-    tle_line1 : str
+    tle_line_1 : str
       The first line of the TLE.
-    tle_line2 : str
+    tle_line_2 : str
       The second line of the TLE.
-    target_start_dt : datetime
-      Target start datetime.
-    target_end_dt : datetime
-      Target end datetime.
+    desired_time_o_dt : datetime
+      Desired initial datetime.
+    desired_time_f_dt : datetime
+      Desired final datetime.
       
   Output:
   -------
@@ -362,9 +362,9 @@ def propagate_sgp4(
   # Propagate SGP4 at Horizons time points for direct comparison
   if not (result_horizons and result_horizons.get('success')):
     return None
-    
+  
   # Extract TLE epoch to calculate time offset
-  tle_epoch_dt, _ = get_tle_satellite_and_tle_epoch(tle_line1, tle_line2)
+  tle_epoch_dt, _ = get_tle_satellite_and_tle_epoch(tle_line_1, tle_line_2)
 
   # Calculate time offset: Horizons start relative to TLE epoch
   horizons_start_dt = result_horizons['time_o']
@@ -376,15 +376,15 @@ def propagate_sgp4(
   # Calculate display values
   duration_actual_s  = result_horizons['plot_time_s'][-1]
   grid_end_dt        = horizons_start_dt + timedelta(seconds=duration_actual_s)
-  duration_desired_s = (target_end_dt - target_start_dt).total_seconds()
+  duration_desired_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
   num_points         = len(sgp4_eval_times)
 
   # Display propagation info
   print(f"  Configuration")
   print(f"    Timespan")
   print(f"      Desired")
-  print(f"        Start    : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(target_start_dt):.6f} ET)")
-  print(f"        End      : {target_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(target_end_dt):.6f} ET)")
+  print(f"        Start    : {desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(desired_time_o_dt):.6f} ET)")
+  print(f"        End      : {desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(desired_time_f_dt):.6f} ET)")
   print(f"        Duration : {duration_desired_s:.1f} s")
   print(f"      Actual")
   print(f"        Start    : {horizons_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(horizons_start_dt):.6f} ET)")
@@ -395,8 +395,8 @@ def propagate_sgp4(
   print("\n  Compute")
   print("    Numerical Integration Running ... ", end='', flush=True)
   result_sgp4_at_horizons = propagate_tle(
-    tle_line1  = tle_line1,
-    tle_line2  = tle_line2,
+    tle_line_1 = tle_line_1,
+    tle_line_2 = tle_line_2,
     to_j2000   = True,
     time_eval  = sgp4_eval_times,
   )
@@ -444,8 +444,8 @@ def propagate_sgp4(
 
 def run_high_fidelity_propagation(
   initial_state            : np.ndarray,
-  target_start_dt          : datetime,
-  target_end_dt            : datetime,
+  desired_time_o_dt        : datetime,
+  desired_time_f_dt        : datetime,
   mass                     : float,
   cd                       : float,
   area_drag                : float,
@@ -467,10 +467,10 @@ def run_high_fidelity_propagation(
   ------
     initial_state : np.ndarray
       Initial state vector [x, y, z, vx, vy, vz].
-    target_start_dt : datetime
-      Target start datetime.
-    target_end_dt : datetime
-      Target end datetime.
+    desired_time_o_dt : datetime
+      Desired initial datetime.
+    desired_time_f_dt : datetime
+      Desired final datetime.
     mass : float
       Satellite mass [kg].
     cd : float
@@ -508,8 +508,8 @@ def run_high_fidelity_propagation(
   print("\nHigh-Fidelity Model")
 
   # Determine Actual times if Horizons is available (for grid alignment)
-  actual_start_dt = target_start_dt
-  actual_end_dt   = target_end_dt
+  actual_start_dt = desired_time_o_dt
+  actual_end_dt   = desired_time_f_dt
   
   if result_horizons and result_horizons.get('success'):
       actual_start_dt = result_horizons['time_o']
@@ -531,8 +531,8 @@ def run_high_fidelity_propagation(
   time_et_f_actual = get_et(actual_end_dt)
   
   # Calculate ETs for display
-  time_et_o_desired = get_et(target_start_dt)
-  time_et_f_desired = get_et(target_end_dt)
+  time_et_o_desired = get_et(desired_time_o_dt)
+  time_et_f_desired = get_et(desired_time_f_dt)
 
   # Determine active zonal harmonics
   j2_val = 0.0
@@ -552,7 +552,7 @@ def run_high_fidelity_propagation(
       active_harmonics.append('J4')
 
   # Calculate duration and grid info
-  delta_time  = (target_end_dt - target_start_dt).total_seconds()
+  delta_time  = (desired_time_f_dt - desired_time_o_dt).total_seconds()
   grid_points = 0
   if result_horizons and result_horizons.get('success'):
     grid_points = len(result_horizons['plot_time_s'])
@@ -561,8 +561,8 @@ def run_high_fidelity_propagation(
   print("  Configuration")
   print( "    Timespan")
   print(f"      Desired")
-  print(f"        Start    : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_o_desired:.6f} ET)")
-  print(f"        End      : {target_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_f_desired:.6f} ET)")
+  print(f"        Start    : {desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_o_desired:.6f} ET)")
+  print(f"        End      : {desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_f_desired:.6f} ET)")
   print(f"        Duration : {delta_time:.1f} s")
   
   if result_horizons and result_horizons.get('success'):
@@ -674,8 +674,8 @@ def run_high_fidelity_propagation(
 
 def run_propagations(
   initial_state            : np.ndarray,
-  target_start_dt          : datetime,
-  target_end_dt            : datetime,
+  desired_time_o_dt        : datetime,
+  desired_time_f_dt        : datetime,
   mass                     : float,
   cd                       : float,
   area_drag                : float,
@@ -689,8 +689,8 @@ def run_propagations(
   include_srp              : bool,
   spice_kernels_folderpath : Path,
   result_horizons          : dict,
-  tle_line1                : str,
-  tle_line2                : str,
+  tle_line_1               : str,
+  tle_line_2               : str,
 ) -> tuple[dict, Optional[dict]]:
   """
   Run high-fidelity and SGP4 propagations.
@@ -699,10 +699,10 @@ def run_propagations(
   ------
     initial_state : np.ndarray
       Initial state vector.
-    target_start_dt : datetime
-      Target start datetime.
-    target_end_dt : datetime
-      Target end datetime.
+    desired_time_o_dt : datetime
+      Desired initial time as a datetime.
+    desired_time_f_dt : datetime
+      Desired final time as a datetime.
     mass : float
       Satellite mass.
     cd : float
@@ -729,9 +729,9 @@ def run_propagations(
       Path to SPICE kernels.
     result_horizons : dict
       Horizons ephemeris result.
-    tle_line1 : str
+    tle_line_1 : str
       TLE line 1.
-    tle_line2 : str
+    tle_line_2 : str
       TLE line 2.
       
   Output:
@@ -742,8 +742,8 @@ def run_propagations(
   # Propagate: run high-fidelity propagation at Horizons time points for comparison
   result_high_fidelity = run_high_fidelity_propagation(
     initial_state            = initial_state,
-    target_start_dt          = target_start_dt,
-    target_end_dt            = target_end_dt,
+    desired_time_o_dt        = desired_time_o_dt,
+    desired_time_f_dt        = desired_time_f_dt,
     mass                     = mass,
     cd                       = cd,
     area_drag                = area_drag,
@@ -762,11 +762,11 @@ def run_propagations(
   # Propagate: run SGP4 at Horizons time points for comparison
   print("\nSGP4 Model")
   result_sgp4_at_horizons = propagate_sgp4(
-    result_horizons = result_horizons,
-    tle_line1       = tle_line1,
-    tle_line2       = tle_line2,
-    target_start_dt = target_start_dt,
-    target_end_dt   = target_end_dt,
+    result_horizons   = result_horizons,
+    tle_line_1        = tle_line_1,
+    tle_line_2        = tle_line_2,
+    desired_time_o_dt = desired_time_o_dt,
+    desired_time_f_dt = desired_time_f_dt,
   )
   
   return result_high_fidelity, result_sgp4_at_horizons

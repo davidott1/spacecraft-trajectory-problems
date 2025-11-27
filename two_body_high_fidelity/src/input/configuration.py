@@ -43,7 +43,7 @@ def normalize_input(
 def build_config(
   input_object_type    : str,
   norad_id             : str,
-  timespan             : list,
+  desired_timespan     : list,
   use_spice            : bool           = False,
   third_bodies         : Optional[list] = None,
   zonal_harmonics      : Optional[list] = None,
@@ -59,8 +59,8 @@ def build_config(
       Type of input object (e.g., norad-id).
     norad_id : str
       NORAD catalog ID of the satellite.
-    timespan : list
-      Start and end time in ISO format (e.g., ['2025-10-01T00:00:00', '2025-10-02T00:00:00']).
+    desired_timespan : list
+      Initial and final time in ISO format (e.g., ['2025-10-01T00:00:00', '2025-10-02T00:00:00']) as list of strings.
     use_spice : bool
       Flag to enable/disable SPICE usage.
     third_bodies : list | None
@@ -101,8 +101,8 @@ def build_config(
   third_bodies_list  = [b.upper() for b in third_bodies] if third_bodies is not None else []
 
   # Unpack timespan
-  start_time_str = timespan[0]
-  end_time_str   = timespan[1]
+  desired_time_o_str = desired_timespan[0]
+  desired_time_f_str = desired_timespan[1]
 
   # Validate: NORAD ID required for norad-id input type
   if input_object_type == 'norad_id' and not norad_id:
@@ -121,33 +121,34 @@ def build_config(
   obj_props = supported_objects[norad_id]
 
   # Extract TLE lines
-  tle_line1 = obj_props['tle']['line_1']
-  tle_line2 = obj_props['tle']['line_2']
+  tle_line_1 = obj_props['tle']['line_1']
+  tle_line_2 = obj_props['tle']['line_2']
 
   # Parse TLE epoch
-  tle_epoch_dt, _ = get_tle_satellite_and_tle_epoch(tle_line1, tle_line2)
+  tle_epoch_dt, _ = get_tle_satellite_and_tle_epoch(tle_line_1, tle_line_2)
   
   # Target propagation start/end times from arguments
-  target_start_dt = parse_time(start_time_str)
-  target_end_dt   = parse_time(end_time_str)
-  delta_time      = (target_end_dt - target_start_dt).total_seconds()
-  
+  desired_time_o_dt = parse_time(desired_time_o_str)
+  desired_time_f_dt = parse_time(desired_time_f_str)
+
+  desired_delta_time_of_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
+
   # Set up paths and files
   paths = setup_paths_and_files(
-    norad_id        = norad_id,
-    obj_name        = obj_props['name'],
-    target_start_dt = target_start_dt,
-    target_end_dt   = target_end_dt,
+    norad_id          = norad_id,
+    obj_name          = obj_props['name'],
+    desired_time_o_dt = desired_time_o_dt,
+    desired_time_f_dt = desired_time_f_dt,
   )
   
   return SimpleNamespace(
     obj_props                = obj_props,
-    tle_line1                = tle_line1,
-    tle_line2                = tle_line2,
+    tle_line_1               = tle_line_1,
+    tle_line_2               = tle_line_2,
     tle_epoch_dt             = tle_epoch_dt,
-    target_start_dt          = target_start_dt,
-    target_end_dt            = target_end_dt,
-    delta_time               = delta_time,
+    desired_time_o_dt        = desired_time_o_dt,
+    desired_time_f_dt        = desired_time_f_dt,
+    desired_delta_time_of_s  = desired_delta_time_of_s,
     mass                     = obj_props['mass__kg'],
     cd                       = obj_props['drag']['coeff'],
     area_drag                = obj_props['drag']['area__m2'],
@@ -168,10 +169,10 @@ def build_config(
 
 
 def setup_paths_and_files(
-  norad_id        : str,
-  obj_name        : str,
-  target_start_dt : datetime,
-  target_end_dt   : datetime,
+  norad_id          : str,
+  obj_name          : str,
+  desired_time_o_dt : datetime,
+  desired_time_f_dt : datetime,
 ) -> dict:
   """
   Set up all required folder paths and file names for the propagation.
@@ -182,10 +183,10 @@ def setup_paths_and_files(
       NORAD catalog ID of the satellite.
     obj_name : str
       Name of the object (e.g., 'ISS').
-    target_start_dt : datetime
-      Target start time as a datetime object.
-    target_end_dt : datetime
-      Target end time as a datetime object.
+    desired_time_o_dt : datetime
+      Desired initial time as a datetime object.
+    desired_time_f_dt : datetime
+      Desired final time as a datetime object.
   
   Output:
   -------
@@ -207,10 +208,10 @@ def setup_paths_and_files(
   lsk_filepath             = spice_kernels_folderpath / 'naif0012.tls'
   
   # Horizons ephemeris file (dynamically named)
-  start_str         = target_start_dt.strftime('%Y%m%dT%H%M%SZ')
-  end_str           = target_end_dt.strftime('%Y%m%dT%H%M%SZ')
-  horizons_filename = f"horizons_ephem_{norad_id}_{obj_name.lower()}_{start_str}_{end_str}_1m.csv"
-  horizons_filepath = data_folderpath / 'ephems' / horizons_filename
+  desired_time_o_str = desired_time_o_dt.strftime('%Y%m%dT%H%M%SZ')
+  desired_time_f_str = desired_time_f_dt.strftime('%Y%m%dT%H%M%SZ')
+  horizons_filename  = f"horizons_ephem_{norad_id}_{obj_name.lower()}_{desired_time_o_str}_{desired_time_f_str}_1m.csv"
+  horizons_filepath  = data_folderpath / 'ephems' / horizons_filename
   
   return {
     'output_folderpath'        : output_folderpath,
