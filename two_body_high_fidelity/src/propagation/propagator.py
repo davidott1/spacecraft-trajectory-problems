@@ -68,6 +68,43 @@ def modify_tle_bstar(
   return modified_line1
 
 
+def get_tle_satellite_and_tle_epoch(
+  tle_line1 : str,
+  tle_line2 : str,
+) -> tuple[datetime, Satrec]:
+  """
+  Create Satrec object and extract epoch from TLE.
+  
+  Input:
+  ------
+    tle_line1 : str
+      First line of TLE.
+    tle_line2 : str
+      Second line of TLE.
+  
+  Output:
+  -------
+    tuple[datetime, Satrec]
+      Epoch datetime and Satellite object.
+  """
+  # Satellite object of TLE
+  tle_satellite = Satrec.twoline2rv(
+    tle_line1,
+    tle_line2,
+  )
+  
+  # Epoch of TLE
+  tle_year = tle_satellite.epochyr
+  if tle_year < 57:
+    tle_year += 2000
+  else:
+    tle_year += 1900
+  tle_epoch_days     = tle_satellite.epochdays
+  tle_epoch_datetime = datetime(tle_year, 1, 1) + timedelta(days=tle_epoch_days - 1)
+  
+  return tle_epoch_datetime, tle_satellite
+
+
 def propagate_tle(
   tle_line1    : str,
   tle_line2    : str,
@@ -116,18 +153,8 @@ def propagate_tle(
     tle_line1 = modify_tle_bstar(tle_line1, 0.0)
   
   try:
-    # Create satellite object from TLE
-    satellite = Satrec.twoline2rv(tle_line1, tle_line2)
-    
-    # Extract epoch from TLE
-    year = satellite.epochyr
-    if year < 57:
-      year += 2000
-    else:
-      year += 1900
-    
-    epoch_days = satellite.epochdays
-    epoch_datetime = datetime(year, 1, 1) + timedelta(days=epoch_days - 1)
+    # Create satellite object and extract epoch
+    epoch_datetime, satellite = get_tle_satellite_and_tle_epoch(tle_line1, tle_line2)
     
     # Generate time array
     if time_eval is not None:
@@ -185,7 +212,7 @@ def propagate_tle(
       coe = OrbitConverter.pv_to_coe(
         pos_vec,
         vel_vec,
-        gp=PHYSICALCONSTANTS.EARTH.GP,
+        gp = PHYSICALCONSTANTS.EARTH.GP,
       )
       for key in coe_time_series.keys():
         if coe[key] is not None:
@@ -238,22 +265,20 @@ def get_tle_initial_state(
   if disable_drag:
     tle_line1 = modify_tle_bstar(tle_line1, 0.0)
   
-  satellite = Satrec.twoline2rv(tle_line1, tle_line2)
+  # Get satellite object and epoch
+  epoch_datetime, satellite = get_tle_satellite_and_tle_epoch(tle_line1, tle_line2)
   
-  # Get epoch
-  year = satellite.epochyr
-  if year < 57:
-    year += 2000
-  else:
-    year += 1900
+  # Get Julian date and fraction
+  jd, fr = jday(
+    epoch_datetime.year,
+    epoch_datetime.month,
+    epoch_datetime.day,
+    epoch_datetime.hour,
+    epoch_datetime.minute, 
+    epoch_datetime.second + epoch_datetime.microsecond/1e6,
+  )
   
-  epoch_days     = satellite.epochdays
-  epoch_datetime = datetime(year, 1, 1) + timedelta(days=epoch_days - 1)
-  
-  jd, fr = jday(epoch_datetime.year, epoch_datetime.month, epoch_datetime.day,
-                epoch_datetime.hour, epoch_datetime.minute, 
-                epoch_datetime.second + epoch_datetime.microsecond/1e6)
-  
+  # Propagate to epoch
   error_code, teme_pos_vec, teme_vel_vec = satellite.sgp4(jd, fr)
   
   if error_code != 0:
@@ -407,6 +432,10 @@ def propagate_sgp4(
       The first line of the TLE.
     tle_line2 : str
       The second line of the TLE.
+    target_start_dt : datetime
+      Target start datetime.
+    target_end_dt : datetime
+      Target end datetime.
       
   Output:
   -------
@@ -418,12 +447,7 @@ def propagate_sgp4(
     return None
     
   # Extract TLE epoch to calculate time offset
-  satellite = Satrec.twoline2rv(tle_line1, tle_line2)
-  year = satellite.epochyr
-  if year < 57: year += 2000
-  else: year += 1900
-  epoch_days = satellite.epochdays
-  tle_epoch_dt = datetime(year, 1, 1) + timedelta(days=epoch_days - 1)
+  tle_epoch_dt, _ = get_tle_satellite_and_tle_epoch(tle_line1, tle_line2)
 
   # Calculate time offset: Horizons start relative to TLE epoch
   horizons_start_dt = result_horizons['time_o']
@@ -436,24 +460,18 @@ def propagate_sgp4(
   duration_actual_s  = result_horizons['plot_time_s'][-1]
   grid_end_dt        = horizons_start_dt + timedelta(seconds=duration_actual_s)
   duration_desired_s = (target_end_dt - target_start_dt).total_seconds()
-  num_points = len(sgp4_eval_times)
+  num_points         = len(sgp4_eval_times)
 
-  # Helper for ET string
-  def get_et_str(dt):
-      try:
-          return f"{utc_to_et(dt):.6f} ET"
-      except:
-          return "N/A ET"
-
+  # Display propagation info
   print(f"  Configuration")
   print(f"    Timespan")
   print(f"      Desired")
-  print(f"        Start    : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({get_et_str(target_start_dt)})")
-  print(f"        End      : {target_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({get_et_str(target_end_dt)})")
+  print(f"        Start    : {target_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(target_start_dt):.6f} ET)")
+  print(f"        End      : {target_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(target_end_dt):.6f} ET)")
   print(f"        Duration : {duration_desired_s:.1f} s")
   print(f"      Actual")
-  print(f"        Start    : {horizons_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({get_et_str(horizons_start_dt)})")
-  print(f"        End      : {grid_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({get_et_str(grid_end_dt)})")
+  print(f"        Start    : {horizons_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(horizons_start_dt):.6f} ET)")
+  print(f"        End      : {grid_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(grid_end_dt):.6f} ET)")
   print(f"        Duration : {duration_actual_s:.1f} s")
   print(f"        Grid     : {num_points} points")
 
@@ -617,13 +635,10 @@ def run_high_fidelity_propagation(
       active_harmonics.append('J4')
 
   # Calculate duration and grid info
-  delta_time = (target_end_dt - target_start_dt).total_seconds()
+  delta_time  = (target_end_dt - target_start_dt).total_seconds()
   grid_points = 0
-  step_size = 0.0
   if result_horizons and result_horizons.get('success'):
     grid_points = len(result_horizons['plot_time_s'])
-    if grid_points > 1:
-      step_size = result_horizons['plot_time_s'][1] - result_horizons['plot_time_s'][0]
 
   # Set up high-fidelity dynamics model
   print("  Configuration")
@@ -702,8 +717,10 @@ def run_high_fidelity_propagation(
     print(f"      Method     : DOP853")
     print(f"      Tolerances : rtol=1e-12, atol=1e-12")
 
+    # Print completion message
     print("\n  Compute")
     print("    Numerical Integration Running ... ", end='', flush=True)
+
     # Propagate
     result_high_fidelity = propagate_state_numerical_integration(
       initial_state       = initial_state,
@@ -718,6 +735,8 @@ def run_high_fidelity_propagation(
       get_coe_time_series = True,
       gp                  = PHYSICALCONSTANTS.EARTH.GP,
     )
+
+    # Print completion message
     print("Complete")
   else:
     # If Horizons data is not available, error analysis is not possible.
@@ -730,6 +749,7 @@ def run_high_fidelity_propagation(
     # Create plotting time array (seconds from ACTUAL start time, to match Horizons plot_time_s)
     result_high_fidelity['plot_time_s'] = result_high_fidelity['time'] - time_et_o_actual
   else:
+    # Print error message
     print(f"  Propagation failed: {result_high_fidelity['message']}")
   
   return result_high_fidelity

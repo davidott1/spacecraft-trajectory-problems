@@ -7,7 +7,7 @@ from pathlib              import Path
 from typing               import Optional
 from matplotlib.figure    import Figure
 
-from src.plot.utility    import get_equal_limits
+from src.plot.utility    import get_equal_limits, add_utc_time_axis
 from src.model.constants import CONVERTER, PHYSICALCONSTANTS
 
 
@@ -193,35 +193,8 @@ def plot_time_series(
   if epoch is not None:
     # Only add UTC time to top row axes
     top_row_axes = [ax_pos, ax_sma]
-    
     for ax in top_row_axes:
-      # Create secondary x-axis
-      ax2 = ax.twiny()
-      ax2.set_xlim(ax.get_xlim())
-      
-      # Get tick positions in seconds and filter to only positive values
-      tick_positions_sec = ax.get_xticks()
-
-      # Filter out negative ticks and ticks beyond our data range
-      valid_ticks = tick_positions_sec[(tick_positions_sec >= 0) & (tick_positions_sec <= 86400)]
-      
-      # If we don't have enough valid ticks, create our own
-      if len(valid_ticks) < 2:
-        valid_ticks = np.linspace(0, 86400, 7)  # Every 4 hours
-      
-      # Convert directly from seconds to UTC datetime
-      utc_times = [epoch + timedelta(seconds=float(t)) for t in valid_ticks]
-      
-      # Format UTC time labels
-      time_labels = [t.strftime('%m/%d %H:%M') for t in utc_times]
-      
-      ax2.set_xticks(valid_ticks)
-      ax2.set_xticklabels(time_labels, rotation=45, ha='left', fontsize=8)
-      ax2.set_xlabel('UTC Time', fontsize=9)
-      
-      # Position the secondary axis at the top
-      ax2.xaxis.set_label_position('top')
-      ax2.xaxis.tick_top()
+      add_utc_time_axis(ax, epoch)
 
   # Align y-axis labels for right column
   fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_argp, ax_anom])
@@ -501,18 +474,7 @@ def plot_time_series_error(
 
   # Add UTC time axis if epoch is provided
   if epoch is not None:
-    ax_top = ax_pos.twiny()
-    ax_top.set_xlim(ax_pos.get_xlim())
-    ticks = ax_pos.get_xticks()
-    valid = ticks[(ticks >= 0) & (ticks <= time_ref[-1])]
-    if len(valid) < 2:
-      valid = np.linspace(0, time_ref[-1], 7)
-    labels = [(epoch + timedelta(seconds=float(t))).strftime('%m/%d %H:%M') for t in valid]
-    ax_top.set_xticks(valid)
-    ax_top.set_xticklabels(labels, rotation=45, ha='left', fontsize=8)
-    ax_top.set_xlabel('UTC Time', fontsize=9)
-    ax_top.xaxis.set_label_position('top')
-    ax_top.xaxis.tick_top()
+    add_utc_time_axis(ax_pos, epoch)
 
   # Align y-axis labels
   fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_argp, ax_ta])
@@ -607,18 +569,7 @@ def plot_true_longitude_error(
   add_stats(ax_vel, vel_mag, 'Vel [m/s]')
 
   if epoch is not None:
-    ax_top = ax_pos.twiny()
-    ax_top.set_xlim(ax_pos.get_xlim())
-    ticks = ax_pos.get_xticks()
-    valid = ticks[(ticks >= 0) & (ticks <= time_ref[-1])]
-    if len(valid) < 2:
-      valid = np.linspace(0, time_ref[-1], 7)
-    labels = [(epoch + timedelta(seconds=float(t))).strftime('%m/%d %H:%M') for t in valid]
-    ax_top.set_xticks(valid)
-    ax_top.set_xticklabels(labels, rotation=45, ha='left', fontsize=8)
-    ax_top.set_xlabel('UTC Time', fontsize=9)
-    ax_top.xaxis.set_label_position('top')
-    ax_top.xaxis.tick_top()
+    add_utc_time_axis(ax_pos, epoch)
 
   fig.suptitle('RIC Frame Error (Reference = Horizons)', fontsize=14)
   fig.tight_layout()
