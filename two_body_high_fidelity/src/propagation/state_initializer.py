@@ -1,5 +1,6 @@
 import numpy as np
-
+from datetime import datetime, timedelta
+from sgp4.api import Satrec
 from typing import Optional
 
 from src.propagation.propagator  import propagate_tle
@@ -9,7 +10,7 @@ from src.model.time_converter    import utc_to_et
 def get_initial_state(
   tle_line1            : str,
   tle_line2            : str,
-  integ_time_o         : float,
+  target_epoch         : datetime,
   result_horizons      : Optional[dict],
   initial_state_source : str = 'jpl_horizons',
   to_j2000             : bool = True,
@@ -23,8 +24,8 @@ def get_initial_state(
       The first line of the TLE.
     tle_line2 : str
       The second line of the TLE.
-    integ_time_o : float
-      The start time of the integration in seconds from the TLE epoch.
+    target_epoch : datetime
+      The start time of the integration.
     result_horizons : dict | None
       The dictionary containing Horizons ephemeris data.
     initial_state_source : str
@@ -65,6 +66,15 @@ def get_initial_state(
   print(f"    TLE Line 1 : {tle_line1}")
   print(f"    TLE Line 2 : {tle_line2}")
 
+  # Calculate integ_time_o (seconds from TLE epoch)
+  satellite = Satrec.twoline2rv(tle_line1, tle_line2)
+  year = satellite.epochyr
+  if year < 57: year += 2000
+  else: year += 1900
+  epoch_days = satellite.epochdays
+  tle_epoch_dt = datetime(year, 1, 1) + timedelta(days=epoch_days - 1)
+  integ_time_o = (target_epoch - tle_epoch_dt).total_seconds()
+
   result_tle_initial = propagate_tle(
     tle_line1  = tle_line1,
     tle_line2  = tle_line2,
@@ -77,7 +87,7 @@ def get_initial_state(
     raise RuntimeError(f"Failed to get initial state from TLE: {result_tle_initial['message']}")
 
   tle_initial_state = result_tle_initial['state'][:, 0]
-  print(f"    Epoch      : {integ_time_o:>19.12e} s")
+  print(f"    Epoch      : {integ_time_o:>19.12e} s (from TLE epoch)")
   print(f"    Position   : [{tle_initial_state[0]:>19.12e}, {tle_initial_state[1]:>19.12e}, {tle_initial_state[2]:>19.12e}] m")
   print(f"    Velocity   : [{tle_initial_state[3]:>19.12e}, {tle_initial_state[4]:>19.12e}, {tle_initial_state[5]:>19.12e}] m/s")
 

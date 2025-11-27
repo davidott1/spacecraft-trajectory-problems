@@ -387,7 +387,6 @@ def propagate_state_numerical_integration(
 
 def propagate_sgp4_at_horizons_grid(
   result_horizons : dict,
-  integ_time_o    : float,
   tle_line1       : str,
   tle_line2       : str,
   target_start_dt : datetime,
@@ -404,8 +403,6 @@ def propagate_sgp4_at_horizons_grid(
   ------
     result_horizons : dict
       The processed dictionary from JPL Horizons, containing 'success', 'plot_time_s'.
-    integ_time_o : float
-      The start time of the integration in seconds from the TLE epoch.
     tle_line1 : str
       The first line of the TLE.
     tle_line2 : str
@@ -420,13 +417,20 @@ def propagate_sgp4_at_horizons_grid(
   if not (result_horizons and result_horizons.get('success')):
     return None
     
-  # Calculate time offset between Horizons data start and requested target start
-  horizons_start_dt = result_horizons['time_o']
-  time_offset_s     = (horizons_start_dt - target_start_dt).total_seconds()
+  # Extract TLE epoch to calculate time offset
+  satellite = Satrec.twoline2rv(tle_line1, tle_line2)
+  year = satellite.epochyr
+  if year < 57: year += 2000
+  else: year += 1900
+  epoch_days = satellite.epochdays
+  tle_epoch_dt = datetime(year, 1, 1) + timedelta(days=epoch_days - 1)
 
-  # Convert Horizons plot_time_s to integration times for SGP4
-  # Shift by time_offset_s to align SGP4 evaluation with Actual Horizons times
-  sgp4_eval_times = result_horizons['plot_time_s'] + integ_time_o + time_offset_s
+  # Calculate time offset: Horizons start relative to TLE epoch
+  horizons_start_dt = result_horizons['time_o']
+  time_offset_s     = (horizons_start_dt - tle_epoch_dt).total_seconds()
+
+  # Convert Horizons plot_time_s to integration times for SGP4 (seconds from TLE epoch)
+  sgp4_eval_times = result_horizons['plot_time_s'] + time_offset_s
   
   # Calculate display values
   duration_actual_s  = result_horizons['plot_time_s'][-1]
@@ -505,8 +509,6 @@ def propagate_sgp4_at_horizons_grid(
 
 def run_high_fidelity_propagation(
   initial_state            : np.ndarray,
-  integ_time_o             : float,
-  integ_time_f             : float,
   target_start_dt          : datetime,
   target_end_dt            : datetime,
   mass                     : float,
@@ -516,6 +518,7 @@ def run_high_fidelity_propagation(
   area_srp                 : float,
   use_spice                : bool,
   include_third_body       : bool,
+  third_bodies_list        : list,
   include_zonal_harmonics  : bool,
   zonal_harmonics_list     : list,
   include_srp              : bool,
@@ -529,10 +532,6 @@ def run_high_fidelity_propagation(
   ------
     initial_state : np.ndarray
       Initial state vector [x, y, z, vx, vy, vz].
-    integ_time_o : float
-      Integration start time (seconds from TLE epoch).
-    integ_time_f : float
-      Integration end time (seconds from TLE epoch).
     target_start_dt : datetime
       Target start datetime.
     target_end_dt : datetime
@@ -551,6 +550,8 @@ def run_high_fidelity_propagation(
       Whether to use SPICE for third-body ephemerides.
     include_third_body : bool
       Whether to enable third-body gravity.
+    third_bodies_list : list
+      List of third bodies to include.
     include_zonal_harmonics : bool
       Whether to enable zonal harmonics.
     zonal_harmonics_list : list
@@ -651,7 +652,7 @@ def run_high_fidelity_propagation(
   
   if include_third_body:
     print("        Third-Body")
-    print("          Bodies    : Sun, Moon")
+    print(f"          Bodies    : {', '.join(third_bodies_list)}")
     if use_spice:
       print("          Ephemeris : SPICE (High Accuracy)")
       print(f"          Note      : SPICE kernels loaded for third-body ephemerides.")
@@ -683,7 +684,7 @@ def run_high_fidelity_propagation(
     area_srp                = area_srp,
     enable_third_body       = include_third_body,
     third_body_use_spice    = use_spice,
-    third_body_bodies       = ['SUN', 'MOON'],
+    third_body_bodies       = third_bodies_list,
     spice_kernel_folderpath = str(spice_kernels_folderpath),
   )
   
@@ -736,8 +737,6 @@ def run_high_fidelity_propagation(
 
 def run_propagations(
   initial_state            : np.ndarray,
-  integ_time_o             : float,
-  integ_time_f             : float,
   target_start_dt          : datetime,
   target_end_dt            : datetime,
   mass                     : float,
@@ -747,6 +746,7 @@ def run_propagations(
   area_srp                 : float,
   use_spice                : bool,
   include_third_body       : bool,
+  third_bodies_list        : list,
   include_zonal_harmonics  : bool,
   zonal_harmonics_list     : list,
   include_srp              : bool,
@@ -762,10 +762,6 @@ def run_propagations(
   ------
     initial_state : np.ndarray
       Initial state vector.
-    integ_time_o : float
-      Integration start time.
-    integ_time_f : float
-      Integration end time.
     target_start_dt : datetime
       Target start datetime.
     target_end_dt : datetime
@@ -784,6 +780,8 @@ def run_propagations(
       Whether to use SPICE.
     include_third_body : bool
       Whether to enable third-body gravity.
+    third_bodies_list : list
+      List of third bodies to include.
     include_zonal_harmonics : bool
       Whether to enable zonal harmonics.
     zonal_harmonics_list : list
@@ -807,8 +805,6 @@ def run_propagations(
   # Propagate: run high-fidelity propagation at Horizons time points for comparison
   result_high_fidelity = run_high_fidelity_propagation(
     initial_state            = initial_state,
-    integ_time_o             = integ_time_o,
-    integ_time_f             = integ_time_f,
     target_start_dt          = target_start_dt,
     target_end_dt            = target_end_dt,
     mass                     = mass,
@@ -818,6 +814,7 @@ def run_propagations(
     area_srp                 = area_srp,
     use_spice                = use_spice,
     include_third_body       = include_third_body,
+    third_bodies_list        = third_bodies_list,
     include_zonal_harmonics  = include_zonal_harmonics,
     zonal_harmonics_list     = zonal_harmonics_list,
     include_srp              = include_srp,
@@ -829,7 +826,6 @@ def run_propagations(
   print("\nSGP4 Model")
   result_sgp4_at_horizons = propagate_sgp4_at_horizons_grid(
     result_horizons = result_horizons,
-    integ_time_o    = integ_time_o,
     tle_line1       = tle_line1,
     tle_line2       = tle_line2,
     target_start_dt = target_start_dt,

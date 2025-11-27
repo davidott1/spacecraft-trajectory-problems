@@ -106,11 +106,6 @@ def build_config(
   target_end_dt   = parse_time(end_time_str)
   delta_time      = (target_end_dt - target_start_dt).total_seconds()
   
-  # Integration time bounds (seconds from TLE epoch)
-  integ_time_o     = (target_start_dt - tle_epoch_dt).total_seconds()
-  integ_time_f     = integ_time_o + delta_time
-  delta_integ_time = integ_time_f - integ_time_o
-  
   # Set up paths and files
   paths = setup_paths_and_files(
     norad_id        = norad_id,
@@ -128,9 +123,6 @@ def build_config(
     target_start_dt          = target_start_dt,
     target_end_dt            = target_end_dt,
     delta_time               = delta_time,
-    integ_time_o             = integ_time_o,
-    integ_time_f             = integ_time_f,
-    delta_integ_time         = delta_integ_time,
     mass                     = obj_props['mass__kg'],
     cd                       = obj_props['drag']['coeff'],
     area_drag                = obj_props['drag']['area__m2'],

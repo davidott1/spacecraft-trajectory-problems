@@ -49,9 +49,6 @@ Usage:
       --third-bodies SUN MOON \
       --include-srp \
       --include-spice
-
-
-    
 """
 from typing                            import Optional
 
@@ -137,7 +134,7 @@ def main(
   initial_state = get_initial_state(
     tle_line1            = config.tle_line1,
     tle_line2            = config.tle_line2,
-    integ_time_o         = config.integ_time_o,
+    target_epoch         = config.target_start_dt,
     result_horizons      = result_horizons_ephemeris,
     initial_state_source = config.initial_state_source,
     to_j2000             = True,
@@ -146,8 +143,6 @@ def main(
   # Run propagations: high-fidelity and SGP4 at Horizons times
   result_high_fidelity_propagation, result_sgp4_propagation = run_propagations(
     initial_state            = initial_state,
-    integ_time_o             = config.integ_time_o,
-    integ_time_f             = config.integ_time_f,
     target_start_dt          = config.target_start_dt,
     target_end_dt            = config.target_end_dt,
     mass                     = config.mass,
