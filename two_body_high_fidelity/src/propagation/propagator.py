@@ -435,9 +435,9 @@ def propagate_sgp4(
       result_sgp4_at_horizons['coe'][key][i] = coe[key]
   
   # Calculate display values
-  duration_actual_s = result_horizons['plot_time_s'][-1]
-  grid_end_dt       = horizons_start_dt + timedelta(seconds=duration_actual_s)
-  duration_desired_s = (target_end_dt - target_start_dt).total_seconds()
+  duration_actual_s  = result_horizons['plot_time_s'][-1]
+  grid_end_dt        = horizons_start_dt + timedelta(seconds=duration_actual_s)
+  duration_desired_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
   
   return result_sgp4_at_horizons
 
