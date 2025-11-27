@@ -73,7 +73,8 @@ def get_tle_satellite_and_tle_epoch(
   tle_line2 : str,
 ) -> tuple[datetime, Satrec]:
   """
-  Create Satrec object and extract epoch from TLE.
+  Create Satrec object and extract epoch from TLE. Deconstruct datetime from year 
+  and fractional days to make it precise.
   
   Input:
   ------
@@ -86,6 +87,32 @@ def get_tle_satellite_and_tle_epoch(
   -------
     tuple[datetime, Satrec]
       Epoch datetime and Satellite object.
+      
+  Notes:
+  ------
+    Preferred method: Explicitly handle year rollover and fractional days.
+  
+    Explanation:
+      Precision: 
+        Julian Dates are large numbers (~2.45e6). Performing arithmetic 
+        on them (like subtracting J2000 epoch) before converting to datetime can 
+        introduce small floating-point errors compared to using the specific 
+        year and fractional day provided directly by the TLE.
+
+      Mathematical Detail:
+      - A standard 64-bit float (double) has ~15-17 significant decimal digits.
+      - A modern Julian Date is approx 2,460,000.xxxxxx
+      - To represent 1 microsecond (1e-6 s), we need a day fraction of:
+        1e-6 / 86400 ≈ 1.157e-11
+      - So we need precision down to the 11th decimal place.
+      - JD = 2,460,219.50000000001157...
+        Digits before decimal: 7
+        Digits needed after decimal: 11
+        Total digits needed: 18
+      - Since 18 > 15-17 (double precision limit), the last digits are truncated 
+        or rounded, losing the microsecond precision.
+      - By using the fractional day directly (0.50000000001157...), we only need 
+        11 digits total, which fits comfortably within double precision.
   """
   # Satellite object of TLE
   tle_satellite = Satrec.twoline2rv(
@@ -93,16 +120,21 @@ def get_tle_satellite_and_tle_epoch(
     tle_line2,
   )
   
-  # Epoch of TLE
+  # Extract year
   tle_year = tle_satellite.epochyr
   if tle_year < 57:
     tle_year += 2000
   else:
     tle_year += 1900
-  tle_epoch_days     = tle_satellite.epochdays
-  tle_epoch_datetime = datetime(tle_year, 1, 1) + timedelta(days=tle_epoch_days - 1)
+
+  # Extract days of year
+  tle_days = tle_satellite.epochdays
+
+  # Convert to datetime object
+  tle_time_datetime = datetime(tle_year, 1, 1) + timedelta(days=tle_days - 1)
   
-  return tle_epoch_datetime, tle_satellite
+  # Return epoch datetime and satellite object
+  return tle_time_datetime, tle_satellite
 
 
 def propagate_tle(
@@ -218,6 +250,7 @@ def propagate_tle(
         if coe[key] is not None:
           coe_time_series[key][i] = coe[key]
     
+    # Return dict result
     return {
       'success'     : True,
       'message'     : 'SGP4 propagation successful',
@@ -227,6 +260,7 @@ def propagate_tle(
       'coe'         : coe_time_series,
     }
   except Exception as e:
+    # Catch all exceptions and return failure
     return {
       'success' : False,
       'message' : str(e),

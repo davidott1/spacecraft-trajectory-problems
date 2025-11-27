@@ -1,6 +1,8 @@
 import numpy as np
 
-from typing import Any
+from datetime import datetime, timedelta
+from typing   import Any
+
 
 def get_equal_limits(
   ax : Any,
@@ -25,4 +27,40 @@ def get_equal_limits(
   min_limit  = np.min(all_limits[:, 0])
   max_limit  = np.max(all_limits[:, 1])
   return min_limit, max_limit
+
+
+def add_utc_time_axis(
+  ax       : Any,
+  epoch    : datetime,
+  max_time : float,
+) -> None:
+  """
+  Add a secondary x-axis with UTC time labels.
+  
+  Input:
+  ------
+    ax : matplotlib.axes.Axes
+      The axes object to add the secondary axis to.
+    epoch : datetime
+      The epoch time corresponding to t=0.
+    max_time : float
+      The maximum time value on the primary x-axis.
+  """
+  ax2 = ax.twiny()
+  ax2.set_xlim(ax.get_xlim())
+  
+  tick_positions_sec = ax.get_xticks()
+  valid_ticks = tick_positions_sec[(tick_positions_sec >= 0) & (tick_positions_sec <= max_time)]
+  
+  if len(valid_ticks) < 2:
+    valid_ticks = np.linspace(0, max_time, 7)
+    
+  utc_times = [epoch + timedelta(seconds=float(t)) for t in valid_ticks]
+  time_labels = [t.strftime('%m/%d %H:%M') for t in utc_times]
+  
+  ax2.set_xticks(valid_ticks)
+  ax2.set_xticklabels(time_labels, rotation=45, ha='left', fontsize=8)
+  ax2.set_xlabel('UTC Time', fontsize=9)
+  ax2.xaxis.set_label_position('top')
+  ax2.xaxis.tick_top()
 

@@ -7,8 +7,29 @@ from pathlib              import Path
 from typing               import Optional
 from matplotlib.figure    import Figure
 
-from src.plot.utility    import get_equal_limits, add_utc_time_axis
+from src.plot.utility    import get_equal_limits
 from src.model.constants import CONVERTER, PHYSICALCONSTANTS
+
+
+def add_utc_time_axis(ax, epoch: datetime.datetime, max_time: float):
+  """Add a secondary x-axis with UTC time labels."""
+  ax2 = ax.twiny()
+  ax2.set_xlim(ax.get_xlim())
+  
+  tick_positions_sec = ax.get_xticks()
+  valid_ticks = tick_positions_sec[(tick_positions_sec >= 0) & (tick_positions_sec <= max_time)]
+  
+  if len(valid_ticks) < 2:
+    valid_ticks = np.linspace(0, max_time, 7)
+    
+  utc_times = [epoch + timedelta(seconds=float(t)) for t in valid_ticks]
+  time_labels = [t.strftime('%m/%d %H:%M') for t in utc_times]
+  
+  ax2.set_xticks(valid_ticks)
+  ax2.set_xticklabels(time_labels, rotation=45, ha='left', fontsize=8)
+  ax2.set_xlabel('UTC Time', fontsize=9)
+  ax2.xaxis.set_label_position('top')
+  ax2.xaxis.tick_top()
 
 
 def plot_3d_trajectories(
@@ -193,8 +214,10 @@ def plot_time_series(
   if epoch is not None:
     # Only add UTC time to top row axes
     top_row_axes = [ax_pos, ax_sma]
+    max_time = time[-1]
+    
     for ax in top_row_axes:
-      add_utc_time_axis(ax, epoch)
+      add_utc_time_axis(ax, epoch, max_time)
 
   # Align y-axis labels for right column
   fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_argp, ax_anom])
@@ -474,7 +497,7 @@ def plot_time_series_error(
 
   # Add UTC time axis if epoch is provided
   if epoch is not None:
-    add_utc_time_axis(ax_pos, epoch)
+    add_utc_time_axis(ax_pos, epoch, time_ref[-1])
 
   # Align y-axis labels
   fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_argp, ax_ta])
@@ -569,7 +592,7 @@ def plot_true_longitude_error(
   add_stats(ax_vel, vel_mag, 'Vel [m/s]')
 
   if epoch is not None:
-    add_utc_time_axis(ax_pos, epoch)
+    add_utc_time_axis(ax_pos, epoch, time_ref[-1])
 
   fig.suptitle('RIC Frame Error (Reference = Horizons)', fontsize=14)
   fig.tight_layout()

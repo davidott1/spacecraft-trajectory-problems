@@ -103,18 +103,16 @@ def build_config(
   start_time_str = timespan[0]
   end_time_str   = timespan[1]
 
-  # Validate conditional arguments
+  # Validate: NORAD ID required for norad-id input type
   if input_object_type == 'norad_id' and not norad_id:
     raise ValueError("NORAD ID is required when input-object-type is 'norad-id'")
 
-  # Enforce dependencies: SRP requires SPICE
+  # Validate: SRP requires SPICE
   if include_srp:
     use_spice = True
 
-  # Load supported objects
+  # Validate: norad is insupported objects
   supported_objects = load_supported_objects()
-
-  # Validate norad id input
   if norad_id not in supported_objects:
     raise ValueError(f"NORAD ID {norad_id} is not supported. Supported IDs: {list(supported_objects.keys())}")
 
