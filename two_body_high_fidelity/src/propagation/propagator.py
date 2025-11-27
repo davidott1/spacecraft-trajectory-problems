@@ -385,7 +385,7 @@ def propagate_state_numerical_integration(
   }
 
 
-def propagate_sgp4_at_horizons_grid(
+def propagate_sgp4(
   result_horizons : dict,
   tle_line1       : str,
   tle_line2       : str,
@@ -824,7 +824,7 @@ def run_propagations(
   
   # Propagate: run SGP4 at Horizons time points for comparison
   print("\nSGP4 Model")
-  result_sgp4_at_horizons = propagate_sgp4_at_horizons_grid(
+  result_sgp4_at_horizons = propagate_sgp4(
     result_horizons = result_horizons,
     tle_line1       = tle_line1,
     tle_line2       = tle_line2,
