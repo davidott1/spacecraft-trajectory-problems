@@ -4,8 +4,9 @@ from types    import SimpleNamespace
 from typing   import Optional
 from sgp4.api import Satrec
 
-from src.input.loader import load_supported_objects
-from src.input.cli    import parse_time
+from src.input.loader        import load_supported_objects
+from src.input.cli           import parse_time
+from src.utility.tle_helper  import get_tle_satellite_and_tle_epoch
 
 
 def normalize_input(
@@ -124,9 +125,7 @@ def build_config(
   tle_line2 = obj_props['tle']['line_2']
 
   # Parse TLE epoch
-  satellite    = Satrec.twoline2rv(tle_line1, tle_line2)
-  tle_epoch_jd = satellite.jdsatepoch + satellite.jdsatepochF
-  tle_epoch_dt = datetime(2000, 1, 1, 12, 0, 0) + timedelta(days=tle_epoch_jd - 2451545.0)
+  tle_epoch_dt, _ = get_tle_satellite_and_tle_epoch(tle_line1, tle_line2)
   
   # Target propagation start/end times from arguments
   target_start_dt = parse_time(start_time_str)
@@ -146,7 +145,6 @@ def build_config(
     tle_line1                = tle_line1,
     tle_line2                = tle_line2,
     tle_epoch_dt             = tle_epoch_dt,
-    tle_epoch_jd             = tle_epoch_jd,
     target_start_dt          = target_start_dt,
     target_end_dt            = target_end_dt,
     delta_time               = delta_time,
