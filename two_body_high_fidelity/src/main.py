@@ -197,7 +197,7 @@ def main(
     result_high_fidelity_propagation = result_high_fidelity_propagation,
     result_sgp4_propagation          = result_sgp4_propagation,
     desired_time_o_dt                = config.desired_time_o_dt,
-    figure_folderpath                = config.figure_folderpath,
+    figures_folderpath               = config.figures_folderpath,
   )
   
   # Unload all files (SPICE kernels)
