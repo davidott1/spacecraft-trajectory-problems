@@ -217,6 +217,13 @@ def setup_paths_and_files(
   jpl_horizons_filename = f"horizons_ephem_{norad_id}_{obj_name.lower()}_{desired_time_o_str}_{desired_time_f_str}_1m.csv"
   jpl_horizons_filepath = data_folderpath / 'ephems' / jpl_horizons_filename
   
+  # Define output folderpath
+  timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+  output_folderpath = project_root / 'output' / 'figures' / timestamp_str
+  
+  # Ensure output directory exists
+  output_folderpath.mkdir(parents=True, exist_ok=True)
+  
   return {
     'output_folderpath'        : output_folderpath,
     'spice_kernels_folderpath' : spice_kernels_folderpath,
