@@ -394,7 +394,7 @@ def propagate_sgp4(
 
   print("\n  Compute")
   print("    Numerical Integration Running ... ", end='', flush=True)
-  result_sgp4_at_horizons = propagate_tle(
+  result_sgp4 = propagate_tle(
     tle_line_1 = tle_line_1,
     tle_line_2 = tle_line_2,
     to_j2000   = True,
@@ -402,19 +402,19 @@ def propagate_sgp4(
   )
   print("Complete")
   
-  if not result_sgp4_at_horizons['success']:
-    print(f"  SGP4 propagation at Horizons times failed: {result_sgp4_at_horizons['message']}")
+  if not result_sgp4['success']:
+    print(f"  SGP4 propagation at Horizons times failed: {result_sgp4['message']}")
     return None
 
   # Store integration time (seconds from TLE epoch)
-  result_sgp4_at_horizons['integ_time_s'] = result_sgp4_at_horizons['time']
+  result_sgp4['integ_time_s'] = result_sgp4['time']
   
   # Create plotting time array (seconds from Actual start time)
-  result_sgp4_at_horizons['plot_time_s'] = result_horizons['plot_time_s']
+  result_sgp4['plot_time_s'] = result_horizons['plot_time_s']
   
   # Compute COEs for SGP4 data
-  num_points_sgp4 = result_sgp4_at_horizons['state'].shape[1]
-  result_sgp4_at_horizons['coe'] = {
+  num_points_sgp4 = result_sgp4['state'].shape[1]
+  result_sgp4['coe'] = {
     'sma'  : np.zeros(num_points_sgp4),
     'ecc'  : np.zeros(num_points_sgp4),
     'inc'  : np.zeros(num_points_sgp4),
@@ -427,19 +427,19 @@ def propagate_sgp4(
   
   for i in range(num_points_sgp4):
     coe = OrbitConverter.pv_to_coe(
-      result_sgp4_at_horizons['state'][0:3, i],
-      result_sgp4_at_horizons['state'][3:6, i],
+      result_sgp4['state'][0:3, i],
+      result_sgp4['state'][3:6, i],
       PHYSICALCONSTANTS.EARTH.GP
     )
-    for key in result_sgp4_at_horizons['coe'].keys():
-      result_sgp4_at_horizons['coe'][key][i] = coe[key]
+    for key in result_sgp4['coe'].keys():
+      result_sgp4['coe'][key][i] = coe[key]
   
   # Calculate display values
   duration_actual_s  = result_horizons['plot_time_s'][-1]
   grid_end_dt        = horizons_start_dt + timedelta(seconds=duration_actual_s)
   duration_desired_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
   
-  return result_sgp4_at_horizons
+  return result_sgp4
 
 
 def run_high_fidelity_propagation(
