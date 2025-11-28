@@ -564,9 +564,9 @@ def plot_true_longitude_error(
 
 
 def generate_error_plots(
-  result_jpl_horizons_ephemeris    : dict,
+  result_jpl_horizons_ephemeris    : Optional[dict],
   result_high_fidelity_propagation : dict,
-  result_sgp4_propagation          : dict,
+  result_sgp4_propagation          : Optional[dict],
   desired_time_o_dt                : datetime.datetime,
   figures_folderpath               : Path,
 ) -> None:
@@ -655,9 +655,9 @@ def generate_error_plots(
 
 
 def generate_3d_and_time_series_plots(
-  result_jpl_horizons_ephemeris    : dict,
+  result_jpl_horizons_ephemeris    : Optional[dict],
   result_high_fidelity_propagation : dict,
-  result_sgp4_propagation          : dict,
+  result_sgp4_propagation          : Optional[dict],
   desired_time_o_dt                : datetime.datetime,
   figures_folderpath               : Path,
 ) -> None:
@@ -760,18 +760,18 @@ def generate_plots(
   
   # Generate 3D and time series plots
   generate_3d_and_time_series_plots(
-    result_jpl_horizons_ephemeris    = result_jpl_horizons_ephemeris, # type: ignore
+    result_jpl_horizons_ephemeris    = result_jpl_horizons_ephemeris,
     result_high_fidelity_propagation = result_high_fidelity_propagation,
-    result_sgp4_propagation          = result_sgp4_propagation, # type: ignore
+    result_sgp4_propagation          = result_sgp4_propagation,
     desired_time_o_dt                = desired_time_o_dt,
     figures_folderpath               = figures_folderpath,
   )
     
   # Generate error plots
   generate_error_plots(
-    result_jpl_horizons_ephemeris    = result_jpl_horizons_ephemeris, # type: ignore
+    result_jpl_horizons_ephemeris    = result_jpl_horizons_ephemeris,
     result_high_fidelity_propagation = result_high_fidelity_propagation,
-    result_sgp4_propagation          = result_sgp4_propagation, # type: ignore
+    result_sgp4_propagation          = result_sgp4_propagation,
     desired_time_o_dt                = desired_time_o_dt,
     figures_folderpath               = figures_folderpath,
   )
