@@ -20,6 +20,28 @@ from src.model.frame_converter import FrameConverter
 from src.utility.tle_helper    import modify_tle_bstar, get_tle_satellite_and_tle_epoch
 
 
+def determine_actual_times(
+  result_jpl_horizons_ephemeris : Optional[dict],
+  desired_time_o_dt             : datetime,
+  desired_time_f_dt             : datetime,
+) -> tuple[datetime, datetime]:
+  """
+  Determine the actual start and end times for propagation.
+  
+  If Horizons data is available, aligns the time grid with Horizons.
+  Otherwise, uses the desired start and end times.
+  """
+  if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
+    actual_time_o_dt  = result_jpl_horizons_ephemeris['time_o']
+    duration_horizons = result_jpl_horizons_ephemeris['plot_time_s'][-1]
+    actual_time_f_dt  = actual_time_o_dt + timedelta(seconds=duration_horizons)
+  else:
+    actual_time_o_dt = desired_time_o_dt
+    actual_time_f_dt = desired_time_f_dt
+    
+  return actual_time_o_dt, actual_time_f_dt
+
+
 def propagate_tle(
   tle_line_1   : str,
   tle_line_2   : str,
@@ -328,7 +350,7 @@ def propagate_state_numerical_integration(
 
 
 def propagate_sgp4(
-  result_jpl_horizons_ephemeris : dict,
+  result_jpl_horizons_ephemeris : Optional[dict],
   tle_line_1                    : str,
   tle_line_2                    : str,
   desired_time_o_dt             : datetime,
@@ -365,6 +387,8 @@ def propagate_sgp4(
     dict | None
       An enriched dictionary with SGP4 results, or None if propagation fails.
   """
+  print("\nSGP4 Model")
+
   # Propagate SGP4 at Horizons time points for direct comparison
   if not (result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success')):
     return None
@@ -464,7 +488,7 @@ def run_high_fidelity_propagation(
   zonal_harmonics_list          : list,
   include_srp                   : bool,
   spice_kernels_folderpath      : Path,
-  result_jpl_horizons_ephemeris : dict,
+  result_jpl_horizons_ephemeris : Optional[dict],
 ) -> dict:
   """
   Configure and run the high-fidelity numerical propagator.
@@ -530,7 +554,6 @@ def run_high_fidelity_propagation(
   j3_val = 0.0
   j4_val = 0.0
   active_harmonics = []
-
   if include_zonal_harmonics:
     if 'J2' in zonal_harmonics_list:
       j2_val = PHYSICALCONSTANTS.EARTH.J2
@@ -759,7 +782,6 @@ def run_propagations(
   )
   
   # Propagate: run SGP4 at Horizons time points for comparison
-  print("\nSGP4 Model")
   result_sgp4_at_horizons = propagate_sgp4(
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     tle_line_1                    = tle_line_1,
