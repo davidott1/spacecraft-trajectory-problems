@@ -383,12 +383,12 @@ def propagate_sgp4(
   print(f"  Configuration")
   print(f"    Timespan")
   print(f"      Desired")
-  print(f"        Start    : {desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(desired_time_o_dt):.6f} ET)")
-  print(f"        End      : {desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(desired_time_f_dt):.6f} ET)")
+  print(f"        Initial  : {desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(desired_time_o_dt):.6f} ET)")
+  print(f"        Final    : {desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(desired_time_f_dt):.6f} ET)")
   print(f"        Duration : {duration_desired_s:.1f} s")
   print(f"      Actual")
-  print(f"        Start    : {horizons_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(horizons_start_dt):.6f} ET)")
-  print(f"        End      : {grid_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(grid_end_dt):.6f} ET)")
+  print(f"        Initial  : {horizons_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(horizons_start_dt):.6f} ET)")
+  print(f"        Final    : {grid_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(grid_end_dt):.6f} ET)")
   print(f"        Duration : {duration_actual_s:.1f} s")
   print(f"        Grid     : {num_points} points")
 
@@ -508,17 +508,17 @@ def run_high_fidelity_propagation(
   print("\nHigh-Fidelity Model")
 
   # Determine Actual times if Horizons is available (for grid alignment)
-  actual_start_dt = desired_time_o_dt
-  actual_end_dt   = desired_time_f_dt
+  actual_time_o_dt = desired_time_o_dt
+  actual_time_f_dt = desired_time_f_dt
   
   if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
-    actual_start_dt   = result_jpl_horizons_ephemeris['time_o']
+    actual_time_o_dt  = result_jpl_horizons_ephemeris['time_o']
     duration_horizons = result_jpl_horizons_ephemeris['plot_time_s'][-1]
-    actual_end_dt     = actual_start_dt + timedelta(seconds=duration_horizons)
+    actual_time_f_dt  = actual_time_o_dt + timedelta(seconds=duration_horizons)
 
   # Calculate Ephemeris Times (ET) for integration
-  time_et_o_actual = utc_to_et(actual_start_dt)
-  time_et_f_actual = utc_to_et(actual_end_dt)
+  time_et_o_actual = utc_to_et(actual_time_o_dt)
+  time_et_f_actual = utc_to_et(actual_time_f_dt)
   
   # Calculate ETs for display
   time_et_o_desired = utc_to_et(desired_time_o_dt)
@@ -551,15 +551,15 @@ def run_high_fidelity_propagation(
   print("  Configuration")
   print( "    Timespan")
   print(f"      Desired")
-  print(f"        Start    : {desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_o_desired:.6f} ET)")
-  print(f"        End      : {desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_f_desired:.6f} ET)")
+  print(f"        Initial  : {desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_o_desired:.6f} ET)")
+  print(f"        Final    : {desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_f_desired:.6f} ET)")
   print(f"        Duration : {delta_time:.1f} s")
   
   if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
-      duration_actual = (actual_end_dt - actual_start_dt).total_seconds()
+      duration_actual = (actual_time_f_dt - actual_time_o_dt).total_seconds()
       print(f"      Actual")
-      print(f"        Start    : {actual_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_o_actual:.6f} ET)")
-      print(f"        End      : {actual_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_f_actual:.6f} ET)")
+      print(f"        Initial  : {actual_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_o_actual:.6f} ET)")
+      print(f"        Final    : {actual_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_f_actual:.6f} ET)")
       print(f"        Duration : {duration_actual:.1f} s")
       print(f"        Grid     : {grid_points} points")
   
