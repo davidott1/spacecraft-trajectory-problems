@@ -166,6 +166,9 @@ def build_config(
     include_srp              = include_srp,
     initial_state_source     = initial_state_source,
     output_folderpath        = paths['output_folderpath'],
+    timestamp_folderpath     = paths['timestamp_folderpath'],
+    figures_folderpath       = paths['figures_folderpath'],
+    files_folderpath         = paths['files_folderpath'],
     spice_kernels_folderpath = paths['spice_kernels_folderpath'],
     jpl_horizons_filepath    = paths['jpl_horizons_filepath'],
     lsk_filepath             = paths['lsk_filepath'],
@@ -219,13 +222,20 @@ def setup_paths_and_files(
   
   # Define output folderpath
   timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-  output_folderpath = project_root / 'output' / 'figures' / timestamp_str
+  output_folderpath    = project_root / 'output'
+  timestamp_folderpath = output_folderpath / timestamp_str
+  figures_folderpath   = timestamp_folderpath / 'figures'
+  files_folderpath     = timestamp_folderpath / 'files'
   
   # Ensure output directory exists
-  output_folderpath.mkdir(parents=True, exist_ok=True)
-  
+  figures_folderpath.mkdir(parents=True, exist_ok=True)
+  files_folderpath.mkdir(parents=True, exist_ok=True)
+
   return {
     'output_folderpath'        : output_folderpath,
+    'timestamp_folderpath'     : timestamp_folderpath,
+    'figures_folderpath'       : figures_folderpath,
+    'files_folderpath'         : files_folderpath,
     'spice_kernels_folderpath' : spice_kernels_folderpath,
     'jpl_horizons_filepath'    : jpl_horizons_filepath,
     'lsk_filepath'             : lsk_filepath,
