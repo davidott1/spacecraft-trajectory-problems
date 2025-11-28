@@ -328,11 +328,11 @@ def propagate_state_numerical_integration(
 
 
 def propagate_sgp4(
-  result_horizons   : dict,
-  tle_line_1        : str,
-  tle_line_2        : str,
-  desired_time_o_dt : datetime,
-  desired_time_f_dt : datetime,
+  result_jpl_horizons_ephemeris : dict,
+  tle_line_1                    : str,
+  tle_line_2                    : str,
+  desired_time_o_dt             : datetime,
+  desired_time_f_dt             : datetime,
 ) -> Optional[dict]:
   """
   Propagate SGP4 on the same time grid as the Horizons ephemeris.
@@ -343,7 +343,7 @@ def propagate_sgp4(
   
   Input:
   ------
-    result_horizons : dict
+    result_jpl_horizons_ephemeris : dict
       The processed dictionary from JPL Horizons, containing 'success', 'plot_time_s'.
     tle_line_1 : str
       The first line of the TLE.
@@ -360,21 +360,21 @@ def propagate_sgp4(
       An enriched dictionary with SGP4 results, or None if propagation fails.
   """
   # Propagate SGP4 at Horizons time points for direct comparison
-  if not (result_horizons and result_horizons.get('success')):
+  if not (result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success')):
     return None
   
   # Extract TLE epoch to calculate time offset
   tle_epoch_dt, _ = get_tle_satellite_and_tle_epoch(tle_line_1, tle_line_2)
 
   # Calculate time offset: Horizons start relative to TLE epoch
-  horizons_start_dt = result_horizons['time_o']
+  horizons_start_dt = result_jpl_horizons_ephemeris['time_o']
   time_offset_s     = (horizons_start_dt - tle_epoch_dt).total_seconds()
 
   # Convert Horizons plot_time_s to integration times for SGP4 (seconds from TLE epoch)
-  sgp4_eval_times = result_horizons['plot_time_s'] + time_offset_s
+  sgp4_eval_times = result_jpl_horizons_ephemeris['plot_time_s'] + time_offset_s
   
   # Calculate display values
-  duration_actual_s  = result_horizons['plot_time_s'][-1]
+  duration_actual_s  = result_jpl_horizons_ephemeris['plot_time_s'][-1]
   grid_end_dt        = horizons_start_dt + timedelta(seconds=duration_actual_s)
   duration_desired_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
   num_points         = len(sgp4_eval_times)
@@ -410,7 +410,7 @@ def propagate_sgp4(
   result_sgp4['integ_time_s'] = result_sgp4['time']
   
   # Create plotting time array (seconds from Actual start time)
-  result_sgp4['plot_time_s'] = result_horizons['plot_time_s']
+  result_sgp4['plot_time_s'] = result_jpl_horizons_ephemeris['plot_time_s']
   
   # Compute COEs for SGP4 data
   num_points_sgp4 = result_sgp4['state'].shape[1]
@@ -435,7 +435,7 @@ def propagate_sgp4(
       result_sgp4['coe'][key][i] = coe[key]
   
   # Calculate display values
-  duration_actual_s  = result_horizons['plot_time_s'][-1]
+  duration_actual_s  = result_jpl_horizons_ephemeris['plot_time_s'][-1]
   grid_end_dt        = horizons_start_dt + timedelta(seconds=duration_actual_s)
   duration_desired_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
   
@@ -443,22 +443,22 @@ def propagate_sgp4(
 
 
 def run_high_fidelity_propagation(
-  initial_state            : np.ndarray,
-  desired_time_o_dt        : datetime,
-  desired_time_f_dt        : datetime,
-  mass                     : float,
-  cd                       : float,
-  area_drag                : float,
-  cr                       : float,
-  area_srp                 : float,
-  use_spice                : bool,
-  include_third_body       : bool,
-  third_bodies_list        : list,
-  include_zonal_harmonics  : bool,
-  zonal_harmonics_list     : list,
-  include_srp              : bool,
-  spice_kernels_folderpath : Path,
-  result_horizons          : dict,
+  initial_state                 : np.ndarray,
+  desired_time_o_dt             : datetime,
+  desired_time_f_dt             : datetime,
+  mass                          : float,
+  cd                            : float,
+  area_drag                     : float,
+  cr                            : float,
+  area_srp                      : float,
+  use_spice                     : bool,
+  include_third_body            : bool,
+  third_bodies_list             : list,
+  include_zonal_harmonics       : bool,
+  zonal_harmonics_list          : list,
+  include_srp                   : bool,
+  spice_kernels_folderpath      : Path,
+  result_jpl_horizons_ephemeris : dict,
 ) -> dict:
   """
   Configure and run the high-fidelity numerical propagator.
@@ -495,7 +495,7 @@ def run_high_fidelity_propagation(
       Whether to enable Solar Radiation Pressure.
     spice_kernels_folderpath : Path
       Path to SPICE kernels folder.
-    result_horizons : dict
+    result_jpl_horizons_ephemeris : dict
       Result from Horizons loader (used for time grid).
       
   Output:
@@ -511,9 +511,9 @@ def run_high_fidelity_propagation(
   actual_start_dt = desired_time_o_dt
   actual_end_dt   = desired_time_f_dt
   
-  if result_horizons and result_horizons.get('success'):
-      actual_start_dt = result_horizons['time_o']
-      duration_horizons = result_horizons['plot_time_s'][-1]
+  if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
+      actual_start_dt = result_jpl_horizons_ephemeris['time_o']
+      duration_horizons = result_jpl_horizons_ephemeris['plot_time_s'][-1]
       actual_end_dt = actual_start_dt + timedelta(seconds=duration_horizons)
 
   # Helper to get ET (or approx ET)
@@ -554,8 +554,8 @@ def run_high_fidelity_propagation(
   # Calculate duration and grid info
   delta_time  = (desired_time_f_dt - desired_time_o_dt).total_seconds()
   grid_points = 0
-  if result_horizons and result_horizons.get('success'):
-    grid_points = len(result_horizons['plot_time_s'])
+  if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
+    grid_points = len(result_jpl_horizons_ephemeris['plot_time_s'])
 
   # Set up high-fidelity dynamics model
   print("  Configuration")
@@ -565,7 +565,7 @@ def run_high_fidelity_propagation(
   print(f"        End      : {desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_f_desired:.6f} ET)")
   print(f"        Duration : {delta_time:.1f} s")
   
-  if result_horizons and result_horizons.get('success'):
+  if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
       duration_actual = (actual_end_dt - actual_start_dt).total_seconds()
       print(f"      Actual")
       print(f"        Start    : {actual_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_o_actual:.6f} ET)")
@@ -621,9 +621,9 @@ def run_high_fidelity_propagation(
   )
   
   # Propagate with high-fidelity model: use Horizons time grid
-  if result_horizons and result_horizons['success']:
+  if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris['success']:
     # Convert Horizons plot_time_s (seconds from ACTUAL start) to ET
-    horizons_et_times = result_horizons['plot_time_s'] + time_et_o_actual
+    horizons_et_times = result_jpl_horizons_ephemeris['plot_time_s'] + time_et_o_actual
     
     # Update integration start/end times to match grid exactly (avoids floating point errors)
     time_et_o_actual = horizons_et_times[0]
@@ -673,24 +673,24 @@ def run_high_fidelity_propagation(
 
 
 def run_propagations(
-  initial_state            : np.ndarray,
-  desired_time_o_dt        : datetime,
-  desired_time_f_dt        : datetime,
-  mass                     : float,
-  cd                       : float,
-  area_drag                : float,
-  cr                       : float,
-  area_srp                 : float,
-  use_spice                : bool,
-  include_third_body       : bool,
-  third_bodies_list        : list,
-  include_zonal_harmonics  : bool,
-  zonal_harmonics_list     : list,
-  include_srp              : bool,
-  spice_kernels_folderpath : Path,
-  result_horizons          : dict,
-  tle_line_1               : str,
-  tle_line_2               : str,
+  initial_state                 : np.ndarray,
+  desired_time_o_dt             : datetime,
+  desired_time_f_dt             : datetime,
+  mass                          : float,
+  cd                            : float,
+  area_drag                     : float,
+  cr                            : float,
+  area_srp                      : float,
+  use_spice                     : bool,
+  include_third_body            : bool,
+  third_bodies_list             : list,
+  include_zonal_harmonics       : bool,
+  zonal_harmonics_list          : list,
+  include_srp                   : bool,
+  spice_kernels_folderpath      : Path,
+  result_jpl_horizons_ephemeris : dict,
+  tle_line_1                    : str,
+  tle_line_2                    : str,
 ) -> tuple[dict, Optional[dict]]:
   """
   Run high-fidelity and SGP4 propagations.
@@ -727,8 +727,8 @@ def run_propagations(
       Whether to enable SRP.
     spice_kernels_folderpath : Path
       Path to SPICE kernels.
-    result_horizons : dict
-      Horizons ephemeris result.
+    result_jpl_horizons_ephemeris : dict
+      JPL Horizons ephemeris result.
     tle_line_1 : str
       TLE line 1.
     tle_line_2 : str
@@ -741,32 +741,32 @@ def run_propagations(
   """
   # Propagate: run high-fidelity propagation at Horizons time points for comparison
   result_high_fidelity = run_high_fidelity_propagation(
-    initial_state            = initial_state,
-    desired_time_o_dt        = desired_time_o_dt,
-    desired_time_f_dt        = desired_time_f_dt,
-    mass                     = mass,
-    cd                       = cd,
-    area_drag                = area_drag,
-    cr                       = cr,
-    area_srp                 = area_srp,
-    use_spice                = use_spice,
-    include_third_body       = include_third_body,
-    third_bodies_list        = third_bodies_list,
-    include_zonal_harmonics  = include_zonal_harmonics,
-    zonal_harmonics_list     = zonal_harmonics_list,
-    include_srp              = include_srp,
-    spice_kernels_folderpath = spice_kernels_folderpath,
-    result_horizons          = result_horizons,
+    initial_state                 = initial_state,
+    desired_time_o_dt             = desired_time_o_dt,
+    desired_time_f_dt             = desired_time_f_dt,
+    mass                          = mass,
+    cd                            = cd,
+    area_drag                     = area_drag,
+    cr                            = cr,
+    area_srp                      = area_srp,
+    use_spice                     = use_spice,
+    include_third_body            = include_third_body,
+    third_bodies_list             = third_bodies_list,
+    include_zonal_harmonics       = include_zonal_harmonics,
+    zonal_harmonics_list          = zonal_harmonics_list,
+    include_srp                   = include_srp,
+    spice_kernels_folderpath      = spice_kernels_folderpath,
+    result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
   )
   
   # Propagate: run SGP4 at Horizons time points for comparison
   print("\nSGP4 Model")
   result_sgp4_at_horizons = propagate_sgp4(
-    result_horizons   = result_horizons,
-    tle_line_1        = tle_line_1,
-    tle_line_2        = tle_line_2,
-    desired_time_o_dt = desired_time_o_dt,
-    desired_time_f_dt = desired_time_f_dt,
+    result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
+    tle_line_1                    = tle_line_1,
+    tle_line_2                    = tle_line_2,
+    desired_time_o_dt             = desired_time_o_dt,
+    desired_time_f_dt             = desired_time_f_dt,
   )
   
   return result_high_fidelity, result_sgp4_at_horizons

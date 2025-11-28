@@ -149,24 +149,24 @@ def main(
 
   # Run propagations: high-fidelity and SGP4 at Horizons times
   result_high_fidelity_propagation, result_sgp4_propagation = run_propagations(
-    initial_state            = initial_state,
-    desired_time_o_dt        = config.desired_time_o_dt,
-    desired_time_f_dt        = config.desired_time_f_dt,
-    mass                     = config.mass,
-    cd                       = config.cd,
-    area_drag                = config.area_drag,
-    cr                       = config.cr,
-    area_srp                 = config.area_srp,
-    use_spice                = config.use_spice,
-    include_third_body       = config.include_third_body,
-    third_bodies_list        = config.third_bodies_list,
-    include_zonal_harmonics  = config.include_zonal_harmonics,
-    zonal_harmonics_list     = config.zonal_harmonics_list,
-    include_srp              = config.include_srp,
-    spice_kernels_folderpath = config.spice_kernels_folderpath,
-    result_horizons          = result_horizons_ephemeris, # type: ignore
-    tle_line_1               = config.tle_line_1,
-    tle_line_2               = config.tle_line_2,
+    initial_state                 = initial_state,
+    desired_time_o_dt             = config.desired_time_o_dt,
+    desired_time_f_dt             = config.desired_time_f_dt,
+    mass                          = config.mass,
+    cd                            = config.cd,
+    area_drag                     = config.area_drag,
+    cr                            = config.cr,
+    area_srp                      = config.area_srp,
+    use_spice                     = config.use_spice,
+    include_third_body            = config.include_third_body,
+    third_bodies_list             = config.third_bodies_list,
+    include_zonal_harmonics       = config.include_zonal_harmonics,
+    zonal_harmonics_list          = config.zonal_harmonics_list,
+    include_srp                   = config.include_srp,
+    spice_kernels_folderpath      = config.spice_kernels_folderpath,
+    result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris, # type: ignore
+    tle_line_1                    = config.tle_line_1,
+    tle_line_2                    = config.tle_line_2,
   )
   
   # Display results and create plots
