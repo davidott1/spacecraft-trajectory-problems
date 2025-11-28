@@ -512,27 +512,17 @@ def run_high_fidelity_propagation(
   actual_end_dt   = desired_time_f_dt
   
   if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
-      actual_start_dt = result_jpl_horizons_ephemeris['time_o']
-      duration_horizons = result_jpl_horizons_ephemeris['plot_time_s'][-1]
-      actual_end_dt = actual_start_dt + timedelta(seconds=duration_horizons)
-
-  # Helper to get ET (or approx ET)
-  J2000_EPOCH = datetime(2000, 1, 1, 12, 0, 0)
-  def get_et(dt):
-    if use_spice:
-      try:
-        return utc_to_et(dt)
-      except:
-        pass
-    return (dt - J2000_EPOCH).total_seconds()
+    actual_start_dt   = result_jpl_horizons_ephemeris['time_o']
+    duration_horizons = result_jpl_horizons_ephemeris['plot_time_s'][-1]
+    actual_end_dt     = actual_start_dt + timedelta(seconds=duration_horizons)
 
   # Calculate Ephemeris Times (ET) for integration
-  time_et_o_actual = get_et(actual_start_dt)
-  time_et_f_actual = get_et(actual_end_dt)
+  time_et_o_actual = utc_to_et(actual_start_dt)
+  time_et_f_actual = utc_to_et(actual_end_dt)
   
   # Calculate ETs for display
-  time_et_o_desired = get_et(desired_time_o_dt)
-  time_et_f_desired = get_et(desired_time_f_dt)
+  time_et_o_desired = utc_to_et(desired_time_o_dt)
+  time_et_f_desired = utc_to_et(desired_time_f_dt)
 
   # Determine active zonal harmonics
   j2_val = 0.0
@@ -768,5 +758,6 @@ def run_propagations(
     desired_time_o_dt             = desired_time_o_dt,
     desired_time_f_dt             = desired_time_f_dt,
   )
-  
+
   return result_high_fidelity, result_sgp4_at_horizons
+
