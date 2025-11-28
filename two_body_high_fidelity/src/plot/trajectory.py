@@ -600,13 +600,13 @@ def generate_error_plots(
     fig_err_3d = plot_3d_error(result_jpl_horizons_ephemeris, result_high_fidelity_propagation)
     fig_err_3d.suptitle('ISS Orbit Error: Horizons vs High-Fidelity', fontsize=16)
     fig_err_3d.savefig(output_folderpath / 'iss_error_3d.png', dpi=300, bbox_inches='tight')
-    print(f"      <figure_folderpath>/iss_error_3d.png")
+    print(f"      <folderpath>/iss_error_3d.png")
     
     # Time series error plots
     fig_err_ts = plot_time_series_error(result_jpl_horizons_ephemeris, result_high_fidelity_propagation, epoch=desired_time_o_dt)
     fig_err_ts.suptitle('ISS RIC Position/Velocity Errors: Horizons vs High-Fidelity', fontsize=16)
     fig_err_ts.savefig(output_folderpath / 'iss_error_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"      <figure_folderpath>/iss_error_timeseries.png")
+    print(f"      <folderpath>/iss_error_timeseries.png")
 
   # Error plots comparing SGP4 to Horizons
   if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success') and result_sgp4_propagation and result_sgp4_propagation.get('success'):
@@ -616,13 +616,13 @@ def generate_error_plots(
     fig_sgp4_err_3d = plot_3d_error(result_jpl_horizons_ephemeris, result_sgp4_propagation)
     fig_sgp4_err_3d.suptitle('ISS Orbit Error: Horizons vs SGP4', fontsize=16)
     fig_sgp4_err_3d.savefig(output_folderpath / 'iss_sgp4_error_3d.png', dpi=300, bbox_inches='tight')
-    print(f"      <figure_folderpath>/iss_sgp4_error_3d.png")
+    print(f"      <folderpath>/iss_sgp4_error_3d.png")
     
     # Time series error plot (RIC frame)
     fig_sgp4_err_ts = plot_time_series_error(result_jpl_horizons_ephemeris, result_sgp4_propagation, epoch=desired_time_o_dt, use_ric=False)
     fig_sgp4_err_ts.suptitle('ISS XYZ Position/Velocity Errors: Horizons vs SGP4', fontsize=16)
     fig_sgp4_err_ts.savefig(output_folderpath / 'iss_sgp4_error_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"      <figure_folderpath>/iss_sgp4_error_timeseries.png")
+    print(f"      <folderpath>/iss_sgp4_error_timeseries.png")
     
     # Compute and display SGP4 error statistics
     pos_error_sgp4_m  = np.linalg.norm(result_sgp4_propagation['state'][0:3, :] - result_jpl_horizons_ephemeris['state'][0:3, :], axis=0)
@@ -651,7 +651,7 @@ def generate_error_plots(
     
     fig_sgp4_growth.tight_layout()
     fig_sgp4_growth.savefig(output_folderpath / 'iss_sgp4_error_growth.png', dpi=300, bbox_inches='tight')
-    print(f"      <figure_folderpath>/iss_sgp4_error_growth.png")
+    print(f"      <folderpath>/iss_sgp4_error_growth.png")
 
 
 def generate_3d_and_time_series_plots(
@@ -690,12 +690,12 @@ def generate_3d_and_time_series_plots(
     fig1 = plot_3d_trajectories(result_jpl_horizons_ephemeris)
     fig1.suptitle('ISS Orbit - JPL Horizons - 3D', fontsize=16)
     fig1.savefig(output_folderpath / 'iss_jpl_horizons_3d.png', dpi=300, bbox_inches='tight')
-    print(f"      <figure_folderpath>/iss_jpl_horizons_3d.png")
+    print(f"      <folderpath>/iss_jpl_horizons_3d.png")
     
     fig2 = plot_time_series(result_jpl_horizons_ephemeris, epoch=desired_time_o_dt)
     fig2.suptitle('ISS Orbit - JPL Horizons - Time Series', fontsize=16)
     fig2.savefig(output_folderpath / 'iss_jpl_horizons_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"      <figure_folderpath>/iss_jpl_horizons_timeseries.png")
+    print(f"      <folderpath>/iss_jpl_horizons_timeseries.png")
   
   # High-fidelity plots (second)
   if result_high_fidelity_propagation.get('success'):
@@ -704,12 +704,12 @@ def generate_3d_and_time_series_plots(
     fig3 = plot_3d_trajectories(result_high_fidelity_propagation)
     fig3.suptitle('ISS Orbit - High-Fidelity Model - 3D', fontsize=16)
     fig3.savefig(output_folderpath / 'iss_high_fidelity_model_3d.png', dpi=300, bbox_inches='tight')
-    print(f"      <figure_folderpath>/iss_high_fidelity_model_3d.png")
+    print(f"      <folderpath>/iss_high_fidelity_model_3d.png")
     
     fig4 = plot_time_series(result_high_fidelity_propagation, epoch=desired_time_o_dt)
     fig4.suptitle('ISS Orbit - High-Fidelity Model - Time Series', fontsize=16)
     fig4.savefig(output_folderpath / 'iss_high_fidelity_model_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"      <figure_folderpath>/iss_high_fidelity_model_timeseries.png")
+    print(f"      <folderpath>/iss_high_fidelity_model_timeseries.png")
   
   # SGP4 at Horizons time points plots
   if result_sgp4_propagation and result_sgp4_propagation.get('success'):
@@ -719,13 +719,13 @@ def generate_3d_and_time_series_plots(
     fig_sgp4_hz_3d = plot_3d_trajectories(result_sgp4_propagation)
     fig_sgp4_hz_3d.suptitle('ISS Orbit - SGP4 Model - 3D', fontsize=16)
     fig_sgp4_hz_3d.savefig(output_folderpath / 'iss_sgp4_model_3d.png', dpi=300, bbox_inches='tight')
-    print(f"      <figure_folderpath>/iss_sgp4_model_3d.png")
+    print(f"      <folderpath>/iss_sgp4_model_3d.png")
     
     # Time series plot
     fig_sgp4_hz_ts = plot_time_series(result_sgp4_propagation, epoch=desired_time_o_dt)
     fig_sgp4_hz_ts.suptitle('ISS Orbit - SGP4 Model - Time Series', fontsize=16)
     fig_sgp4_hz_ts.savefig(output_folderpath / 'iss_sgp4_model_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"      <figure_folderpath>/iss_sgp4_model_timeseries.png")
+    print(f"      <folderpath>/iss_sgp4_model_timeseries.png")
 
 
 def generate_plots(
@@ -756,7 +756,7 @@ def generate_plots(
     None
   """
   print("\nGenerate and Save Plots")
-  print(f"  Figure Folderpath {output_folderpath}\n")
+  print(f"  Folderpath : {output_folderpath}\n")
   
   # Generate 3D and time series plots
   generate_3d_and_time_series_plots(
