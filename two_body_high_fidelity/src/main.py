@@ -134,9 +134,9 @@ def main(
 
   # Get Horizons ephemeris
   result_jpl_horizons_ephemeris = get_horizons_ephemeris(
-    horizons_filepath = config.horizons_filepath,
-    desired_time_o_dt = config.desired_time_o_dt,
-    target_end_dt     = config.desired_time_f_dt,
+    jpl_horizons_filepath = config.jpl_horizons_filepath,
+    desired_time_o_dt     = config.desired_time_o_dt,
+    target_end_dt         = config.desired_time_f_dt,
   )
 
   # Determine Actual times if Horizons is available (for grid alignment)

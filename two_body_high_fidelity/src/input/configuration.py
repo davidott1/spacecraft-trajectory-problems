@@ -163,7 +163,7 @@ def build_config(
     initial_state_source     = initial_state_source,
     output_folderpath        = paths['output_folderpath'],
     spice_kernels_folderpath = paths['spice_kernels_folderpath'],
-    horizons_filepath        = paths['horizons_filepath'],
+    jpl_horizons_filepath    = paths['jpl_horizons_filepath'],
     lsk_filepath             = paths['lsk_filepath'],
   )
 
@@ -208,14 +208,14 @@ def setup_paths_and_files(
   lsk_filepath             = spice_kernels_folderpath / 'naif0012.tls'
   
   # Horizons ephemeris file (dynamically named)
-  desired_time_o_str = desired_time_o_dt.strftime('%Y%m%dT%H%M%SZ')
-  desired_time_f_str = desired_time_f_dt.strftime('%Y%m%dT%H%M%SZ')
-  horizons_filename  = f"horizons_ephem_{norad_id}_{obj_name.lower()}_{desired_time_o_str}_{desired_time_f_str}_1m.csv"
-  horizons_filepath  = data_folderpath / 'ephems' / horizons_filename
+  desired_time_o_str    = desired_time_o_dt.strftime('%Y%m%dT%H%M%SZ')
+  desired_time_f_str    = desired_time_f_dt.strftime('%Y%m%dT%H%M%SZ')
+  jpl_horizons_filename = f"horizons_ephem_{norad_id}_{obj_name.lower()}_{desired_time_o_str}_{desired_time_f_str}_1m.csv"
+  jpl_horizons_filepath = data_folderpath / 'ephems' / jpl_horizons_filename
   
   return {
     'output_folderpath'        : output_folderpath,
     'spice_kernels_folderpath' : spice_kernels_folderpath,
-    'horizons_filepath'        : horizons_filepath,
+    'jpl_horizons_filepath'    : jpl_horizons_filepath,
     'lsk_filepath'             : lsk_filepath,
   }
