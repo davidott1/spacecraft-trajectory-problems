@@ -183,7 +183,8 @@ def parse_command_line_arguments(
   # Optional arguments
   parser.add_argument(
     '--include-spice',
-    dest    = 'use_spice',
+    '--spice',
+    dest    = 'include_spice',
     action  = 'store_true',
     default = False,
     help    = "Enable SPICE functionality (disabled by default).",
@@ -192,7 +193,7 @@ def parse_command_line_arguments(
     '--third-bodies',
     '--include-third-bodies',
     dest    = 'third_bodies',
-    nargs   = '+', # Accepts 1 or more args.
+    nargs   = '+', # accepts 1 or more args.
     choices = ['SUN', 'MOON', 'sun', 'moon'],
     default = None,
     help    = "Enable third-body gravity. Required args: SUN MOON (e.g. --third-bodies SUN).",
@@ -201,13 +202,22 @@ def parse_command_line_arguments(
     '--zonal-harmonics',
     '--include-zonal-harmonics',
     dest    = 'zonal_harmonics',
-    nargs   = '+', # Accepts 1 or more args.
+    nargs   = '+', # accepts 1 or more args.
     choices = ['J2', 'J3', 'J4'],
     default = None,
     help    = "Enable zonal harmonics. Required args: J2 J3 J4 (e.g. --zonal-harmonics J2).",
   )
   parser.add_argument(
+    '--include-drag',
+    '--drag',
+    dest    = 'include_drag',
+    action  = 'store_true',
+    default = False,
+    help    = "Enable Atmospheric Drag (disabled by default).",
+  )
+  parser.add_argument(
     '--include-srp',
+    '--srp',
     dest    = 'include_srp',
     action  = 'store_true',
     default = False,

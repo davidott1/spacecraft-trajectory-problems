@@ -487,6 +487,7 @@ def run_high_fidelity_propagation(
   actual_time_o_dt              : datetime,
   actual_time_f_dt              : datetime,
   mass                          : float,
+  include_drag                  : bool,
   cd                            : float,
   area_drag                     : float,
   cr                            : float,
@@ -517,6 +518,8 @@ def run_high_fidelity_propagation(
       Actual final datetime (from Horizons or Desired).
     mass : float
       Satellite mass [kg].
+    include_drag : bool
+      Whether to enable Atmospheric Drag.
     cd : float
       Drag coefficient.
     area_drag : float
@@ -616,8 +619,11 @@ def run_high_fidelity_propagation(
       print("          Ephemeris : Analytical (Approximate)")
       
   print("      Atmospheric Drag")
-  print( "        Model      : Exponential Atmosphere")
-  print(f"        Parameters : Cd={cd}, Area_Drag={area_drag} m², Mass={mass} kg")
+  if include_drag:
+    print( "        Model      : Exponential Atmosphere")
+    print(f"        Parameters : Cd={cd}, Area_Drag={area_drag} m², Mass={mass} kg")
+  else:
+    print("        Model      : None")
 
   if include_srp:
     print("      Solar Radiation Pressure")
@@ -632,7 +638,7 @@ def run_high_fidelity_propagation(
     j4                      = j4_val,
     pos_ref                 = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR,
     mass                    = mass,
-    enable_drag             = True,
+    enable_drag             = include_drag,
     cd                      = cd,
     area_drag               = area_drag,
     enable_srp              = include_srp,
@@ -703,6 +709,7 @@ def run_propagations(
   actual_time_o_dt              : datetime,
   actual_time_f_dt              : datetime,
   mass                          : float,
+  include_drag                  : bool,
   cd                            : float,
   area_drag                     : float,
   cr                            : float,
@@ -735,6 +742,8 @@ def run_propagations(
       Actual final time as a datetime.
     mass : float
       Satellite mass.
+    include_drag : bool
+      Whether to enable Atmospheric Drag.
     cd : float
       Drag coefficient.
     area_drag : float
@@ -777,6 +786,7 @@ def run_propagations(
     actual_time_o_dt              = actual_time_o_dt,
     actual_time_f_dt              = actual_time_f_dt,
     mass                          = mass,
+    include_drag                  = include_drag,
     cd                            = cd,
     area_drag                     = area_drag,
     cr                            = cr,

@@ -31,6 +31,7 @@ Usage:
   --spice                      No         Enable SPICE functionality
   --third-bodies               No         Enable third-body gravity (requires arguments e.g. sun)
   --srp                        No         Enable Solar Radiation Pressure
+  --drag                       No         Enable Atmospheric Drag
   
 
   Example Commands:
@@ -42,10 +43,9 @@ Usage:
       [--zonal-harmonics J2 J3 J4] \
       [--third-bodies sun moon] \
       [--srp] \
-      [--spice]
+      [--spice] \
+      [--drag]
       
-      
-
     python -m src.main \
       --input-object-type norad-id \
       --norad-id 25544 \
@@ -54,8 +54,8 @@ Usage:
       --zonal-harmonics J2 J3 J4 \
       --third-bodies sun moon \
       --srp \
-      --spice
-      
+      --spice \
+      --drag
 """
 from typing                            import Optional
 from datetime                          import datetime, timedelta
@@ -74,7 +74,8 @@ def main(
   input_object_type    : str,
   norad_id             : str,
   timespan             : list,
-  use_spice            : bool           = False,
+  include_spice        : bool           = False,
+  include_drag         : bool           = False,
   third_bodies         : Optional[list] = None,
   zonal_harmonics      : Optional[list] = None,
   include_srp          : bool           = False,
@@ -96,8 +97,10 @@ def main(
       NORAD Catalog ID of the satellite.
     timespan : list
       Start and end time for propagation in ISO format.
-    use_spice : bool
+    include_spice : bool
       Flag to enable/disable SPICE usage.
+    include_drag : bool
+      Flag to enable/disable Atmospheric Drag.
     third_bodies : list | None
       List of third bodies to include (e.g., ['SUN', 'MOON']). None means disabled.
     zonal_harmonics : list | None
@@ -118,7 +121,8 @@ def main(
     input_object_type,
     norad_id,
     timespan,
-    use_spice,
+    include_spice,
+    include_drag,
     third_bodies,
     zonal_harmonics,
     include_srp,
@@ -127,7 +131,7 @@ def main(
 
   # Load files
   load_files(
-    config.use_spice,
+    config.include_spice,
     config.spice_kernels_folderpath,
     config.lsk_filepath,
   )
@@ -139,7 +143,7 @@ def main(
     target_end_dt         = config.desired_time_f_dt,
   )
 
-  # Determine Actual times if Horizons is available (for grid alignment)
+  # Determine actual times if Horizons is available (for grid alignment)
   actual_time_o_dt, actual_time_f_dt = determine_actual_times(
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     desired_time_o_dt             = config.desired_time_o_dt,
@@ -156,7 +160,7 @@ def main(
     to_j2000                      = True,
   )
 
-  # Run propagations: high-fidelity and SGP4 at Horizons times
+  # Run propagations: high-fidelity and SGP4
   result_high_fidelity_propagation, result_sgp4_propagation = run_propagations(
     initial_state                 = initial_state,
     desired_time_o_dt             = config.desired_time_o_dt,
@@ -164,11 +168,12 @@ def main(
     actual_time_o_dt              = actual_time_o_dt,
     actual_time_f_dt              = actual_time_f_dt,
     mass                          = config.mass,
+    include_drag                  = config.include_drag,
     cd                            = config.cd,
     area_drag                     = config.area_drag,
     cr                            = config.cr,
     area_srp                      = config.area_srp,
-    use_spice                     = config.use_spice,
+    use_spice                     = config.include_spice,
     include_third_body            = config.include_third_body,
     third_bodies_list             = config.third_bodies_list,
     include_zonal_harmonics       = config.include_zonal_harmonics,
@@ -196,7 +201,7 @@ def main(
   )
   
   # Unload all files (SPICE kernels)
-  unload_files(config.use_spice)
+  unload_files(config.include_spice)
   
   # Return high-fidelity propagation results
   return result_high_fidelity_propagation
@@ -211,7 +216,8 @@ if __name__ == "__main__":
     args.input_object_type,
     args.norad_id,
     args.timespan,
-    args.use_spice,
+    args.include_spice,
+    args.include_drag,
     args.third_bodies,
     args.zonal_harmonics,
     args.include_srp,

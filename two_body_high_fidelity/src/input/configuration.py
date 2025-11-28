@@ -44,7 +44,8 @@ def build_config(
   input_object_type    : str,
   norad_id             : str,
   desired_timespan     : list,
-  use_spice            : bool           = False,
+  include_spice        : bool           = False,
+  include_drag         : bool           = False,
   third_bodies         : Optional[list] = None,
   zonal_harmonics      : Optional[list] = None,
   include_srp          : bool           = False,
@@ -63,6 +64,8 @@ def build_config(
       Initial and final time in ISO format (e.g., ['2025-10-01T00:00:00', '2025-10-02T00:00:00']) as list of strings.
     use_spice : bool
       Flag to enable/disable SPICE usage.
+    include_drag : bool
+      Flag to enable/disable Drag force modeling.
     third_bodies : list | None
       List of third bodies to include (e.g., ['SUN', 'MOON']). None if disabled.
     zonal_harmonics : list | None
@@ -110,7 +113,7 @@ def build_config(
 
   # Validate: SRP requires SPICE
   if include_srp:
-    use_spice = True
+    include_spice = True
 
   # Validate: norad is insupported objects
   supported_objects = load_supported_objects()
@@ -154,7 +157,8 @@ def build_config(
     area_drag                = obj_props['drag']['area__m2'],
     cr                       = obj_props['srp']['coeff'],
     area_srp                 = obj_props['srp']['area__m2'],
-    use_spice                = use_spice,
+    include_spice            = include_spice,
+    include_drag             = include_drag,
     include_third_body       = include_third_body,
     third_bodies_list        = third_bodies_list,
     include_zonal_harmonics  = include_zonal_harmonics,
