@@ -24,13 +24,17 @@ class FrameConverter:
         Velocity in TEME frame [m/s].
       jd_utc : float
         Julian date in UTC scale (from SGP4).
+      units_pos : str
+        Units for position input (default 'm').
+      units_vel : str
+        Units for velocity input (default 'm/s').
     
     Output:
     -------
-      tuple[np.ndarray, np.ndarray]
-        A tuple containing:
-        - gcrs_pos_vec: position in GCRS frame [m].
-        - gcrs_vel_vec: velocity in GCRS frame [m/s].
+      gcrs_pos_vec : np.ndarray
+        Position in GCRS frame [m].
+      gcrs_vel_vec : np.ndarray
+        Velocity in GCRS frame [m/s].
     """
     # Create astropy Time object from UTC
     astropy_time = AstropyTime(jd_utc, format='jd', scale='utc')
@@ -83,7 +87,7 @@ class FrameConverter:
     j2000_vel_vec : np.ndarray,
     jd_utc        : float,
     units_pos     : str = 'm',
-    units_vel     : str = 'm/s'
+    units_vel     : str = 'm/s',
   ) -> tuple[np.ndarray, np.ndarray]:
     """
     Convert J2000/GCRS to TEME (True Equator Mean Equinox) using astropy.
@@ -96,13 +100,17 @@ class FrameConverter:
         Velocity in J2000/GCRS frame [m/s].
       jd_utc : float
         Julian date in UTC scale.
+      units_pos : str
+        Units for position input (default 'm').
+      units_vel : str
+        Units for velocity input (default 'm/s').
     
     Output:
     -------
-      tuple[np.ndarray, np.ndarray]
-        A tuple containing:
-        - teme_pos_vec: position in TEME frame [m].
-        - teme_vel_vec: velocity in TEME frame [m/s].
+      teme_pos_vec : np.ndarray
+        Position in TEME frame [m].
+      teme_vel_vec : np.ndarray
+        Velocity in TEME frame [m/s].
     """
     # Create astropy Time object from UTC
     astropy_time = AstropyTime(jd_utc, format='jd', scale='utc')
@@ -148,3 +156,119 @@ class FrameConverter:
     ])
     
     return teme_pos_vec, teme_vel_vec
+
+  @staticmethod
+  def xyz_to_ric(
+    xyz_ref_pos_vec : np.ndarray,
+    xyz_ref_vel_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Calculate the rotation matrix from Inertial (XYZ) to Radial-Intrack-Cross-track (RIC) frame.
+    
+    Input:
+    ------
+      xyz_ref_pos_vec : np.ndarray
+        Reference position vector in inertial frame.
+      xyz_ref_vel_vec : np.ndarray
+        Reference velocity vector in inertial frame.
+        
+    Output:
+    -------
+      rot_mat_xyz_to_ric : np.ndarray
+        3x3 Rotation matrix from Inertial to RIC frame.
+    """
+    # r_hat unit vector
+    xyz_ref_pos_hat = xyz_ref_pos_vec / np.linalg.norm(xyz_ref_pos_vec)
+    r_hat = xyz_ref_pos_hat
+
+    # c_hat unit vector
+    ang_mom_vec = np.cross(xyz_ref_pos_vec, xyz_ref_vel_vec)
+    ang_mom_hat = ang_mom_vec / np.linalg.norm(ang_mom_vec)
+    c_hat       = ang_mom_hat
+    
+    # i_hat unit vector
+    i_hat = np.cross(c_hat, r_hat)
+    
+    # Rotation matrix from inertial to RIC frame
+    rot_mat_xyz_to_ric = np.vstack((r_hat, i_hat, c_hat))
+    
+    # Return rotation matrix
+    return rot_mat_xyz_to_ric
+  
+  @staticmethod
+  def ric_to_xyz(
+    ric_ref_pos_vec : np.ndarray,
+    ric_ref_vel_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Calculate the rotation matrix from Radial-Intrack-Cross-track (RIC) to Inertial (XYZ) frame.
+    
+    Input:
+    ------
+      ric_ref_pos_vec : np.ndarray
+        Reference position vector in inertial frame.
+      ric_ref_vel_vec : np.ndarray
+        Reference velocity vector in inertial frame.
+        
+    Output:
+    -------
+      rot_mat_ric_to_xyz : np.ndarray
+        3x3 Rotation matrix from RIC to Inertial frame.
+    """
+    # Get rotation matrix from Inertial to RIC
+    rot_mat_xyz_to_ric = FrameConverter.xyz_to_ric(
+      xyz_ref_pos_vec = ric_ref_pos_vec,
+      xyz_ref_vel_vec = ric_ref_vel_vec,
+    )
+    
+    # Rotation matrix from RIC to Inertial is the transpose
+    rot_mat_ric_to_xyz = rot_mat_xyz_to_ric.T
+    
+    # Return rotation matrix
+    return rot_mat_ric_to_xyz
+
+  @staticmethod
+  def xyz_to_rtn(
+    xyz_ref_pos_vec : np.ndarray,
+    xyz_ref_vel_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Alias for xyz_to_ric. RIC is also known as RTN (Radial-Transverse-Normal).
+    
+    Input:
+    ------
+      xyz_ref_pos_vec : np.ndarray
+        Reference position vector in inertial frame.
+      xyz_ref_vel_vec : np.ndarray
+        Reference velocity vector in inertial frame.
+        
+    Output:
+    -------
+      rot_mat_xyz_to_rtn : np.ndarray
+        3x3 Rotation matrix from Inertial to RTN frame.
+    """
+    return FrameConverter.xyz_to_ric(xyz_ref_pos_vec, xyz_ref_vel_vec)
+
+  @staticmethod
+  def rtn_to_xyz(
+    rtn_ref_pos_vec : np.ndarray,
+    rtn_ref_vel_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Alias for ric_to_xyz. RIC is also known as RTN (Radial-Transverse-Normal).
+    
+    Input:
+    ------
+      rtn_ref_pos_vec : np.ndarray
+        Reference position vector in inertial frame.
+      rtn_ref_vel_vec : np.ndarray
+        Reference velocity vector in inertial frame.
+        
+    Output:
+    -------
+      rot_mat_rtn_to_xyz : np.ndarray
+        3x3 Rotation matrix from RTN to Inertial frame.
+    """
+    return FrameConverter.ric_to_xyz(rtn_ref_pos_vec, rtn_ref_vel_vec)
+
+

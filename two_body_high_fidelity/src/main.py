@@ -131,20 +131,20 @@ def main(
   )
 
   # Get Horizons ephemeris
-  result_horizons_ephemeris = get_horizons_ephemeris(
+  result_jpl_horizons_ephemeris = get_horizons_ephemeris(
     horizons_filepath = config.horizons_filepath,
-    desired_time_o_dt   = config.desired_time_o_dt,
+    desired_time_o_dt = config.desired_time_o_dt,
     target_end_dt     = config.desired_time_f_dt,
   )
 
   # Determine initial state (from Horizons if available, else TLE)
   initial_state = get_initial_state(
-    tle_line_1           = config.tle_line_1,
-    tle_line_2           = config.tle_line_2,
-    desired_time_o_dt    = config.desired_time_o_dt,
-    result_horizons      = result_horizons_ephemeris,
-    initial_state_source = config.initial_state_source,
-    to_j2000             = True,
+    tle_line_1                    = config.tle_line_1,
+    tle_line_2                    = config.tle_line_2,
+    desired_time_o_dt             = config.desired_time_o_dt,
+    result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
+    initial_state_source          = config.initial_state_source,
+    to_j2000                      = True,
   )
 
   # Run propagations: high-fidelity and SGP4 at Horizons times
@@ -170,18 +170,18 @@ def main(
   )
   
   # Display results and create plots
-  print_results_summary(
-    result_horizons_ephemeris,
+  print_results_summary( 
+    result_jpl_horizons_ephemeris,
     result_high_fidelity_propagation,
   )
   
   # Generate plots
   generate_plots(
-    result_horizons      = result_horizons_ephemeris,
-    result_high_fidelity = result_high_fidelity_propagation,
-    result_sgp4          = result_sgp4_propagation,
-    desired_time_o_dt    = config.desired_time_o_dt,
-    output_folderpath    = config.output_folderpath,
+    result_jpl_horizons_ephemeris    = result_jpl_horizons_ephemeris,
+    result_high_fidelity_propagation = result_high_fidelity_propagation,
+    result_sgp4_propagation          = result_sgp4_propagation,
+    desired_time_o_dt                = config.desired_time_o_dt,
+    output_folderpath                = config.output_folderpath,
   )
   
   # Unload all files (SPICE kernels)
