@@ -58,10 +58,11 @@ Usage:
       
 """
 from typing                            import Optional
-from datetime                          import timedelta
+from datetime                          import datetime, timedelta
 
 from src.plot.trajectory               import generate_plots
 from src.propagation.propagator        import run_propagations
+from src.propagation.utility           import determine_actual_times
 from src.input.loader                  import unload_files, load_files, get_horizons_ephemeris
 from src.utility.printer               import print_results_summary
 from src.input.cli                     import parse_command_line_arguments
@@ -138,6 +139,13 @@ def main(
     target_end_dt     = config.desired_time_f_dt,
   )
 
+  # Determine Actual times if Horizons is available (for grid alignment)
+  actual_time_o_dt, actual_time_f_dt = determine_actual_times(
+    result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
+    desired_time_o_dt             = config.desired_time_o_dt,
+    desired_time_f_dt             = config.desired_time_f_dt
+  )
+
   # Determine initial state (from Horizons if available, else TLE)
   initial_state = get_initial_state(
     tle_line_1                    = config.tle_line_1,
@@ -147,15 +155,6 @@ def main(
     initial_state_source          = config.initial_state_source,
     to_j2000                      = True,
   )
-
-  # Determine Actual times if Horizons is available (for grid alignment)
-  if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
-    actual_time_o_dt  = result_jpl_horizons_ephemeris['time_o']
-    duration_horizons = result_jpl_horizons_ephemeris['plot_time_s'][-1]
-    actual_time_f_dt  = actual_time_o_dt + timedelta(seconds=duration_horizons)
-  else:
-    actual_time_o_dt = config.desired_time_o_dt
-    actual_time_f_dt = config.desired_time_f_dt
 
   # Run propagations: high-fidelity and SGP4 at Horizons times
   result_high_fidelity_propagation, result_sgp4_propagation = run_propagations(

@@ -746,29 +746,5 @@ def run_propagations(
     mass                          = mass,
     cd                            = cd,
     area_drag                     = area_drag,
-    cr                            = cr,
-    area_srp                      = area_srp,
-    use_spice                     = use_spice,
-    include_third_body            = include_third_body,
-    third_bodies_list             = third_bodies_list,
-    include_zonal_harmonics       = include_zonal_harmonics,
-    zonal_harmonics_list          = zonal_harmonics_list,
-    include_srp                   = include_srp,
-    spice_kernels_folderpath      = spice_kernels_folderpath,
-    result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
-  )
-  
-  # Propagate: run SGP4 at Horizons time points for comparison
-  print("\nSGP4 Model")
-  result_sgp4_at_horizons = propagate_sgp4(
-    result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
-    tle_line_1                    = tle_line_1,
-    tle_line_2                    = tle_line_2,
-    desired_time_o_dt             = desired_time_o_dt,
-    desired_time_f_dt             = desired_time_f_dt,
-    actual_time_o_dt              = actual_time_o_dt,
-    actual_time_f_dt              = actual_time_f_dt,
-  )
-
-  return result_high_fidelity, result_sgp4_at_horizons
+    cr                            :
 
