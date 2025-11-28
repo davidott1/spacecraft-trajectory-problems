@@ -696,43 +696,6 @@ def run_high_fidelity_propagation(
   return result_high_fidelity
 
 
-def determine_actual_times(
-  result_jpl_horizons_ephemeris : Optional[dict],
-  desired_time_o_dt             : datetime,
-  desired_time_f_dt             : datetime,
-) -> tuple[datetime, datetime]:
-  """
-  Determine the actual start and end times for propagation.
-  
-  If Horizons data is available, aligns the time grid with Horizons.
-  Otherwise, uses the desired start and end times.
-  
-  Input:
-  ------
-    result_jpl_horizons_ephemeris : dict | None
-      Result from Horizons loader.
-    desired_time_o_dt : datetime
-      Desired initial datetime.
-    desired_time_f_dt : datetime
-      Desired final datetime.
-      
-  Output:
-  -------
-    tuple[datetime, datetime]
-      Tuple containing (actual_time_o_dt, actual_time_f_dt).
-  """
-  if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
-    # Extract actual start/end times from Horizons result
-    actual_time_o_dt = result_jpl_horizons_ephemeris['plot_time_s'][0]
-    actual_time_f_dt = result_jpl_horizons_ephemeris['plot_time_s'][-1]
-  else:
-    # Fallback to desired times
-    actual_time_o_dt = desired_time_o_dt
-    actual_time_f_dt = desired_time_f_dt
-
-  return actual_time_o_dt, actual_time_f_dt
-
-
 def run_propagations(
   initial_state                 : np.ndarray,
   desired_time_o_dt             : datetime,
@@ -815,5 +778,29 @@ def run_propagations(
     actual_time_f_dt              = actual_time_f_dt,
     mass                          = mass,
     cd                            = cd,
-    area_drag                     :
+    area_drag                     = area_drag,
+    cr                            = cr,
+    area_srp                      = area_srp,
+    use_spice                     = use_spice,
+    include_third_body            = include_third_body,
+    third_bodies_list             = third_bodies_list,
+    include_zonal_harmonics       = include_zonal_harmonics,
+    zonal_harmonics_list          = zonal_harmonics_list,
+    include_srp                   = include_srp,
+    spice_kernels_folderpath      = spice_kernels_folderpath,
+    result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
+  )
+  
+  # Propagate: run SGP4 at Horizons time points for comparison
+  result_sgp4_at_horizons = run_sgp4_propagation(
+    result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
+    tle_line_1                    = tle_line_1,
+    tle_line_2                    = tle_line_2,
+    desired_time_o_dt             = desired_time_o_dt,
+    desired_time_f_dt             = desired_time_f_dt,
+    actual_time_o_dt              = actual_time_o_dt,
+    actual_time_f_dt              = actual_time_f_dt,
+  )
+
+  return result_high_fidelity, result_sgp4_at_horizons
 
