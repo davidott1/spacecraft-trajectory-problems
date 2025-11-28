@@ -7,29 +7,8 @@ from pathlib              import Path
 from typing               import Optional
 from matplotlib.figure    import Figure
 
-from src.plot.utility    import get_equal_limits
+from src.plot.utility    import get_equal_limits, add_utc_time_axis
 from src.model.constants import CONVERTER, PHYSICALCONSTANTS
-
-
-def add_utc_time_axis(ax, epoch: datetime.datetime, max_time: float):
-  """Add a secondary x-axis with UTC time labels."""
-  ax2 = ax.twiny()
-  ax2.set_xlim(ax.get_xlim())
-  
-  tick_positions_sec = ax.get_xticks()
-  valid_ticks = tick_positions_sec[(tick_positions_sec >= 0) & (tick_positions_sec <= max_time)]
-  
-  if len(valid_ticks) < 2:
-    valid_ticks = np.linspace(0, max_time, 7)
-    
-  utc_times = [epoch + timedelta(seconds=float(t)) for t in valid_ticks]
-  time_labels = [t.strftime('%m/%d %H:%M') for t in utc_times]
-  
-  ax2.set_xticks(valid_ticks)
-  ax2.set_xticklabels(time_labels, rotation=45, ha='left', fontsize=8)
-  ax2.set_xlabel('UTC Time', fontsize=9)
-  ax2.xaxis.set_label_position('top')
-  ax2.xaxis.tick_top()
 
 
 def plot_3d_trajectories(
@@ -263,7 +242,7 @@ def plot_3d_error(
   # Interpolate each state component
   state_cmp_interp = np.zeros((6, len(time_ref)))
   for i in range(6):
-    interpolator = interp1d(time_cmp, state_cmp[i, :], kind='cubic', fill_value='extrapolate')
+    interpolator = interp1d(time_cmp, state_cmp[i, :], kind='cubic', fill_value='extrapolate') # type: ignore
     state_cmp_interp[i, :] = interpolator(time_ref)
   
   # Calculate errors (comparison - reference)
@@ -604,7 +583,7 @@ def generate_error_plots(
   result_horizons      : dict,
   result_high_fidelity : dict,
   result_sgp4          : dict,
-  target_start_dt      : datetime.datetime,
+  desired_time_o_dt      : datetime.datetime,
   output_folderpath    : Path,
 ) -> None:
   """
@@ -618,7 +597,7 @@ def generate_error_plots(
       High-fidelity propagation result.
     result_sgp4 : dict | None
       SGP4 propagation result.
-    target_start_dt : datetime
+    desired_time_o_dt : datetime
       Simulation start time (for plot labels).
     output_folderpath : Path
       Directory to save plots.
@@ -640,7 +619,7 @@ def generate_error_plots(
     print(f"      {output_folderpath / 'iss_sgp4_error_3d.png'}")
     
     # Time series error plot (RIC frame)
-    fig_sgp4_err_ts = plot_time_series_error(result_horizons, result_sgp4, epoch=target_start_dt, use_ric=False)
+    fig_sgp4_err_ts = plot_time_series_error(result_horizons, result_sgp4, epoch=desired_time_o_dt, use_ric=False)
     fig_sgp4_err_ts.suptitle('ISS XYZ Position/Velocity Errors: Horizons vs SGP4', fontsize=16)
     fig_sgp4_err_ts.savefig(output_folderpath / 'iss_sgp4_error_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"      {output_folderpath / 'iss_sgp4_error_timeseries.png'}")
@@ -685,7 +664,7 @@ def generate_error_plots(
     print(f"      {output_folderpath / 'iss_error_3d.png'}")
     
     # Time series error plots
-    fig_err_ts = plot_time_series_error(result_horizons, result_high_fidelity, epoch=target_start_dt)
+    fig_err_ts = plot_time_series_error(result_horizons, result_high_fidelity, epoch=desired_time_o_dt)
     fig_err_ts.suptitle('ISS RIC Position/Velocity Errors: Horizons vs High-Fidelity', fontsize=16)
     fig_err_ts.savefig(output_folderpath / 'iss_error_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"      {output_folderpath / 'iss_error_timeseries.png'}")
@@ -695,7 +674,7 @@ def generate_3d_and_time_series_plots(
   result_horizons      : dict,
   result_high_fidelity : dict,
   result_sgp4          : dict,
-  target_start_dt      : datetime.datetime,
+  desired_time_o_dt    : datetime.datetime,
   output_folderpath    : Path,
 ) -> None:
   """
@@ -709,7 +688,7 @@ def generate_3d_and_time_series_plots(
       High-fidelity propagation result.
     result_sgp4 : dict | None
       SGP4 propagation result.
-    target_start_dt : datetime
+    desired_time_o_dt : datetime
       Simulation start time (for plot labels).
     output_folderpath : Path
       Directory to save plots.
@@ -729,7 +708,7 @@ def generate_3d_and_time_series_plots(
     fig1.savefig(output_folderpath / 'iss_jpl_horizons_3d.png', dpi=300, bbox_inches='tight')
     print(f"      {output_folderpath / 'iss_jpl_horizons_3d.png'}")
     
-    fig2 = plot_time_series(result_horizons, epoch=target_start_dt)
+    fig2 = plot_time_series(result_horizons, epoch=desired_time_o_dt)
     fig2.suptitle('ISS Orbit - JPL Horizons - Time Series', fontsize=16)
     fig2.savefig(output_folderpath / 'iss_jpl_horizons_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"      {output_folderpath / 'iss_jpl_horizons_timeseries.png'}")
@@ -743,7 +722,7 @@ def generate_3d_and_time_series_plots(
     fig3.savefig(output_folderpath / 'iss_high_fidelity_model_3d.png', dpi=300, bbox_inches='tight')
     print(f"      {output_folderpath / 'iss_high_fidelity_model_3d.png'}")
     
-    fig4 = plot_time_series(result_high_fidelity, epoch=target_start_dt)
+    fig4 = plot_time_series(result_high_fidelity, epoch=desired_time_o_dt)
     fig4.suptitle('ISS Orbit - High-Fidelity Model - Time Series', fontsize=16)
     fig4.savefig(output_folderpath / 'iss_high_fidelity_model_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"      {output_folderpath / 'iss_high_fidelity_model_timeseries.png'}")
@@ -759,7 +738,7 @@ def generate_3d_and_time_series_plots(
     print(f"      {output_folderpath / 'iss_sgp4_model_3d.png'}")
     
     # Time series plot
-    fig_sgp4_hz_ts = plot_time_series(result_sgp4, epoch=target_start_dt)
+    fig_sgp4_hz_ts = plot_time_series(result_sgp4, epoch=desired_time_o_dt)
     fig_sgp4_hz_ts.suptitle('ISS Orbit - SGP4 Model - Time Series', fontsize=16)
     fig_sgp4_hz_ts.savefig(output_folderpath / 'iss_sgp4_model_timeseries.png', dpi=300, bbox_inches='tight')
     print(f"      {output_folderpath / 'iss_sgp4_model_timeseries.png'}")
@@ -769,7 +748,7 @@ def generate_plots(
   result_horizons      : Optional[dict],
   result_high_fidelity : dict,
   result_sgp4          : Optional[dict],
-  target_start_dt      : datetime.datetime,
+  desired_time_o_dt      : datetime.datetime,
   output_folderpath    : Path,
 ) -> None:
   """
@@ -783,7 +762,7 @@ def generate_plots(
       High-fidelity propagation result.
     result_sgp4 : dict | None
       SGP4 propagation result.
-    target_start_dt : datetime
+    desired_time_o_dt : datetime
       Simulation start time (for plot labels).
     output_folderpath : Path
       Directory to save plots.
@@ -799,7 +778,7 @@ def generate_plots(
     result_horizons      = result_horizons, # type: ignore
     result_high_fidelity = result_high_fidelity,
     result_sgp4          = result_sgp4, # type: ignore
-    target_start_dt      = target_start_dt,
+    desired_time_o_dt    = desired_time_o_dt,
     output_folderpath    = output_folderpath,
   )
     
@@ -808,6 +787,6 @@ def generate_plots(
     result_horizons      = result_horizons, # type: ignore
     result_high_fidelity = result_high_fidelity,
     result_sgp4          = result_sgp4, # type: ignore
-    target_start_dt      = target_start_dt,
+    desired_time_o_dt    = desired_time_o_dt,
     output_folderpath    = output_folderpath,
   )

@@ -133,7 +133,7 @@ def main(
   # Get Horizons ephemeris
   result_horizons_ephemeris = get_horizons_ephemeris(
     horizons_filepath = config.horizons_filepath,
-    target_start_dt   = config.desired_time_o_dt,
+    desired_time_o_dt   = config.desired_time_o_dt,
     target_end_dt     = config.desired_time_f_dt,
   )
 
@@ -180,7 +180,7 @@ def main(
     result_horizons      = result_horizons_ephemeris,
     result_high_fidelity = result_high_fidelity_propagation,
     result_sgp4          = result_sgp4_propagation,
-    target_start_dt      = config.desired_time_o_dt,
+    desired_time_o_dt    = config.desired_time_o_dt,
     output_folderpath    = config.output_folderpath,
   )
   
