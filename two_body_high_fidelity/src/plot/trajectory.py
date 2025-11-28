@@ -569,6 +569,8 @@ def generate_error_plots(
   result_sgp4_propagation          : Optional[dict],
   desired_time_o_dt                : datetime.datetime,
   figures_folderpath               : Path,
+  compare_horizons                 : bool,
+  compare_tle                      : bool,
 ) -> None:
   """
   Generate and save error comparison plots.
@@ -585,15 +587,23 @@ def generate_error_plots(
       Simulation start time (for plot labels).
     figures_folderpath : Path
       Directory to save plots.
+    compare_horizons : bool
+      Flag to enable comparison with Horizons.
+    compare_tle : bool
+      Flag to enable comparison with TLE/SGP4.
       
   Output:
   -------
     None
   """
+  # Only proceed if we have something to compare against (Horizons) and comparison is requested
+  if not compare_horizons or not (result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success')):
+    return
+
   print("\n  Generate Error Plots")
 
   # Create error comparison plots if both Horizons and high-fidelity are available
-  if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success') and result_high_fidelity_propagation.get('success'):
+  if result_high_fidelity_propagation.get('success'):
     print("    High-Fidelity Model Relative to JPL Horizons")
     
     # Position and velocity error plots
@@ -609,7 +619,7 @@ def generate_error_plots(
     print(f"      <figures_folderpath>/iss_error_timeseries.png")
 
   # Error plots comparing SGP4 to Horizons
-  if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success') and result_sgp4_propagation and result_sgp4_propagation.get('success'):
+  if compare_tle and result_sgp4_propagation and result_sgp4_propagation.get('success'):
     print("    SGP4 Model Relative to JPL Horizons")
 
     # 3D error plot
@@ -660,6 +670,8 @@ def generate_3d_and_time_series_plots(
   result_sgp4_propagation          : Optional[dict],
   desired_time_o_dt                : datetime.datetime,
   figures_folderpath               : Path,
+  compare_horizons                 : bool,
+  compare_tle                      : bool,
 ) -> None:
   """
   Generate and save 3D trajectory and time series plots.
@@ -676,6 +688,10 @@ def generate_3d_and_time_series_plots(
       Simulation start time (for plot labels).
     figures_folderpath : Path
       Directory to save plots.
+    compare_horizons : bool
+      Flag to enable comparison with Horizons.
+    compare_tle : bool
+      Flag to enable comparison with TLE/SGP4.
       
   Output:
   -------
@@ -684,7 +700,7 @@ def generate_3d_and_time_series_plots(
   print("  Generate 3D-Trajectory and Time-Series Plots")
 
   # Horizons plots (first)
-  if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
+  if compare_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
     print("    JPL-Horizons-Ephemeris Plots")
 
     fig1 = plot_3d_trajectories(result_jpl_horizons_ephemeris)
@@ -712,7 +728,7 @@ def generate_3d_and_time_series_plots(
     print(f"      <figures_folderpath>/iss_high_fidelity_model_timeseries.png")
   
   # SGP4 at Horizons time points plots
-  if result_sgp4_propagation and result_sgp4_propagation.get('success'):
+  if compare_tle and result_sgp4_propagation and result_sgp4_propagation.get('success'):
     print("    SGP4-Model Plots")
     
     # 3D trajectory plot
@@ -734,6 +750,8 @@ def generate_plots(
   result_sgp4_propagation          : Optional[dict],
   desired_time_o_dt                : datetime.datetime,
   figures_folderpath               : Path,
+  compare_horizons                 : bool = False,
+  compare_tle                      : bool = False,
 ) -> None:
   """
   Generate and save all simulation plots.
@@ -750,6 +768,10 @@ def generate_plots(
       Simulation start time (for plot labels).
     figures_folderpath : Path
       Directory to save plots.
+    compare_horizons : bool
+      Flag to enable comparison with Horizons.
+    compare_tle : bool
+      Flag to enable comparison with TLE/SGP4.
       
   Output:
   -------
@@ -765,6 +787,8 @@ def generate_plots(
     result_sgp4_propagation          = result_sgp4_propagation,
     desired_time_o_dt                = desired_time_o_dt,
     figures_folderpath               = figures_folderpath,
+    compare_horizons                 = compare_horizons,
+    compare_tle                      = compare_tle,
   )
     
   # Generate error plots
@@ -774,4 +798,6 @@ def generate_plots(
     result_sgp4_propagation          = result_sgp4_propagation,
     desired_time_o_dt                = desired_time_o_dt,
     figures_folderpath               = figures_folderpath,
+    compare_horizons                 = compare_horizons,
+    compare_tle                      = compare_tle,
   )

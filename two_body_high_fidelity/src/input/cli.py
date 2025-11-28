@@ -216,6 +216,21 @@ def parse_command_line_arguments(
     help    = "Enable Atmospheric Drag (disabled by default).",
   )
   parser.add_argument(
+    '--compare-tle',
+    dest    = 'compare_tle',
+    action  = 'store_true',
+    default = False,
+    help    = "Enable comparison with TLE/SGP4 propagation (disabled by default).",
+  )
+  parser.add_argument(
+    '--compare-horizons',
+    '--compare-jpl-horizons',
+    dest    = 'compare_jpl_horizons',
+    action  = 'store_true',
+    default = False,
+    help    = "Enable comparison with JPL Horizons ephemeris (disabled by default).",
+  )
+  parser.add_argument(
     '--include-srp',
     '--srp',
     dest    = 'include_srp',

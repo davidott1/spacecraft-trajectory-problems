@@ -658,36 +658,38 @@ def run_high_fidelity_propagation(
     # Update integration start/end times to match grid exactly (avoids floating point errors)
     time_et_o_actual = horizons_et_times[0]
     time_et_f_actual = horizons_et_times[-1]
-  
-    # Print numerical integration settings
-    print("    Numerical Integration")
-    print(f"      Method     : DOP853")
-    print(f"      Tolerances : rtol=1e-12, atol=1e-12")
-
-    # Print completion message
-    print("\n  Compute")
-    print("    Numerical Integration Running ... ", end='', flush=True)
-
-    # Propagate
-    result_high_fidelity = propagate_state_numerical_integration(
-      initial_state       = initial_state,
-      time_o              = time_et_o_actual, # Use Actual Start ET
-      time_f              = time_et_f_actual, # Use Actual End ET
-      dynamics            = acceleration,
-      method              = 'DOP853',
-      rtol                = 1e-12,
-      atol                = 1e-12,
-      dense_output        = True,  # Enable dense output for exact time evaluation
-      t_eval              = horizons_et_times,  # Evaluate at Horizons times (Actual ET)
-      get_coe_time_series = True,
-      gp                  = PHYSICALCONSTANTS.EARTH.GP,
-    )
-
-    # Print completion message
-    print("Complete")
+    
+    t_eval = horizons_et_times
   else:
-    # If Horizons data is not available, error analysis is not possible.
-    raise RuntimeError("Horizons ephemeris is required for high-fidelity propagation and error analysis, but it failed to load.")
+    # Use default grid if Horizons is not available
+    t_eval = np.linspace(time_et_o_actual, time_et_f_actual, 1000)
+  
+  # Print numerical integration settings
+  print("    Numerical Integration")
+  print(f"      Method     : DOP853")
+  print(f"      Tolerances : rtol=1e-12, atol=1e-12")
+
+  # Print completion message
+  print("\n  Compute")
+  print("    Numerical Integration Running ... ", end='', flush=True)
+
+  # Propagate
+  result_high_fidelity = propagate_state_numerical_integration(
+    initial_state       = initial_state,
+    time_o              = time_et_o_actual,
+    time_f              = time_et_f_actual,
+    dynamics            = acceleration,
+    method              = 'DOP853',
+    rtol                = 1e-12,
+    atol                = 1e-12,
+    dense_output        = True,  # Enable dense output for exact time evaluation
+    t_eval              = t_eval,  # Evaluate at Horizons times (Actual ET) or default grid
+    get_coe_time_series = True,
+    gp                  = PHYSICALCONSTANTS.EARTH.GP,
+  )
+
+  # Print completion message
+  print("Complete")
   
   if result_high_fidelity['success']:
     # Store integration time (ET)
@@ -710,6 +712,7 @@ def run_propagations(
   actual_time_f_dt              : datetime,
   mass                          : float,
   include_drag                  : bool,
+  compare_tle                   : bool,
   cd                            : float,
   area_drag                     : float,
   cr                            : float,
@@ -744,6 +747,8 @@ def run_propagations(
       Satellite mass.
     include_drag : bool
       Whether to enable Atmospheric Drag.
+    compare_tle : bool
+      Whether to run SGP4 propagation for comparison.
     cd : float
       Drag coefficient.
     area_drag : float
@@ -802,15 +807,17 @@ def run_propagations(
   )
   
   # Propagate: run SGP4 at Horizons time points for comparison
-  result_sgp4_at_horizons = run_sgp4_propagation(
-    result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
-    tle_line_1                    = tle_line_1,
-    tle_line_2                    = tle_line_2,
-    desired_time_o_dt             = desired_time_o_dt,
-    desired_time_f_dt             = desired_time_f_dt,
-    actual_time_o_dt              = actual_time_o_dt,
-    actual_time_f_dt              = actual_time_f_dt,
-  )
+  result_sgp4 = None
+  if compare_tle:
+    result_sgp4 = run_sgp4_propagation(
+      result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
+      tle_line_1                    = tle_line_1,
+      tle_line_2                    = tle_line_2,
+      desired_time_o_dt             = desired_time_o_dt,
+      desired_time_f_dt             = desired_time_f_dt,
+      actual_time_o_dt              = actual_time_o_dt,
+      actual_time_f_dt              = actual_time_f_dt,
+    )
 
-  return result_high_fidelity, result_sgp4_at_horizons
+  return result_high_fidelity, result_sgp4
 

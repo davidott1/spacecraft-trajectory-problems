@@ -76,6 +76,8 @@ def main(
   timespan             : list,
   include_spice        : bool           = False,
   include_drag         : bool           = False,
+  compare_tle          : bool           = False,
+  compare_horizons     : bool           = False,
   third_bodies         : Optional[list] = None,
   zonal_harmonics      : Optional[list] = None,
   include_srp          : bool           = False,
@@ -101,6 +103,10 @@ def main(
       Flag to enable/disable SPICE usage.
     include_drag : bool
       Flag to enable/disable Atmospheric Drag.
+    compare_tle : bool
+      Flag to enable/disable comparison with TLE propagation.
+    compare_horizons : bool
+      Flag to enable/disable comparison with Horizons ephemeris.
     third_bodies : list | None
       List of third bodies to include (e.g., ['SUN', 'MOON']). None means disabled.
     zonal_harmonics : list | None
@@ -123,6 +129,8 @@ def main(
     timespan,
     include_spice,
     include_drag,
+    compare_tle,
+    compare_horizons,
     third_bodies,
     zonal_harmonics,
     include_srp,
@@ -136,12 +144,14 @@ def main(
     config.lsk_filepath,
   )
 
-  # Get Horizons ephemeris
-  result_jpl_horizons_ephemeris = get_horizons_ephemeris(
-    jpl_horizons_filepath = config.jpl_horizons_filepath,
-    desired_time_o_dt     = config.desired_time_o_dt,
-    target_end_dt         = config.desired_time_f_dt,
-  )
+  # Get Horizons ephemeris (only if needed for initial state or comparison)
+  result_jpl_horizons_ephemeris = None
+  if config.initial_state_source == 'jpl_horizons' or config.compare_horizons:
+    result_jpl_horizons_ephemeris = get_horizons_ephemeris(
+      jpl_horizons_filepath = config.jpl_horizons_filepath,
+      desired_time_o_dt     = config.desired_time_o_dt,
+      target_end_dt         = config.desired_time_f_dt,
+    )
 
   # Determine actual times if Horizons is available (for grid alignment)
   actual_time_o_dt, actual_time_f_dt = determine_actual_times(
@@ -169,6 +179,7 @@ def main(
     actual_time_f_dt              = actual_time_f_dt,
     mass                          = config.mass,
     include_drag                  = config.include_drag,
+    compare_tle                   = config.compare_tle,
     cd                            = config.cd,
     area_drag                     = config.area_drag,
     cr                            = config.cr,
@@ -187,7 +198,7 @@ def main(
   
   # Display results and create plots
   print_results_summary( 
-    result_jpl_horizons_ephemeris,
+    result_jpl_horizons_ephemeris if config.compare_horizons else None,
     result_high_fidelity_propagation,
   )
   
@@ -198,6 +209,8 @@ def main(
     result_sgp4_propagation          = result_sgp4_propagation,
     desired_time_o_dt                = config.desired_time_o_dt,
     figures_folderpath               = config.figures_folderpath,
+    compare_horizons                 = config.compare_horizons,
+    compare_tle                      = config.compare_tle,
   )
   
   # Unload all files (SPICE kernels)
@@ -218,6 +231,8 @@ if __name__ == "__main__":
     args.timespan,
     args.include_spice,
     args.include_drag,
+    args.compare_tle,
+    args.compare_horizons,
     args.third_bodies,
     args.zonal_harmonics,
     args.include_srp,
