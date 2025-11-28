@@ -28,9 +28,8 @@ def determine_actual_times(
       Tuple containing (actual_time_o_dt, actual_time_f_dt).
   """
   if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
-    actual_time_o_dt  = result_jpl_horizons_ephemeris['time_o']
-    duration_horizons = result_jpl_horizons_ephemeris['plot_time_s'][-1]
-    actual_time_f_dt  = actual_time_o_dt + timedelta(seconds=duration_horizons)
+    actual_time_o_dt = result_jpl_horizons_ephemeris['time_o']
+    actual_time_f_dt = result_jpl_horizons_ephemeris['time_f']
   else:
     actual_time_o_dt = desired_time_o_dt
     actual_time_f_dt = desired_time_f_dt

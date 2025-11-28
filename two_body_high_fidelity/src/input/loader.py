@@ -237,6 +237,7 @@ def load_horizons_ephemeris(
     
     # Define epoch as the first time point in the filtered series
     time_o     = time_filtered[0]
+    time_f     = time_filtered[-1]
     delta_time = np.array([(t - time_o).total_seconds() for t in time_filtered])
     
     # 4. Extract position and velocity, applying unit conversions
@@ -249,6 +250,7 @@ def load_horizons_ephemeris(
       'success'    : True,
       'message'    : 'Horizons ephemeris loaded successfully',
       'time_o'     : time_o,
+      'time_f'     : time_f,
       'delta_time' : delta_time,
       'state'      : state,
     }
@@ -258,22 +260,23 @@ def load_horizons_ephemeris(
       'success'    : False,
       'message'    : str(e),
       'time_o'     : [],
+      'time_f'     : [],
       'delta_time' : [],
       'state'      : [],
     }
 
 
 def get_horizons_ephemeris(
-  horizons_filepath : Path,
-  desired_time_o_dt   : datetime,
-  target_end_dt     : datetime,
+  jpl_horizons_filepath : Path,
+  desired_time_o_dt     : datetime,
+  target_end_dt         : datetime,
 ) -> Optional[dict]:
   """
   Load and process JPL Horizons ephemeris.
   
   Input:
   ------
-    horizons_filepath : Path
+    jpl_horizons_filepath : Path
       Path to the Horizons ephemeris file.
     desired_time_o_dt : datetime
       Start time for data request.
@@ -282,15 +285,15 @@ def get_horizons_ephemeris(
       
   Output:
   -------
-    dict | None
+    result_jpl_horizons : dict | None
       Processed Horizons result dictionary, or None if loading failed.
   """
   # Load Horizons ephemeris
   try:
-    rel_path = horizons_filepath.relative_to(Path.cwd())
+    rel_path = jpl_horizons_filepath.relative_to(Path.cwd())
     display_path = f"<project_folderpath>/{rel_path}"
   except ValueError:
-    display_path = horizons_filepath
+    display_path = jpl_horizons_filepath
 
   print("  JPL Horizons Ephemeris")
   print(f"    Filepath : {display_path}")
@@ -311,16 +314,16 @@ def get_horizons_ephemeris(
   print(f"        Duration : {duration_s:.1f} s")
   
   # Load Horizons data
-  result_horizons = load_horizons_ephemeris(
-    filepath      = str(horizons_filepath),
+  result_jpl_horizons = load_horizons_ephemeris(
+    filepath      = str(jpl_horizons_filepath),
     time_start_dt = desired_time_o_dt,
     time_end_dt   = target_end_dt,
   )
 
   # Process Horizons data
-  result_horizons = process_horizons_result(result_horizons)
+  result_jpl_horizons = process_horizons_result(result_jpl_horizons)
   
-  return result_horizons
+  return result_jpl_horizons
 
 
 def process_horizons_result(
@@ -363,8 +366,8 @@ def process_horizons_result(
     duration_s = result_horizons['delta_time'][-1] - result_horizons['delta_time'][0]
 
     print(f"      Actual")
-    print(f"        Start    : {actual_start.strftime('%Y-%m-%d %H:%M:%S')} UTC ({start_et})")
-    print(f"        End      : {actual_end.strftime('%Y-%m-%d %H:%M:%S')} UTC ({end_et})")
+    print(f"        Initial  : {actual_start.strftime('%Y-%m-%d %H:%M:%S')} UTC ({start_et})")
+    print(f"        Final    : {  actual_end.strftime('%Y-%m-%d %H:%M:%S')} UTC ({end_et})")
     print(f"        Duration : {duration_s:.1f} s")
     print(f"        Grid     : {len(result_horizons['delta_time'])} points")
 
