@@ -7,8 +7,9 @@ from pathlib              import Path
 from typing               import Optional
 from matplotlib.figure    import Figure
 
-from src.plot.utility    import get_equal_limits, add_utc_time_axis
-from src.model.constants import CONVERTER, PHYSICALCONSTANTS
+from src.plot.utility          import get_equal_limits, add_utc_time_axis, add_stats
+from src.model.constants       import CONVERTER, PHYSICALCONSTANTS
+from src.model.frame_converter import FrameConverter
 
 
 def plot_3d_trajectories(
@@ -324,9 +325,9 @@ def plot_time_series_error(
       f"Both datasets must use the same time grid for error comparison."
     )
   
-  state_ref = result_ref['state']
+  state_ref  = result_ref['state']
   state_comp = result_comp['state']
-  coe_comp = result_comp['coe']
+  coe_comp   = result_comp['coe']
   
   # Create figure with subplots matching the grid structure
   fig = plt.figure(figsize=(18, 10))
@@ -340,17 +341,11 @@ def plot_time_series_error(
     
     for i in range(len(time_ref)):
       # Reference position and velocity
-      r_ref = state_ref[0:3, i]
-      v_ref = state_ref[3:6, i]
-      
-      # Compute RIC frame unit vectors
-      r_hat = r_ref / np.linalg.norm(r_ref)  # Radial
-      h_vec = np.cross(r_ref, v_ref)
-      h_hat = h_vec / np.linalg.norm(h_vec)  # Cross-track (normal)
-      i_hat = np.cross(h_hat, r_hat)         # In-track
+      ref_pos = state_ref[0:3, i]
+      ref_vel = state_ref[3:6, i]
       
       # Rotation matrix from inertial to RIC
-      R_inertial_to_ric = np.array([r_hat, i_hat, h_hat])
+      R_inertial_to_ric = FrameConverter.xyz_to_ric(ref_pos, ref_vel)
       
       # Compute errors in inertial frame
       pos_error_inertial = state_comp[0:3, i] - state_ref[0:3, i]
@@ -521,64 +516,44 @@ def plot_true_longitude_error(
 
   state_ref  = result_ref['state']
   state_comp = result_comp['state']
-  pos_error_ric = np.zeros((3, len(time_ref)))
-  vel_error_ric = np.zeros((3, len(time_ref)))
+  ric_delta_pos = np.zeros((3, len(time_ref)))
+  ric_delta_vel = np.zeros((3, len(time_ref)))
 
   for i in range(len(time_ref)):
-    r_ref = state_ref[0:3, i]
-    v_ref = state_ref[3:6, i]
-    r_hat = r_ref / np.linalg.norm(r_ref)
-    h_vec = np.cross(r_ref, v_ref)
-    h_hat = h_vec / np.linalg.norm(h_vec)
-    i_hat = np.cross(h_hat, r_hat)
+    xyz_ref_pos = state_ref[0:3, i]
+    xyz_ref_vel = state_ref[3:6, i]
     
-    # Stack vectors as rows:
-    # ric_pos_vec = rot_mat_xyz2ric xyz_pos_vec
-    # ric_pos_vec = [ r_hat ] xyz_pos_vec
-    #               [ i_hat ]
-    #               [ c_hat ]
-
-
-    rot_mat_xyz_to_ric   = np.vstack((r_hat, i_hat, h_hat))
+    rot_mat_xyz_to_ric = FrameConverter.xyz_to_ric(xyz_ref_pos, xyz_ref_vel)
     
-    pos_error = state_comp[0:3, i] - r_ref
-    vel_error = state_comp[3:6, i] - v_ref
+    xyz_delta_pos_vec = state_comp[0:3, i] - xyz_ref_pos
+    xyz_delta_vel_vec = state_comp[3:6, i] - xyz_ref_vel
 
-    pos_error_ric[:, i] = rot_mat_xyz_to_ric @ pos_error
-    vel_error_ric[:, i] = rot_mat_xyz_to_ric @ vel_error
+    ric_delta_pos[:, i] = rot_mat_xyz_to_ric @ xyz_delta_pos_vec
+    ric_delta_vel[:, i] = rot_mat_xyz_to_ric @ xyz_delta_vel_vec
 
-  pos_mag = np.linalg.norm(pos_error_ric, axis=0)
-  vel_mag = np.linalg.norm(vel_error_ric, axis=0)
+  ric_delta_pos_mag = np.linalg.norm(ric_delta_pos, axis=0)
+  ric_delta_vel_mag = np.linalg.norm(ric_delta_vel, axis=0)
 
   fig, (ax_pos, ax_vel) = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
-  ax_pos.plot(time_ref, pos_error_ric[0], 'r-', label='Radial')
-  ax_pos.plot(time_ref, pos_error_ric[1], 'g-', label='In-track')
-  ax_pos.plot(time_ref, pos_error_ric[2], 'b-', label='Cross-track')
-  ax_pos.plot(time_ref, pos_mag, 'k-', linewidth=2, label='Magnitude')
+  ax_pos.plot(time_ref, ric_delta_pos[0], 'r-', label='Radial')
+  ax_pos.plot(time_ref, ric_delta_pos[1], 'g-', label='In-track')
+  ax_pos.plot(time_ref, ric_delta_pos[2], 'b-', label='Cross-track')
+  ax_pos.plot(time_ref, ric_delta_pos_mag, 'k-', linewidth=2, label='Magnitude')
   ax_pos.set_ylabel('Position Error [m]')
   ax_pos.grid(True, alpha=0.3)
   ax_pos.legend()
 
-  ax_vel.plot(time_ref, vel_error_ric[0], 'r-', label='Radial')
-  ax_vel.plot(time_ref, vel_error_ric[1], 'g-', label='In-track')
-  ax_vel.plot(time_ref, vel_error_ric[2], 'b-', label='Cross-track')
-  ax_vel.plot(time_ref, vel_mag, 'k-', linewidth=2, label='Magnitude')
+  ax_vel.plot(time_ref, ric_delta_vel[0], 'r-', label='Radial')
+  ax_vel.plot(time_ref, ric_delta_vel[1], 'g-', label='In-track')
+  ax_vel.plot(time_ref, ric_delta_vel[2], 'b-', label='Cross-track')
+  ax_vel.plot(time_ref, ric_delta_vel_mag, 'k-', linewidth=2, label='Magnitude')
   ax_vel.set_ylabel('Velocity Error [m/s]')
   ax_vel.set_xlabel('Time [s]')
   ax_vel.grid(True, alpha=0.3)
   ax_vel.legend()
 
-  def add_stats(ax, data, label):
-    stats = (
-      f'{label} Mean: {np.mean(data):.3f}\n'
-      f'{label} RMS: {np.sqrt(np.mean(data**2)):.3f}\n'
-      f'{label} Max |.|: {np.max(np.abs(data)):.3f}'
-    )
-    ax.text(0.02, 0.95, stats, transform=ax.transAxes, fontsize=9,
-        verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-
-  add_stats(ax_pos, pos_mag, 'Pos [m]')
-  add_stats(ax_vel, vel_mag, 'Vel [m/s]')
+  add_stats(ax_pos, ric_delta_pos_mag, 'Pos [m]')
+  add_stats(ax_vel, ric_delta_vel_mag, 'Vel [m/s]')
 
   if epoch is not None:
     add_utc_time_axis(ax_pos, epoch, time_ref[-1])

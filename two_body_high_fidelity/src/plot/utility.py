@@ -64,3 +64,18 @@ def add_utc_time_axis(
   ax2.xaxis.set_label_position('top')
   ax2.xaxis.tick_top()
 
+
+def add_stats(ax, data, label):
+  stats = (
+    f'{label} Mean : {np.mean(data):.3f}\n'
+    f'{label} RMS  : {np.sqrt(np.mean(data**2)):.3f}\n'
+    f'{label} Max  : {np.max(np.abs(data)):.3f}'
+  )
+  ax.text(
+    0.02, 0.95,
+    stats,
+    transform         = ax.transAxes,
+    fontsize          = 9,
+    verticalalignment = 'top',
+    bbox              = dict(boxstyle='round', facecolor='white', alpha=0.8),
+  )

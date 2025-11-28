@@ -1,4 +1,5 @@
 import numpy as np
+from typing import Optional, Union
 
 from astropy             import units as u
 from astropy.time        import Time as AstropyTime
@@ -23,7 +24,7 @@ class FrameConverter:
       teme_vel_vec : np.ndarray
         Velocity in TEME frame [m/s].
       jd_utc : float
-        Julian date in UTC scale (from SGP4).
+        Julian date in UTC scale (e.g. 2460310.5).
       units_pos : str
         Units for position input (default 'm').
       units_vel : str
@@ -35,6 +36,14 @@ class FrameConverter:
         Position in GCRS frame [m].
       gcrs_vel_vec : np.ndarray
         Velocity in GCRS frame [m/s].
+
+    Usage:
+    ------
+      gcrs_pos_vec, gcrs_vel_vec = FrameConverter.teme_to_j2000(
+        teme_pos_vec = teme_pos_vec,
+        teme_vel_vec = teme_vel_vec,
+        jd_utc       = jd_utc,
+      )
     """
     # Create astropy Time object from UTC
     astropy_time = AstropyTime(jd_utc, format='jd', scale='utc')
@@ -99,7 +108,7 @@ class FrameConverter:
       j2000_vel_vec : np.ndarray
         Velocity in J2000/GCRS frame [m/s].
       jd_utc : float
-        Julian date in UTC scale.
+        Julian date in UTC scale (e.g. 2460310.5).
       units_pos : str
         Units for position input (default 'm').
       units_vel : str
@@ -111,6 +120,14 @@ class FrameConverter:
         Position in TEME frame [m].
       teme_vel_vec : np.ndarray
         Velocity in TEME frame [m/s].
+
+    Usage:
+    ------
+      teme_pos_vec, teme_vel_vec = FrameConverter.j2000_to_teme(
+        j2000_pos_vec = j2000_pos_vec,
+        j2000_vel_vec = j2000_vel_vec,
+        jd_utc        = jd_utc,
+      )
     """
     # Create astropy Time object from UTC
     astropy_time = AstropyTime(jd_utc, format='jd', scale='utc')
@@ -176,6 +193,13 @@ class FrameConverter:
     -------
       rot_mat_xyz_to_ric : np.ndarray
         3x3 Rotation matrix from Inertial to RIC frame.
+
+    Usage:
+    ------
+      rot_mat_xyz_to_ric = FrameConverter.xyz_to_ric(
+        xyz_ref_pos_vec = xyz_ref_pos_vec,
+        xyz_ref_vel_vec = xyz_ref_vel_vec,
+      )
     """
     # r_hat unit vector
     xyz_ref_pos_hat = xyz_ref_pos_vec / np.linalg.norm(xyz_ref_pos_vec)
@@ -214,6 +238,13 @@ class FrameConverter:
     -------
       rot_mat_ric_to_xyz : np.ndarray
         3x3 Rotation matrix from RIC to Inertial frame.
+
+    Usage:
+    ------
+      rot_mat_ric_to_xyz = FrameConverter.ric_to_xyz(
+        ric_ref_pos_vec = ric_ref_pos_vec,
+        ric_ref_vel_vec = ric_ref_vel_vec,
+      )
     """
     # Get rotation matrix from Inertial to RIC
     rot_mat_xyz_to_ric = FrameConverter.xyz_to_ric(
@@ -271,4 +302,155 @@ class FrameConverter:
     """
     return FrameConverter.ric_to_xyz(rtn_ref_pos_vec, rtn_ref_vel_vec)
 
+
+class VectorConverter:
+  @staticmethod
+  def xyz_to_ric(
+    xyz_ref_pos_vec : np.ndarray,
+    xyz_ref_vel_vec : np.ndarray,
+    xyz_obj_pos_vec : Optional[np.ndarray] = None,
+    xyz_obj_vel_vec : Optional[np.ndarray] = None,
+  ) -> Union[np.ndarray, tuple[np.ndarray, np.ndarray]]:
+    """
+    Convert position and/or velocity vectors from Inertial (XYZ) to Radial-Intrack-Cross-track (RIC) frame.
+    Calculates the delta between object and reference before rotating.
+    
+    Input:
+    ------
+      xyz_ref_pos_vec : np.ndarray
+        Reference position vector for RIC frame definition.
+      xyz_ref_vel_vec : np.ndarray
+        Reference velocity vector for RIC frame definition.
+      xyz_obj_pos_vec : np.ndarray, optional
+        Object position vector in inertial frame.
+      xyz_obj_vel_vec : np.ndarray, optional
+        Object velocity vector in inertial frame.
+        
+    Output:
+    -------
+      result : np.ndarray | tuple[np.ndarray, np.ndarray]
+        If only pos provided: ric_delta_pos_vec
+        If only vel provided: ric_delta_vel_vec
+        If both provided: (ric_delta_pos_vec, ric_delta_vel_vec)
+
+    Usage:
+    ------
+      # Convert both position and velocity
+      ric_delta_pos_vec, ric_delta_vel_vec = VectorConverter.xyz_to_ric(
+        xyz_ref_pos_vec = xyz_ref_pos_vec, 
+        xyz_ref_vel_vec = xyz_ref_vel_vec, 
+        xyz_obj_pos_vec = xyz_obj_pos_vec, 
+        xyz_obj_vel_vec = xyz_obj_vel_vec,
+      )
+      
+      # Convert only position
+      ric_delta_pos_vec = VectorConverter.xyz_to_ric(
+        xyz_ref_pos_vec = xyz_ref_pos_vec, 
+        xyz_ref_vel_vec = xyz_ref_vel_vec, 
+        xyz_obj_pos_vec = xyz_obj_pos_vec,
+      )
+    """
+    if xyz_obj_pos_vec is None and xyz_obj_vel_vec is None:
+      raise ValueError("At least one of xyz_obj_pos_vec or xyz_obj_vel_vec must be provided.")
+
+    # Get rotation matrix
+    rot_mat_xyz_to_ric = FrameConverter.xyz_to_ric(xyz_ref_pos_vec, xyz_ref_vel_vec)
+    
+    # Get delta vectors and rotate
+    ric_delta_pos_vec = None
+    ric_delta_vel_vec = None
+
+    if xyz_obj_pos_vec is not None:
+      # Calculate delta position
+      xyz_delta_pos_vec = xyz_obj_pos_vec - xyz_ref_pos_vec
+      # Rotate position
+      ric_delta_pos_vec = rot_mat_xyz_to_ric @ xyz_delta_pos_vec
+
+    if xyz_obj_vel_vec is not None:
+      # Calculate delta velocity
+      xyz_delta_vel_vec = xyz_obj_vel_vec - xyz_ref_vel_vec
+      # Rotate velocity
+      ric_delta_vel_vec = rot_mat_xyz_to_ric @ xyz_delta_vel_vec
+
+    if ric_delta_pos_vec is not None and ric_delta_vel_vec is not None:
+      return ric_delta_pos_vec, ric_delta_vel_vec
+    elif ric_delta_pos_vec is not None:
+      return ric_delta_pos_vec
+    else:
+      return ric_delta_vel_vec # type: ignore
+
+  @staticmethod
+  def ric_to_xyz(
+    xyz_ref_pos_vec   : np.ndarray,
+    xyz_ref_vel_vec   : np.ndarray,
+    ric_delta_pos_vec : Optional[np.ndarray] = None,
+    ric_delta_vel_vec : Optional[np.ndarray] = None,
+  ) -> Union[np.ndarray, tuple[np.ndarray, np.ndarray]]:
+    """
+    Convert delta position and/or velocity vectors from Radial-Intrack-Cross-track (RIC) to Inertial (XYZ) frame.
+    Calculates the absolute object state by adding the reference state.
+    
+    Input:
+    ------
+      xyz_ref_pos_vec : np.ndarray
+        Reference position vector for RIC frame definition (Inertial).
+      xyz_ref_vel_vec : np.ndarray
+        Reference velocity vector for RIC frame definition (Inertial).
+      ric_delta_pos_vec : np.ndarray, optional
+        Delta position vector in RIC frame.
+      ric_delta_vel_vec : np.ndarray, optional
+        Delta velocity vector in RIC frame.
+        
+    Output:
+    -------
+      result : np.ndarray | tuple[np.ndarray, np.ndarray]
+        If only pos provided: xyz_obj_pos_vec
+        If only vel provided: xyz_obj_vel_vec
+        If both provided: (xyz_obj_pos_vec, xyz_obj_vel_vec)
+
+    Usage:
+    ------
+      # Convert both position and velocity
+      xyz_pos_vec, xyz_vel_vec = VectorConverter.ric_to_xyz(
+        xyz_ref_pos_vec   = xyz_ref_pos_vec, 
+        xyz_ref_vel_vec   = xyz_ref_vel_vec, 
+        ric_delta_pos_vec = ric_delta_pos_vec, 
+        ric_delta_vel_vec = ric_delta_vel_vec,
+      )
+
+      # Convert position only
+      xyz_pos_vec = VectorConverter.ric_to_xyz(
+        xyz_ref_pos_vec   = xyz_ref_pos_vec, 
+        ric_delta_pos_vec = ric_delta_pos_vec, 
+        ric_delta_vel_vec = ric_delta_vel_vec,
+      )
+    """
+    if ric_delta_pos_vec is None and ric_delta_vel_vec is None:
+      raise ValueError("At least one of ric_delta_pos_vec or ric_delta_vel_vec must be provided.")
+
+    # Get rotation matrix (RIC to XYZ)
+    rot_mat_ric_to_xyz = FrameConverter.ric_to_xyz(xyz_ref_pos_vec, xyz_ref_vel_vec)
+    
+    # Get object vectors by rotating and adding reference
+    xyz_obj_pos_vec = None
+    xyz_obj_vel_vec = None
+
+    if ric_delta_pos_vec is not None:
+      # Rotate delta position to inertial
+      xyz_delta_pos_vec = rot_mat_ric_to_xyz @ ric_delta_pos_vec
+      # Add reference position
+      xyz_obj_pos_vec = xyz_ref_pos_vec + xyz_delta_pos_vec
+
+    if ric_delta_vel_vec is not None:
+      # Rotate delta velocity to inertial
+      xyz_delta_vel_vec = rot_mat_ric_to_xyz @ ric_delta_vel_vec
+      # Add reference velocity
+      xyz_obj_vel_vec = xyz_ref_vel_vec + xyz_delta_vel_vec
+
+    if xyz_obj_pos_vec is not None and xyz_obj_vel_vec is not None:
+      return xyz_obj_pos_vec, xyz_obj_vel_vec
+    elif xyz_obj_pos_vec is not None:
+      return xyz_obj_pos_vec
+    else:
+      return xyz_obj_vel_vec # type: ignore
 
