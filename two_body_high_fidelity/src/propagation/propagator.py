@@ -431,7 +431,7 @@ def run_sgp4_propagation(
   print(f"        Grid     : {num_points} points")
 
   print("\n  Compute")
-  print("    Numerical Integration Running ... ", end='', flush=True)
+  print("    SGP4 Propagation Running ... ", end='', flush=True)
   result_sgp4 = propagate_tle(
     tle_line_1 = tle_line_1,
     tle_line_2 = tle_line_2,
