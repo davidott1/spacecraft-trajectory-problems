@@ -31,18 +31,18 @@ def plot_3d_trajectories(
   fig = plt.figure(figsize=(18,10))
   
   # Extract state vectors
-  states = result['state']
-  pos_x, pos_y, pos_z = states[0, :], states[1, :], states[2, :]
-  vel_x, vel_y, vel_z = states[3, :], states[4, :], states[5, :]
+  posvel_vec = result['state']
+  pos_x, pos_y, pos_z = posvel_vec[0, :], posvel_vec[1, :], posvel_vec[2, :]
+  vel_x, vel_y, vel_z = posvel_vec[3, :], posvel_vec[4, :], posvel_vec[5, :]
   
   # Plot 3D position trajectory
   ax1 = fig.add_subplot(121, projection='3d')
   
   # Add Earth ellipsoid
-  u = np.linspace(0, 2 * np.pi, 50)
-  v = np.linspace(0, np.pi, 50)
-  r_eq = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR
-  r_pol = PHYSICALCONSTANTS.EARTH.RADIUS.POLAR
+  u       = np.linspace(0, 2 * np.pi, 50)
+  v       = np.linspace(0, np.pi, 50)
+  r_eq    = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR
+  r_pol   = PHYSICALCONSTANTS.EARTH.RADIUS.POLAR
   x_earth = r_eq * np.outer(np.cos(u), np.sin(v))
   y_earth = r_eq * np.outer(np.sin(u), np.sin(v))
   z_earth = r_pol * np.outer(np.ones(np.size(u)), np.cos(v))

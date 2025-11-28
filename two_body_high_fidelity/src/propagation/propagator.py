@@ -20,28 +20,6 @@ from src.model.frame_converter import FrameConverter
 from src.utility.tle_helper    import modify_tle_bstar, get_tle_satellite_and_tle_epoch
 
 
-def determine_actual_times(
-  result_jpl_horizons_ephemeris : Optional[dict],
-  desired_time_o_dt             : datetime,
-  desired_time_f_dt             : datetime,
-) -> tuple[datetime, datetime]:
-  """
-  Determine the actual start and end times for propagation.
-  
-  If Horizons data is available, aligns the time grid with Horizons.
-  Otherwise, uses the desired start and end times.
-  """
-  if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
-    actual_time_o_dt  = result_jpl_horizons_ephemeris['time_o']
-    duration_horizons = result_jpl_horizons_ephemeris['plot_time_s'][-1]
-    actual_time_f_dt  = actual_time_o_dt + timedelta(seconds=duration_horizons)
-  else:
-    actual_time_o_dt = desired_time_o_dt
-    actual_time_f_dt = desired_time_f_dt
-    
-  return actual_time_o_dt, actual_time_f_dt
-
-
 def propagate_tle(
   tle_line_1   : str,
   tle_line_2   : str,
@@ -89,6 +67,10 @@ def propagate_tle(
   if disable_drag:
     tle_line_1 = modify_tle_bstar(tle_line_1, 0.0)
   
+  # Determine frame
+  frame = 'J2000' if to_j2000 else 'TEME'
+
+  # Propagation vectorized
   try:
     # Create satellite object and extract epoch
     epoch_datetime, satellite = get_tle_satellite_and_tle_epoch(tle_line_1, tle_line_2)
@@ -101,7 +83,7 @@ def propagate_tle(
       time = np.linspace(time_o, time_f, num_points) # type: ignore
     
     # Initialize arrays
-    state_array = np.zeros((6, num_points))
+    posvel_vec_array = np.zeros((6, num_points))
     coe_time_series = {
       'sma'  : np.zeros(num_points),
       'ecc'  : np.zeros(num_points),
@@ -113,42 +95,68 @@ def propagate_tle(
       'ea'   : np.zeros(num_points),
     }
 
-    # Propagate at each time step
-    for i, t in enumerate(time):
-      # Convert time to datetime
-      dt = epoch_datetime + timedelta(seconds=float(t))
+    # Get epoch Julian date
+    jd_epoch, fr_epoch = jday(
+      epoch_datetime.year,
+      epoch_datetime.month,
+      epoch_datetime.day,
+      epoch_datetime.hour,
+      epoch_datetime.minute,
+      epoch_datetime.second + epoch_datetime.microsecond/1e6
+    )
+    
+    # Create arrays for sgp4_array (time is in seconds, 86400 seconds/day)
+    jd_arr = np.full(num_points, jd_epoch)
+    fr_arr = fr_epoch + time / 86400.0
+    
+    # Run SGP4 (vectorized)
+    error_code_arr, teme_pos_vec_arr, teme_vel_vec_arr = satellite.sgp4_array(jd_arr, fr_arr)
+    
+    # Check for errors
+    if np.any(error_code_arr != 0):
+      idx = np.where(error_code_arr != 0)[0][0]
+      return {
+        'success' : False,
+        'message' : f'SGP4 error code: {error_code_arr[idx]} at index {idx}',
+        'frame'   : frame,
+        'time'    : time[:idx],
+        'state'   : np.zeros((6, idx)),
+        'coe'     : coe_time_series,
+      }
+
+    # Convert SGP4 output km, km/s to m, m/s
+    teme_pos_vec_arr *= 1000.0
+    teme_vel_vec_arr *= 1000.0
+
+    # FrameConverter expects (3, N) for vectorized input.
+    teme_pos_vec_arr_T = teme_pos_vec_arr.T # (3, N)
+    teme_vel_vec_arr_T = teme_vel_vec_arr.T # (3, N)
+    
+    # Convert to desired frame
+    if to_j2000:
+      # Convert TEME to J2000/GCRS
+      j2000_pos_vec_T, j2000_vel_vec_T = FrameConverter.teme_to_j2000(
+        teme_pos_vec_arr_T,
+        teme_vel_vec_arr_T,
+        jd_arr + fr_arr,
+        units_pos = 'm',
+        units_vel = 'm/s'
+      )
+      pos_vec_arr = j2000_pos_vec_T
+      vel_vec_arr = j2000_vel_vec_T
+    else:
+      # No frame conversion
+      pos_vec_arr = teme_pos_vec_arr_T
+      vel_vec_arr = teme_vel_vec_arr_T
       
-      # Get Julian date
-      jd, fr = jday(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second + dt.microsecond/1e6)
-      
-      # Propagate
-      error_code, teme_pos_vec, teme_vel_vec = satellite.sgp4(jd, fr)
-      if error_code != 0:
-        return {
-          'success' : False,
-          'message' : f'SGP4 error code: {error_code}',
-          'time'    : time,
-          'state'   : state_array,
-          'coe'     : coe_time_series,
-        }
-      
-      # Transform TEME to J2000/GCRS
-      if to_j2000:
-        j2000_pos_vec, j2000_vel_vec = FrameConverter.teme_to_j2000(teme_pos_vec, teme_vel_vec, jd + fr)
-        pos_vec = np.array(j2000_pos_vec) * 1000.0  # km -> m
-        vel_vec = np.array(j2000_vel_vec) * 1000.0  # km/s -> m/s
-      else:
-        pos_vec = np.array(teme_pos_vec) * 1000.0  # km -> m
-        vel_vec = np.array(teme_vel_vec) * 1000.0  # km/s -> m/s
-      
-      # Store state
-      state_array[0:3, i] = pos_vec
-      state_array[3:6, i] = vel_vec
-      
-      # Compute osculating elements
+    # Construct state array (6, N)
+    posvel_vec_array = np.vstack((pos_vec_arr, vel_vec_arr))
+    
+    # Compute osculating elements (Loop)
+    for i in range(num_points):
       coe = OrbitConverter.pv_to_coe(
-        pos_vec,
-        vel_vec,
+        posvel_vec_array[0:3, i],
+        posvel_vec_array[3:6, i],
         gp = PHYSICALCONSTANTS.EARTH.GP,
       )
       for key in coe_time_series.keys():
@@ -157,18 +165,19 @@ def propagate_tle(
     
     # Return dict result
     return {
-      'success'     : True,
-      'message'     : 'SGP4 propagation successful',
-      'time'        : time,
-      'state'       : state_array,
-      'final_state' : state_array[:, -1],
-      'coe'         : coe_time_series,
+      'success' : True,
+      'message' : 'SGP4 propagation successful',
+      'frame'   : frame,
+      'time'    : time,
+      'state'   : posvel_vec_array,
+      'coe'     : coe_time_series,
     }
   except Exception as e:
     # Catch all exceptions and return failure
     return {
       'success' : False,
       'message' : str(e),
+      'frame'   : frame,
       'time'    : [],
       'state'   : [],
       'coe'     : [],
@@ -349,7 +358,7 @@ def propagate_state_numerical_integration(
   }
 
 
-def propagate_sgp4(
+def run_sgp4_propagation(
   result_jpl_horizons_ephemeris : Optional[dict],
   tle_line_1                    : str,
   tle_line_2                    : str,
@@ -782,7 +791,7 @@ def run_propagations(
   )
   
   # Propagate: run SGP4 at Horizons time points for comparison
-  result_sgp4_at_horizons = propagate_sgp4(
+  result_sgp4_at_horizons = run_sgp4_propagation(
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     tle_line_1                    = tle_line_1,
     tle_line_2                    = tle_line_2,
