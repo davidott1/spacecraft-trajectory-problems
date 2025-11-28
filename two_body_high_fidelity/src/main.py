@@ -175,7 +175,7 @@ def main(
     zonal_harmonics_list          = config.zonal_harmonics_list,
     include_srp                   = config.include_srp,
     spice_kernels_folderpath      = config.spice_kernels_folderpath,
-    result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris, # type: ignore
+    result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     tle_line_1                    = config.tle_line_1,
     tle_line_2                    = config.tle_line_2,
   )

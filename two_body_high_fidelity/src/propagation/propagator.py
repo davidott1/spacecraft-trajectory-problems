@@ -681,7 +681,7 @@ def run_propagations(
   zonal_harmonics_list          : list,
   include_srp                   : bool,
   spice_kernels_folderpath      : Path,
-  result_jpl_horizons_ephemeris : dict,
+  result_jpl_horizons_ephemeris : Optional[dict],
   tle_line_1                    : str,
   tle_line_2                    : str,
 ) -> tuple[dict, Optional[dict]]:
