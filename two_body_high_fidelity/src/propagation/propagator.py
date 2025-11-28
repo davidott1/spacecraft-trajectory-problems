@@ -262,44 +262,45 @@ def propagate_state_numerical_integration(
   """
   Propagate an orbit from initial cartesian state.
   
-  Parameters:
-  -----------
-  initial_state : np.ndarray
-    Initial state vector [pos, vel] in meters and m/s
-  time_o : float
-    Initial time [s]
-  time_f : float
-    Final time [s]
-  dynamics : Acceleration
-    Acceleration model containing all force models
-  method : str
-    Integration method for scipy.solve_ivp (default: 'DOP853')
-  rtol : float
-    Relative tolerance for integration
-  atol : float
-    Absolute tolerance for integration
-  dense_output : bool
-    Enable dense output for interpolation
-  t_eval : np.ndarray, optional
-    Times at which to store the solution
-  get_coe_time_series : bool
-    If True, convert states to classical orbital elements
-  num_points : int, optional
-    Number of output points. If None, uses adaptive timesteps from solver.
-    If specified, solution is evaluated at uniformly spaced times.
-  gp : float, optional
-    Gravitational parameter for orbital element conversion [m³/s²]
-    If None, uses dynamics.gravity.two_body.gp
+  Input:
+  ------
+    initial_state : np.ndarray
+      Initial state vector [pos, vel] in meters and m/s.
+    time_o : float
+      Initial time [s].
+    time_f : float
+      Final time [s].
+    dynamics : Acceleration
+      Acceleration model containing all force models.
+    method : str
+      Integration method for scipy.solve_ivp (default: 'DOP853').
+    rtol : float
+      Relative tolerance for integration.
+    atol : float
+      Absolute tolerance for integration.
+    dense_output : bool
+      Enable dense output for interpolation.
+    t_eval : np.ndarray, optional
+      Times at which to store the solution.
+    get_coe_time_series : bool
+      If True, convert states to classical orbital elements.
+    num_points : int, optional
+      Number of output points. If None, uses adaptive timesteps from solver.
+      If specified, solution is evaluated at uniformly spaced times.
+    gp : float, optional
+      Gravitational parameter for orbital element conversion [m³/s²].
+      If None, uses dynamics.gravity.two_body.gp.
   
-  Returns:
-  --------
-  dict : Dictionary containing:
-    - success : bool - Integration success flag
-    - message : str - Status message
-    - time : np.ndarray - Time array [s]
-    - state : np.ndarray - State history [6 x N]
-    - final_state : np.ndarray - Final state vector
-    - coe : dict - Classical orbital elements time series (if requested)
+  Output:
+  -------
+    dict
+      Dictionary containing:
+      - success : bool - Integration success flag
+      - message : str - Status message
+      - time : np.ndarray - Time array [s]
+      - state : np.ndarray - State history [6 x N]
+      - final_state : np.ndarray - Final state vector
+      - coe : dict - Classical orbital elements time series (if requested)
   """
   # Time span for integration
   time_span = (time_o, time_f)
@@ -376,7 +377,7 @@ def run_sgp4_propagation(
   
   Input:
   ------
-    result_jpl_horizons_ephemeris : dict
+    result_jpl_horizons_ephemeris : dict | None
       The processed dictionary from JPL Horizons, containing 'success', 'plot_time_s'.
     tle_line_1 : str
       The first line of the TLE.
@@ -538,7 +539,7 @@ def run_high_fidelity_propagation(
       Whether to enable Solar Radiation Pressure.
     spice_kernels_folderpath : Path
       Path to SPICE kernels folder.
-    result_jpl_horizons_ephemeris : dict
+    result_jpl_horizons_ephemeris : dict | None
       Result from Horizons loader (used for time grid).
       
   Output:
@@ -589,12 +590,12 @@ def run_high_fidelity_propagation(
   print(f"        Duration : {delta_time:.1f} s")
   
   if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
-      duration_actual = (actual_time_f_dt - actual_time_o_dt).total_seconds()
-      print(f"      Actual")
-      print(f"        Initial  : {actual_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_o_actual:.6f} ET)")
-      print(f"        Final    : {actual_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_f_actual:.6f} ET)")
-      print(f"        Duration : {duration_actual:.1f} s")
-      print(f"        Grid     : {grid_points} points")
+    duration_actual = (actual_time_f_dt - actual_time_o_dt).total_seconds()
+    print(f"      Actual")
+    print(f"        Initial  : {actual_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_o_actual:.6f} ET)")
+    print(f"        Final    : {actual_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({time_et_f_actual:.6f} ET)")
+    print(f"        Duration : {duration_actual:.1f} s")
+    print(f"        Grid     : {grid_points} points")
   
   print("    Forces")
   print("      Gravity")
@@ -695,6 +696,43 @@ def run_high_fidelity_propagation(
   return result_high_fidelity
 
 
+def determine_actual_times(
+  result_jpl_horizons_ephemeris : Optional[dict],
+  desired_time_o_dt             : datetime,
+  desired_time_f_dt             : datetime,
+) -> tuple[datetime, datetime]:
+  """
+  Determine the actual start and end times for propagation.
+  
+  If Horizons data is available, aligns the time grid with Horizons.
+  Otherwise, uses the desired start and end times.
+  
+  Input:
+  ------
+    result_jpl_horizons_ephemeris : dict | None
+      Result from Horizons loader.
+    desired_time_o_dt : datetime
+      Desired initial datetime.
+    desired_time_f_dt : datetime
+      Desired final datetime.
+      
+  Output:
+  -------
+    tuple[datetime, datetime]
+      Tuple containing (actual_time_o_dt, actual_time_f_dt).
+  """
+  if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
+    # Extract actual start/end times from Horizons result
+    actual_time_o_dt = result_jpl_horizons_ephemeris['plot_time_s'][0]
+    actual_time_f_dt = result_jpl_horizons_ephemeris['plot_time_s'][-1]
+  else:
+    # Fallback to desired times
+    actual_time_o_dt = desired_time_o_dt
+    actual_time_f_dt = desired_time_f_dt
+
+  return actual_time_o_dt, actual_time_f_dt
+
+
 def run_propagations(
   initial_state                 : np.ndarray,
   desired_time_o_dt             : datetime,
@@ -756,7 +794,7 @@ def run_propagations(
       Whether to enable SRP.
     spice_kernels_folderpath : Path
       Path to SPICE kernels.
-    result_jpl_horizons_ephemeris : dict
+    result_jpl_horizons_ephemeris : dict | None
       JPL Horizons ephemeris result.
     tle_line_1 : str
       TLE line 1.
@@ -777,29 +815,5 @@ def run_propagations(
     actual_time_f_dt              = actual_time_f_dt,
     mass                          = mass,
     cd                            = cd,
-    area_drag                     = area_drag,
-    cr                            = cr,
-    area_srp                      = area_srp,
-    use_spice                     = use_spice,
-    include_third_body            = include_third_body,
-    third_bodies_list             = third_bodies_list,
-    include_zonal_harmonics       = include_zonal_harmonics,
-    zonal_harmonics_list          = zonal_harmonics_list,
-    include_srp                   = include_srp,
-    spice_kernels_folderpath      = spice_kernels_folderpath,
-    result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
-  )
-  
-  # Propagate: run SGP4 at Horizons time points for comparison
-  result_sgp4_at_horizons = run_sgp4_propagation(
-    result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
-    tle_line_1                    = tle_line_1,
-    tle_line_2                    = tle_line_2,
-    desired_time_o_dt             = desired_time_o_dt,
-    desired_time_f_dt             = desired_time_f_dt,
-    actual_time_o_dt              = actual_time_o_dt,
-    actual_time_f_dt              = actual_time_f_dt,
-  )
-
-  return result_high_fidelity, result_sgp4_at_horizons
+    area_drag                     :
 
