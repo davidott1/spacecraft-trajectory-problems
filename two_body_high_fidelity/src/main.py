@@ -58,6 +58,7 @@ Usage:
       
 """
 from typing                            import Optional
+from datetime                          import timedelta
 
 from src.plot.trajectory               import generate_plots
 from src.propagation.propagator        import run_propagations
@@ -147,11 +148,22 @@ def main(
     to_j2000                      = True,
   )
 
+  # Determine Actual times if Horizons is available (for grid alignment)
+  if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
+    actual_time_o_dt  = result_jpl_horizons_ephemeris['time_o']
+    duration_horizons = result_jpl_horizons_ephemeris['plot_time_s'][-1]
+    actual_time_f_dt  = actual_time_o_dt + timedelta(seconds=duration_horizons)
+  else:
+    actual_time_o_dt = config.desired_time_o_dt
+    actual_time_f_dt = config.desired_time_f_dt
+
   # Run propagations: high-fidelity and SGP4 at Horizons times
   result_high_fidelity_propagation, result_sgp4_propagation = run_propagations(
     initial_state                 = initial_state,
     desired_time_o_dt             = config.desired_time_o_dt,
     desired_time_f_dt             = config.desired_time_f_dt,
+    actual_time_o_dt              = actual_time_o_dt,
+    actual_time_f_dt              = actual_time_f_dt,
     mass                          = config.mass,
     cd                            = config.cd,
     area_drag                     = config.area_drag,

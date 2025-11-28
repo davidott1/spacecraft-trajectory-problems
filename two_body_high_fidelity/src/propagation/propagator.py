@@ -333,6 +333,8 @@ def propagate_sgp4(
   tle_line_2                    : str,
   desired_time_o_dt             : datetime,
   desired_time_f_dt             : datetime,
+  actual_time_o_dt              : datetime,
+  actual_time_f_dt              : datetime,
 ) -> Optional[dict]:
   """
   Propagate SGP4 on the same time grid as the Horizons ephemeris.
@@ -353,6 +355,10 @@ def propagate_sgp4(
       Desired initial datetime.
     desired_time_f_dt : datetime
       Desired final datetime.
+    actual_time_o_dt : datetime
+      Actual initial datetime (from Horizons or Desired).
+    actual_time_f_dt : datetime
+      Actual final datetime (from Horizons or Desired).
       
   Output:
   -------
@@ -367,15 +373,13 @@ def propagate_sgp4(
   tle_epoch_dt, _ = get_tle_satellite_and_tle_epoch(tle_line_1, tle_line_2)
 
   # Calculate time offset: Horizons start relative to TLE epoch
-  horizons_start_dt = result_jpl_horizons_ephemeris['time_o']
-  time_offset_s     = (horizons_start_dt - tle_epoch_dt).total_seconds()
+  time_offset_s = (actual_time_o_dt - tle_epoch_dt).total_seconds()
 
   # Convert Horizons plot_time_s to integration times for SGP4 (seconds from TLE epoch)
   sgp4_eval_times = result_jpl_horizons_ephemeris['plot_time_s'] + time_offset_s
   
   # Calculate display values
-  duration_actual_s  = result_jpl_horizons_ephemeris['plot_time_s'][-1]
-  grid_end_dt        = horizons_start_dt + timedelta(seconds=duration_actual_s)
+  duration_actual_s  = (actual_time_f_dt - actual_time_o_dt).total_seconds()
   duration_desired_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
   num_points         = len(sgp4_eval_times)
 
@@ -387,8 +391,8 @@ def propagate_sgp4(
   print(f"        Final    : {desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(desired_time_f_dt):.6f} ET)")
   print(f"        Duration : {duration_desired_s:.1f} s")
   print(f"      Actual")
-  print(f"        Initial  : {horizons_start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(horizons_start_dt):.6f} ET)")
-  print(f"        Final    : {grid_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(grid_end_dt):.6f} ET)")
+  print(f"        Initial  : {actual_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(actual_time_o_dt):.6f} ET)")
+  print(f"        Final    : {actual_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({utc_to_et(actual_time_f_dt):.6f} ET)")
   print(f"        Duration : {duration_actual_s:.1f} s")
   print(f"        Grid     : {num_points} points")
 
@@ -436,7 +440,7 @@ def propagate_sgp4(
   
   # Calculate display values
   duration_actual_s  = result_jpl_horizons_ephemeris['plot_time_s'][-1]
-  grid_end_dt        = horizons_start_dt + timedelta(seconds=duration_actual_s)
+  grid_end_dt        = actual_time_o_dt + timedelta(seconds=duration_actual_s)
   duration_desired_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
   
   return result_sgp4
@@ -446,6 +450,8 @@ def run_high_fidelity_propagation(
   initial_state                 : np.ndarray,
   desired_time_o_dt             : datetime,
   desired_time_f_dt             : datetime,
+  actual_time_o_dt              : datetime,
+  actual_time_f_dt              : datetime,
   mass                          : float,
   cd                            : float,
   area_drag                     : float,
@@ -471,6 +477,10 @@ def run_high_fidelity_propagation(
       Desired initial datetime.
     desired_time_f_dt : datetime
       Desired final datetime.
+    actual_time_o_dt : datetime
+      Actual initial datetime (from Horizons or Desired).
+    actual_time_f_dt : datetime
+      Actual final datetime (from Horizons or Desired).
     mass : float
       Satellite mass [kg].
     cd : float
@@ -506,15 +516,6 @@ def run_high_fidelity_propagation(
 
   # Display configuration
   print("\nHigh-Fidelity Model")
-
-  # Determine Actual times if Horizons is available (for grid alignment)
-  actual_time_o_dt = desired_time_o_dt
-  actual_time_f_dt = desired_time_f_dt
-  
-  if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
-    actual_time_o_dt  = result_jpl_horizons_ephemeris['time_o']
-    duration_horizons = result_jpl_horizons_ephemeris['plot_time_s'][-1]
-    actual_time_f_dt  = actual_time_o_dt + timedelta(seconds=duration_horizons)
 
   # Calculate Ephemeris Times (ET) for integration
   time_et_o_actual = utc_to_et(actual_time_o_dt)
@@ -666,6 +667,8 @@ def run_propagations(
   initial_state                 : np.ndarray,
   desired_time_o_dt             : datetime,
   desired_time_f_dt             : datetime,
+  actual_time_o_dt              : datetime,
+  actual_time_f_dt              : datetime,
   mass                          : float,
   cd                            : float,
   area_drag                     : float,
@@ -693,6 +696,10 @@ def run_propagations(
       Desired initial time as a datetime.
     desired_time_f_dt : datetime
       Desired final time as a datetime.
+    actual_time_o_dt : datetime
+      Actual initial time as a datetime.
+    actual_time_f_dt : datetime
+      Actual final time as a datetime.
     mass : float
       Satellite mass.
     cd : float
@@ -734,6 +741,8 @@ def run_propagations(
     initial_state                 = initial_state,
     desired_time_o_dt             = desired_time_o_dt,
     desired_time_f_dt             = desired_time_f_dt,
+    actual_time_o_dt              = actual_time_o_dt,
+    actual_time_f_dt              = actual_time_f_dt,
     mass                          = mass,
     cd                            = cd,
     area_drag                     = area_drag,
@@ -757,6 +766,8 @@ def run_propagations(
     tle_line_2                    = tle_line_2,
     desired_time_o_dt             = desired_time_o_dt,
     desired_time_f_dt             = desired_time_f_dt,
+    actual_time_o_dt              = actual_time_o_dt,
+    actual_time_f_dt              = actual_time_f_dt,
   )
 
   return result_high_fidelity, result_sgp4_at_horizons
