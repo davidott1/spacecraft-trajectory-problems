@@ -85,3 +85,38 @@ class DualOutputLogger:
       self.original_stdout.flush()
     if self.log_file is not None:
       self.log_file.flush()
+
+
+def start_logging(
+  log_filepath: Path,
+) -> DualOutputLogger:
+  """
+  Create and start a DualOutputLogger for the given filepath.
+  
+  Input:
+  ------
+    log_filepath : Path
+      Path to the log file.
+      
+  Output:
+  -------
+    DualOutputLogger
+      The started logger instance (call .stop() when done).
+  """
+  logger = DualOutputLogger(log_filepath)
+  logger.start()
+  return logger
+
+
+def stop_logging(
+  logger: DualOutputLogger,
+) -> None:
+  """
+  Stop the DualOutputLogger and restore original stdout.
+  
+  Input:
+  ------
+    logger : DualOutputLogger
+      The logger instance to stop.
+  """
+  logger.stop()

@@ -68,7 +68,7 @@ from src.utility.printer               import print_results_summary
 from src.input.cli                     import parse_command_line_arguments
 from src.input.configuration           import build_config, print_input_configuration, print_paths
 from src.propagation.state_initializer import get_initial_state
-from src.utility.logger                import DualOutputLogger
+from src.utility.logger                import start_logging, stop_logging
 
 def main(
   input_object_type    : str,
@@ -139,8 +139,9 @@ def main(
   )
 
   # Start logging to file
-  logger = DualOutputLogger(config.log_filepath)
-  logger.start()
+  logger = start_logging(
+    config.log_filepath,
+  )
   
   # Print input configuration and paths
   print_input_configuration(
@@ -239,7 +240,7 @@ def main(
   unload_files(config.include_spice)
   
   # Stop logging
-  logger.stop()
+  stop_logging(logger)
   
   # Return high-fidelity propagation results
   return result_high_fidelity_propagation
