@@ -571,6 +571,7 @@ def generate_error_plots(
   figures_folderpath               : Path,
   compare_jpl_horizons             : bool,
   compare_tle                      : bool,
+  object_name                      : str = "object",
 ) -> None:
   """
   Generate and save error comparison plots.
@@ -591,6 +592,8 @@ def generate_error_plots(
       Flag to enable comparison with Horizons.
     compare_tle : bool
       Flag to enable comparison with TLE/SGP4.
+    object_name : str
+      Name of the object for plot titles and filenames.
       
   Output:
   -------
@@ -601,6 +604,9 @@ def generate_error_plots(
     return
 
   print("\n  Generate Error Plots")
+  
+  # Lowercase name for filenames
+  name_lower = object_name.lower()
 
   # Create error comparison plots if both Horizons and high-fidelity are available
   if result_high_fidelity_propagation.get('success'):
@@ -608,15 +614,15 @@ def generate_error_plots(
     
     # Position and velocity error plots
     fig_err_3d = plot_3d_error(result_jpl_horizons_ephemeris, result_high_fidelity_propagation)
-    fig_err_3d.suptitle('ISS Orbit Error: Horizons vs High-Fidelity', fontsize=16)
-    fig_err_3d.savefig(figures_folderpath / 'iss_error_3d.png', dpi=300, bbox_inches='tight')
-    print(f"      3D Error          : <figures_folderpath>/iss_error_3d.png")
+    fig_err_3d.suptitle(f'{object_name} Orbit Error: Horizons vs High-Fidelity', fontsize=16)
+    fig_err_3d.savefig(figures_folderpath / f'{name_lower}_error_3d.png', dpi=300, bbox_inches='tight')
+    print(f"      3D Error          : <figures_folderpath>/{name_lower}_error_3d.png")
     
     # Time series error plots
     fig_err_ts = plot_time_series_error(result_jpl_horizons_ephemeris, result_high_fidelity_propagation, epoch=desired_time_o_dt)
-    fig_err_ts.suptitle('ISS RIC Position/Velocity Errors: Horizons vs High-Fidelity', fontsize=16)
-    fig_err_ts.savefig(figures_folderpath / 'iss_error_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"      Time-Series Error : <figures_folderpath>/iss_error_timeseries.png")
+    fig_err_ts.suptitle(f'{object_name} RIC Position/Velocity Errors: Horizons vs High-Fidelity', fontsize=16)
+    fig_err_ts.savefig(figures_folderpath / f'{name_lower}_error_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"      Time-Series Error : <figures_folderpath>/{name_lower}_error_timeseries.png")
 
   # Error plots comparing SGP4 to Horizons
   if compare_tle and result_sgp4_propagation and result_sgp4_propagation.get('success'):
@@ -624,15 +630,15 @@ def generate_error_plots(
 
     # 3D error plot
     fig_sgp4_err_3d = plot_3d_error(result_jpl_horizons_ephemeris, result_sgp4_propagation)
-    fig_sgp4_err_3d.suptitle('ISS Orbit Error: Horizons vs SGP4', fontsize=16)
-    fig_sgp4_err_3d.savefig(figures_folderpath / 'iss_sgp4_error_3d.png', dpi=300, bbox_inches='tight')
-    print(f"      3D Error          : <figures_folderpath>/iss_sgp4_error_3d.png")
+    fig_sgp4_err_3d.suptitle(f'{object_name} Orbit Error: Horizons vs SGP4', fontsize=16)
+    fig_sgp4_err_3d.savefig(figures_folderpath / f'{name_lower}_sgp4_error_3d.png', dpi=300, bbox_inches='tight')
+    print(f"      3D Error          : <figures_folderpath>/{name_lower}_sgp4_error_3d.png")
     
     # Time series error plot (RIC frame)
     fig_sgp4_err_ts = plot_time_series_error(result_jpl_horizons_ephemeris, result_sgp4_propagation, epoch=desired_time_o_dt, use_ric=False)
-    fig_sgp4_err_ts.suptitle('ISS XYZ Position/Velocity Errors: Horizons vs SGP4', fontsize=16)
-    fig_sgp4_err_ts.savefig(figures_folderpath / 'iss_sgp4_error_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"      Time-Series Error : <figures_folderpath>/iss_sgp4_error_timeseries.png")
+    fig_sgp4_err_ts.suptitle(f'{object_name} XYZ Position/Velocity Errors: Horizons vs SGP4', fontsize=16)
+    fig_sgp4_err_ts.savefig(figures_folderpath / f'{name_lower}_sgp4_error_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"      Time-Series Error : <figures_folderpath>/{name_lower}_sgp4_error_timeseries.png")
 
 
 def generate_3d_and_time_series_plots(
@@ -643,6 +649,7 @@ def generate_3d_and_time_series_plots(
   figures_folderpath               : Path,
   compare_jpl_horizons             : bool,
   compare_tle                      : bool,
+  object_name                      : str = "object",
 ) -> None:
   """
   Generate and save 3D trajectory and time series plots.
@@ -663,40 +670,45 @@ def generate_3d_and_time_series_plots(
       Flag to enable comparison with Horizons.
     compare_tle : bool
       Flag to enable comparison with TLE/SGP4.
+    object_name : str
+      Name of the object for plot titles and filenames.
       
   Output:
   -------
     None
   """
   print("  Generate 3D-Trajectory and Time-Series Plots")
+  
+  # Lowercase name for filenames
+  name_lower = object_name.lower()
 
   # Horizons plots (first)
   if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
     print("    JPL-Horizons-Ephemeris Plots")
 
     fig1 = plot_3d_trajectories(result_jpl_horizons_ephemeris)
-    fig1.suptitle('ISS Orbit - JPL Horizons - 3D', fontsize=16)
-    fig1.savefig(figures_folderpath / 'iss_jpl_horizons_3d.png', dpi=300, bbox_inches='tight')
-    print(f"      3D          : <figures_folderpath>/iss_jpl_horizons_3d.png")
+    fig1.suptitle(f'{object_name} Orbit - JPL Horizons - 3D', fontsize=16)
+    fig1.savefig(figures_folderpath / f'{name_lower}_jpl_horizons_3d.png', dpi=300, bbox_inches='tight')
+    print(f"      3D          : <figures_folderpath>/{name_lower}_jpl_horizons_3d.png")
     
     fig2 = plot_time_series(result_jpl_horizons_ephemeris, epoch=desired_time_o_dt)
-    fig2.suptitle('ISS Orbit - JPL Horizons - Time Series', fontsize=16)
-    fig2.savefig(figures_folderpath / 'iss_jpl_horizons_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"      Time Series :  <figures_folderpath>/iss_jpl_horizons_timeseries.png")
+    fig2.suptitle(f'{object_name} Orbit - JPL Horizons - Time Series', fontsize=16)
+    fig2.savefig(figures_folderpath / f'{name_lower}_jpl_horizons_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"      Time Series : <figures_folderpath>/{name_lower}_jpl_horizons_timeseries.png")
   
   # High-fidelity plots (second)
   if result_high_fidelity_propagation.get('success'):
     print("    High-Fidelity-Model Plots")
 
     fig3 = plot_3d_trajectories(result_high_fidelity_propagation)
-    fig3.suptitle('ISS Orbit - High-Fidelity Model - 3D', fontsize=16)
-    fig3.savefig(figures_folderpath / 'iss_high_fidelity_model_3d.png', dpi=300, bbox_inches='tight')
-    print(f"      3D          : <figures_folderpath>/iss_high_fidelity_model_3d.png")
+    fig3.suptitle(f'{object_name} Orbit - High-Fidelity Model - 3D', fontsize=16)
+    fig3.savefig(figures_folderpath / f'{name_lower}_high_fidelity_model_3d.png', dpi=300, bbox_inches='tight')
+    print(f"      3D          : <figures_folderpath>/{name_lower}_high_fidelity_model_3d.png")
     
     fig4 = plot_time_series(result_high_fidelity_propagation, epoch=desired_time_o_dt)
-    fig4.suptitle('ISS Orbit - High-Fidelity Model - Time Series', fontsize=16)
-    fig4.savefig(figures_folderpath / 'iss_high_fidelity_model_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"      Time Series : <figures_folderpath>/iss_high_fidelity_model_timeseries.png")
+    fig4.suptitle(f'{object_name} Orbit - High-Fidelity Model - Time Series', fontsize=16)
+    fig4.savefig(figures_folderpath / f'{name_lower}_high_fidelity_model_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"      Time Series : <figures_folderpath>/{name_lower}_high_fidelity_model_timeseries.png")
   
   # SGP4 at Horizons time points plots
   if compare_tle and result_sgp4_propagation and result_sgp4_propagation.get('success'):
@@ -704,15 +716,15 @@ def generate_3d_and_time_series_plots(
     
     # 3D trajectory plot
     fig_sgp4_hz_3d = plot_3d_trajectories(result_sgp4_propagation)
-    fig_sgp4_hz_3d.suptitle('ISS Orbit - SGP4 Model - 3D', fontsize=16)
-    fig_sgp4_hz_3d.savefig(figures_folderpath / 'iss_sgp4_model_3d.png', dpi=300, bbox_inches='tight')
-    print(f"      3D          : <figures_folderpath>/iss_sgp4_model_3d.png")
+    fig_sgp4_hz_3d.suptitle(f'{object_name} Orbit - SGP4 Model - 3D', fontsize=16)
+    fig_sgp4_hz_3d.savefig(figures_folderpath / f'{name_lower}_sgp4_model_3d.png', dpi=300, bbox_inches='tight')
+    print(f"      3D          : <figures_folderpath>/{name_lower}_sgp4_model_3d.png")
     
     # Time series plot
     fig_sgp4_hz_ts = plot_time_series(result_sgp4_propagation, epoch=desired_time_o_dt)
-    fig_sgp4_hz_ts.suptitle('ISS Orbit - SGP4 Model - Time Series', fontsize=16)
-    fig_sgp4_hz_ts.savefig(figures_folderpath / 'iss_sgp4_model_timeseries.png', dpi=300, bbox_inches='tight')
-    print(f"      Time Series : <figures_folderpath>/iss_sgp4_model_timeseries.png")
+    fig_sgp4_hz_ts.suptitle(f'{object_name} Orbit - SGP4 Model - Time Series', fontsize=16)
+    fig_sgp4_hz_ts.savefig(figures_folderpath / f'{name_lower}_sgp4_model_timeseries.png', dpi=300, bbox_inches='tight')
+    print(f"      Time Series : <figures_folderpath>/{name_lower}_sgp4_model_timeseries.png")
 
 
 def generate_plots(
@@ -723,6 +735,7 @@ def generate_plots(
   figures_folderpath               : Path,
   compare_jpl_horizons             : bool = False,
   compare_tle                      : bool = False,
+  object_name                      : str  = "object",
 ) -> None:
   """
   Generate and save all simulation plots.
@@ -743,6 +756,8 @@ def generate_plots(
       Flag to enable comparison with Horizons.
     compare_tle : bool
       Flag to enable comparison with TLE/SGP4.
+    object_name : str
+      Name of the object for plot titles and filenames.
       
   Output:
   -------
@@ -760,6 +775,7 @@ def generate_plots(
     figures_folderpath               = figures_folderpath,
     compare_jpl_horizons             = compare_jpl_horizons,
     compare_tle                      = compare_tle,
+    object_name                      = object_name,
   )
     
   # Generate error plots
@@ -771,4 +787,5 @@ def generate_plots(
     figures_folderpath               = figures_folderpath,
     compare_jpl_horizons             = compare_jpl_horizons,
     compare_tle                      = compare_tle,
+    object_name                      = object_name,
   )

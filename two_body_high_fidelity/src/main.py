@@ -234,6 +234,7 @@ def main(
     figures_folderpath               = config.figures_folderpath,
     compare_jpl_horizons             = config.compare_jpl_horizons,
     compare_tle                      = config.compare_tle,
+    object_name                      = config.obj_props['name'],
   )
   
   # Unload all files (SPICE kernels)
