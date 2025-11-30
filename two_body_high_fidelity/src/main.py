@@ -66,7 +66,7 @@ from src.propagation.utility           import determine_actual_times
 from src.input.loader                  import unload_files, load_files, get_horizons_ephemeris
 from src.utility.printer               import print_results_summary
 from src.input.cli                     import parse_command_line_arguments
-from src.input.configuration           import build_config, print_input_configuration, print_paths
+from src.input.configuration           import build_config, print_configuration
 from src.propagation.state_initializer import get_initial_state
 from src.utility.logger                import start_logging, stop_logging
 
@@ -144,22 +144,7 @@ def main(
   )
   
   # Print input configuration and paths
-  print_input_configuration(
-    input_object_type    = input_object_type,
-    norad_id             = norad_id,
-    desired_timespan     = timespan,
-    include_spice        = include_spice,
-    include_drag         = include_drag,
-    compare_tle          = compare_tle,
-    compare_jpl_horizons = compare_jpl_horizons,
-    third_bodies         = third_bodies,
-    zonal_harmonics      = zonal_harmonics,
-    include_srp          = include_srp,
-    initial_state_source = initial_state_source,
-  )
-  
-  # Print paths
-  print_paths(config)
+  print_configuration(config)
 
   # Load files
   load_files(

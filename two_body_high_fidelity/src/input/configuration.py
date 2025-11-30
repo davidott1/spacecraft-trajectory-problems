@@ -17,8 +17,8 @@ def print_input_configuration(
   include_drag         : bool,
   compare_tle          : bool,
   compare_jpl_horizons : bool,
-  third_bodies         : Optional[list],
-  zonal_harmonics      : Optional[list],
+  third_bodies_list    : list,
+  zonal_harmonics_list : list,
   include_srp          : bool,
   initial_state_source : str,
 ) -> None:
@@ -41,10 +41,10 @@ def print_input_configuration(
       Flag to enable/disable TLE comparison.
     compare_jpl_horizons : bool
       Flag to enable/disable JPL Horizons comparison.
-    third_bodies : list | None
-      List of third bodies to include (e.g., ['SUN', 'MOON']). None if disabled.
-    zonal_harmonics : list | None
-      List of zonal harmonics to include (e.g., ['J2', 'J3']). None if disabled.
+    third_bodies_list : list
+      List of third bodies to include (e.g., ['SUN', 'MOON']). Empty list if disabled.
+    zonal_harmonics_list : list
+      List of zonal harmonics to include (e.g., ['J2', 'J3']). Empty list if disabled.
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
     initial_state_source : str
@@ -56,8 +56,8 @@ def print_input_configuration(
     'norad_id'             : None,
     'timespan'             : None,
     'initial_state_source' : 'jpl_horizons',
-    'zonal_harmonics'      : None,
-    'third_bodies'         : None,
+    'zonal_harmonics'      : [],
+    'third_bodies'         : [],
     'include_drag'         : False,
     'include_srp'          : False,
     'include_spice'        : False,
@@ -67,8 +67,8 @@ def print_input_configuration(
   
   # Format values for display
   timespan_str = f"{desired_timespan[0]} {desired_timespan[1]}" if desired_timespan else "None"
-  zonal_str    = ' '.join(zonal_harmonics) if zonal_harmonics else "None"
-  third_str    = ' '.join(third_bodies) if third_bodies else "None"
+  zonal_str    = ' '.join(zonal_harmonics_list) if zonal_harmonics_list else "None"
+  third_str    = ' '.join(third_bodies_list) if third_bodies_list else "None"
   
   # Build configuration entries: (name, value, default, is_explicit)
   entries = [
@@ -76,8 +76,8 @@ def print_input_configuration(
     ('norad_id',             norad_id,             defaults['norad_id'],             norad_id is not None and norad_id != ''),
     ('timespan',             timespan_str,         defaults['timespan'],             desired_timespan is not None),
     ('initial_state_source', initial_state_source, defaults['initial_state_source'], initial_state_source != defaults['initial_state_source']),
-    ('zonal_harmonics',      zonal_str,            defaults['zonal_harmonics'],      zonal_harmonics is not None),
-    ('third_bodies',         third_str,            defaults['third_bodies'],         third_bodies is not None),
+    ('zonal_harmonics',      zonal_str,            defaults['zonal_harmonics'],      len(zonal_harmonics_list) > 0),
+    ('third_bodies',         third_str,            defaults['third_bodies'],         len(third_bodies_list) > 0),
     ('include_drag',         include_drag,         defaults['include_drag'],         include_drag != defaults['include_drag']),
     ('include_srp',          include_srp,          defaults['include_srp'],          include_srp != defaults['include_srp']),
     ('include_spice',        include_spice,        defaults['include_spice'],        include_spice != defaults['include_spice']),
@@ -85,15 +85,36 @@ def print_input_configuration(
     ('compare_tle',          compare_tle,          defaults['compare_tle'],          compare_tle != defaults['compare_tle']),
   ]
   
-  print("\nInput Configuration")
-  print(f"  {'Argument':<24}{'Value':<44}{'Default':<12}{'Explicit':<8}")
-  print(f"  {'-'*20:<24}{'-'*39:<44}{'-'*8:<12}{'-'*8:<8}")
-  
+  # Convert entries to strings for width calculation
+  headers = ['Argument', 'Value', 'Default', 'Explicit']
+  rows = []
   for name, value, default, is_explicit in entries:
-    default_str  = str(default) if default is not None else "None"
-    value_str    = str(value) if value is not None else "None"
-    explicit_str = str(is_explicit)
-    print(f"  {name:<24}{value_str:<44}{default_str:<12}{explicit_str:<8}")
+    rows.append([
+      name,
+      str(value) if value is not None else "None",
+      str(default) if default is not None else "None",
+      str(is_explicit),
+    ])
+  
+  # Calculate column widths: max of header and all values, plus 4 for spacing
+  min_spacing = 4
+  col_widths = []
+  for col_idx in range(len(headers)):
+    max_len = len(headers[col_idx])
+    for row in rows:
+      max_len = max(max_len, len(row[col_idx]))
+    col_widths.append(max_len + min_spacing)
+  
+  # Print table
+  print("\nInput Configuration")
+  header_line = "  " + "".join(h.ljust(col_widths[i]) for i, h in enumerate(headers))
+  print(header_line)
+  separator_line = "  " + "".join(("-" * (col_widths[i] - min_spacing)).ljust(col_widths[i]) for i in range(len(headers)))
+  print(separator_line)
+  
+  for row in rows:
+    row_line = "  " + "".join(row[col_idx].ljust(col_widths[col_idx]) for col_idx in range(len(row)))
+    print(row_line)
 
 
 def print_paths(config: SimpleNamespace) -> None:
@@ -117,6 +138,34 @@ def print_paths(config: SimpleNamespace) -> None:
   print(f"    SPICE Kernels Folderpath : <data_folderpath>/{config.spice_kernels_folderpath.relative_to(data_folderpath)}")
   print(f"    LSK Filepath             : <data_folderpath>/{config.lsk_filepath.relative_to(data_folderpath)}")
   print(f"    JPL Horizons Filepath    : <data_folderpath>/{config.jpl_horizons_filepath.relative_to(data_folderpath)}")
+
+
+def print_configuration(
+  config : SimpleNamespace,
+) -> None:
+  """
+  Print the complete configuration (input arguments and paths).
+  
+  Input:
+  ------
+    config : SimpleNamespace
+      Configuration object containing all input and path attributes.
+  """
+  print_input_configuration(
+    input_object_type    = config.input_object_type,
+    norad_id             = config.norad_id,
+    desired_timespan     = config.desired_timespan,
+    include_spice        = config.include_spice,
+    include_drag         = config.include_drag,
+    compare_tle          = config.compare_tle,
+    compare_jpl_horizons = config.compare_jpl_horizons,
+    third_bodies_list    = config.third_bodies_list,
+    zonal_harmonics_list = config.zonal_harmonics_list,
+    include_srp          = config.include_srp,
+    initial_state_source = config.initial_state_source,
+  )
+  
+  print_paths(config)
 
 
 def normalize_input(
@@ -258,6 +307,11 @@ def build_config(
   )
   
   return SimpleNamespace(
+    # Store original input values for print_configuration
+    input_object_type    = input_object_type,
+    norad_id             = norad_id,
+    desired_timespan     = desired_timespan,
+    # Parsed and calculated values
     obj_props                = obj_props,
     tle_line_1               = tle_line_1,
     tle_line_2               = tle_line_2,
@@ -277,7 +331,7 @@ def build_config(
     include_third_body       = include_third_body,
     third_bodies_list        = third_bodies_list,
     include_zonal_harmonics  = include_zonal_harmonics,
-    zonal_harmonics_list     = zonal_harmonics_list if zonal_harmonics_list else [],
+    zonal_harmonics_list     = zonal_harmonics_list,
     include_srp              = include_srp,
     initial_state_source     = initial_state_source,
     output_folderpath        = paths['output_folderpath'],
