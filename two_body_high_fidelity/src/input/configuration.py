@@ -9,6 +9,116 @@ from src.input.cli           import parse_time
 from src.utility.tle_helper  import get_tle_satellite_and_tle_epoch
 
 
+def print_input_configuration(
+  input_object_type    : str,
+  norad_id             : str,
+  desired_timespan     : list,
+  include_spice        : bool,
+  include_drag         : bool,
+  compare_tle          : bool,
+  compare_jpl_horizons : bool,
+  third_bodies         : Optional[list],
+  zonal_harmonics      : Optional[list],
+  include_srp          : bool,
+  initial_state_source : str,
+) -> None:
+  """
+  Print the input configuration in a formatted table.
+
+  Input:
+  ------
+    input_object_type : str
+      Type of input object (e.g., 'norad-id').
+    norad_id : str
+      NORAD catalog ID of the satellite.
+    desired_timespan : list
+      Initial and final time in ISO format (e.g., ['2025-10-01T00:00:00', '2025-10-02T00:00:00']) as list of strings.
+    include_spice : bool
+      Flag to enable/disable SPICE usage.
+    include_drag : bool
+      Flag to enable/disable Drag force modeling.
+    compare_tle : bool
+      Flag to enable/disable TLE comparison.
+    compare_jpl_horizons : bool
+      Flag to enable/disable JPL Horizons comparison.
+    third_bodies : list | None
+      List of third bodies to include (e.g., ['SUN', 'MOON']). None if disabled.
+    zonal_harmonics : list | None
+      List of zonal harmonics to include (e.g., ['J2', 'J3']). None if disabled.
+    include_srp : bool
+      Flag to enable/disable Solar Radiation Pressure.
+    initial_state_source : str
+      Source for the initial state vector ('jpl_horizons' or 'tle').
+  """
+  # Define defaults for comparison
+  defaults = {
+    'input_object_type'    : None,
+    'norad_id'             : None,
+    'timespan'             : None,
+    'initial_state_source' : 'jpl_horizons',
+    'zonal_harmonics'      : None,
+    'third_bodies'         : None,
+    'include_drag'         : False,
+    'include_srp'          : False,
+    'include_spice'        : False,
+    'compare_jpl_horizons' : False,
+    'compare_tle'          : False,
+  }
+  
+  # Format values for display
+  timespan_str = f"{desired_timespan[0]} {desired_timespan[1]}" if desired_timespan else "None"
+  zonal_str    = ' '.join(zonal_harmonics) if zonal_harmonics else "None"
+  third_str    = ' '.join(third_bodies) if third_bodies else "None"
+  
+  # Build configuration entries: (name, value, default, is_explicit)
+  entries = [
+    ('input_object_type',    input_object_type,    defaults['input_object_type'],    input_object_type is not None),
+    ('norad_id',             norad_id,             defaults['norad_id'],             norad_id is not None and norad_id != ''),
+    ('timespan',             timespan_str,         defaults['timespan'],             desired_timespan is not None),
+    ('initial_state_source', initial_state_source, defaults['initial_state_source'], initial_state_source != defaults['initial_state_source']),
+    ('zonal_harmonics',      zonal_str,            defaults['zonal_harmonics'],      zonal_harmonics is not None),
+    ('third_bodies',         third_str,            defaults['third_bodies'],         third_bodies is not None),
+    ('include_drag',         include_drag,         defaults['include_drag'],         include_drag != defaults['include_drag']),
+    ('include_srp',          include_srp,          defaults['include_srp'],          include_srp != defaults['include_srp']),
+    ('include_spice',        include_spice,        defaults['include_spice'],        include_spice != defaults['include_spice']),
+    ('compare_jpl_horizons', compare_jpl_horizons, defaults['compare_jpl_horizons'], compare_jpl_horizons != defaults['compare_jpl_horizons']),
+    ('compare_tle',          compare_tle,          defaults['compare_tle'],          compare_tle != defaults['compare_tle']),
+  ]
+  
+  print("\nInput Configuration")
+  print(f"  {'Argument':<24}{'Value':<44}{'Default':<12}{'Explicit':<8}")
+  print(f"  {'-'*20:<24}{'-'*39:<44}{'-'*8:<12}{'-'*8:<8}")
+  
+  for name, value, default, is_explicit in entries:
+    default_str  = str(default) if default is not None else "None"
+    value_str    = str(value) if value is not None else "None"
+    explicit_str = str(is_explicit)
+    print(f"  {name:<24}{value_str:<44}{default_str:<12}{explicit_str:<8}")
+
+
+def print_paths(config: SimpleNamespace) -> None:
+  """
+  Print the paths configuration.
+  
+  Input:
+  ------
+    config : SimpleNamespace
+      Configuration object containing path attributes.
+  """
+  data_folderpath = config.output_folderpath.parent / 'data'
+  
+  print("\nPaths and Files Setup")
+  print(f"  Output Folderpath          : {config.output_folderpath}")
+  print(f"    Timestamp Folderpath     : <output_folderpath>/{config.timestamp_folderpath.relative_to(config.output_folderpath)}")
+  print(f"    Figures Folderpath       : <output_folderpath>/{config.figures_folderpath.relative_to(config.output_folderpath)}")
+  print(f"    Files Folderpath         : <output_folderpath>/{config.files_folderpath.relative_to(config.output_folderpath)}")
+  print(f"    Log Filepath             : <output_folderpath>/{config.log_filepath.relative_to(config.output_folderpath)}")
+  print(f"  Data Folderpath            : {data_folderpath}")
+  print(f"    SPICE Kernels Folderpath : <data_folderpath>/{config.spice_kernels_folderpath.relative_to(data_folderpath)}")
+  print(f"    LSK Filepath             : <data_folderpath>/{config.lsk_filepath.relative_to(data_folderpath)}")
+  print(f"    JPL Horizons Filepath    : <data_folderpath>/{config.jpl_horizons_filepath.relative_to(data_folderpath)}")
+
+
 def normalize_input(
   input_object_type    : str,
   initial_state_source : str,
@@ -47,7 +157,7 @@ def build_config(
   include_spice        : bool           = False,
   include_drag         : bool           = False,
   compare_tle          : bool           = False,
-  compare_horizons     : bool           = False,
+  compare_jpl_horizons : bool           = False,
   third_bodies         : Optional[list] = None,
   zonal_harmonics      : Optional[list] = None,
   include_srp          : bool           = False,
@@ -88,12 +198,13 @@ def build_config(
     ValueError
       If NORAD ID is not supported.
   """
+  
   # Normalize inputs
   input_object_type, initial_state_source = normalize_input(
     input_object_type,
     initial_state_source,
   )
-
+  
   # Handle zonal harmonics logic
   include_zonal_harmonics = zonal_harmonics is not None
   if zonal_harmonics is not None and len(zonal_harmonics) == 0:
@@ -108,7 +219,7 @@ def build_config(
   # Unpack timespan
   desired_time_o_str = desired_timespan[0]
   desired_time_f_str = desired_timespan[1]
-
+  
   # Validate: NORAD ID required for norad-id input type
   if input_object_type == 'norad_id' and not norad_id:
     raise ValueError("NORAD ID is required when input-object-type is 'norad-id'")
@@ -162,7 +273,7 @@ def build_config(
     include_spice            = include_spice,
     include_drag             = include_drag,
     compare_tle              = compare_tle,
-    compare_horizons         = compare_horizons,
+    compare_jpl_horizons     = compare_jpl_horizons,
     include_third_body       = include_third_body,
     third_bodies_list        = third_bodies_list,
     include_zonal_harmonics  = include_zonal_harmonics,
@@ -173,6 +284,7 @@ def build_config(
     timestamp_folderpath     = paths['timestamp_folderpath'],
     figures_folderpath       = paths['figures_folderpath'],
     files_folderpath         = paths['files_folderpath'],
+    log_filepath             = paths['log_filepath'],
     spice_kernels_folderpath = paths['spice_kernels_folderpath'],
     jpl_horizons_filepath    = paths['jpl_horizons_filepath'],
     lsk_filepath             = paths['lsk_filepath'],
@@ -198,19 +310,17 @@ def setup_paths_and_files(
       Desired initial time as a datetime object.
     desired_time_f_dt : datetime
       Desired final time as a datetime object.
-  
+    print_paths : bool
+      Flag to enable/disable printing of paths.
+      
   Output:
   -------
     dict
       A dictionary containing paths to output, data, SPICE kernels,
       Horizons ephemeris, and leap seconds files.
   """
-  # Output directory for figures
-  output_folderpath = Path('./output/figures')
-  output_folderpath.mkdir(parents=True, exist_ok=True)
-  
   # Project and data paths
-  # Adjusted for location in src/input/configuration.py (depth: src/input/configuration.py -> input -> src -> root)
+  #   Adjusted for location in src/input/configuration.py (depth: src/input/configuration.py -> input -> src -> root)
   project_root    = Path(__file__).parent.parent.parent
   data_folderpath = project_root / 'data'
   
@@ -230,6 +340,7 @@ def setup_paths_and_files(
   timestamp_folderpath = output_folderpath / timestamp_str
   figures_folderpath   = timestamp_folderpath / 'figures'
   files_folderpath     = timestamp_folderpath / 'files'
+  log_filepath         = files_folderpath / 'output.log'
   
   # Ensure output directory exists
   figures_folderpath.mkdir(parents=True, exist_ok=True)
@@ -240,6 +351,7 @@ def setup_paths_and_files(
     'timestamp_folderpath'     : timestamp_folderpath,
     'figures_folderpath'       : figures_folderpath,
     'files_folderpath'         : files_folderpath,
+    'log_filepath'             : log_filepath,
     'spice_kernels_folderpath' : spice_kernels_folderpath,
     'jpl_horizons_filepath'    : jpl_horizons_filepath,
     'lsk_filepath'             : lsk_filepath,

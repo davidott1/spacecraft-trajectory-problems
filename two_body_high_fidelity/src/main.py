@@ -66,9 +66,9 @@ from src.propagation.utility           import determine_actual_times
 from src.input.loader                  import unload_files, load_files, get_horizons_ephemeris
 from src.utility.printer               import print_results_summary
 from src.input.cli                     import parse_command_line_arguments
-from src.input.configuration           import build_config
+from src.input.configuration           import build_config, print_input_configuration, print_paths
 from src.propagation.state_initializer import get_initial_state
-
+from src.utility.logger                import DualOutputLogger
 
 def main(
   input_object_type    : str,
@@ -77,7 +77,7 @@ def main(
   include_spice        : bool           = False,
   include_drag         : bool           = False,
   compare_tle          : bool           = False,
-  compare_horizons     : bool           = False,
+  compare_jpl_horizons : bool           = False,
   third_bodies         : Optional[list] = None,
   zonal_harmonics      : Optional[list] = None,
   include_srp          : bool           = False,
@@ -105,7 +105,7 @@ def main(
       Flag to enable/disable Atmospheric Drag.
     compare_tle : bool
       Flag to enable/disable comparison with TLE propagation.
-    compare_horizons : bool
+    compare_jpl_horizons : bool
       Flag to enable/disable comparison with Horizons ephemeris.
     third_bodies : list | None
       List of third bodies to include (e.g., ['SUN', 'MOON']). None means disabled.
@@ -122,6 +122,7 @@ def main(
     dict
       Dictionary containing the results of the high-fidelity propagation.
   """
+  
   # Process inputs and setup
   config = build_config(
     input_object_type,
@@ -130,12 +131,34 @@ def main(
     include_spice,
     include_drag,
     compare_tle,
-    compare_horizons,
+    compare_jpl_horizons,
     third_bodies,
     zonal_harmonics,
     include_srp,
     initial_state_source,
   )
+
+  # Start logging to file
+  logger = DualOutputLogger(config.log_filepath)
+  logger.start()
+  
+  # Print input configuration and paths
+  print_input_configuration(
+    input_object_type    = input_object_type,
+    norad_id             = norad_id,
+    desired_timespan     = timespan,
+    include_spice        = include_spice,
+    include_drag         = include_drag,
+    compare_tle          = compare_tle,
+    compare_jpl_horizons = compare_jpl_horizons,
+    third_bodies         = third_bodies,
+    zonal_harmonics      = zonal_harmonics,
+    include_srp          = include_srp,
+    initial_state_source = initial_state_source,
+  )
+  
+  # Print paths
+  print_paths(config)
 
   # Load files
   load_files(
@@ -146,7 +169,7 @@ def main(
 
   # Get Horizons ephemeris (only if needed for initial state or comparison)
   result_jpl_horizons_ephemeris = None
-  if config.initial_state_source == 'jpl_horizons' or config.compare_horizons:
+  if config.initial_state_source == 'jpl_horizons' or config.compare_jpl_horizons:
     result_jpl_horizons_ephemeris = get_horizons_ephemeris(
       jpl_horizons_filepath = config.jpl_horizons_filepath,
       desired_time_o_dt     = config.desired_time_o_dt,
@@ -198,7 +221,6 @@ def main(
   
   # Display results and create plots
   print_results_summary( 
-    result_jpl_horizons_ephemeris if config.compare_horizons else None,
     result_high_fidelity_propagation,
   )
   
@@ -209,12 +231,15 @@ def main(
     result_sgp4_propagation          = result_sgp4_propagation,
     desired_time_o_dt                = config.desired_time_o_dt,
     figures_folderpath               = config.figures_folderpath,
-    compare_horizons                 = config.compare_horizons,
+    compare_jpl_horizons             = config.compare_jpl_horizons,
     compare_tle                      = config.compare_tle,
   )
   
   # Unload all files (SPICE kernels)
   unload_files(config.include_spice)
+  
+  # Stop logging
+  logger.stop()
   
   # Return high-fidelity propagation results
   return result_high_fidelity_propagation
@@ -232,7 +257,7 @@ if __name__ == "__main__":
     args.include_spice,
     args.include_drag,
     args.compare_tle,
-    args.compare_horizons,
+    args.compare_jpl_horizons,
     args.third_bodies,
     args.zonal_harmonics,
     args.include_srp,
