@@ -6,6 +6,7 @@ from datetime          import timedelta
 from pathlib           import Path
 from typing            import Optional
 from matplotlib.figure import Figure
+from matplotlib.lines  import Line2D
 
 from src.plot.utility          import get_equal_limits, add_utc_time_axis, add_stats
 from src.model.constants       import CONVERTER, PHYSICALCONSTANTS
@@ -14,6 +15,8 @@ from src.model.frame_converter import FrameConverter
 
 def plot_3d_trajectories(
   result : dict,
+  epoch  : Optional[datetime.datetime] = None,
+  frame  : str = "J2000",
 ) -> Figure:
   """
   Plot 3D position and velocity trajectories in a 1x2 grid.
@@ -21,7 +24,11 @@ def plot_3d_trajectories(
   Input:
   ------
     result : dict
-      Propagation result dictionary containing 'state' (6xN array).
+      Propagation result dictionary containing 'state' (6xN array) and 'plot_time_s'.
+    epoch : datetime, optional
+      Reference epoch (start time) for labeling.
+    frame : str
+      Reference frame name (default "J2000").
       
   Output:
   -------
@@ -34,6 +41,14 @@ def plot_3d_trajectories(
   posvel_vec = result['state']
   pos_x, pos_y, pos_z = posvel_vec[0, :], posvel_vec[1, :], posvel_vec[2, :]
   vel_x, vel_y, vel_z = posvel_vec[3, :], posvel_vec[4, :], posvel_vec[5, :]
+  
+  # Build info string with frame and time if epoch is provided
+  info_text = f"Frame: {frame}"
+  if epoch is not None and 'plot_time_s' in result:
+    start_utc = epoch.strftime('%Y-%m-%d %H:%M:%S UTC')
+    end_time  = epoch + timedelta(seconds=result['plot_time_s'][-1])
+    end_utc   = end_time.strftime('%Y-%m-%d %H:%M:%S UTC')
+    info_text += f"  |  Start: {start_utc}  |  End: {end_utc}"
   
   # Plot 3D position trajectory
   ax1 = fig.add_subplot(121, projection='3d')
@@ -49,8 +64,8 @@ def plot_3d_trajectories(
   ax1.plot_surface(x_earth, y_earth, z_earth, color='lightblue', alpha=0.3, edgecolor='none') # type: ignore
   
   ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=1)
-  ax1.scatter([pos_x[0]], [pos_y[0]], [pos_z[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, label='Start') # type: ignore
-  ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, label='End') # type: ignore
+  ax1.scatter([pos_x[0]], [pos_y[0]], [pos_z[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2) # type: ignore
+  ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2) # type: ignore
   ax1.set_xlabel('Pos-X [m]')
   ax1.set_ylabel('Pos-Y [m]')
   ax1.set_zlabel('Pos-Z [m]') # type: ignore
@@ -64,8 +79,8 @@ def plot_3d_trajectories(
   # Plot 3D velocity trajectory
   ax2 = fig.add_subplot(122, projection='3d')
   ax2.plot(vel_x, vel_y, vel_z, 'r-', linewidth=1)
-  ax2.scatter([vel_x[0]], [vel_y[0]], [vel_z[0]], s=100, marker='>', facecolors='white', edgecolors='r', linewidths=2, label='Start') # type: ignore
-  ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], s=100, marker='s', facecolors='white', edgecolors='r', linewidths=2, label='End') # type: ignore
+  ax2.scatter([vel_x[0]], [vel_y[0]], [vel_z[0]], s=100, marker='>', facecolors='white', edgecolors='r', linewidths=2) # type: ignore
+  ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], s=100, marker='s', facecolors='white', edgecolors='r', linewidths=2) # type: ignore
   ax2.set_xlabel('Vel-X [m/s]')
   ax2.set_ylabel('Vel-Y [m/s]')
   ax2.set_zlabel('Vel-Z [m/s]') # type: ignore
@@ -76,7 +91,20 @@ def plot_3d_trajectories(
   ax2.set_ylim([min_limit, max_limit]) # type: ignore
   ax2.set_zlim([min_limit, max_limit]) # type: ignore
 
-  plt.tight_layout()
+  # Create custom legend handles with black edges
+  legend_handles = [
+    Line2D([0], [0], marker='>', color='w', markerfacecolor='white', markeredgecolor='black', 
+           markersize=10, markeredgewidth=2, linestyle='None', label='Start'),
+    Line2D([0], [0], marker='s', color='w', markerfacecolor='white', markeredgecolor='black', 
+           markersize=10, markeredgewidth=2, linestyle='None', label='End'),
+  ]
+  fig.legend(handles=legend_handles, loc='upper right', fontsize=11, framealpha=0.9)
+
+  # Add info text as figure text
+  fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=11, color='black',
+           bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', alpha=0.9))
+
+  plt.tight_layout(rect=[0, 0.06, 1, 0.95])  # Leave space at bottom for info text and top for legend
   return fig
 
 
@@ -382,7 +410,7 @@ def plot_time_series_error(
   ax_pos.plot(time, pos_error[2, :], 'b-', label=pos_labels[2], linewidth=1.5)
   ax_pos.plot(time, pos_error_mag, 'k-', label='Magnitude', linewidth=2)
   ax_pos.tick_params(labelbottom=False)
-  ax_pos.set_ylabel(pos_ylabel)
+  ax_pos.set_ylabel('Position\n[m]')
   ax_pos.legend()
   ax_pos.grid(True)
   ax_pos.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
@@ -394,7 +422,7 @@ def plot_time_series_error(
   ax_vel.plot(time, vel_error[2, :], 'b-', label=vel_labels[2], linewidth=1.5)
   ax_vel.plot(time, vel_error_mag, 'k-', label='Magnitude', linewidth=2)
   ax_vel.set_xlabel('Time\n[s]')
-  ax_vel.set_ylabel(vel_ylabel)
+  ax_vel.set_ylabel('Velocity\n[m/s]')
   ax_vel.legend()
   ax_vel.grid(True)
   ax_vel.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
@@ -686,7 +714,7 @@ def generate_3d_and_time_series_plots(
   if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
     print("    JPL-Horizons-Ephemeris Plots")
 
-    fig1 = plot_3d_trajectories(result_jpl_horizons_ephemeris)
+    fig1 = plot_3d_trajectories(result_jpl_horizons_ephemeris, epoch=desired_time_o_dt, frame="J2000")
     fig1.suptitle(f'{object_name} Orbit - JPL Horizons - 3D', fontsize=16)
     fig1.savefig(figures_folderpath / f'3d_{name_lower}_jpl_horizons.png', dpi=300, bbox_inches='tight')
     print(f"      3D          : <figures_folderpath>/3d_{name_lower}_jpl_horizons.png")
@@ -700,7 +728,7 @@ def generate_3d_and_time_series_plots(
   if result_high_fidelity_propagation.get('success'):
     print("    High-Fidelity-Model Plots")
 
-    fig3 = plot_3d_trajectories(result_high_fidelity_propagation)
+    fig3 = plot_3d_trajectories(result_high_fidelity_propagation, epoch=desired_time_o_dt, frame="J2000")
     fig3.suptitle(f'{object_name} Orbit - High-Fidelity Model - 3D', fontsize=16)
     fig3.savefig(figures_folderpath / f'3d_{name_lower}_high_fidelity.png', dpi=300, bbox_inches='tight')
     print(f"      3D          : <figures_folderpath>/3d_{name_lower}_high_fidelity.png")
@@ -715,7 +743,7 @@ def generate_3d_and_time_series_plots(
     print("    SGP4-Model Plots")
     
     # 3D trajectory plot
-    fig_sgp4_hz_3d = plot_3d_trajectories(result_sgp4_propagation)
+    fig_sgp4_hz_3d = plot_3d_trajectories(result_sgp4_propagation, epoch=desired_time_o_dt, frame="J2000")
     fig_sgp4_hz_3d.suptitle(f'{object_name} Orbit - SGP4 Model - 3D', fontsize=16)
     fig_sgp4_hz_3d.savefig(figures_folderpath / f'3d_{name_lower}_sgp4.png', dpi=300, bbox_inches='tight')
     print(f"      3D          : <figures_folderpath>/3d_{name_lower}_sgp4.png")

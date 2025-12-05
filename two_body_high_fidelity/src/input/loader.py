@@ -466,7 +466,7 @@ def find_compatible_horizons_file(
       Path to a compatible file if found, None otherwise.
   """
   # Extract object identifier from the filepath
-  #   Expected format: horizons_ephem_<norad_id>_<name>_<start>_<end>_<interval>.csv
+  #   Expected format : horizons_ephem_<norad_id>_<name>_<start>_<end>_<interval>.csv
   jpl_horizons_filename = jpl_horizons_filepath.name
   
   # Validate filename format
@@ -512,9 +512,8 @@ def find_compatible_horizons_file(
       file_end_dt   = parse_time(str(last_dt_str))
       
       # Check if this file contains the desired timespan
-      # Use small tolerance for start and end times (file can start slightly after 
-      # desired start or end slightly before desired end)
-      # This handles cases where the file starts/ends a few seconds/minutes off
+      #   Use small tolerance for start and end times. This handles cases where 
+      #   the file starts/ends a few seconds/minutes off.
       time_tolerance = timedelta(minutes=5)
       start_ok = file_start_dt <= (time_start_dt + time_tolerance)
       end_ok   = file_end_dt   >= (time_end_dt   - time_tolerance)
