@@ -806,45 +806,18 @@ def run_propagations(
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
   )
   
-  # SGP4 Propagation
-  result_sgp4_propagation = None
+  # Propagate: run SGP4 at Horizons time points for comparison
+  result_sgp4 = None
   if compare_tle:
-    print("\nSGP4 Model")
-    
-    # Determine time grid for SGP4 propagation
-    if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
-      # Use Horizons time grid
-      sgp4_time_grid = result_jpl_horizons_ephemeris['plot_time_s']
-      sgp4_actual_time_o_dt = actual_time_o_dt
-      sgp4_actual_time_f_dt = actual_time_f_dt
-    else:
-      # Use desired time grid with 60-second intervals
-      duration_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
-      num_points = int(duration_s / 60) + 1
-      sgp4_time_grid = np.linspace(0, duration_s, num_points)
-      sgp4_actual_time_o_dt = desired_time_o_dt
-      sgp4_actual_time_f_dt = desired_time_f_dt
-    
-    # Calculate time offset: desired start time relative to TLE epoch
-    tle_epoch_dt, _ = get_tle_satellite_and_tle_epoch(tle_line_1, tle_line_2)
-    time_offset_s = (sgp4_actual_time_o_dt - tle_epoch_dt).total_seconds()
-
-    # Propagate TLE using SGP4 at the determined time grid
-    result_sgp4_propagation = propagate_tle(
-      tle_line_1 = tle_line_1,
-      tle_line_2 = tle_line_2,
-      to_j2000   = True,
-      time_eval  = sgp4_time_grid + time_offset_s,
+    result_sgp4 = run_sgp4_propagation(
+      result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
+      tle_line_1                    = tle_line_1,
+      tle_line_2                    = tle_line_2,
+      desired_time_o_dt             = desired_time_o_dt,
+      desired_time_f_dt             = desired_time_f_dt,
+      actual_time_o_dt              = actual_time_o_dt,
+      actual_time_f_dt              = actual_time_f_dt,
     )
-    
-    if result_sgp4_propagation['success']:
-      # Store integration time (seconds from TLE epoch)
-      result_sgp4_propagation['integ_time_s'] = result_sgp4_propagation['time']
-      
-      # Create plotting time array (seconds from Actual start time)
-      result_sgp4_propagation['plot_time_s'] = sgp4_time_grid
-    else:
-      print(f"  SGP4 propagation at desired times failed: {result_sgp4_propagation['message']}")
-  
-  return result_high_fidelity, result_sgp4_propagation
+
+  return result_high_fidelity, result_sgp4
 

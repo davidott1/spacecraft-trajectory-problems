@@ -275,6 +275,9 @@ def get_horizons_ephemeris(
   """
   Load and process JPL Horizons ephemeris.
   
+  If the exact file doesn't exist, searches for compatible files that contain
+  the desired timespan.
+  
   Input:
   ------
     jpl_horizons_filepath : Path
@@ -288,35 +291,63 @@ def get_horizons_ephemeris(
   -------
     result_jpl_horizons : dict | None
       Processed Horizons result dictionary, or None if loading failed.
+      Contains 'success' key indicating if data was loaded successfully.
   """
-  # Load Horizons ephemeris
+  # Display JPL Horizons filepath
   try:
-    rel_path = jpl_horizons_filepath.relative_to(Path.cwd())
+    rel_path     = jpl_horizons_filepath.relative_to(Path.cwd())
     display_path = f"<project_folderpath>/{rel_path}"
   except ValueError:
     display_path = jpl_horizons_filepath
 
   print("  JPL Horizons Ephemeris")
   print(f"    Filepath : {display_path}")
+  
+  # Determine which file to load
+  jpl_horizons_filepath_to_load = jpl_horizons_filepath
+  
+  if not jpl_horizons_filepath.exists():
+    print(f"    Status   : Exact file not found, searching for compatible files...")
+    
+    compatible_file = find_compatible_horizons_file(
+      jpl_horizons_filepath = jpl_horizons_filepath,
+      time_start_dt         = desired_time_o_dt,
+      time_end_dt           = target_end_dt,
+    )
+    
+    if compatible_file is None:
+      print(f"    Status   : No compatible ephemeris files found")
+      return {
+        'success' : False,
+        'message' : f"Horizons file not found and no compatible alternatives : {jpl_horizons_filepath}",
+      }
+    
+    jpl_horizons_filepath_to_load = compatible_file
+    try:
+      rel_path = compatible_file.relative_to(Path.cwd())
+      display_path = f"<project_folderpath>/{rel_path}"
+    except ValueError:
+      display_path = compatible_file
+    print(f"    Status   : Found compatible file")
+    print(f"    Using    : {display_path}")
+
+  # Print timespan info
   print(f"    Timespan")
   print(f"      Desired")
-  
   try:
     start_et = f"{utc_to_et(desired_time_o_dt):.6f} ET"
     end_et   = f"{utc_to_et(target_end_dt):.6f} ET"
   except:
     start_et = "N/A ET"
     end_et   = "N/A ET"
-
   duration_s = (target_end_dt - desired_time_o_dt).total_seconds()
-
   print(f"        Start    : {desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({start_et})")
   print(f"        End      : {target_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({end_et})")
   print(f"        Duration : {duration_s:.1f} s")
   
-  # Load Horizons data
+  # Load Horizons data (use jpl_horizons_filepath_to_load, not jpl_horizons_filepath)
   result_jpl_horizons = load_horizons_ephemeris(
-    filepath      = str(jpl_horizons_filepath),
+    filepath      = str(jpl_horizons_filepath_to_load),
     time_start_dt = desired_time_o_dt,
     time_end_dt   = target_end_dt,
   )
@@ -417,11 +448,13 @@ def find_compatible_horizons_file(
   
   When the exact ephemeris file doesn't exist, this function searches for other
   ephemeris files for the same object that may contain the requested time range.
+  A 5-minute tolerance is applied to both start and end times.
   
   Input:
   ------
     jpl_horizons_filepath : Path
       Path to the expected (but possibly missing) JPL Horizons ephemeris file.
+      Expected filename format: horizons_ephem_<norad_id>_<name>_<start>_<end>_<interval>.csv
     time_start_dt : datetime
       Desired start time.
     time_end_dt : datetime
@@ -433,27 +466,37 @@ def find_compatible_horizons_file(
       Path to a compatible file if found, None otherwise.
   """
   # Extract object identifier from the filepath
-  # Expected format: horizons_ephem_<NORAD_ID>_<name>_<start>_<end>_<interval>.csv
-  filename = jpl_horizons_filepath.name
+  #   Expected format: horizons_ephem_<norad_id>_<name>_<start>_<end>_<interval>.csv
+  jpl_horizons_filename = jpl_horizons_filepath.name
   
-  if not filename.startswith('horizons_ephem_'):
+  # Validate filename format
+  if not jpl_horizons_filename.startswith('horizons_ephem_'):
     return None
-    
-  parts = filename.replace('horizons_ephem_', '').split('_')
-  if len(parts) < 1:
+  jpl_horizons_filename_parts = jpl_horizons_filename.replace('horizons_ephem_', '').split('_')
+  if len(jpl_horizons_filename_parts) < 1:
     return None
-    
-  object_identifier = parts[0]  # e.g., '25544'
+  
+  norad_id = jpl_horizons_filename_parts[0]
   
   # Search for all ephemeris files for this object
-  ephems_folder = jpl_horizons_filepath.parent
-  pattern = str(ephems_folder / f'horizons_ephem_{object_identifier}_*.csv')
-  matching_files = glob.glob(pattern)
+  jpl_horizons_folderpath = jpl_horizons_filepath.parent
   
+  # Ensure the folder exists before searching
+  if not jpl_horizons_folderpath.exists():
+    return None
+  
+  # Use Path.glob() instead of glob.glob() for better cross-platform compatibility
+  glob_pattern = f'horizons_ephem_{norad_id}_*.csv'
+  matching_files = list(jpl_horizons_folderpath.glob(glob_pattern))
+
   if not matching_files:
     return None
   
   for filepath in matching_files:
+    # Skip the exact file we're looking for (it doesn't exist)
+    if filepath == jpl_horizons_filepath:
+      continue
+      
     try:
       # Read the CSV file to check its timespan
       # Skip the units row (row index 1 in 0-indexed after header)
@@ -463,15 +506,21 @@ def find_compatible_horizons_file(
         continue
       
       # Get first and last datetime in the file
-      first_dt_str = df['datetime'].iloc[0]
-      last_dt_str = df['datetime'].iloc[-1]
-      
+      first_dt_str  = df['datetime'].iloc[0]
+      last_dt_str   = df['datetime'].iloc[-1]
       file_start_dt = parse_time(str(first_dt_str))
-      file_end_dt = parse_time(str(last_dt_str))
+      file_end_dt   = parse_time(str(last_dt_str))
       
       # Check if this file contains the desired timespan
-      if file_start_dt <= time_start_dt and file_end_dt >= time_end_dt:
-        return Path(filepath)
+      # Use small tolerance for start and end times (file can start slightly after 
+      # desired start or end slightly before desired end)
+      # This handles cases where the file starts/ends a few seconds/minutes off
+      time_tolerance = timedelta(minutes=5)
+      start_ok = file_start_dt <= (time_start_dt + time_tolerance)
+      end_ok   = file_end_dt   >= (time_end_dt   - time_tolerance)
+      
+      if start_ok and end_ok:
+        return filepath
         
     except Exception:
       # Skip files that can't be parsed
