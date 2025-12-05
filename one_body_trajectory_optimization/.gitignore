@@ -5,3 +5,7 @@ __pycache__/
 *.DS_Store
 input/example/custom.json
 *.egg-info/
+
+# Data directories
+src/data/
+tests/data/
