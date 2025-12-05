@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional
+import glob
 
 from src.model.time_converter import utc_to_et
 from src.model.dynamics       import OrbitConverter
@@ -403,4 +404,77 @@ def process_horizons_result(
   # Failure path
   msg = result_horizons.get('message') if isinstance(result_horizons, dict) else 'No result returned'
   print(f"    - Horizons loading failed: {msg}")
+  return None
+
+
+def find_compatible_horizons_file(
+  jpl_horizons_filepath : Path,
+  time_start_dt         : datetime,
+  time_end_dt           : datetime,
+) -> Optional[Path]:
+  """
+  Search for existing Horizons ephemeris files that contain the desired timespan.
+  
+  When the exact ephemeris file doesn't exist, this function searches for other
+  ephemeris files for the same object that may contain the requested time range.
+  
+  Input:
+  ------
+    jpl_horizons_filepath : Path
+      Path to the expected (but possibly missing) JPL Horizons ephemeris file.
+    time_start_dt : datetime
+      Desired start time.
+    time_end_dt : datetime
+      Desired end time.
+      
+  Output:
+  -------
+    Path | None
+      Path to a compatible file if found, None otherwise.
+  """
+  # Extract object identifier from the filepath
+  # Expected format: horizons_ephem_<NORAD_ID>_<name>_<start>_<end>_<interval>.csv
+  filename = jpl_horizons_filepath.name
+  
+  if not filename.startswith('horizons_ephem_'):
+    return None
+    
+  parts = filename.replace('horizons_ephem_', '').split('_')
+  if len(parts) < 1:
+    return None
+    
+  object_identifier = parts[0]  # e.g., '25544'
+  
+  # Search for all ephemeris files for this object
+  ephems_folder = jpl_horizons_filepath.parent
+  pattern = str(ephems_folder / f'horizons_ephem_{object_identifier}_*.csv')
+  matching_files = glob.glob(pattern)
+  
+  if not matching_files:
+    return None
+  
+  for filepath in matching_files:
+    try:
+      # Read the CSV file to check its timespan
+      # Skip the units row (row index 1 in 0-indexed after header)
+      df = pd.read_csv(filepath, header=0, skiprows=[1])
+      
+      if 'datetime' not in df.columns or len(df) < 2:
+        continue
+      
+      # Get first and last datetime in the file
+      first_dt_str = df['datetime'].iloc[0]
+      last_dt_str = df['datetime'].iloc[-1]
+      
+      file_start_dt = parse_time(str(first_dt_str))
+      file_end_dt = parse_time(str(last_dt_str))
+      
+      # Check if this file contains the desired timespan
+      if file_start_dt <= time_start_dt and file_end_dt >= time_end_dt:
+        return Path(filepath)
+        
+    except Exception:
+      # Skip files that can't be parsed
+      continue
+  
   return None
