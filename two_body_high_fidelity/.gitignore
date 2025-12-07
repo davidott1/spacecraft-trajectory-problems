@@ -5,3 +5,10 @@ data/tles/
 
 # Output directory
 output/
+
+# Ignore Python bytecode and cache
+*.pyc
+__pycache__/
+
+# Ignore generated images
+*.png
