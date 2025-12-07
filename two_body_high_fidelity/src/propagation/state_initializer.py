@@ -52,7 +52,7 @@ def get_initial_state(
     try:
       epoch_et = utc_to_et(epoch_dt)
       et_str   = f" ({epoch_et:.6f} ET)"
-    except:
+    except Exception:
       et_str = ""
 
     print(f"  JPL-Horizons-Derived")
