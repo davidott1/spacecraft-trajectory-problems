@@ -472,11 +472,6 @@ def run_sgp4_propagation(
     for key in result_sgp4['coe'].keys():
       result_sgp4['coe'][key][i] = coe[key]
   
-  # Calculate display values
-  duration_actual_s  = result_jpl_horizons_ephemeris['plot_time_s'][-1]
-  grid_end_dt        = actual_time_o_dt + timedelta(seconds=duration_actual_s)
-  duration_desired_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
-  
   return result_sgp4
 
 
