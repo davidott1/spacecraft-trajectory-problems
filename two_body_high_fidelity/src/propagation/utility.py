@@ -1,5 +1,5 @@
 from typing   import Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 
 
 def determine_actual_times(
