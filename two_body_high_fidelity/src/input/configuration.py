@@ -288,13 +288,6 @@ def build_config(
   # Get object name
   object_name = obj_props.get('name', 'object_name')
 
-  # Extract TLE lines
-  tle_line_1 = obj_props['tle']['line_1']
-  tle_line_2 = obj_props['tle']['line_2']
-
-  # Parse TLE epoch
-  tle_epoch_dt, _ = get_tle_satellite_and_tle_epoch(tle_line_1, tle_line_2)
-  
   # Target propagation start/end times from arguments
   desired_time_o_dt = parse_time(desired_time_o_str)
   desired_time_f_dt = parse_time(desired_time_f_str)
@@ -317,9 +310,6 @@ def build_config(
     # Parsed and calculated values
     obj_props                = obj_props,
     object_name              = object_name,
-    tle_line_1               = tle_line_1,
-    tle_line_2               = tle_line_2,
-    tle_epoch_dt             = tle_epoch_dt,
     desired_time_o_dt        = desired_time_o_dt,
     desired_time_f_dt        = desired_time_f_dt,
     desired_delta_time_of_s  = desired_delta_time_of_s,
@@ -345,6 +335,7 @@ def build_config(
     log_filepath             = paths['log_filepath'],
     spice_kernels_folderpath = paths['spice_kernels_folderpath'],
     jpl_horizons_filepath    = paths['jpl_horizons_filepath'],
+    tles_folderpath          = paths['tles_folderpath'],
     lsk_filepath             = paths['lsk_filepath'],
   )
 
@@ -386,6 +377,9 @@ def setup_paths_and_files(
   spice_kernels_folderpath = data_folderpath / 'spice_kernels'
   lsk_filepath             = spice_kernels_folderpath / 'naif0012.tls'
   
+  # TLEs folderpath
+  tles_folderpath = data_folderpath / 'tles'
+  
   # Horizons ephemeris file (dynamically named)
   desired_time_o_str    = desired_time_o_dt.strftime('%Y%m%dT%H%M%SZ')
   desired_time_f_str    = desired_time_f_dt.strftime('%Y%m%dT%H%M%SZ')
@@ -412,5 +406,6 @@ def setup_paths_and_files(
     'log_filepath'             : log_filepath,
     'spice_kernels_folderpath' : spice_kernels_folderpath,
     'jpl_horizons_filepath'    : jpl_horizons_filepath,
+    'tles_folderpath'          : tles_folderpath,
     'lsk_filepath'             : lsk_filepath,
   }

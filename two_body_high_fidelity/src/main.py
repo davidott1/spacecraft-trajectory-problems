@@ -63,7 +63,7 @@ from datetime                          import datetime, timedelta
 from src.plot.trajectory               import generate_plots
 from src.propagation.propagator        import run_propagations
 from src.propagation.utility           import determine_actual_times
-from src.input.loader                  import unload_files, load_files, get_horizons_ephemeris
+from src.input.loader                  import unload_files, load_files, get_horizons_ephemeris, get_celestrak_tle
 from src.utility.printer               import print_results_summary
 from src.input.cli                     import parse_command_line_arguments
 from src.input.configuration           import build_config, print_configuration
@@ -165,6 +165,22 @@ def main(
       step                  = "1m",
     )
 
+  # Get Celestrak TLE (if needed for initial state or comparison)
+  result_celestrak_tle = None
+  if config.initial_state_source == 'tle' or config.compare_tle:
+    result_celestrak_tle = get_celestrak_tle(
+      norad_id          = config.norad_id,
+      object_name       = config.object_name,
+      tles_folderpath   = config.tles_folderpath,
+      desired_time_o_dt = config.desired_time_o_dt,
+      desired_time_f_dt = config.desired_time_f_dt,
+    )
+
+  # Extract TLE lines from result (for backward compatibility)
+  tle_line_1   = result_celestrak_tle['tle_line_1'] if result_celestrak_tle and result_celestrak_tle.get('success') else None
+  tle_line_2   = result_celestrak_tle['tle_line_2'] if result_celestrak_tle and result_celestrak_tle.get('success') else None
+  tle_epoch_dt = result_celestrak_tle['tle_epoch_dt'] if result_celestrak_tle and result_celestrak_tle.get('success') else None
+
   # Determine actual times if Horizons is available (for grid alignment)
   actual_time_o_dt, actual_time_f_dt = determine_actual_times(
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
@@ -174,8 +190,8 @@ def main(
 
   # Determine initial state (from Horizons if available, else TLE)
   initial_state = get_initial_state(
-    tle_line_1                    = config.tle_line_1,
-    tle_line_2                    = config.tle_line_2,
+    tle_line_1                    = tle_line_1,
+    tle_line_2                    = tle_line_2,
     desired_time_o_dt             = config.desired_time_o_dt,
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     initial_state_source          = config.initial_state_source,
@@ -204,8 +220,8 @@ def main(
     include_srp                   = config.include_srp,
     spice_kernels_folderpath      = config.spice_kernels_folderpath,
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
-    tle_line_1                    = config.tle_line_1,
-    tle_line_2                    = config.tle_line_2,
+    tle_line_1                    = tle_line_1,
+    tle_line_2                    = tle_line_2,
   )
   
   # Display results and create plots
