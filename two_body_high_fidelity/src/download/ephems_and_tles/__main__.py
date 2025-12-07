@@ -430,13 +430,18 @@ def download_ephems_and_tles(
     print(f"TLE history file already exists, skipping download:\n  {tle_history_file}")
     tle_history = None # Data not loaded, just confirming file exists
   else:
-    tle_history = download_historical_tles(
-      norad_id    = norad_id,
-      start_time  = start_time,
-      end_time    = end_time,
-      output_file = tle_history_file
-    )
-    tle_status = "downloaded"
+    try:
+      tle_history = download_historical_tles(
+        norad_id    = norad_id,
+        start_time  = start_time,
+        end_time    = end_time,
+        output_file = tle_history_file
+      )
+      tle_status = "downloaded"
+    except RuntimeError as e:
+      print(f"WARNING: TLE download skipped - {e}")
+      tle_history = None
+      tle_status = "skipped (no credentials)"
   
   print("\n" + "="*80)
   print("PROCESSING COMPLETE")

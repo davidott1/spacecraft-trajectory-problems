@@ -509,88 +509,6 @@ def plot_time_series_error(
   return fig
 
 
-def plot_true_longitude_error(
-  result_ref  : dict, 
-  result_comp : dict, 
-  epoch       : Optional[datetime.datetime] = None
-) -> Figure:
-  """
-  Create position/velocity error plots in the RIC frame (reference = result_ref).
-  
-  Input:
-  ------
-    result_ref : dict
-      Reference result dictionary.
-    result_comp : dict
-      Comparison result dictionary.
-    epoch : datetime, optional
-      Reference epoch for UTC time axis.
-      
-  Output:
-  -------
-    matplotlib.figure.Figure
-      Figure object containing the RIC frame error plots.
-  """
-  time_ref  = result_ref['plot_time_s']
-  time_comp = result_comp['plot_time_s']
-  if not np.array_equal(time_ref, time_comp):
-    raise ValueError(
-      f"Time grids don't match! "
-      f"Reference has {len(time_ref)} points from {time_ref[0]:.1f} to {time_ref[-1]:.1f} s, "
-      f"Comparison has {len(time_comp)} points from {time_comp[0]:.1f} to {time_comp[-1]:.1f} s. "
-      f"Both datasets must use the same time grid for error comparison."
-    )
-
-  state_ref  = result_ref['state']
-  state_comp = result_comp['state']
-  ric_delta_pos = np.zeros((3, len(time_ref)))
-  ric_delta_vel = np.zeros((3, len(time_ref)))
-
-  for i in range(len(time_ref)):
-    xyz_ref_pos = state_ref[0:3, i]
-    xyz_ref_vel = state_ref[3:6, i]
-    
-    rot_mat_xyz_to_ric = FrameConverter.xyz_to_ric(xyz_ref_pos, xyz_ref_vel)
-    
-    xyz_delta_pos_vec = state_comp[0:3, i] - xyz_ref_pos
-    xyz_delta_vel_vec = state_comp[3:6, i] - xyz_ref_vel
-
-    ric_delta_pos[:, i] = rot_mat_xyz_to_ric @ xyz_delta_pos_vec
-    ric_delta_vel[:, i] = rot_mat_xyz_to_ric @ xyz_delta_vel_vec
-
-  ric_delta_pos_mag = np.linalg.norm(ric_delta_pos, axis=0)
-  ric_delta_vel_mag = np.linalg.norm(ric_delta_vel, axis=0)
-
-  fig, (ax_pos, ax_vel) = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
-  ax_pos.plot(time_ref, ric_delta_pos[0], 'r-', label='Radial')
-  ax_pos.plot(time_ref, ric_delta_pos[1], 'g-', label='In-track')
-  ax_pos.plot(time_ref, ric_delta_pos[2], 'b-', label='Cross-track')
-  ax_pos.plot(time_ref, ric_delta_pos_mag, 'k-', linewidth=2, label='Magnitude')
-  ax_pos.set_ylabel('Position Error [m]')
-  ax_pos.grid(True, alpha=0.3)
-  ax_pos.legend()
-
-  ax_vel.plot(time_ref, ric_delta_vel[0], 'r-', label='Radial')
-  ax_vel.plot(time_ref, ric_delta_vel[1], 'g-', label='In-track')
-  ax_vel.plot(time_ref, ric_delta_vel[2], 'b-', label='Cross-track')
-  ax_vel.plot(time_ref, ric_delta_vel_mag, 'k-', linewidth=2, label='Magnitude')
-  ax_vel.set_ylabel('Velocity Error [m/s]')
-  ax_vel.set_xlabel('Time [s]')
-  ax_vel.grid(True, alpha=0.3)
-  ax_vel.legend()
-
-  add_stats(ax_pos, ric_delta_pos_mag, 'Pos [m]')
-  add_stats(ax_vel, ric_delta_vel_mag, 'Vel [m/s]')
-
-  if epoch is not None:
-    add_utc_time_axis(ax_pos, epoch, time_ref[-1])
-
-  fig.suptitle('RIC Frame Error (Reference = Horizons)', fontsize=14)
-  fig.tight_layout()
-
-  return fig
-
-
 def generate_error_plots(
   result_jpl_horizons_ephemeris    : Optional[dict],
   result_high_fidelity_propagation : dict,
@@ -627,46 +545,73 @@ def generate_error_plots(
   -------
     None
   """
-  # Only proceed if we have something to compare against (Horizons) and comparison is requested
-  if not compare_jpl_horizons or not (result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success')):
-    return
-
-  print("\n  Generate Error Plots")
-  
   # Lowercase name for filenames
   name_lower = object_name.lower()
+  
+  has_horizons     = result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success')
+  has_high_fidelity = result_high_fidelity_propagation and result_high_fidelity_propagation.get('success')
+  has_sgp4         = result_sgp4_propagation and result_sgp4_propagation.get('success')
+  
+  # Check if we have anything to compare
+  if not (has_high_fidelity or has_sgp4):
+    return
+  
+  print("\n  Generate Error Plots")
 
-  # Create error comparison plots if both Horizons and high-fidelity are available
-  if result_high_fidelity_propagation.get('success'):
-    print("    High-Fidelity Model Relative to JPL Horizons")
+  # 1. High-Fidelity Relative To JPL Horizons
+  if compare_jpl_horizons and has_horizons and has_high_fidelity:
+    print("    High-Fidelity Relative To JPL Horizons")
     
-    # Position and velocity error plots
-    fig_err_3d = plot_3d_error(result_jpl_horizons_ephemeris, result_high_fidelity_propagation)
-    fig_err_3d.suptitle(f'{object_name} Orbit Error: Horizons vs High-Fidelity', fontsize=16)
-    fig_err_3d.savefig(figures_folderpath / f'error_3d_{name_lower}_high_fidelity.png', dpi=300, bbox_inches='tight')
-    print(f"      3D Error          : <figures_folderpath>/error_3d_{name_lower}_high_fidelity.png")
-    
-    # Time series error plots
-    fig_err_ts = plot_time_series_error(result_jpl_horizons_ephemeris, result_high_fidelity_propagation, epoch=desired_time_o_dt)
-    fig_err_ts.suptitle(f'{object_name} RIC Position/Velocity Errors: Horizons vs High-Fidelity', fontsize=16)
-    fig_err_ts.savefig(figures_folderpath / f'error_timeseries_{name_lower}_high_fidelity.png', dpi=300, bbox_inches='tight')
-    print(f"      Time-Series Error : <figures_folderpath>/error_timeseries_{name_lower}_high_fidelity.png")
+    # Time series error plot (high_fidelity - horizons)
+    fig_err_ts = plot_time_series_error(
+      result_ref  = result_jpl_horizons_ephemeris,
+      result_comp = result_high_fidelity_propagation,
+      epoch       = desired_time_o_dt,
+      use_ric     = True,
+    )
+    title = f'{object_name}: RIC Position/Velocity Errors: High-Fidelity Relative To JPL Horizons'
+    fig_err_ts.suptitle(title, fontsize=14)
+    filename = f'error_timeseries_{name_lower}_high_fidelity_relative_to_jpl_horizons.png'
+    fig_err_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+    print(f"      Time-Series Error : <figures_folderpath>/{filename}")
+    plt.close(fig_err_ts)
 
-  # Error plots comparing SGP4 to Horizons
-  if compare_tle and result_sgp4_propagation and result_sgp4_propagation.get('success'):
-    print("    SGP4 Model Relative to JPL Horizons")
-
-    # 3D error plot
-    fig_sgp4_err_3d = plot_3d_error(result_jpl_horizons_ephemeris, result_sgp4_propagation)
-    fig_sgp4_err_3d.suptitle(f'{object_name} Orbit Error: Horizons vs SGP4', fontsize=16)
-    fig_sgp4_err_3d.savefig(figures_folderpath / f'error_3d_{name_lower}_sgp4.png', dpi=300, bbox_inches='tight')
-    print(f"      3D Error          : <figures_folderpath>/error_3d_{name_lower}_sgp4.png")
+  # 2. High-Fidelity Relative To SGP4
+  if compare_tle and has_high_fidelity and has_sgp4:
+    print("    High-Fidelity Relative To SGP4")
     
-    # Time series error plot (RIC frame)
-    fig_sgp4_err_ts = plot_time_series_error(result_jpl_horizons_ephemeris, result_sgp4_propagation, epoch=desired_time_o_dt, use_ric=False)
-    fig_sgp4_err_ts.suptitle(f'{object_name} XYZ Position/Velocity Errors: Horizons vs SGP4', fontsize=16)
-    fig_sgp4_err_ts.savefig(figures_folderpath / f'error_timeseries_{name_lower}_sgp4.png', dpi=300, bbox_inches='tight')
-    print(f"      Time-Series Error : <figures_folderpath>/error_timeseries_{name_lower}_sgp4.png")
+    # Time series error plot (high_fidelity - sgp4)
+    fig_err_ts = plot_time_series_error(
+      result_ref  = result_sgp4_propagation,
+      result_comp = result_high_fidelity_propagation,
+      epoch       = desired_time_o_dt,
+      use_ric     = True,
+    )
+    title = f'{object_name}: RIC Position/Velocity Errors: High-Fidelity Relative To SGP4'
+    fig_err_ts.suptitle(title, fontsize=14)
+    filename = f'error_timeseries_{name_lower}_high_fidelity_relative_to_sgp4.png'
+    fig_err_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+    print(f"      Time-Series Error : <figures_folderpath>/{filename}")
+    plt.close(fig_err_ts)
+
+  # 3. SGP4 Relative To JPL Horizons
+  if compare_jpl_horizons and compare_tle and has_horizons and has_sgp4:
+    print("    SGP4 Relative To JPL Horizons")
+    
+    # Time series error plot (sgp4 - horizons)
+    fig_err_ts = plot_time_series_error(
+      result_ref  = result_jpl_horizons_ephemeris,
+      result_comp = result_sgp4_propagation,
+      epoch       = desired_time_o_dt,
+      use_ric     = True,
+    )
+    title = f'{object_name}: RIC Position/Velocity Errors: SGP4 Relative To JPL Horizons'
+    fig_err_ts.suptitle(title, fontsize=14)
+    filename = f'error_timeseries_{name_lower}_sgp4_relative_to_jpl_horizons.png'
+    fig_err_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+    print(f"      Time-Series Error : <figures_folderpath>/{filename}")
+    plt.close(fig_err_ts)
+  
 
 
 def generate_3d_and_time_series_plots(

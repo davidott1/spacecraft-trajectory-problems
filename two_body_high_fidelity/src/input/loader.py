@@ -338,7 +338,7 @@ def get_horizons_ephemeris(
           desired_time_f_dt.strftime('%Y-%m-%dT%H:%M:%S'),
           step
         ]
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
         print("Done")
         
         # Search again for the downloaded file
@@ -350,16 +350,12 @@ def get_horizons_ephemeris(
         )
         
       except subprocess.CalledProcessError as e:
-        print(f"Error : {e}")
+        print(f"Error")
+        print(f"               :   ... stderr: {e.stderr}")
+        print(f"               :   ... stdout: {e.stdout}")
       except Exception as e:
         print(f"Error : {e}")
 
-    if compatible_file is None:
-      return {
-        'success' : False,
-        'message' : f"No compatible Horizons ephemeris files found in: {jpl_horizons_folderpath}",
-      }
-  
   # Display the file being loaded
   try:
     rel_path = compatible_file.relative_to(Path.cwd())
@@ -534,13 +530,16 @@ def find_compatible_horizons_file(
     
     try:
       # Start time is third-to-last, end time is second-to-last (before step)
-      # Format: YYYYMMDDTHHMMSSz
+      # Format: YYYYMMDDTHHMMSSz (uppercase Z)
       start_str = parts[-3]  # e.g., "20251001T000000Z"
       end_str   = parts[-2]  # e.g., "20251002T000000Z"
       
-      # Parse the datetime strings
-      file_start_dt = datetime.strptime(start_str, '%Y%m%dT%H%M%SZ')
-      file_end_dt = datetime.strptime(end_str, '%Y%m%dT%H%M%SZ')
+      # Parse the datetime strings (handle both uppercase and lowercase Z)
+      start_str_clean = start_str.rstrip('Zz')
+      end_str_clean   = end_str.rstrip('Zz')
+      
+      file_start_dt = datetime.strptime(start_str_clean, '%Y%m%dT%H%M%S')
+      file_end_dt   = datetime.strptime(end_str_clean, '%Y%m%dT%H%M%S')
       
       # Check if this file contains the desired timespan (with tolerance)
       start_ok = file_start_dt <= (time_start_dt + time_tolerance)

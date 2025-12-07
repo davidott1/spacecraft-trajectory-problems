@@ -1,3 +1,4 @@
+# LEO satellites (Low Earth Orbit, ~400-700 km altitude)
 '25544'      :                                                                          # norad id as top-level key
   name       : "ISS"                                                                    # object name
   norad_id   : 25544                                                                    # norad id
@@ -9,13 +10,17 @@
     coeff    : 1.2                                                                      # solar radiation pressure coefficient, typically c_r [-]
     area__m2 : 1000.0                                                                   # srp cross-sectional area [m²]
 
-'25994'      :                                                                          # norad id as top-level key
-  name       : "TERRA"                                                                  # object name
-  norad_id   : 25994                                                                    # norad id
-  mass__kg   : 4866.0                                                                   # mass [kg]
+# MEO satellites (Medium Earth Orbit, ~20,200 km altitude)
+# ... add MEO satellites here if needed ...
+
+# GEO satellites (Geostationary Orbit, ~35,786 km altitude)
+'41866'      :                                                                          # norad id as top-level key
+  name       : "GOES-16"                                                                # object name
+  norad_id   : 41866                                                                    # norad id
+  mass__kg   : 2227.0                                                                   # mass [kg]
   drag       :                                                                          # drag parameters
     coeff    : 2.0                                                                      # drag coefficient, typically c_d [-]
-    area__m2 : 22.0                                                                     # drag cross-sectional area [m²]
+    area__m2 : 10.0                                                                     # drag cross-sectional area [m²]
   srp        :                                                                          # solar radiation pressure parameters
     coeff    : 1.3                                                                      # solar radiation pressure coefficient, typically c_r [-]
-    area__m2 : 22.0                                                                     # srp cross-sectional area [m²]
+    area__m2 : 10.0                                                                     # srp cross-sectional area [m²]
