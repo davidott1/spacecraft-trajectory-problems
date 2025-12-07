@@ -8,7 +8,7 @@ from typing            import Optional
 from matplotlib.figure import Figure
 from matplotlib.lines  import Line2D
 
-from src.plot.utility          import get_equal_limits, add_utc_time_axis, add_stats
+from src.plot.utility          import get_equal_limits, add_utc_time_axis
 from src.model.constants       import CONVERTER, PHYSICALCONSTANTS
 from src.model.frame_converter import FrameConverter
 
