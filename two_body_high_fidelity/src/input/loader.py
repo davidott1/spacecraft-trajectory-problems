@@ -270,33 +270,32 @@ def load_horizons_ephemeris(
 
 
 def get_horizons_ephemeris(
-  jpl_horizons_filepath : Path,
-  desired_time_o_dt     : datetime,
-  target_end_dt         : datetime,
-  norad_id              : str,
-  object_name           : str,
-  step                  : str = "1h",
+  jpl_horizons_folderpath : Path,
+  desired_time_o_dt       : datetime,
+  desired_time_f_dt       : datetime,
+  norad_id                : str,
+  object_name             : str,
+  step                    : str = "1m",
 ) -> Optional[dict]:
   """
   Load and process JPL Horizons ephemeris.
   
-  If the exact file doesn't exist, searches for compatible files that contain
-  the desired timespan.
+  Searches for compatible files in the folder that contain the desired timespan.
   
   Input:
   ------
-    jpl_horizons_filepath : Path
-      Path to the Horizons ephemeris file.
+    jpl_horizons_folderpath : Path
+      Path to the folder containing Horizons ephemeris files.
     desired_time_o_dt : datetime
       Start time for data request.
-    target_end_dt : datetime
+    desired_time_f_dt : datetime
       End time for data request.
     norad_id : str
       NORAD catalog ID for the object.
     object_name : str
       Name of the object (for display purposes).
     step : str
-      Time step for ephemeris download (default "1h").
+      Time step for ephemeris download (default "1m").
       
   Output:
   -------
@@ -304,94 +303,90 @@ def get_horizons_ephemeris(
       Processed Horizons result dictionary, or None if loading failed.
       Contains 'success' key indicating if data was loaded successfully.
   """
-  # Display JPL Horizons filepath
+  # Display JPL Horizons folderpath
   try:
-    rel_path     = jpl_horizons_filepath.relative_to(Path.cwd())
-    display_path = f"<project_folderpath>/{rel_path}"
+    rel_folderpath = jpl_horizons_folderpath.relative_to(Path.cwd())
+    display_path = f"<project_folderpath>/{rel_folderpath}"
   except ValueError:
-    display_path = jpl_horizons_filepath
+    display_path = jpl_horizons_folderpath
 
   print("  JPL Horizons Ephemeris")
-  print(f"    Filepath : {display_path}")
+  print(f"    Folderpath : {display_path}")
   
-  # Determine which file to load
-  jpl_horizons_filepath_to_load = jpl_horizons_filepath
+  # Search for compatible file
+  compatible_file = find_compatible_horizons_file(
+    jpl_horizons_folderpath = jpl_horizons_folderpath,
+    norad_id                = norad_id,
+    time_start_dt           = desired_time_o_dt,
+    time_end_dt             = desired_time_f_dt,
+  )
   
-  if not jpl_horizons_filepath.exists():
-    print(f"             :   ... Exact file not found, searching for compatible files ...", end=" ", flush=True)
+  if compatible_file is None:
+    # Prompt user to download
+    print(f"               :   ... No compatible files found. Download from JPL Horizons? (y/n)", end=" ", flush=True)
+    user_response = input().strip().lower()
     
-    compatible_file = find_compatible_horizons_file(
-      jpl_horizons_filepath = jpl_horizons_filepath,
-      time_start_dt         = desired_time_o_dt,
-      time_end_dt           = target_end_dt,
-    )
-    
-    if compatible_file is None:
-      print(f"No compatible ephemeris files found")
+    if user_response == 'y':
+      print(f"               :   ... Downloading {object_name} ({norad_id}) ...", end=" ", flush=True)
       
-      # Prompt user to download
-      print(f"             :   ... Download from JPL Horizons? (y/n)", end=" ", flush=True)
-      user_response = input().strip().lower()
-      
-      if user_response == 'y':
-        print(f"             :   ... Downloading {object_name} ({norad_id}) ...", end=" ", flush=True)
+      try:
+        # Construct command to run the download module
+        cmd = [
+          sys.executable, "-m", "src.download.ephems_and_tles",
+          norad_id,
+          desired_time_o_dt.strftime('%Y-%m-%dT%H:%M:%S'),
+          desired_time_f_dt.strftime('%Y-%m-%dT%H:%M:%S'),
+          step
+        ]
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        print("Done")
         
-        try:
-          # Construct command to run the download module
-          cmd = [
-            sys.executable, "-m", "src.download.ephems_and_tles",
-            norad_id,
-            desired_time_o_dt.strftime('%Y-%m-%dT%H:%M:%S'),
-            target_end_dt.strftime('%Y-%m-%dT%H:%M:%S'),
-            step
-          ]
-          subprocess.run(cmd, check=True, capture_output=True, text=True)
-          print("Done")
-          
-          # Check if exact file exists now (if download matched filename)
-          if jpl_horizons_filepath.exists():
-            compatible_file = jpl_horizons_filepath
-          
-        except subprocess.CalledProcessError as e:
-          print(f"Error : {e}")
-        except Exception as e:
-          print(f"Error : {e}")
+        # Search again for the downloaded file
+        compatible_file = find_compatible_horizons_file(
+          jpl_horizons_folderpath = jpl_horizons_folderpath,
+          norad_id                = norad_id,
+          time_start_dt           = desired_time_o_dt,
+          time_end_dt             = desired_time_f_dt,
+        )
+        
+      except subprocess.CalledProcessError as e:
+        print(f"Error : {e}")
+      except Exception as e:
+        print(f"Error : {e}")
 
-      if compatible_file is None:
-        return {
-          'success' : False,
-          'message' : f"Horizons file not found and no compatible alternatives : {jpl_horizons_filepath}",
-        }
-    else:
-      print(f"Found")
-    
-    jpl_horizons_filepath_to_load = compatible_file
-    try:
-      rel_path = compatible_file.relative_to(Path.cwd())
-      display_path = f"<project_folderpath>/{rel_path}"
-    except ValueError:
-      display_path = compatible_file
-    print(f"             : {display_path}")
+    if compatible_file is None:
+      return {
+        'success' : False,
+        'message' : f"No compatible Horizons ephemeris files found in: {jpl_horizons_folderpath}",
+      }
+  
+  # Display the file being loaded
+  try:
+    rel_path = compatible_file.relative_to(Path.cwd())
+    display_path = f"<project_folderpath>/{rel_path}"
+  except ValueError:
+    display_path = compatible_file
+  print(f"    Filepath   : {display_path}")
 
   # Print timespan info
   print(f"    Timespan")
   print(f"      Desired")
   try:
     start_et = f"{utc_to_et(desired_time_o_dt):.6f} ET"
-    end_et   = f"{utc_to_et(target_end_dt):.6f} ET"
+    end_et   = f"{utc_to_et(desired_time_f_dt):.6f} ET"
   except:
     start_et = "N/A ET"
     end_et   = "N/A ET"
-  duration_s = (target_end_dt - desired_time_o_dt).total_seconds()
+  duration_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
   print(f"        Start    : {desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({start_et})")
-  print(f"        End      : {target_end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({end_et})")
+  print(f"        End      : {desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({end_et})")
   print(f"        Duration : {duration_s:.1f} s")
   
-  # Load Horizons data (use jpl_horizons_filepath_to_load, not jpl_horizons_filepath)
+  # Load Horizons data
   result_jpl_horizons = load_horizons_ephemeris(
-    filepath      = str(jpl_horizons_filepath_to_load),
+    filepath      = str(compatible_file),
     time_start_dt = desired_time_o_dt,
-    time_end_dt   = target_end_dt,
+    time_end_dt   = desired_time_f_dt,
   )
 
   # Process Horizons data
@@ -481,22 +476,24 @@ def process_horizons_result(
 
 
 def find_compatible_horizons_file(
-  jpl_horizons_filepath : Path,
-  time_start_dt         : datetime,
-  time_end_dt           : datetime,
+  jpl_horizons_folderpath : Path,
+  norad_id                : str,
+  time_start_dt           : datetime,
+  time_end_dt             : datetime,
 ) -> Optional[Path]:
   """
   Search for existing Horizons ephemeris files that contain the desired timespan.
   
-  When the exact ephemeris file doesn't exist, this function searches for other
-  ephemeris files for the same object that may contain the requested time range.
-  A 5-minute tolerance is applied to both start and end times.
+  Parses the timespan directly from filenames for speed.
+  Expected filename format: horizons_ephem_<norad_id>_<name>_<start>_<end>_<step>.csv
+  where <start> and <end> are in format: YYYYMMDDTHHMMSSz
   
   Input:
   ------
-    jpl_horizons_filepath : Path
-      Path to the expected (but possibly missing) JPL Horizons ephemeris file.
-      Expected filename format: horizons_ephem_<norad_id>_<name>_<start>_<end>_<interval>.csv
+    jpl_horizons_folderpath : Path
+      Path to the folder containing JPL Horizons ephemeris files.
+    norad_id : str
+      NORAD catalog ID for the object.
     time_start_dt : datetime
       Desired start time.
     time_end_dt : datetime
@@ -507,64 +504,126 @@ def find_compatible_horizons_file(
     Path | None
       Path to a compatible file if found, None otherwise.
   """
-  # Extract object identifier from the filepath
-  #   Expected format : horizons_ephem_<norad_id>_<name>_<start>_<end>_<interval>.csv
-  jpl_horizons_filename = jpl_horizons_filepath.name
-  
-  # Validate filename format
-  if not jpl_horizons_filename.startswith('horizons_ephem_'):
-    return None
-  jpl_horizons_filename_parts = jpl_horizons_filename.replace('horizons_ephem_', '').split('_')
-  if len(jpl_horizons_filename_parts) < 1:
-    return None
-  
-  norad_id = jpl_horizons_filename_parts[0]
-  
-  # Search for all ephemeris files for this object
-  jpl_horizons_folderpath = jpl_horizons_filepath.parent
-  
   # Ensure the folder exists before searching
   if not jpl_horizons_folderpath.exists():
     return None
   
-  # Use Path.glob() instead of glob.glob() for better cross-platform compatibility
+  # Use Path.glob() to find all ephemeris files for this object
   glob_pattern = f'horizons_ephem_{norad_id}_*.csv'
   matching_files = list(jpl_horizons_folderpath.glob(glob_pattern))
 
   if not matching_files:
     return None
   
+  # Time tolerance for matching
+  time_tolerance = timedelta(minutes=5)
+  
   for filepath in matching_files:
-    # Skip the exact file we're looking for (it doesn't exist)
-    if filepath == jpl_horizons_filepath:
+    # Parse timespan from filename
+    # Format: horizons_ephem_<norad_id>_<name>_<start>_<end>_<step>.csv
+    filename = filepath.stem  # Remove .csv extension
+    parts = filename.split('_')
+    
+    # Need at least: horizons, ephem, norad_id, name, start, end, step = 7 parts
+    if len(parts) < 7:
       continue
-      
+    
     try:
-      # Read the CSV file to check its timespan
-      # Skip the units row (row index 1 in 0-indexed after header)
-      df = pd.read_csv(filepath, header=0, skiprows=[1])
+      # Start time is third-to-last, end time is second-to-last (before step)
+      # Format: YYYYMMDDTHHMMSSz
+      start_str = parts[-3]  # e.g., "20251001T000000Z"
+      end_str   = parts[-2]  # e.g., "20251002T000000Z"
       
-      if 'datetime' not in df.columns or len(df) < 2:
-        continue
+      # Parse the datetime strings
+      file_start_dt = datetime.strptime(start_str, '%Y%m%dT%H%M%SZ')
+      file_end_dt = datetime.strptime(end_str, '%Y%m%dT%H%M%SZ')
       
-      # Get first and last datetime in the file
-      first_dt_str  = df['datetime'].iloc[0]
-      last_dt_str   = df['datetime'].iloc[-1]
-      file_start_dt = parse_time(str(first_dt_str))
-      file_end_dt   = parse_time(str(last_dt_str))
-      
-      # Check if this file contains the desired timespan
-      #   Use small tolerance for start and end times. This handles cases where 
-      #   the file starts/ends a few seconds/minutes off.
-      time_tolerance = timedelta(minutes=5)
+      # Check if this file contains the desired timespan (with tolerance)
       start_ok = file_start_dt <= (time_start_dt + time_tolerance)
       end_ok   = file_end_dt   >= (time_end_dt   - time_tolerance)
       
       if start_ok and end_ok:
         return filepath
         
-    except Exception:
-      # Skip files that can't be parsed
+    except (ValueError, IndexError):
+      # Skip files with unparseable names
+      continue
+  
+  return None
+
+
+def find_compatible_tle_file(
+  norad_id          : str,
+  tles_folderpath   : Path,
+  desired_time_o_dt : datetime,
+  desired_time_f_dt : datetime,
+) -> Optional[Path]:
+  """
+  Search for existing TLE files for the given NORAD ID that cover the desired timespan.
+  
+  Parses the timespan directly from filenames for speed.
+  Expected filename format: celestrak_tle_<norad_id>_<name>_<start>_<end>.txt
+  where <start> and <end> are in format: YYYYMMDDTHHMMSSz
+  
+  Input:
+  ------
+    norad_id : str
+      NORAD catalog ID.
+    tles_folderpath : Path
+      Path to the folder containing TLE files.
+    desired_time_o_dt : datetime
+      Desired initial time.
+    desired_time_f_dt : datetime
+      Desired final time.
+      
+  Output:
+  -------
+    Path | None
+      Path to a compatible file if found, None otherwise.
+  """
+  # Ensure the folder exists before searching
+  if not tles_folderpath.exists():
+    return None
+  
+  # Search for TLE files matching the NORAD ID (new format)
+  glob_pattern = f'celestrak_tle_{norad_id}_*.txt'
+  matching_files = list(tles_folderpath.glob(glob_pattern))
+  
+  if not matching_files:
+    return None
+  
+  # Time tolerance for matching (TLEs can be valid for longer periods)
+  time_tolerance = timedelta(days=7)
+  
+  for filepath in matching_files:
+    # Parse timespan from filename
+    # Format: celestrak_tle_<norad_id>_<name>_<start>_<end>.txt
+    filename = filepath.stem  # Remove .txt extension
+    parts = filename.split('_')
+    
+    # Need at least: celestrak, tle, norad_id, name, start, end = 6 parts
+    if len(parts) < 6:
+      continue
+    
+    try:
+      # Start time is second-to-last, end time is last
+      # Format: YYYYMMDDTHHMMSSz
+      start_str = parts[-2]  # e.g., "20251001T000000Z"
+      end_str = parts[-1]    # e.g., "20251002T000000Z"
+      
+      # Parse the datetime strings
+      file_start_dt = datetime.strptime(start_str, '%Y%m%dT%H%M%SZ')
+      file_end_dt = datetime.strptime(end_str, '%Y%m%dT%H%M%SZ')
+      
+      # Check if this file covers the desired timespan (with tolerance)
+      start_ok = file_start_dt <= (desired_time_o_dt + time_tolerance)
+      end_ok = file_end_dt >= (desired_time_f_dt - time_tolerance)
+      
+      if start_ok and end_ok:
+        return filepath
+        
+    except (ValueError, IndexError):
+      # Skip files with unparseable names
       continue
   
   return None
@@ -623,7 +682,7 @@ def get_celestrak_tle(
   
   # Check if TLE file exists
   if not tle_filepath.exists():
-    print(f"              :   ... TLE file not found, searching for compatible files ...", end=" ", flush=True)
+    print(f"             :   ... TLE file not found, searching for compatible files ...", end=" ", flush=True)
     
     # Search for compatible TLE files
     compatible_file = find_compatible_tle_file(
@@ -637,11 +696,11 @@ def get_celestrak_tle(
       print(f"No compatible TLE files found")
       
       # Prompt user to download
-      print(f"              :   ... Download from Celestrak? (y/n)", end=" ", flush=True)
+      print(f"             :   ... Download from Celestrak? (y/n)", end=" ", flush=True)
       user_response = input().strip().lower()
       
       if user_response == 'y':
-        print(f"              :   ... Downloading {object_name} ({norad_id}) ...", end=" ", flush=True)
+        print(f"             :   ... Downloading {object_name} ({norad_id}) ...", end=" ", flush=True)
         
         try:
           # Download TLE from Celestrak
@@ -679,7 +738,7 @@ def get_celestrak_tle(
       display_filepath = f"<project_folderpath>/{rel_filepath}"
     except ValueError:
       display_filepath = compatible_file
-    print(f"              : {display_filepath}")
+    print(f"             : {display_filepath}")
 
   # Load TLE from file
   result = load_tle_file(tle_filepath, desired_time_o_dt)
@@ -689,84 +748,6 @@ def get_celestrak_tle(
     print(f"    TLE Epoch : {result['tle_epoch_dt'].strftime('%Y-%m-%d %H:%M:%S')} UTC (closest to desired initial time)")
   
   return result
-
-
-def find_compatible_tle_file(
-  norad_id          : str,
-  tles_folderpath   : Path,
-  desired_time_o_dt : datetime,
-  desired_time_f_dt : datetime,
-) -> Optional[Path]:
-  """
-  Search for existing TLE files for the given NORAD ID that cover the desired timespan.
-  
-  Input:
-  ------
-    norad_id : str
-      NORAD catalog ID.
-    tles_folderpath : Path
-      Path to the folder containing TLE files.
-    desired_time_o_dt : datetime
-      Desired initial time.
-    desired_time_f_dt : datetime
-      Desired final time.
-      
-  Output:
-  -------
-    Path | None
-      Path to a compatible file if found, None otherwise.
-  """
-  # Ensure the folder exists before searching
-  if not tles_folderpath.exists():
-    return None
-  
-  # Search for TLE files matching the NORAD ID (new format)
-  glob_pattern   = f'celestrak_tle_{norad_id}_*.txt'
-  matching_files = list(tles_folderpath.glob(glob_pattern))
-  
-  # Also check old format for backward compatibility
-  glob_pattern_old = f'tle_{norad_id}_*.txt'
-  matching_files.extend(list(tles_folderpath.glob(glob_pattern_old)))
-  
-  if not matching_files:
-    return None
-  
-  # Check each file to see if it contains TLEs covering the desired timespan
-  time_tolerance = timedelta(days=7)  # Allow TLEs within 7 days of desired time
-  
-  for filepath in matching_files:
-    try:
-      # Load all TLEs from file
-      result = load_tle_file(filepath)
-      if not result or not result.get('success'):
-        continue
-      
-      all_tles = result.get('all_tles', [])
-      if not all_tles:
-        continue
-      
-      # Get the range of TLE epochs in the file
-      tle_epochs = [tle['tle_epoch_dt'] for tle in all_tles]
-      earliest_tle = min(tle_epochs)
-      latest_tle = max(tle_epochs)
-      
-      # Check if file covers the desired timespan (with tolerance)
-      covers_start = earliest_tle <= (desired_time_o_dt + time_tolerance)
-      covers_end = latest_tle >= (desired_time_f_dt - time_tolerance)
-      
-      # Also accept if any TLE is close to the desired start time
-      has_close_tle = any(
-        abs((epoch - desired_time_o_dt).total_seconds()) < time_tolerance.total_seconds()
-        for epoch in tle_epochs
-      )
-      
-      if (covers_start and covers_end) or has_close_tle:
-        return filepath
-        
-    except Exception:
-      continue
-  
-  return None
 
 
 def load_tle_file(

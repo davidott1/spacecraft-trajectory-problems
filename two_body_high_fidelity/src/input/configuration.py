@@ -137,7 +137,8 @@ def print_paths(config: SimpleNamespace) -> None:
   print(f"  Data Folderpath            : {data_folderpath}")
   print(f"    SPICE Kernels Folderpath : <data_folderpath>/{config.spice_kernels_folderpath.relative_to(data_folderpath)}")
   print(f"    LSK Filepath             : <data_folderpath>/{config.lsk_filepath.relative_to(data_folderpath)}")
-  print(f"    JPL Horizons Filepath    : <data_folderpath>/{config.jpl_horizons_filepath.relative_to(data_folderpath)}")
+  print(f"    JPL Horizons Folderpath  : <data_folderpath>/{config.jpl_horizons_folderpath.relative_to(data_folderpath)}")
+  print(f"    TLEs Folderpath          : <data_folderpath>/{config.tles_folderpath.relative_to(data_folderpath)}")
 
 
 def print_configuration(
@@ -334,7 +335,7 @@ def build_config(
     files_folderpath         = paths['files_folderpath'],
     log_filepath             = paths['log_filepath'],
     spice_kernels_folderpath = paths['spice_kernels_folderpath'],
-    jpl_horizons_filepath    = paths['jpl_horizons_filepath'],
+    jpl_horizons_folderpath  = paths['jpl_horizons_folderpath'],
     tles_folderpath          = paths['tles_folderpath'],
     lsk_filepath             = paths['lsk_filepath'],
   )
@@ -359,14 +360,12 @@ def setup_paths_and_files(
       Desired initial time as a datetime object.
     desired_time_f_dt : datetime
       Desired final time as a datetime object.
-    print_paths : bool
-      Flag to enable/disable printing of paths.
       
   Output:
   -------
     dict
       A dictionary containing paths to output, data, SPICE kernels,
-      Horizons ephemeris, and leap seconds files.
+      Horizons ephemeris folder, TLEs folder, and leap seconds files.
   """
   # Project and data paths
   #   Adjusted for location in src/input/configuration.py (depth: src/input/configuration.py -> input -> src -> root)
@@ -380,11 +379,8 @@ def setup_paths_and_files(
   # TLEs folderpath
   tles_folderpath = data_folderpath / 'tles'
   
-  # Horizons ephemeris file (dynamically named)
-  desired_time_o_str    = desired_time_o_dt.strftime('%Y%m%dT%H%M%SZ')
-  desired_time_f_str    = desired_time_f_dt.strftime('%Y%m%dT%H%M%SZ')
-  jpl_horizons_filename = f"horizons_ephem_{norad_id}_{obj_name.lower()}_{desired_time_o_str}_{desired_time_f_str}_1m.csv"
-  jpl_horizons_filepath = data_folderpath / 'ephems' / jpl_horizons_filename
+  # Horizons ephemeris folder (loader will search for compatible files)
+  jpl_horizons_folderpath = data_folderpath / 'ephems'
   
   # Define output folderpath
   timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -405,7 +401,7 @@ def setup_paths_and_files(
     'files_folderpath'         : files_folderpath,
     'log_filepath'             : log_filepath,
     'spice_kernels_folderpath' : spice_kernels_folderpath,
-    'jpl_horizons_filepath'    : jpl_horizons_filepath,
+    'jpl_horizons_folderpath'  : jpl_horizons_folderpath,
     'tles_folderpath'          : tles_folderpath,
     'lsk_filepath'             : lsk_filepath,
   }

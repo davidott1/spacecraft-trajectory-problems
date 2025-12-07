@@ -157,12 +157,11 @@ def main(
   result_jpl_horizons_ephemeris = None
   if config.initial_state_source == 'jpl_horizons' or config.compare_jpl_horizons:
     result_jpl_horizons_ephemeris = get_horizons_ephemeris(
-      jpl_horizons_filepath = config.jpl_horizons_filepath,
-      desired_time_o_dt     = config.desired_time_o_dt,
-      target_end_dt         = config.desired_time_f_dt,
-      norad_id              = config.norad_id,
-      object_name           = config.object_name,
-      step                  = "1m",
+      jpl_horizons_folderpath = config.jpl_horizons_folderpath,
+      desired_time_o_dt       = config.desired_time_o_dt,
+      desired_time_f_dt       = config.desired_time_f_dt,
+      norad_id                = config.norad_id,
+      object_name             = config.object_name,
     )
 
   # Get Celestrak TLE (if needed for initial state or comparison)
