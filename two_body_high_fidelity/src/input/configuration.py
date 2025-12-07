@@ -1,5 +1,5 @@
 from pathlib  import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 from types    import SimpleNamespace
 from typing   import Optional
 from sgp4.api import Satrec
