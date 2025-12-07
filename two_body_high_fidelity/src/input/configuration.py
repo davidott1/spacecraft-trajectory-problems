@@ -305,9 +305,9 @@ def build_config(
   
   return SimpleNamespace(
     # Store original input values for print_configuration
-    input_object_type    = input_object_type,
-    norad_id             = norad_id,
-    desired_timespan     = desired_timespan,
+    input_object_type = input_object_type,
+    norad_id          = norad_id,
+    desired_timespan  = desired_timespan,
     # Parsed and calculated values
     obj_props                = obj_props,
     object_name              = object_name,
@@ -338,6 +338,11 @@ def build_config(
     jpl_horizons_folderpath  = paths['jpl_horizons_folderpath'],
     tles_folderpath          = paths['tles_folderpath'],
     lsk_filepath             = paths['lsk_filepath'],
+    # Values calculated later
+    tle_line_0   = None,
+    tle_line_1   = None,
+    tle_line_2   = None,
+    tle_epoch_dt = None,
   )
 
 
@@ -405,3 +410,24 @@ def setup_paths_and_files(
     'tles_folderpath'          : tles_folderpath,
     'lsk_filepath'             : lsk_filepath,
   }
+
+
+def extract_tle_to_config(
+  config              : SimpleNamespace,
+  result_celestrak_tle : Optional[dict],
+) -> None:
+  """
+  Extract TLE data from result dictionary and store on config object.
+  
+  Input:
+  ------
+    config : SimpleNamespace
+      Configuration object to store TLE data on.
+    result_celestrak_tle : dict | None
+      Result dictionary from get_celestrak_tle containing TLE data.
+  """
+  if result_celestrak_tle and result_celestrak_tle.get('success'):
+    config.tle_line_0   = result_celestrak_tle['tle_line_0']
+    config.tle_line_1   = result_celestrak_tle['tle_line_1']
+    config.tle_line_2   = result_celestrak_tle['tle_line_2']
+    config.tle_epoch_dt = result_celestrak_tle['tle_epoch_dt']

@@ -66,7 +66,7 @@ from src.propagation.utility           import determine_actual_times
 from src.input.loader                  import unload_files, load_files, get_horizons_ephemeris, get_celestrak_tle
 from src.utility.printer               import print_results_summary
 from src.input.cli                     import parse_command_line_arguments
-from src.input.configuration           import build_config, print_configuration
+from src.input.configuration           import build_config, print_configuration, extract_tle_to_config
 from src.propagation.state_initializer import get_initial_state
 from src.utility.logger                import start_logging, stop_logging
 
@@ -174,11 +174,9 @@ def main(
       desired_time_o_dt = config.desired_time_o_dt,
       desired_time_f_dt = config.desired_time_f_dt,
     )
-
-  # Extract TLE lines from result (for backward compatibility)
-  tle_line_1   = result_celestrak_tle['tle_line_1'] if result_celestrak_tle and result_celestrak_tle.get('success') else None
-  tle_line_2   = result_celestrak_tle['tle_line_2'] if result_celestrak_tle and result_celestrak_tle.get('success') else None
-  tle_epoch_dt = result_celestrak_tle['tle_epoch_dt'] if result_celestrak_tle and result_celestrak_tle.get('success') else None
+    
+    # Extract TLE data to config
+    extract_tle_to_config(config, result_celestrak_tle)
 
   # Determine actual times if Horizons is available (for grid alignment)
   actual_time_o_dt, actual_time_f_dt = determine_actual_times(
@@ -189,8 +187,8 @@ def main(
 
   # Determine initial state (from Horizons if available, else TLE)
   initial_state = get_initial_state(
-    tle_line_1                    = tle_line_1,
-    tle_line_2                    = tle_line_2,
+    tle_line_1                    = config.tle_line_1,
+    tle_line_2                    = config.tle_line_2,
     desired_time_o_dt             = config.desired_time_o_dt,
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     initial_state_source          = config.initial_state_source,
@@ -219,8 +217,8 @@ def main(
     include_srp                   = config.include_srp,
     spice_kernels_folderpath      = config.spice_kernels_folderpath,
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
-    tle_line_1                    = tle_line_1,
-    tle_line_2                    = tle_line_2,
+    tle_line_1                    = config.tle_line_1,
+    tle_line_2                    = config.tle_line_2,
   )
   
   # Display results and create plots

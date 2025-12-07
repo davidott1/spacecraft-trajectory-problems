@@ -662,6 +662,7 @@ def get_celestrak_tle(
       Dictionary containing TLE data if successful:
       - success      : bool
       - message      : str
+      - tle_line_0   : str (closest TLE name line)
       - tle_line_1   : str (closest TLE to desired_time_o_dt)
       - tle_line_2   : str (closest TLE to desired_time_o_dt)
       - tle_epoch_dt : datetime (epoch of closest TLE)
@@ -674,6 +675,18 @@ def get_celestrak_tle(
   tle_filename = f"celestrak_tle_{norad_id}_{object_name.lower()}_{time_o_str}_{time_f_str}.txt"
   tle_filepath = tles_folderpath / tle_filename
   
+  # Check if exact TLE file exists, otherwise search for compatible files
+  if not tle_filepath.exists():
+    compatible_file = find_compatible_tle_file(
+      norad_id          = norad_id,
+      tles_folderpath   = tles_folderpath,
+      desired_time_o_dt = desired_time_o_dt,
+      desired_time_f_dt = desired_time_f_dt,
+    )
+    
+    if compatible_file is not None:
+      tle_filepath = compatible_file
+  
   # Display TLE filepath
   try:
     rel_path     = tle_filepath.relative_to(Path.cwd())
@@ -684,65 +697,54 @@ def get_celestrak_tle(
   print("  Celestrak TLE")
   print(f"    Filepath  : {display_path}")
   
-  # Check if TLE file exists
+  # Check if TLE file exists (either exact match or compatible file)
   if not tle_filepath.exists():
-    print(f"             :   ... TLE file not found, searching for compatible files ...", end=" ", flush=True)
+    # Prompt user to download
+    print(f"               :   ... TLE file not found. Download from Celestrak? (y/n)", end=" ", flush=True)
+    user_response = input().strip().lower()
     
-    # Search for compatible TLE files
-    compatible_file = find_compatible_tle_file(
-      norad_id          = norad_id,
-      tles_folderpath   = tles_folderpath,
-      desired_time_o_dt = desired_time_o_dt,
-      desired_time_f_dt = desired_time_f_dt,
-    )
-    
-    if compatible_file is None:
-      print(f"No compatible TLE files found")
+    if user_response == 'y':
+      print(f"               :   ... Downloading {object_name} ({norad_id}) ...", end=" ", flush=True)
       
-      # Prompt user to download
-      print(f"             :   ... Download from Celestrak? (y/n)", end=" ", flush=True)
-      user_response = input().strip().lower()
-      
-      if user_response == 'y':
-        print(f"             :   ... Downloading {object_name} ({norad_id}) ...", end=" ", flush=True)
+      try:
+        # Download TLE from Celestrak
+        tle_data = download_tle_from_celestrak(norad_id)
         
-        try:
-          # Download TLE from Celestrak
-          tle_data = download_tle_from_celestrak(norad_id)
+        if tle_data:
+          # Ensure TLEs folder exists
+          tles_folderpath.mkdir(parents=True, exist_ok=True)
           
-          if tle_data:
-            # Ensure TLEs folder exists
-            tles_folderpath.mkdir(parents=True, exist_ok=True)
-            
-            # Save TLE to file (3-line format per TLE)
-            with open(tle_filepath, 'w') as f:
-              f.write(f"{tle_data['tle_line_0']}\n")
-              f.write(f"{tle_data['tle_line_1']}\n")
-              f.write(f"{tle_data['tle_line_2']}\n")
-            
-            print("Done")
-            compatible_file = tle_filepath
-          else:
-            print("Failed - No TLE data returned")
-            
-        except Exception as e:
-          print(f"Error : {e}")
-
-      if compatible_file is None:
+          # Re-construct filepath for saving (use original expected name)
+          time_o_str   = desired_time_o_dt.strftime('%Y%m%dT%H%M%SZ')
+          time_f_str   = desired_time_f_dt.strftime('%Y%m%dT%H%M%SZ')
+          tle_filename = f"celestrak_tle_{norad_id}_{object_name.lower()}_{time_o_str}_{time_f_str}.txt"
+          tle_filepath = tles_folderpath / tle_filename
+          
+          # Save TLE to file (3-line format per TLE)
+          with open(tle_filepath, 'w') as f:
+            f.write(f"{tle_data['tle_line_0']}\n")
+            f.write(f"{tle_data['tle_line_1']}\n")
+            f.write(f"{tle_data['tle_line_2']}\n")
+          
+          print("Done")
+        else:
+          print("Failed - No TLE data returned")
+          return {
+            'success' : False,
+            'message' : f"TLE download failed: No data returned",
+          }
+          
+      except Exception as e:
+        print(f"Error : {e}")
         return {
           'success' : False,
-          'message' : f"TLE file not found and download failed: {tle_filepath}",
+          'message' : f"TLE download failed: {e}",
         }
     else:
-      print(f"Found")
-    
-    tle_filepath = compatible_file
-    try:
-      rel_filepath     = compatible_file.relative_to(Path.cwd())
-      display_filepath = f"<project_folderpath>/{rel_filepath}"
-    except ValueError:
-      display_filepath = compatible_file
-    print(f"             : {display_filepath}")
+      return {
+        'success' : False,
+        'message' : f"TLE file not found: {tle_filepath}",
+      }
 
   # Load TLE from file
   result = load_tle_file(tle_filepath, desired_time_o_dt)
