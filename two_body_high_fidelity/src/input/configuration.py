@@ -2,7 +2,6 @@ from pathlib  import Path
 from datetime import datetime
 from types    import SimpleNamespace
 from typing   import Optional
-from sgp4.api import Satrec
 
 from src.input.loader        import load_supported_objects
 from src.input.cli           import parse_time
