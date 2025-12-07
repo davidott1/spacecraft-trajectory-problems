@@ -372,7 +372,7 @@ def get_horizons_ephemeris(
     end_et   = utc_to_et(desired_time_f_dt)
     start_time_str = f"{desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {start_et:.6f} ET"
     end_time_str   = f"{desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {end_et:.6f} ET"
-  except:
+  except Exception:
     start_time_str = f"{desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / N/A ET"
     end_time_str   = f"{desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / N/A ET"
   duration_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
