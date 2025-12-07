@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import pytz
 from pathlib          import Path
 from skyfield.api     import load, EarthSatellite
-from skyfield.timelib import Time
 from matplotlib.ticker import ScalarFormatter
 
 from src.model.constants import CONVERTER, PHYSICALCONSTANTS
