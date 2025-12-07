@@ -338,7 +338,7 @@ def get_horizons_ephemeris(
           desired_time_f_dt.strftime('%Y-%m-%dT%H:%M:%S'),
           step
         ]
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
         print("Done")
         
         # Search again for the downloaded file
