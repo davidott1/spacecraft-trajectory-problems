@@ -16,7 +16,7 @@ import numpy as np
 import os
 from astroquery.jplhorizons import Horizons
 from pathlib                import Path
-from datetime               import datetime, timedelta
+from datetime               import datetime
 from astropy.time           import Time, TimeDelta
 from astropy.table          import Table
 from astropy                import units as u
