@@ -307,7 +307,7 @@ def get_horizons_ephemeris(
   jpl_horizons_filepath_to_load = jpl_horizons_filepath
   
   if not jpl_horizons_filepath.exists():
-    print(f"    Status   : Exact file not found, searching for compatible files...")
+    print(f"             :   ... Exact file not found, searching for compatible files ...", end=" ", flush=True)
     
     compatible_file = find_compatible_horizons_file(
       jpl_horizons_filepath = jpl_horizons_filepath,
@@ -316,7 +316,7 @@ def get_horizons_ephemeris(
     )
     
     if compatible_file is None:
-      print(f"    Status   : No compatible ephemeris files found")
+      print(f"No compatible ephemeris files found")
       return {
         'success' : False,
         'message' : f"Horizons file not found and no compatible alternatives : {jpl_horizons_filepath}",
@@ -328,8 +328,8 @@ def get_horizons_ephemeris(
       display_path = f"<project_folderpath>/{rel_path}"
     except ValueError:
       display_path = compatible_file
-    print(f"    Status   : Found compatible file")
-    print(f"    Using    : {display_path}")
+    print(f"Found compatible file ...")
+    print(f"             : {display_path}")
 
   # Print timespan info
   print(f"    Timespan")

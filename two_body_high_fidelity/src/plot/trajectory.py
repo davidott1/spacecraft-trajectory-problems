@@ -128,7 +128,7 @@ def plot_time_series(
       Figure object containing the time series plots.
   """
   
-  
+  # Create figure
   fig = plt.figure(figsize=(18,10))
   
   # Extract data
