@@ -31,9 +31,14 @@ def modify_tle_bstar(
     if bstar_value != 0:
       exponent = math.floor(math.log10(abs(bstar_value)))
       mantissa = bstar_value / (10 ** exponent)
+      # Adjust to TLE format: mantissa in [0.1, 1) range
+      mantissa = mantissa / 10
+      exponent = exponent + 1
       sign = '-' if bstar_value < 0 else ' '
       exp_sign = '-' if exponent < 0 else '+'
-      bstar_str = f"{sign}{abs(mantissa):.5f}[1:]{exp_sign}{abs(exponent)}"
+      # Format mantissa and extract digits (skip "0.")
+      mantissa_digits = f"{abs(mantissa):.5f}"[2:]
+      bstar_str = f"{sign}{mantissa_digits}{exp_sign}{abs(exponent)}"
     else:
       bstar_str = " 00000-0"
   
