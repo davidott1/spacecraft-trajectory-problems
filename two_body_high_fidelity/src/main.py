@@ -160,6 +160,9 @@ def main(
       jpl_horizons_filepath = config.jpl_horizons_filepath,
       desired_time_o_dt     = config.desired_time_o_dt,
       target_end_dt         = config.desired_time_f_dt,
+      norad_id              = config.norad_id,
+      object_name           = config.object_name,
+      step                  = "1m",
     )
 
   # Determine actual times if Horizons is available (for grid alignment)
@@ -219,7 +222,7 @@ def main(
     figures_folderpath               = config.figures_folderpath,
     compare_jpl_horizons             = config.compare_jpl_horizons,
     compare_tle                      = config.compare_tle,
-    object_name                      = config.obj_props['name'],
+    object_name                      = config.object_name,
   )
   
   # Unload all files (SPICE kernels)

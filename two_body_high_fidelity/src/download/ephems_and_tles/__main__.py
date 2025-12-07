@@ -261,11 +261,11 @@ def download_horizons_ephemeris(
   # Query HORIZONS using NORAD catalog number (negative ID format)
   sat_id = -(100000 + norad_id)
   obj = Horizons(
-    id=f"{sat_id}",
-    location='@399',  # Earth center (geocentric)
-    epochs={'start' : start_time.strftime('%Y-%m-%d %H:%M'),
-            'stop'  : end_time.strftime('%Y-%m-%d %H:%M'),
-            'step'  : step}
+    id       = f"{sat_id}",
+    location = '@399',  # Earth center (geocentric)
+    epochs   = {'start' : start_time.strftime('%Y-%m-%d %H:%M'),
+                'stop'  : end_time.strftime('%Y-%m-%d %H:%M'),
+                'step'  : step}
   )
   
   # Get vectors in ICRF/J2000 equatorial frame

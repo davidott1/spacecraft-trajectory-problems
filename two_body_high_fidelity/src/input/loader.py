@@ -5,7 +5,8 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional
-import glob
+import sys
+import subprocess
 
 from src.model.time_converter import utc_to_et
 from src.model.dynamics       import OrbitConverter
@@ -271,6 +272,9 @@ def get_horizons_ephemeris(
   jpl_horizons_filepath : Path,
   desired_time_o_dt     : datetime,
   target_end_dt         : datetime,
+  norad_id              : str,
+  object_name           : str,
+  step                  : str = "1h",
 ) -> Optional[dict]:
   """
   Load and process JPL Horizons ephemeris.
@@ -286,6 +290,12 @@ def get_horizons_ephemeris(
       Start time for data request.
     target_end_dt : datetime
       End time for data request.
+    norad_id : str
+      NORAD catalog ID for the object.
+    object_name : str
+      Name of the object (for display purposes).
+    step : str
+      Time step for ephemeris download (default "1h").
       
   Output:
   -------
@@ -317,10 +327,40 @@ def get_horizons_ephemeris(
     
     if compatible_file is None:
       print(f"No compatible ephemeris files found")
-      return {
-        'success' : False,
-        'message' : f"Horizons file not found and no compatible alternatives : {jpl_horizons_filepath}",
-      }
+      
+      # Prompt user to download
+      print(f"             :   ... Download from JPL Horizons? (y/n)", end=" ", flush=True)
+      user_response = input().strip().lower()
+      
+      if user_response == 'y':
+        print(f"             :   ... Downloading {object_name} ({norad_id}) ...", end=" ", flush=True)
+        
+        try:
+          # Construct command to run the download module
+          cmd = [
+            sys.executable, "-m", "src.download.ephems_and_tles",
+            norad_id,
+            desired_time_o_dt.strftime('%Y-%m-%dT%H:%M:%S'),
+            target_end_dt.strftime('%Y-%m-%dT%H:%M:%S'),
+            step
+          ]
+          subprocess.run(cmd, check=True, capture_output=True, text=True)
+          print("Done")
+          
+          # Check if exact file exists now (if download matched filename)
+          if jpl_horizons_filepath.exists():
+            compatible_file = jpl_horizons_filepath
+          
+        except subprocess.CalledProcessError as e:
+          print(f"Error : {e}")
+        except Exception as e:
+          print(f"Error : {e}")
+
+      if compatible_file is None:
+        return {
+          'success' : False,
+          'message' : f"Horizons file not found and no compatible alternatives : {jpl_horizons_filepath}",
+        }
     
     jpl_horizons_filepath_to_load = compatible_file
     try:
@@ -328,7 +368,6 @@ def get_horizons_ephemeris(
       display_path = f"<project_folderpath>/{rel_path}"
     except ValueError:
       display_path = compatible_file
-    print(f"Found compatible file ...")
     print(f"             : {display_path}")
 
   # Print timespan info

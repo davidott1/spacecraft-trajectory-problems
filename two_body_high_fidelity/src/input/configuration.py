@@ -285,6 +285,9 @@ def build_config(
   # Get object properties
   obj_props = supported_objects[norad_id]
 
+  # Get object name
+  object_name = obj_props.get('name', 'object_name')
+
   # Extract TLE lines
   tle_line_1 = obj_props['tle']['line_1']
   tle_line_2 = obj_props['tle']['line_2']
@@ -301,7 +304,7 @@ def build_config(
   # Set up paths and files
   paths = setup_paths_and_files(
     norad_id          = norad_id,
-    obj_name          = obj_props['name'],
+    obj_name          = object_name,
     desired_time_o_dt = desired_time_o_dt,
     desired_time_f_dt = desired_time_f_dt,
   )
@@ -313,6 +316,7 @@ def build_config(
     desired_timespan     = desired_timespan,
     # Parsed and calculated values
     obj_props                = obj_props,
+    object_name              = object_name,
     tle_line_1               = tle_line_1,
     tle_line_2               = tle_line_2,
     tle_epoch_dt             = tle_epoch_dt,

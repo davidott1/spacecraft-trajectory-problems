@@ -7,33 +7,44 @@ def parse_time(
   time_str : str,
 ) -> datetime:
   """
-  Parse a time string in ISO format.
+  Parse a time string into a datetime object.
   
   Accepted formats include:
-  - "YYYY-MM-DD" (e.g., "2025-10-01")
-  - "YYYY-MM-DDTHH:MM:SS" (e.g., "2025-10-01T12:00:00")
-  - "YYYY-MM-DD HH:MM:SS" (e.g., "2025-10-01 12:00:00")
+  - ISO 8601 with 'T' separator: "2025-10-01T00:00:00"
+  - ISO 8601 with 'Z' suffix: "2025-10-01T00:00:00Z"
+  - Space-separated: "2025-10-01 00:00:00"
+  - With microseconds: "2025-10-01 00:00:00.123456"
+  
+  The 'Z' suffix (UTC indicator) is stripped before parsing for 
+  Python < 3.11 compatibility.
   
   Input:
   ------
     time_str : str
       Time string to parse.
-  
+      
   Output:
   -------
-    datetime.datetime
-      An object representing the parsed time.
+    datetime
+      Parsed datetime object.
   """
+  # Handle 'Z' suffix for Python < 3.11 compatibility
+  if time_str.endswith('Z'):
+    time_str = time_str[:-1]
+
   try:
     return datetime.fromisoformat(time_str)
   except ValueError:
-    # Fallback for space separator if fromisoformat fails (older python versions)
-    # or other common formats
-    try:
-      return datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
-    except ValueError:
-      pass
-      
+    # Fallback for other formats if needed
+    formats = [
+      "%Y-%m-%d %H:%M:%S",
+      "%Y-%m-%d %H:%M:%S.%f",
+    ]
+    for fmt in formats:
+      try:
+        return datetime.strptime(time_str, fmt)
+      except ValueError:
+        continue
     raise ValueError(f"Cannot parse time string: {time_str}")
 
 
