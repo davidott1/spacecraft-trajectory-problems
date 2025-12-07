@@ -35,8 +35,16 @@ def modify_tle_bstar(
     exponent = exponent + 1
     sign = '-' if bstar_value < 0 else ' '
     exp_sign = '-' if exponent < 0 else '+'
-    # Format mantissa as "0.nnnnn" and extract just the 5 digits after "0."
-    mantissa_digits = f"{abs(mantissa):.5f}"[2:]
+    # Format mantissa as "0.nnnnn" and extract the 5 decimal digits
+    # Use replace to handle edge case where rounding might produce "1.00000"
+    mantissa_formatted = f"{abs(mantissa):.5f}"
+    if mantissa_formatted.startswith('0.'):
+      mantissa_digits = mantissa_formatted[2:]
+    else:
+      # Handle edge case where rounding produces >= 1.0
+      mantissa = mantissa / 10
+      exponent = exponent + 1
+      mantissa_digits = f"{abs(mantissa):.5f}"[2:]
     bstar_str = f"{sign}{mantissa_digits}{exp_sign}{abs(exponent)}"
   
   # Replace B* in TLE line 1 (columns 53-60)
