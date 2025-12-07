@@ -372,14 +372,16 @@ def get_horizons_ephemeris(
   print(f"    Timespan")
   print(f"      Desired")
   try:
-    start_et = f"{utc_to_et(desired_time_o_dt):.6f} ET"
-    end_et   = f"{utc_to_et(desired_time_f_dt):.6f} ET"
+    start_et = utc_to_et(desired_time_o_dt)
+    end_et   = utc_to_et(desired_time_f_dt)
+    start_time_str = f"{desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {start_et:.6f} ET"
+    end_time_str   = f"{desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {end_et:.6f} ET"
   except:
-    start_et = "N/A ET"
-    end_et   = "N/A ET"
+    start_time_str = f"{desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / N/A ET"
+    end_time_str   = f"{desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / N/A ET"
   duration_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
-  print(f"        Start    : {desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({start_et})")
-  print(f"        End      : {desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({end_et})")
+  print(f"        Initial  : {start_time_str}")
+  print(f"        Final    : {end_time_str}")
   print(f"        Duration : {duration_s:.1f} s")
   
   # Load Horizons data
@@ -426,17 +428,19 @@ def process_horizons_result(
     actual_end   = actual_start + timedelta(seconds=result_horizons['delta_time'][-1])
     
     try:
-      start_et = f"{utc_to_et(actual_start):.6f} ET"
-      end_et   = f"{utc_to_et(actual_end):.6f} ET"
+      start_et = utc_to_et(actual_start)
+      end_et   = utc_to_et(actual_end)
+      start_time_str = f"{actual_start.strftime('%Y-%m-%d %H:%M:%S')} UTC / {start_et:.6f} ET"
+      end_time_str   = f"{actual_end.strftime('%Y-%m-%d %H:%M:%S')} UTC / {end_et:.6f} ET"
     except:
-      start_et = "N/A ET"
-      end_et   = "N/A ET"
+      start_time_str = f"{actual_start.strftime('%Y-%m-%d %H:%M:%S')} UTC / N/A ET"
+      end_time_str   = f"{actual_end.strftime('%Y-%m-%d %H:%M:%S')} UTC / N/A ET"
 
     duration_s = result_horizons['delta_time'][-1] - result_horizons['delta_time'][0]
 
     print(f"      Actual")
-    print(f"        Initial  : {actual_start.strftime('%Y-%m-%d %H:%M:%S')} UTC ({start_et})")
-    print(f"        Final    : {  actual_end.strftime('%Y-%m-%d %H:%M:%S')} UTC ({end_et})")
+    print(f"        Initial  : {start_time_str}")
+    print(f"        Final    : {end_time_str}")
     print(f"        Duration : {duration_s:.1f} s")
     print(f"        Grid     : {len(result_horizons['delta_time'])} points")
 
