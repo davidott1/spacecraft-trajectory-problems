@@ -1,7 +1,7 @@
 class CONVERTER:
   # Angle Conversions
-  RAD_PER_DEG = 180.0 / 3.141592653589793  # [degree] per [radian]
-  DEG_PER_RAD = 3.141592653589793 / 180.0  # [radian] per [degree]
+  RAD_PER_DEG = 3.141592653589793 / 180.0  # [radian] per [degree]
+  DEG_PER_RAD = 180.0 / 3.141592653589793  # [degree] per [radian]
 
   # Time Conversions
   SEC_PER_YEAR = 31536000                  # [seconds] per [year]
