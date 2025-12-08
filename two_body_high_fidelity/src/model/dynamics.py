@@ -108,6 +108,7 @@ Sources:
 
 import numpy as np
 import warnings
+
 from pathlib import Path
 from typing  import Optional
 
@@ -319,12 +320,11 @@ class TwoBodyGravity:
 class ThirdBodyGravity:
     """
     Third-body gravitational perturbations from Sun, Moon, and other bodies
-    Uses SPICE ephemerides or analytical approximations
+    Uses SPICE ephemerides
     """
     
     def __init__(
         self,
-        use_spice               : bool  = True,
         bodies                  : list  = None,
         spice_kernel_folderpath : str   = None,
     ):
@@ -333,18 +333,13 @@ class ThirdBodyGravity:
         
         Input:
         ------
-        use_spice : bool
-            Use SPICE ephemerides (True) or analytical approximations (False)
         bodies : list of str
             Which bodies to include (default: ['sun', 'moon'])
         spice_kernel_folderpath : str
             Path to SPICE kernel folderpath
         """
-        self.bodies    = bodies if bodies else ['sun', 'moon']
-        self.use_spice = use_spice
-        
-        if use_spice:
-            self._load_spice_kernels(spice_kernel_folderpath)
+        self.bodies = bodies if bodies else ['sun', 'moon']
+        self._load_spice_kernels(spice_kernel_folderpath)
     
     def _load_spice_kernels(
         self,
@@ -415,21 +410,17 @@ class ThirdBodyGravity:
         pos_vec : np.ndarray (3,)
             Position vector [m]
         """
-        if self.use_spice:
-            import spiceypy as spice
-            # SPICE state relative to Earth
-            state, _ = spice.spkez(
-                targ   = self._get_naif_id(body_name),
-                et     = et_seconds,
-                ref    = frame,
-                abcorr = 'NONE',
-                obs    = 399  # relative to Earth
-            )
-            # SPICE returns km, convert to m
-            return np.array(state[0:3]) * CONVERTER.M_PER_KM
-        else:
-            # Use analytical approximation (returns km, convert to m)
-            return self._get_position_body_analytical(body_name, et_seconds) * CONVERTER.M_PER_KM
+        import spiceypy as spice
+        # SPICE state relative to Earth
+        state, _ = spice.spkez(
+            targ   = self._get_naif_id(body_name),
+            et     = et_seconds,
+            ref    = frame,
+            abcorr = 'NONE',
+            obs    = 399  # relative to Earth
+        )
+        # SPICE returns km, convert to m
+        return np.array(state[0:3]) * CONVERTER.M_PER_KM
     
     def _get_naif_id(
         self,
@@ -454,80 +445,6 @@ class ThirdBodyGravity:
         }
         return naif_ids[body_name.upper()]
 
-    def _get_position_body_analytical(
-        self,
-        body_name  : str,
-        et_seconds : float,
-    ) -> np.ndarray:
-        """
-        Simple analytical approximation for Sun/Moon position
-        Lower accuracy (~1000 km for Moon, ~10,000 km for Sun)
-        Good enough for rough estimates
-
-        Input:
-        ------
-        body_name : str
-            'SUN' or 'MOON'
-        et_seconds : float
-            Ephemeris time in seconds past J2000 epoch
-
-        Output:
-        -------
-        pos_vec : np.ndarray (3,)
-            Position vector [km]  # Note: returns km (caller converts to m)
-        """
-        # Convert to Julian centuries from J2000
-        T = et_seconds / (86400.0 * 36525.0)
-        
-        if body_name.upper() == 'SUN':
-            # Very simplified Sun position (ecliptic plane approximation)
-            # Mean longitude
-            L = np.radians(280.460 + 36000.771 * T)
-            # Mean anomaly
-            g = np.radians(357.528 + 35999.050 * T)
-            # Ecliptic longitude
-            lambda_sun = L + np.radians(1.915) * np.sin(g) + np.radians(0.020) * np.sin(2*g)
-            
-            # Distance (AU to km)
-            r_sun = 149597870.7 * (1.00014 - 0.01671 * np.cos(g) - 0.00014 * np.cos(2*g))
-            
-            # Ecliptic to equatorial (simple rotation)
-            epsilon = np.radians(23.439)  # Obliquity
-            
-            x = r_sun * np.cos(lambda_sun)
-            y = r_sun * np.sin(lambda_sun) * np.cos(epsilon)
-            z = r_sun * np.sin(lambda_sun) * np.sin(epsilon)
-            
-            return np.array([x, y, z])
-        
-        elif body_name.upper() == 'MOON':
-            # Very simplified Moon position
-            # Mean longitude
-            L = np.radians(218.316 + 481267.881 * T)
-            # Mean anomaly
-            M = np.radians(134.963 + 477198.868 * T)
-            # Mean distance of Moon from ascending node
-            F = np.radians(93.272 + 483202.018 * T)
-            
-            # Longitude
-            lambda_moon = L + np.radians(6.289) * np.sin(M)
-            # Latitude
-            beta = np.radians(5.128) * np.sin(F)
-            # Distance
-            r_moon = 385000.0 - 20905.0 * np.cos(M)
-            
-            # Ecliptic to equatorial
-            epsilon = np.radians(23.439)
-            
-            x = r_moon * np.cos(beta) * np.cos(lambda_moon)
-            y = r_moon * np.cos(beta) * np.sin(lambda_moon) * np.cos(epsilon) - np.sin(beta) * np.sin(epsilon)
-            z = r_moon * np.cos(beta) * np.sin(lambda_moon) * np.sin(epsilon) + np.sin(beta) * np.cos(epsilon)
-            
-            return np.array([x, y, z])
-        
-        else:
-            raise ValueError(f"Unknown body: {body_name}")
-    
     def point_mass(
         self,
         time        : float,
@@ -597,7 +514,6 @@ class Gravity:
         j4                      : float = 0.0,
         pos_ref                 : float = 0.0,
         enable_third_body       : bool  = False,
-        third_body_use_spice    : bool  = True,
         third_body_bodies       : list  = None,
         spice_kernel_folderpath : str   = None,
     ):
@@ -614,8 +530,6 @@ class Gravity:
             Reference radius for harmonic coefficients [m]
         enable_third_body : bool
             Enable Sun/Moon gravitational perturbations
-        third_body_use_spice : bool
-            Use SPICE ephemerides (True) or analytical approximations (False)
         third_body_bodies : list of str
             Which bodies to include (default: ['sun', 'moon'])
         spice_kernel_folderpath : str
@@ -634,7 +548,6 @@ class Gravity:
         self.enable_third_body = enable_third_body
         if self.enable_third_body:
             self.third_body = ThirdBodyGravity(
-                use_spice               = third_body_use_spice,
                 bodies                  = third_body_bodies,
                 spice_kernel_folderpath = spice_kernel_folderpath,
             )
@@ -968,7 +881,6 @@ class Acceleration:
         cd                      : float = 0.0,
         area_drag               : float = 0.0,
         enable_third_body       : bool  = False,
-        third_body_use_spice    : bool  = True,
         third_body_bodies       : list  = None,
         spice_kernel_folderpath : str   = None,
         enable_srp              : bool  = False,
@@ -996,8 +908,6 @@ class Acceleration:
             Enable atmospheric drag
         enable_third_body : bool
             Enable Sun/Moon gravitational perturbations
-        third_body_use_spice : bool
-            Use SPICE ephemerides (True) or analytical approximations (False)
         third_body_bodies : list of str
             Which bodies to include (default: ['sun', 'moon'])
         spice_kernel_folderpath : str
@@ -1017,7 +927,6 @@ class Acceleration:
             j4                      = j4,
             pos_ref                 = pos_ref,
             enable_third_body       = enable_third_body,
-            third_body_use_spice    = third_body_use_spice,
             third_body_bodies       = third_body_bodies,
             spice_kernel_folderpath = spice_kernel_folderpath,
         )
