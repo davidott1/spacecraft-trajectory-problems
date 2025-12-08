@@ -421,12 +421,20 @@ def run_sgp4_propagation(
   print(f"  Configuration")
   print(f"    Timespan")
   print(f"      Desired")
-  print(f"        Initial  : {desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {utc_to_et(desired_time_o_dt):.6f} ET")
-  print(f"        Final    : {desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {utc_to_et(desired_time_f_dt):.6f} ET")
+  try:
+    print(f"        Initial  : {desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {utc_to_et(desired_time_o_dt):.6f} ET")
+    print(f"        Final    : {desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {utc_to_et(desired_time_f_dt):.6f} ET")
+  except:
+    print(f"        Initial  : {desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    print(f"        Final    : {desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
   print(f"        Duration : {duration_desired_s:.1f} s")
   print(f"      Actual")
-  print(f"        Initial  : {actual_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {utc_to_et(actual_time_o_dt):.6f} ET")
-  print(f"        Final    : {actual_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {utc_to_et(actual_time_f_dt):.6f} ET")
+  try:
+    print(f"        Initial  : {actual_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {utc_to_et(actual_time_o_dt):.6f} ET")
+    print(f"        Final    : {actual_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {utc_to_et(actual_time_f_dt):.6f} ET")
+  except:
+    print(f"        Initial  : {actual_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    print(f"        Final    : {actual_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
   print(f"        Duration : {duration_actual_s:.1f} s")
   print(f"        Grid     : {num_points} points")
 
@@ -487,7 +495,6 @@ def run_high_fidelity_propagation(
   area_drag                     : float,
   cr                            : float,
   area_srp                      : float,
-  use_spice                     : bool,
   include_third_body            : bool,
   third_bodies_list             : list,
   include_zonal_harmonics       : bool,
@@ -523,8 +530,6 @@ def run_high_fidelity_propagation(
       Reflectivity coefficient.
     area_srp : float
       SRP area [m²].
-    use_spice : bool
-      Whether to use SPICE for third-body ephemerides.
     include_third_body : bool
       Whether to enable third-body gravity.
     third_bodies_list : list
@@ -550,12 +555,14 @@ def run_high_fidelity_propagation(
   print("\nHigh-Fidelity Model")
 
   # Calculate Ephemeris Times (ET) for integration
-  time_et_o_actual = utc_to_et(actual_time_o_dt)
-  time_et_f_actual = utc_to_et(actual_time_f_dt)
-  
-  # Calculate ETs for display
+  time_et_o_actual  = utc_to_et(actual_time_o_dt)
+  time_et_f_actual  = utc_to_et(actual_time_f_dt)
   time_et_o_desired = utc_to_et(desired_time_o_dt)
   time_et_f_desired = utc_to_et(desired_time_f_dt)
+  
+  # Integration times are ET
+  time_o_integ = time_et_o_actual
+  time_f_integ = time_et_f_actual
 
   # Determine active zonal harmonics
   j2_val = 0.0
@@ -607,11 +614,8 @@ def run_high_fidelity_propagation(
   if include_third_body:
     print("        Third-Body")
     print(f"          Bodies    : {', '.join(third_bodies_list)}")
-    if use_spice:
-      print("          Ephemeris : SPICE (High Accuracy)")
-      print(f"          Note      : SPICE kernels loaded for third-body ephemerides.")
-    else:
-      print("          Ephemeris : Analytical (Approximate)")
+    print("          Ephemeris : SPICE (High Accuracy)")
+    print(f"          Note      : SPICE kernels loaded for third-body ephemerides.")
       
   print("      Atmospheric Drag")
   if include_drag:
@@ -640,25 +644,24 @@ def run_high_fidelity_propagation(
     cr                      = cr,
     area_srp                = area_srp,
     enable_third_body       = include_third_body,
-    third_body_use_spice    = use_spice,
     third_body_bodies       = third_bodies_list,
     spice_kernel_folderpath = str(spice_kernels_folderpath),
   )
   
-  # Propagate with high-fidelity model: use Horizons time grid
+  # Propagate with high-fidelity model: use Horizons time grid if available
   if result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris['success']:
-    # Convert Horizons plot_time_s (seconds from ACTUAL start) to ET
-    horizons_et_times = result_jpl_horizons_ephemeris['plot_time_s'] + time_et_o_actual
-    
-    # Update integration start/end times to match grid exactly (avoids floating point errors)
-    time_et_o_actual = horizons_et_times[0]
-    time_et_f_actual = horizons_et_times[-1]
-    
-    t_eval = horizons_et_times
+    # Use the plot_time_s from Horizons, which is seconds from actual_time_o_dt
+    t_eval = result_jpl_horizons_ephemeris['plot_time_s']
+    # Convert to ET
+    t_eval = t_eval + time_et_o_actual
   else:
-    # Use default grid if Horizons is not available
-    t_eval = np.linspace(time_et_o_actual, time_et_f_actual, 1000)
+    # Use default grid based on integration times
+    t_eval = np.linspace(time_o_integ, time_f_integ, 1000)
   
+  # Update integration start/end times to match grid exactly (avoids floating point errors)
+  time_o_integ = t_eval[0]
+  time_f_integ = t_eval[-1]
+
   # Print numerical integration settings
   print("    Numerical Integration")
   print(f"      Method     : DOP853")
@@ -671,8 +674,8 @@ def run_high_fidelity_propagation(
   # Propagate
   result_high_fidelity = propagate_state_numerical_integration(
     initial_state       = initial_state,
-    time_o              = time_et_o_actual,
-    time_f              = time_et_f_actual,
+    time_o              = time_o_integ,
+    time_f              = time_f_integ,
     dynamics            = acceleration,
     method              = 'DOP853',
     rtol                = 1e-12,
@@ -687,10 +690,10 @@ def run_high_fidelity_propagation(
   print("Complete")
   
   if result_high_fidelity['success']:
-    # Store integration time (ET)
+    # Store integration time
     result_high_fidelity['integ_time_s'] = result_high_fidelity['time']
     
-    # Create plotting time array (seconds from ACTUAL start time, to match Horizons plot_time_s)
+    # Create plotting time array (seconds from ACTUAL start time)
     result_high_fidelity['plot_time_s'] = result_high_fidelity['time'] - time_et_o_actual
   else:
     # Print error message
@@ -712,7 +715,6 @@ def run_propagations(
   area_drag                     : float,
   cr                            : float,
   area_srp                      : float,
-  use_spice                     : bool,
   include_third_body            : bool,
   third_bodies_list             : list,
   include_zonal_harmonics       : bool,
@@ -752,8 +754,6 @@ def run_propagations(
       Reflectivity coefficient.
     area_srp : float
       SRP area.
-    use_spice : bool
-      Whether to use SPICE.
     include_third_body : bool
       Whether to enable third-body gravity.
     third_bodies_list : list
@@ -791,7 +791,6 @@ def run_propagations(
     area_drag                     = area_drag,
     cr                            = cr,
     area_srp                      = area_srp,
-    use_spice                     = use_spice,
     include_third_body            = include_third_body,
     third_bodies_list             = third_bodies_list,
     include_zonal_harmonics       = include_zonal_harmonics,

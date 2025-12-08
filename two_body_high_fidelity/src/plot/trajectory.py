@@ -545,18 +545,19 @@ def generate_error_plots(
   -------
     None
   """
-  # Lowercase name for filenames
-  name_lower = object_name.lower()
-  
-  has_horizons     = result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success')
-  has_high_fidelity = result_high_fidelity_propagation and result_high_fidelity_propagation.get('success')
-  has_sgp4         = result_sgp4_propagation and result_sgp4_propagation.get('success')
-  
-  # Check if we have anything to compare
-  if not (has_high_fidelity or has_sgp4):
+  # If neither comparison is requested, do nothing
+  if not (compare_jpl_horizons or compare_tle):
     return
   
   print("\n  Generate Error Plots")
+
+  # Define availability flags
+  has_horizons      = result_jpl_horizons_ephemeris is not None and result_jpl_horizons_ephemeris.get('success', False)
+  has_high_fidelity = result_high_fidelity_propagation.get('success', False)
+  has_sgp4          = result_sgp4_propagation is not None and result_sgp4_propagation.get('success', False)
+  
+  # Lowercase name for filenames
+  name_lower = object_name.lower()
 
   # 1. High-Fidelity Relative To JPL Horizons
   if compare_jpl_horizons and has_horizons and has_high_fidelity:
@@ -751,14 +752,15 @@ def generate_plots(
     object_name                      = object_name,
   )
     
-  # Generate error plots
-  generate_error_plots(
-    result_jpl_horizons_ephemeris    = result_jpl_horizons_ephemeris,
-    result_high_fidelity_propagation = result_high_fidelity_propagation,
-    result_sgp4_propagation          = result_sgp4_propagation,
-    desired_time_o_dt                = desired_time_o_dt,
-    figures_folderpath               = figures_folderpath,
-    compare_jpl_horizons             = compare_jpl_horizons,
-    compare_tle                      = compare_tle,
-    object_name                      = object_name,
-  )
+  # Generate error plots only if a comparison was requested
+  if compare_jpl_horizons or compare_tle:
+    generate_error_plots(
+      result_jpl_horizons_ephemeris    = result_jpl_horizons_ephemeris,
+      result_high_fidelity_propagation = result_high_fidelity_propagation,
+      result_sgp4_propagation          = result_sgp4_propagation,
+      desired_time_o_dt                = desired_time_o_dt,
+      figures_folderpath               = figures_folderpath,
+      compare_jpl_horizons             = compare_jpl_horizons,
+      compare_tle                      = compare_tle,
+      object_name                      = object_name,
+    )

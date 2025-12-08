@@ -11,7 +11,6 @@ def print_input_configuration(
   input_object_type    : str,
   norad_id             : str,
   desired_timespan     : list,
-  include_spice        : bool,
   include_drag         : bool,
   compare_tle          : bool,
   compare_jpl_horizons : bool,
@@ -31,8 +30,6 @@ def print_input_configuration(
       NORAD catalog ID of the satellite.
     desired_timespan : list
       Initial and final time in ISO format (e.g., ['2025-10-01T00:00:00', '2025-10-02T00:00:00']) as list of strings.
-    include_spice : bool
-      Flag to enable/disable SPICE usage.
     include_drag : bool
       Flag to enable/disable Drag force modeling.
     compare_tle : bool
@@ -58,7 +55,6 @@ def print_input_configuration(
     'third_bodies'         : [],
     'include_drag'         : False,
     'include_srp'          : False,
-    'include_spice'        : False,
     'compare_jpl_horizons' : False,
     'compare_tle'          : False,
   }
@@ -66,32 +62,31 @@ def print_input_configuration(
   # Format values for display
   timespan_str = f"{desired_timespan[0]} {desired_timespan[1]}" if desired_timespan else "None"
   zonal_str    = ' '.join(zonal_harmonics_list) if zonal_harmonics_list else "None"
-  third_str    = ' '.join(third_bodies_list) if third_bodies_list else "None"
+  third_str    = ' '.join(third_bodies_list)    if third_bodies_list    else "None"
   
-  # Build configuration entries: (name, value, default, is_explicit)
+  # Build configuration entries: (name, value, default, user_set)
   entries = [
     ('input_object_type',    input_object_type,    defaults['input_object_type'],    input_object_type is not None),
-    ('norad_id',             norad_id,             defaults['norad_id'],             norad_id is not None and norad_id != ''),
-    ('timespan',             timespan_str,         defaults['timespan'],             desired_timespan is not None),
+    ('norad_id',             norad_id,             defaults['norad_id'],             norad_id          is not None and norad_id != ''),
+    ('timespan',             timespan_str,         defaults['timespan'],             desired_timespan  is not None),
     ('initial_state_source', initial_state_source, defaults['initial_state_source'], initial_state_source != defaults['initial_state_source']),
-    ('zonal_harmonics',      zonal_str,            defaults['zonal_harmonics'],      len(zonal_harmonics_list) > 0),
-    ('third_bodies',         third_str,            defaults['third_bodies'],         len(third_bodies_list) > 0),
-    ('include_drag',         include_drag,         defaults['include_drag'],         include_drag != defaults['include_drag']),
-    ('include_srp',          include_srp,          defaults['include_srp'],          include_srp != defaults['include_srp']),
-    ('include_spice',        include_spice,        defaults['include_spice'],        include_spice != defaults['include_spice']),
+    ('zonal_harmonics',      zonal_str,            defaults['zonal_harmonics'],      zonal_harmonics_list is not None and len(zonal_harmonics_list) > 0),
+    ('third_bodies',         third_str,            defaults['third_bodies'],         third_bodies_list    is not None and len(third_bodies_list) > 0),
+    ('include_drag',         include_drag,         defaults['include_drag'],         include_drag         != defaults['include_drag']),
+    ('include_srp',          include_srp,          defaults['include_srp'],          include_srp          != defaults['include_srp']),
     ('compare_jpl_horizons', compare_jpl_horizons, defaults['compare_jpl_horizons'], compare_jpl_horizons != defaults['compare_jpl_horizons']),
-    ('compare_tle',          compare_tle,          defaults['compare_tle'],          compare_tle != defaults['compare_tle']),
+    ('compare_tle',          compare_tle,          defaults['compare_tle'],          compare_tle          != defaults['compare_tle']),
   ]
   
   # Convert entries to strings for width calculation
-  headers = ['Argument', 'Value', 'Default', 'Explicit']
+  headers = ['Argument', 'Value', 'Default', 'User Set']
   rows = []
-  for name, value, default, is_explicit in entries:
+  for name, value, default, user_set in entries:
     rows.append([
       name,
       str(value) if value is not None else "None",
       str(default) if default is not None else "None",
-      str(is_explicit),
+      str(user_set),
     ])
   
   # Calculate column widths: max of header and all values, plus 4 for spacing
@@ -154,7 +149,6 @@ def print_configuration(
     input_object_type    = config.input_object_type,
     norad_id             = config.norad_id,
     desired_timespan     = config.desired_timespan,
-    include_spice        = config.include_spice,
     include_drag         = config.include_drag,
     compare_tle          = config.compare_tle,
     compare_jpl_horizons = config.compare_jpl_horizons,
@@ -202,7 +196,6 @@ def build_config(
   input_object_type    : str,
   norad_id             : str,
   desired_timespan_dt  : list[datetime],
-  include_spice        : bool           = False,
   include_drag         : bool           = False,
   compare_tle          : bool           = False,
   compare_jpl_horizons : bool           = False,
@@ -222,15 +215,13 @@ def build_config(
       NORAD catalog ID of the satellite.
     desired_timespan_dt : list
       Initial and final time in datetime format (e.g., [datetime(2025, 10, 1, 0, 0, 0), datetime(2025, 10, 2, 0, 0, 0)]) as list of datetime objects.
-    use_spice : bool
-      Flag to enable/disable SPICE usage.
     include_drag : bool
       Flag to enable/disable Drag force modeling.
     third_bodies : list | None
       List of third bodies to include (e.g., ['SUN', 'MOON']). None if disabled.
     zonal_harmonics : list | None
-      List of zonal harmonics to include (e.g., ['J2', 'J3']). None if disabled.
-      Empty list [] implies default ['J2'].
+      List of zonal harmonics to include (e.g., ['J2', 'J3']). None disables all.
+      Empty list [] also disables all zonal harmonics.
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
     initial_state_source : str
@@ -255,10 +246,13 @@ def build_config(
   
   # Handle zonal harmonics logic
   include_zonal_harmonics = zonal_harmonics is not None
-  if zonal_harmonics is not None and len(zonal_harmonics) == 0:
-    zonal_harmonics_list = ['J2']
-  else:
+  if zonal_harmonics is not None:
+    # User explicitly provided --zonal-harmonics flag
+    # Even if empty list, use it as-is (no harmonics)
     zonal_harmonics_list = zonal_harmonics
+  else:
+    # None provided (flag not used), disable all zonal harmonics
+    zonal_harmonics_list = []
 
   # Handle third bodies logic
   include_third_body = third_bodies is not None
@@ -273,10 +267,6 @@ def build_config(
   # Validate: NORAD ID required for norad-id input type
   if input_object_type == 'norad_id' and not norad_id:
     raise ValueError("NORAD ID is required when input-object-type is 'norad-id'")
-
-  # Validate: SRP requires SPICE
-  if include_srp:
-    include_spice = True
 
   # Validate: norad is insupported objects
   supported_objects = load_supported_objects()
@@ -313,7 +303,7 @@ def build_config(
     area_drag                = obj_props['drag']['area__m2'],
     cr                       = obj_props['srp']['coeff'],
     area_srp                 = obj_props['srp']['area__m2'],
-    include_spice            = include_spice,
+    include_spice            = True, # SPICE is always required now
     include_drag             = include_drag,
     compare_tle              = compare_tle,
     compare_jpl_horizons     = compare_jpl_horizons,

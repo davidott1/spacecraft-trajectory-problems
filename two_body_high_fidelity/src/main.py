@@ -28,7 +28,6 @@ Usage:
   --timespan                   Yes        Start and end time (ISO format)
   --initial-state-source       No         Source of initial state (jpl_horizons or tle)
   --zonal-harmonics            No         Enable zonal harmonics (requires arguments e.g. J2)
-  --spice                      No         Enable SPICE functionality
   --third-bodies               No         Enable third-body gravity (requires arguments e.g. sun)
   --srp                        No         Enable Solar Radiation Pressure
   --drag                       No         Enable Atmospheric Drag
@@ -36,15 +35,14 @@ Usage:
 
   Example Commands:
     python -m src.main \
-      --input-object-type <type> \
-      --norad-id <id> \
-      --timespan <start> <end> \
-      [--initial-state-source jpl_horizons] \
-      [--zonal-harmonics J2 J3 J4] \
-      [--third-bodies sun moon] \
-      [--srp] \
-      [--spice] \
-      [--drag]
+    --input-object-type <type> \
+    --norad-id <id> \
+    --timespan <start> <end> \
+    [--initial-state-source jpl_horizons] \
+    [--zonal-harmonics J2 J3 J4] \
+    [--third-bodies sun moon] \
+    [--srp] \
+    [--drag]
       
     python -m src.main \
       --input-object-type norad-id \
@@ -54,7 +52,6 @@ Usage:
       --zonal-harmonics J2 J3 J4 \
       --third-bodies sun moon \
       --srp \
-      --spice \
       --drag
 """
 from typing                            import Optional
@@ -73,8 +70,7 @@ from src.utility.logger                import start_logging, stop_logging
 def main(
   input_object_type    : str,
   norad_id             : str,
-  timespan             : list,
-  include_spice        : bool           = False,
+  timespan             : list[datetime],
   include_drag         : bool           = False,
   compare_tle          : bool           = False,
   compare_jpl_horizons : bool           = False,
@@ -97,10 +93,8 @@ def main(
       Type of input object (e.g., 'norad-id').
     norad_id : str
       NORAD Catalog ID of the satellite.
-    timespan : list
-      Start and end time for propagation in ISO format.
-    include_spice : bool
-      Flag to enable/disable SPICE usage.
+    timespan : list[datetime]
+      Start and end time for propagation as datetime objects 
     include_drag : bool
       Flag to enable/disable Atmospheric Drag.
     compare_tle : bool
@@ -111,7 +105,7 @@ def main(
       List of third bodies to include (e.g., ['SUN', 'MOON']). None means disabled.
     zonal_harmonics : list | None
       List of specific zonal harmonics to include (e.g., ['J2', 'J3', 'J4']).
-      None means disabled. Empty list means default (J2).
+      None means disabled. Empty list means no zonal harmonics.
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
     initial_state_source : str
@@ -128,7 +122,6 @@ def main(
     input_object_type,
     norad_id,
     timespan,
-    include_spice,
     include_drag,
     compare_tle,
     compare_jpl_horizons,
@@ -146,9 +139,9 @@ def main(
   # Print input configuration and paths
   print_configuration(config)
 
-  # Load files
+  # Load files (SPICE is always required)
   load_files(
-    config.include_spice,
+    True,
     config.spice_kernels_folderpath,
     config.lsk_filepath,
   )
@@ -209,7 +202,6 @@ def main(
     area_drag                     = config.area_drag,
     cr                            = config.cr,
     area_srp                      = config.area_srp,
-    use_spice                     = config.include_spice,
     include_third_body            = config.include_third_body,
     third_bodies_list             = config.third_bodies_list,
     include_zonal_harmonics       = config.include_zonal_harmonics,
@@ -239,7 +231,7 @@ def main(
   )
   
   # Unload all files (SPICE kernels)
-  unload_files(config.include_spice)
+  unload_files(True)
   
   # Stop logging
   stop_logging(logger)
@@ -257,7 +249,6 @@ if __name__ == "__main__":
     args.input_object_type,
     args.norad_id,
     args.timespan,
-    args.include_spice,
     args.include_drag,
     args.compare_tle,
     args.compare_jpl_horizons,
