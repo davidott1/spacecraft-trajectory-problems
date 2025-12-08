@@ -165,28 +165,28 @@ def propagate_tle(
     
     # Return dict result
     return {
-      'success' : True,
-      'message' : 'SGP4 propagation successful',
-      'frame'   : frame,
-      'time'    : time,
-      'state'   : posvel_vec_array,
-      'coe'     : coe_time_series,
+      'success'    : True,
+      'message'    : 'SGP4 propagation successful',
+      'frame'      : frame,
+      'time'       : time,
+      'state'      : posvel_vec_array,
+      'coe'        : coe_time_series,
     }
   except Exception as e:
     # Catch all exceptions and return failure
     return {
-      'success' : False,
-      'message' : str(e),
-      'frame'   : frame,
-      'time'    : [],
-      'state'   : [],
-      'coe'     : [],
+      'success'    : False,
+      'message'    : str(e),
+      'frame'      : frame,
+      'time'       : [],
+      'state'      : [],
+      'coe'        : [],
     }
 
 
 def get_tle_initial_state(
-  tle_line_1    : str,
-  tle_line_2    : str,
+  tle_line_1   : str,
+  tle_line_2   : str,
   disable_drag : bool = False,
   to_j2000     : bool = True,
 ) -> np.ndarray:
