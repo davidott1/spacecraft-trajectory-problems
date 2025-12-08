@@ -107,9 +107,9 @@ Sources:
 """
 
 import numpy as np
-from pathlib import Path
-from typing import Optional
 import warnings
+from pathlib import Path
+from typing  import Optional
 
 from src.model.constants import PHYSICALCONSTANTS, CONVERTER
 

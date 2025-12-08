@@ -4,8 +4,7 @@ from types    import SimpleNamespace
 from typing   import Optional
 
 from src.input.loader        import load_supported_objects
-from src.input.cli           import parse_time
-from src.utility.tle_helper  import get_tle_satellite_and_tle_epoch
+from src.utility.time_helper import parse_time
 
 
 def print_input_configuration(
@@ -202,7 +201,7 @@ def normalize_input(
 def build_config(
   input_object_type    : str,
   norad_id             : str,
-  desired_timespan     : list,
+  desired_timespan_dt  : list[datetime],
   include_spice        : bool           = False,
   include_drag         : bool           = False,
   compare_tle          : bool           = False,
@@ -221,8 +220,8 @@ def build_config(
       Type of input object (e.g., norad-id).
     norad_id : str
       NORAD catalog ID of the satellite.
-    desired_timespan : list
-      Initial and final time in ISO format (e.g., ['2025-10-01T00:00:00', '2025-10-02T00:00:00']) as list of strings.
+    desired_timespan_dt : list
+      Initial and final time in datetime format (e.g., [datetime(2025, 10, 1, 0, 0, 0), datetime(2025, 10, 2, 0, 0, 0)]) as list of datetime objects.
     use_spice : bool
       Flag to enable/disable SPICE usage.
     include_drag : bool
@@ -265,9 +264,11 @@ def build_config(
   include_third_body = third_bodies is not None
   third_bodies_list  = [b.upper() for b in third_bodies] if third_bodies is not None else []
 
-  # Unpack timespan
-  desired_time_o_str = desired_timespan[0]
-  desired_time_f_str = desired_timespan[1]
+  # Unpack timespan and calculate delta time in seconds
+  desired_time_o_dt = desired_timespan_dt[0]
+  desired_time_f_dt = desired_timespan_dt[1]
+
+  desired_delta_time_of_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
   
   # Validate: NORAD ID required for norad-id input type
   if input_object_type == 'norad_id' and not norad_id:
@@ -288,12 +289,6 @@ def build_config(
   # Get object name
   object_name = obj_props.get('name', 'object_name')
 
-  # Target propagation start/end times from arguments
-  desired_time_o_dt = parse_time(desired_time_o_str)
-  desired_time_f_dt = parse_time(desired_time_f_str)
-
-  desired_delta_time_of_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
-
   # Set up paths and files
   paths = setup_paths_and_files(
     norad_id          = norad_id,
@@ -306,7 +301,7 @@ def build_config(
     # Store original input values for print_configuration
     input_object_type = input_object_type,
     norad_id          = norad_id,
-    desired_timespan  = desired_timespan,
+    desired_timespan  = desired_timespan_dt,
     # Parsed and calculated values
     obj_props                = obj_props,
     object_name              = object_name,
