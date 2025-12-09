@@ -59,7 +59,6 @@ from datetime                          import datetime, timedelta
 
 from src.plot.trajectory               import generate_plots
 from src.propagation.propagator        import run_propagations
-from src.propagation.utility           import determine_actual_times
 from src.input.loader                  import unload_files, load_files, get_horizons_ephemeris, get_celestrak_tle
 from src.utility.printer               import print_results_summary
 from src.input.cli                     import parse_command_line_arguments
@@ -151,8 +150,8 @@ def main(
   if config.initial_state_source == 'jpl_horizons' or config.compare_jpl_horizons:
     result_jpl_horizons_ephemeris = get_horizons_ephemeris(
       jpl_horizons_folderpath = config.jpl_horizons_folderpath,
-      desired_time_o_dt       = config.desired_time_o_dt,
-      desired_time_f_dt       = config.desired_time_f_dt,
+      desired_time_o_dt       = config.time_o_dt,
+      desired_time_f_dt       = config.time_f_dt,
       norad_id                = config.norad_id,
       object_name             = config.object_name,
     )
@@ -161,28 +160,21 @@ def main(
   result_celestrak_tle = None
   if config.initial_state_source == 'tle' or config.compare_tle:
     result_celestrak_tle = get_celestrak_tle(
-      norad_id          = config.norad_id,
-      object_name       = config.object_name,
-      tles_folderpath   = config.tles_folderpath,
-      desired_time_o_dt = config.desired_time_o_dt,
-      desired_time_f_dt = config.desired_time_f_dt,
+      norad_id        = config.norad_id,
+      object_name     = config.object_name,
+      tles_folderpath = config.tles_folderpath,
+      desired_time_o_dt = config.time_o_dt,
+      desired_time_f_dt = config.time_f_dt,
     )
     
     # Extract TLE data to config
     extract_tle_to_config(config, result_celestrak_tle)
 
-  # Determine actual times if Horizons is available (for grid alignment)
-  actual_time_o_dt, actual_time_f_dt = determine_actual_times(
-    result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
-    desired_time_o_dt             = config.desired_time_o_dt,
-    desired_time_f_dt             = config.desired_time_f_dt
-  )
-
-  # Determine initial state (from Horizons if available, else TLE)
+  # Determine initial state (from Horizons or TLE)
   initial_state = get_initial_state(
     tle_line_1                    = config.tle_line_1,
     tle_line_2                    = config.tle_line_2,
-    desired_time_o_dt             = config.desired_time_o_dt,
+    time_o_dt                     = config.time_o_dt,
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     initial_state_source          = config.initial_state_source,
     to_j2000                      = True,
@@ -191,13 +183,12 @@ def main(
   # Run propagations: high-fidelity and SGP4
   result_high_fidelity_propagation, result_sgp4_propagation = run_propagations(
     initial_state                 = initial_state,
-    desired_time_o_dt             = config.desired_time_o_dt,
-    desired_time_f_dt             = config.desired_time_f_dt,
-    actual_time_o_dt              = actual_time_o_dt,
-    actual_time_f_dt              = actual_time_f_dt,
+    time_o_dt                     = config.time_o_dt,
+    time_f_dt                     = config.time_f_dt,
     mass                          = config.mass,
     include_drag                  = config.include_drag,
     compare_tle                   = config.compare_tle,
+    compare_jpl_horizons          = config.compare_jpl_horizons,
     cd                            = config.cd,
     area_drag                     = config.area_drag,
     cr                            = config.cr,
@@ -223,7 +214,7 @@ def main(
     result_jpl_horizons_ephemeris    = result_jpl_horizons_ephemeris,
     result_high_fidelity_propagation = result_high_fidelity_propagation,
     result_sgp4_propagation          = result_sgp4_propagation,
-    desired_time_o_dt                = config.desired_time_o_dt,
+    time_o_dt                        = config.time_o_dt,
     figures_folderpath               = config.figures_folderpath,
     compare_jpl_horizons             = config.compare_jpl_horizons,
     compare_tle                      = config.compare_tle,

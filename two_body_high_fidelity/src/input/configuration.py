@@ -195,7 +195,7 @@ def normalize_input(
 def build_config(
   input_object_type    : str,
   norad_id             : str,
-  desired_timespan_dt  : list[datetime],
+  timespan_dt          : list[datetime],
   include_drag         : bool           = False,
   compare_tle          : bool           = False,
   compare_jpl_horizons : bool           = False,
@@ -213,8 +213,8 @@ def build_config(
       Type of input object (e.g., norad-id).
     norad_id : str
       NORAD catalog ID of the satellite.
-    desired_timespan_dt : list
-      Initial and final time in datetime format (e.g., [datetime(2025, 10, 1, 0, 0, 0), datetime(2025, 10, 2, 0, 0, 0)]) as list of datetime objects.
+    timespan_dt : list
+      Initial and final time as list of datetime objects.
     include_drag : bool
       Flag to enable/disable Drag force modeling.
     third_bodies : list | None
@@ -247,28 +247,24 @@ def build_config(
   # Handle zonal harmonics logic
   include_zonal_harmonics = zonal_harmonics is not None
   if zonal_harmonics is not None:
-    # User explicitly provided --zonal-harmonics flag
-    # Even if empty list, use it as-is (no harmonics)
     zonal_harmonics_list = zonal_harmonics
   else:
-    # None provided (flag not used), disable all zonal harmonics
     zonal_harmonics_list = []
 
   # Handle third bodies logic
   include_third_body = third_bodies is not None
   third_bodies_list  = [b.upper() for b in third_bodies] if third_bodies is not None else []
 
-  # Unpack timespan and calculate delta time in seconds
-  desired_time_o_dt = desired_timespan_dt[0]
-  desired_time_f_dt = desired_timespan_dt[1]
-
-  desired_delta_time_of_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
+  # Unpack timespan
+  time_o_dt = timespan_dt[0]
+  time_f_dt = timespan_dt[1]
+  delta_time_s = (time_f_dt - time_o_dt).total_seconds()
   
   # Validate: NORAD ID required for norad-id input type
   if input_object_type == 'norad_id' and not norad_id:
     raise ValueError("NORAD ID is required when input-object-type is 'norad-id'")
 
-  # Validate: norad is insupported objects
+  # Validate: norad is in supported objects
   supported_objects = load_supported_objects()
   if norad_id not in supported_objects:
     raise ValueError(f"NORAD ID {norad_id} is not supported. Supported IDs: {list(supported_objects.keys())}")
@@ -281,29 +277,29 @@ def build_config(
 
   # Set up paths and files
   paths = setup_paths_and_files(
-    norad_id          = norad_id,
-    obj_name          = object_name,
-    desired_time_o_dt = desired_time_o_dt,
-    desired_time_f_dt = desired_time_f_dt,
+    norad_id   = norad_id,
+    obj_name   = object_name,
+    time_o_dt  = time_o_dt,
+    time_f_dt  = time_f_dt,
   )
   
   return SimpleNamespace(
     # Store original input values for print_configuration
     input_object_type = input_object_type,
     norad_id          = norad_id,
-    desired_timespan  = desired_timespan_dt,
+    desired_timespan  = timespan_dt,  # Keep for print_configuration
     # Parsed and calculated values
     obj_props                = obj_props,
     object_name              = object_name,
-    desired_time_o_dt        = desired_time_o_dt,
-    desired_time_f_dt        = desired_time_f_dt,
-    desired_delta_time_of_s  = desired_delta_time_of_s,
+    time_o_dt                = time_o_dt,
+    time_f_dt                = time_f_dt,
+    delta_time_s             = delta_time_s,
     mass                     = obj_props['mass__kg'],
     cd                       = obj_props['drag']['coeff'],
     area_drag                = obj_props['drag']['area__m2'],
     cr                       = obj_props['srp']['coeff'],
     area_srp                 = obj_props['srp']['area__m2'],
-    include_spice            = True, # SPICE is always required now
+    include_spice            = True,
     include_drag             = include_drag,
     compare_tle              = compare_tle,
     compare_jpl_horizons     = compare_jpl_horizons,
@@ -331,10 +327,10 @@ def build_config(
 
 
 def setup_paths_and_files(
-  norad_id          : str,
-  obj_name          : str,
-  desired_time_o_dt : datetime,
-  desired_time_f_dt : datetime,
+  norad_id  : str,
+  obj_name  : str,
+  time_o_dt : datetime,
+  time_f_dt : datetime,
 ) -> dict:
   """
   Set up all required folder paths and file names for the propagation.
@@ -345,10 +341,10 @@ def setup_paths_and_files(
       NORAD catalog ID of the satellite.
     obj_name : str
       Name of the object (e.g., 'ISS').
-    desired_time_o_dt : datetime
-      Desired initial time as a datetime object.
-    desired_time_f_dt : datetime
-      Desired final time as a datetime object.
+    time_o_dt : datetime
+      Initial time as a datetime object.
+    time_f_dt : datetime
+      Final time as a datetime object.
       
   Output:
   -------

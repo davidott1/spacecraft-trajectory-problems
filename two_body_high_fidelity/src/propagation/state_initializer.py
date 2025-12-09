@@ -1,8 +1,8 @@
 import numpy as np
 
-from datetime import datetime, timedelta
-from sgp4.api import Satrec
-from typing   import Optional
+from datetime            import datetime, timedelta
+from sgp4.api            import Satrec
+from typing              import Optional
 
 from src.propagation.propagator import propagate_tle
 from src.model.time_converter   import utc_to_et
@@ -12,35 +12,35 @@ from src.utility.time_helper    import format_time_offset
 
 
 def get_initial_state(
-  tle_line_1                    : str,
-  tle_line_2                    : str,
-  desired_time_o_dt             : datetime,
+  tle_line_1                    : Optional[str],
+  tle_line_2                    : Optional[str],
+  time_o_dt                     : datetime,
   result_jpl_horizons_ephemeris : Optional[dict],
   initial_state_source          : str = 'jpl_horizons',
   to_j2000                      : bool = True,
 ) -> np.ndarray:
   """
-  Get initial Cartesian state from Horizons (if available) or TLE.
+  Get initial state vector from specified source.
   
   Input:
   ------
-    tle_line1 : str
-      The first line of the TLE.
-    tle_line2 : str
-      The second line of the TLE.
-    desired_time_o_dt : datetime
-      The start time of the integration.
+    tle_line_1 : str | None
+      TLE line 1.
+    tle_line_2 : str | None
+      TLE line 2.
+    time_o_dt : datetime
+      Initial time for propagation.
     result_jpl_horizons_ephemeris : dict | None
-      The dictionary containing Horizons ephemeris data.
+      JPL Horizons ephemeris result.
     initial_state_source : str
-      Source for the initial state ('jpl_horizons' or 'tle').
+      Source for initial state ('jpl_horizons' or 'tle').
     to_j2000 : bool
-      Flag to indicate if the output state should be in the J2000 frame.
-  
+      Convert to J2000 frame.
+      
   Output:
   -------
     np.ndarray
-      A 6x1 state vector [m, m, m, m/s, m/s, m/s].
+      Initial state vector [pos_x, pos_y, pos_z, vel_x, vel_y, vel_z] in m and m/s.
   """
   print("\nInitial State")
   
@@ -49,8 +49,10 @@ def get_initial_state(
 
   # Use Horizons if available and requested
   if use_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
+    # Use the first available state from the ephemeris (not interpolated)
     horizons_initial_state = result_jpl_horizons_ephemeris['state'][:, 0]
     
+    # Get the actual epoch from the ephemeris
     epoch_dt = result_jpl_horizons_ephemeris['time_o']
     try:
       epoch_et = utc_to_et(epoch_dt)
@@ -94,7 +96,7 @@ def get_initial_state(
     year += 1900
   epoch_days   = satellite.epochdays
   tle_epoch_dt = datetime(year, 1, 1) + timedelta(days=epoch_days - 1)
-  integ_time_o = (desired_time_o_dt - tle_epoch_dt).total_seconds()
+  integ_time_o = (time_o_dt - tle_epoch_dt).total_seconds()
 
   # Propagate TLE to get initial state
   result_tle_initial = propagate_tle(
@@ -126,7 +128,7 @@ def get_initial_state(
   print(f"      Line 2 : {tle_line_2}")
   
   print(f"    Propagated State")
-  print(f"      Epoch    : {desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({format_time_offset(integ_time_o)} from TLE epoch)")
+  print(f"      Epoch    : {time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC ({format_time_offset(integ_time_o)} from TLE epoch)")
   print(f"      Position : {tle_initial_state[0]:>19.12e}  {tle_initial_state[1]:>19.12e}  {tle_initial_state[2]:>19.12e} m")
   print(f"      Velocity : {tle_initial_state[3]:>19.12e}  {tle_initial_state[4]:>19.12e}  {tle_initial_state[5]:>19.12e} m/s")
   print(f"    Classical Orbital Elements")
