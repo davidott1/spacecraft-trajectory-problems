@@ -395,29 +395,9 @@ def get_horizons_ephemeris(
 
 def process_horizons_result(
   result_horizons : dict,
-) -> Optional[dict]:
+) -> dict:
   """
-  Processes and enriches the result dictionary from `load_horizons_ephemeris`.
-
-  This function performs the following actions if the Horizons data loading was successful:
-  1. Logs basic information about the loaded ephemeris (epoch, number of points, time span).
-  2. Creates a `plot_time_s` array, which is a time vector in seconds starting from zero.
-  3. Computes the classical orbital elements (COE) for each state vector in the ephemeris
-     and adds them to the dictionary under the 'coe' key.
-
-  If the loading was not successful, it prints a failure message.
-
-  Input:
-  ------
-    result_horizons : dict
-      The dictionary returned by `load_horizons_ephemeris`. It should contain
-      'success', 'time', and 'state' keys.
-
-  Output:
-  -------
-    dict | None
-      An enriched dictionary with 'plot_time_s' and 'coe' keys if processing
-      is successful. Returns `None` if the input indicates a failure.
+  Process Horizons result to add COE time series.
   """
   if result_horizons and result_horizons.get('success'):
     actual_start = result_horizons['time_o']
@@ -450,7 +430,7 @@ def process_horizons_result(
       'ecc'  : np.zeros(num_points),
       'inc'  : np.zeros(num_points),
       'raan' : np.zeros(num_points),
-      'argp' : np.zeros(num_points),
+      'aop'  : np.zeros(num_points),
       'ma'   : np.zeros(num_points),
       'ta'   : np.zeros(num_points),
       'ea'   : np.zeros(num_points),
