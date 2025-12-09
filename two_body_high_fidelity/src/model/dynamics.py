@@ -1322,37 +1322,37 @@ class OrbitConverter:
       # Compute semi-major axis
       sma_inv = 2.0 / pos_mag - np.dot(vel_vec, vel_vec) / gp
       if abs(sma_inv) > eps:
-          # Elliptic or hyperbolic case
-          sma = 1.0 / sma_inv
+        # Elliptic or hyperbolic case
+        sma = 1.0 / sma_inv
       else:
-          # Parabolic case
-          sma     = np.inf
-          ecc_mag = 1.0
+        # Parabolic case
+        sma     = np.inf
+        ecc_mag = 1.0
 
       # Handle rectilinear motion case
       if ang_mom_mag < eps:
-          # periapsis_dir and ang_mom_dir are arbitrary
-          ecc_dir       = pos_dir.copy()
-          dum           = np.array([0, 0, 1])
-          dum2          = np.array([0, 1, 0])
-          ang_mom_dir   = np.cross(ecc_dir, dum)
-          periapsis_dir = np.cross(ecc_dir, dum2)
+        # periapsis_dir and ang_mom_dir are arbitrary
+        ecc_dir       = pos_dir.copy()
+        dum           = np.array([0, 0, 1])
+        dum2          = np.array([0, 1, 0])
+        ang_mom_dir   = np.cross(ecc_dir, dum)
+        periapsis_dir = np.cross(ecc_dir, dum2)
 
-          if np.linalg.norm(ang_mom_dir) > np.linalg.norm(periapsis_dir):
-              ang_mom_dir = ang_mom_dir / np.linalg.norm(ang_mom_dir)
-          else:
-              ang_mom_dir = periapsis_dir / np.linalg.norm(periapsis_dir)
-          periapsis_dir = np.cross(ang_mom_dir, ecc_dir)
+        if np.linalg.norm(ang_mom_dir) > np.linalg.norm(periapsis_dir):
+          ang_mom_dir = ang_mom_dir / np.linalg.norm(ang_mom_dir)
+        else:
+          ang_mom_dir = periapsis_dir / np.linalg.norm(periapsis_dir)
+        periapsis_dir = np.cross(ang_mom_dir, ecc_dir)
       else:
-          # Compute perifocal frame unit direction vectors
-          ang_mom_dir = ang_mom_vec / ang_mom_mag
-          if abs(ecc_mag) > eps:
-              # Non-circular case
-              ecc_dir = ecc_vec / ecc_mag
-          else:
-              # Circular orbit case
-              ecc_dir = pos_dir.copy()
-          periapsis_dir = np.cross(ang_mom_dir, ecc_dir)
+        # Compute perifocal frame unit direction vectors
+        ang_mom_dir = ang_mom_vec / ang_mom_mag
+        if abs(ecc_mag) > eps:
+          # Non-circular case
+          ecc_dir = ecc_vec / ecc_mag
+        else:
+          # Circular orbit case
+          ecc_dir = pos_dir.copy()
+        periapsis_dir = np.cross(ang_mom_dir, ecc_dir)
       
       # Compute the 3-1-3 orbit plane orientation angles
       raan = np.arctan2(ang_mom_dir[0], -ang_mom_dir[1])
@@ -1386,8 +1386,8 @@ class OrbitConverter:
         if ecc_mag < 1.0 - eps:
           # Elliptical case - CORRECTED FORMULA
           ea = 2 * np.arctan2(
-              np.sqrt(1 - ecc_mag) * np.sin(ta / 2),
-              np.sqrt(1 + ecc_mag) * np.cos(ta / 2)
+            np.sqrt(1 - ecc_mag) * np.sin(ta / 2),
+            np.sqrt(1 + ecc_mag) * np.cos(ta / 2)
           )
           ma = ea - ecc_mag * np.sin(ea)
           ma = ma % (2 * np.pi)
@@ -1589,10 +1589,10 @@ class OrbitConverter:
       
       Input:
       ------
-          ea : float
-              Eccentric anomaly [rad]
-          ecc : float
-              Eccentricity (0 <= ecc < 1)
+        ea : float
+          Eccentric anomaly [rad]
+        ecc : float
+          Eccentricity (0 <= ecc < 1)
       
       Output:
       -------

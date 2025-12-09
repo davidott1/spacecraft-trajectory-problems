@@ -1,30 +1,8 @@
 import argparse
 import sys
+from datetime import datetime
 from src.utility.time_helper import parse_time
 
-
-def parse_time(
-  time_str : str,
-) -> datetime:
-  """
-  Parse a time string into a datetime object.
-  
-  Accepted formats include:
-  - ISO 8601 with 'T' separator: "2025-10-01T00:00:00"
-  - ISO 8601 with 'Z' suffix: "2025-10-01T00:00:00Z"
-  - Space-separated: "2025-10-01 00:00:00"
-  - With microseconds: "2025-10-01 00:00:00.123456"
-  
-  Input:
-  ------
-    time_str : str
-      Time string to parse.
-      
-  Output:
-  -------
-    dt : datetime
-      Parsed datetime object.
-  """
 
 def parse_command_line_arguments(
 ) -> argparse.Namespace:
