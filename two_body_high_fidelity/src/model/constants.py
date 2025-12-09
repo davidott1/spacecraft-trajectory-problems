@@ -23,6 +23,10 @@ class PHYSICALCONSTANTS:
   Class to hold physical constants.
   Some constants are from "OrbitalMotion", created by Hanspeter Schaub on 6/19/05.
   """
+  
+  # Solar radiation pressure at 1 AU [N/m²]
+  P_SRP_1AU = 4.56e-6
+  
   class SUN:
     class RADIUS:
       EQUATOR = 696340000.0                 # Sun's equatorial radius [m]
