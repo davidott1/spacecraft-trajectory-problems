@@ -155,8 +155,11 @@ def load_horizons_ephemeris(
   
   Strictly expects:
   - Row 1  : Header (variable names)
+             targetname,datetime,tdb_utc_offset,pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,lighttime,range,range_rate
   - Row 2  : Units
   - Row 3+ : Data
+  
+  If the structure is not followed, raises ValueError.
   
   Input:
   ------
@@ -785,13 +788,13 @@ def load_tle_file(
   -------
     result : dict | None
       Dictionary containing TLE data if successful:
-      - success : bool
-      - message : str
+      - success    : bool
+      - message    : str
       - tle_line_0 : str (name line)
       - tle_line_1 : str (closest TLE to reference_time_dt)
       - tle_line_2 : str (closest TLE to reference_time_dt)
       - tle_epoch_dt : datetime (epoch of closest TLE)
-      - all_tles : list[dict] (all TLEs in the file)
+      - all_tles   : list[dict] (all TLEs in the file)
   """
   try:
     with open(filepath, 'r') as f:
