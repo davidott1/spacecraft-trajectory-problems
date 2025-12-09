@@ -36,7 +36,6 @@ def et_to_utc(
       Ephemeris Time (ET) in seconds past J2000.
     precision_seconds : int
       Number of decimal places for the seconds component (0-6).
-      e.g., 3 results in milliseconds. Max 6 for datetime compatibility.
   
   Output:
   -------

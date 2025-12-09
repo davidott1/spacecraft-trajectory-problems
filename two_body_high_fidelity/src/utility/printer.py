@@ -15,7 +15,11 @@ def print_results_summary(
   Input:
   ------
     result_high_fidelity : dict
-      High-fidelity propagation result.
+      High-fidelity propagation result dictionary.
+      
+  Output:
+  -------
+    None
   """
   print("\nResults Summary")
   

@@ -19,9 +19,13 @@ def load_supported_objects() -> dict:
   """
   Load supported objects from YAML configuration file.
   
+  Input:
+  ------
+    None
+  
   Output:
   -------
-    dict
+    supported_objects : dict
       Dictionary of supported objects loaded from the YAML file.
   """
   # Adjust path traversal: input -> src -> project_root
@@ -51,6 +55,10 @@ def load_files(
       Path to the SPICE kernels folder.
     lsk_filepath : Path
       Path to the leap seconds kernel file.
+      
+  Output:
+  -------
+    None
   """
   print("\nLoad Files")
   print(f"  Project Folderpath : {Path.cwd()}")
@@ -69,6 +77,10 @@ def unload_files(
   ------
     use_spice : bool
       Flag to enable/disable SPICE usage.
+      
+  Output:
+  -------
+    None
   """
   # Unload SPICE files if SPICE was enabled
   unload_spice_files(use_spice)
@@ -90,6 +102,10 @@ def load_spice_files(
       Path to the SPICE kernels folder.
     lsk_filepath : Path
       Path to the leap seconds kernel file.
+      
+  Output:
+  -------
+    None
   """
   if use_spice:
     if not spice_kernels_folderpath.exists():
@@ -120,6 +136,10 @@ def unload_spice_files(
   ------
     use_spice : bool
       Flag to enable/disable SPICE usage.
+      
+  Output:
+  -------
+    None
   """
   if use_spice:
     spice.kclear()
@@ -131,42 +151,32 @@ def load_horizons_ephemeris(
   time_end_dt   : Optional[datetime] = None,
 ) -> dict:
   """
-  Load ephemeris from a custom JPL Horizons .csv file produced by the download script module: src.download.ephems_and_tles
+  Load ephemeris from a custom JPL Horizons .csv file produced by the download script module.
   
   Strictly expects:
   - Row 1  : Header (variable names)
-             targetname,datetime,tdb_utc_offset,pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,lighttime,range,range_rate
   - Row 2  : Units
   - Row 3+ : Data
   
-  If the structure is not followed, raises ValueError.
-  
   Input:
   ------
-  filepath : str
-    Path to the CSV file.
-  time_start_dt : datetime, optional
-    Start datetime to filter data.
-  time_end_dt : datetime, optional
-    End datetime to filter data.
+    filepath : str
+      Path to the CSV file.
+    time_start_dt : datetime, optional
+      Start datetime to filter data.
+    time_end_dt : datetime, optional
+      End datetime to filter data.
     
   Output:
   -------
-  dict
-    Dictionary containing:
-    - success : bool
-    - message : str
-    - epoch   : datetime (of the first data point)
-    - time    : np.ndarray (seconds from epoch)
-    - state   : np.ndarray (6xN state vectors in m and m/s)
-
-  Code Structure:
-  ---------------
-  1. Read first two rows to validate structure and get units.
-  2. Read actual data, skipping the units row.
-  3. Parse time and filter by requested timespan.
-  4. Extract position and velocity, applying unit conversions.
-  5. Return results or error message.
+    result : dict
+      Dictionary containing:
+      - success : bool
+      - message : str
+      - time_o : datetime (of the first data point)
+      - time_f : datetime (of the last data point)
+      - delta_time : np.ndarray (seconds from epoch)
+      - state : np.ndarray (6xN state vectors in m and m/s)
   """
   try:
     # 1. Read first two rows to validate structure and get units
@@ -406,6 +416,16 @@ def process_horizons_result(
 ) -> dict:
   """
   Process Horizons result to add COE time series.
+  
+  Input:
+  ------
+    result_horizons : dict
+      Raw Horizons result dictionary.
+      
+  Output:
+  -------
+    result_horizons : dict
+      Processed Horizons result with added 'coe' and 'plot_time_s' fields.
   """
   if result_horizons and result_horizons.get('success'):
     actual_start = result_horizons['time_o']
@@ -474,7 +494,6 @@ def find_compatible_horizons_file(
   
   Parses the timespan directly from filenames for speed.
   Expected filename format: horizons_ephem_<norad_id>_<name>_<start>_<end>_<step>.csv
-  where <start> and <end> are in format: YYYYMMDDTHHMMSSz
   
   Input:
   ------
@@ -489,7 +508,7 @@ def find_compatible_horizons_file(
       
   Output:
   -------
-    Path | None
+    filepath : Path | None
       Path to a compatible file if found, None otherwise.
   """
   # Ensure the folder exists before searching
@@ -554,7 +573,6 @@ def find_compatible_tle_file(
   
   Parses the timespan directly from filenames for speed.
   Expected filename format: celestrak_tle_<norad_id>_<name>_<start>_<end>.txt
-  where <start> and <end> are in format: YYYYMMDDTHHMMSSz
   
   Input:
   ------
@@ -569,7 +587,7 @@ def find_compatible_tle_file(
       
   Output:
   -------
-    Path | None
+    filepath : Path | None
       Path to a compatible file if found, None otherwise.
   """
   # Ensure the folder exists before searching
@@ -645,15 +663,15 @@ def get_celestrak_tle(
       
   Output:
   -------
-    dict | None
+    result : dict | None
       Dictionary containing TLE data if successful:
-      - success      : bool
-      - message      : str
-      - tle_line_0   : str (closest TLE name line)
-      - tle_line_1   : str (closest TLE to desired_time_o_dt)
-      - tle_line_2   : str (closest TLE to desired_time_o_dt)
+      - success : bool
+      - message : str
+      - tle_line_0 : str (closest TLE name line)
+      - tle_line_1 : str (closest TLE to desired_time_o_dt)
+      - tle_line_2 : str (closest TLE to desired_time_o_dt)
       - tle_epoch_dt : datetime (epoch of closest TLE)
-      - all_tles     : list[dict] (all TLEs in the file)
+      - all_tles : list[dict] (all TLEs in the file)
       Returns None if loading failed.
   """
   # Construct expected TLE filepath
@@ -765,14 +783,15 @@ def load_tle_file(
       
   Output:
   -------
-    dict | None
+    result : dict | None
       Dictionary containing TLE data if successful:
-      - success      : bool
-      - message      : str
-      - tle_line_1   : str (closest TLE to reference_time_dt)
-      - tle_line_2   : str (closest TLE to reference_time_dt)
+      - success : bool
+      - message : str
+      - tle_line_0 : str (name line)
+      - tle_line_1 : str (closest TLE to reference_time_dt)
+      - tle_line_2 : str (closest TLE to reference_time_dt)
       - tle_epoch_dt : datetime (epoch of closest TLE)
-      - all_tles     : list[dict] (all TLEs in the file)
+      - all_tles : list[dict] (all TLEs in the file)
   """
   try:
     with open(filepath, 'r') as f:
@@ -866,7 +885,7 @@ def download_tle_from_celestrak(
       
   Output:
   -------
-    dict | None
+    result : dict | None
       Dictionary containing TLE lines if successful, None otherwise.
   """
   import urllib.request

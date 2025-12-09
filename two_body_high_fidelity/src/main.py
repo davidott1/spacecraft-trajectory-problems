@@ -54,7 +54,6 @@ Usage:
       --srp \
       --drag
 """
-import sys
 from typing                            import Optional
 from datetime                          import datetime, timedelta
 
@@ -66,6 +65,63 @@ from src.input.cli                     import parse_command_line_arguments
 from src.input.configuration           import build_config, print_configuration, extract_tle_to_config
 from src.propagation.state_initializer import get_initial_state
 from src.utility.logger                import start_logging, stop_logging
+
+def check_data_availability(
+  result              : Optional[dict],
+  data_name           : str,
+  needs_initial_state : bool,
+  needs_comparison    : bool,
+  initial_state_flag  : str,
+  comparison_flag     : str,
+) -> Optional[dict]:
+  """
+  Check if required data is available and return error dict if not.
+  
+  Input:
+  ------
+    result : dict | None
+      Result dictionary from data loading (e.g., Horizons or TLE).
+    data_name : str
+      Human-readable name of the data source (e.g., "JPL Horizons ephemeris", "TLE").
+    needs_initial_state : bool
+      Whether this data is needed for initial state.
+    needs_comparison : bool
+      Whether this data is needed for comparison.
+    initial_state_flag : str
+      CLI flag for initial state source (e.g., "--initial-state-source jpl_horizons").
+    comparison_flag : str
+      CLI flag for comparison (e.g., "--compare-jpl-horizons").
+      
+  Output:
+  -------
+    error : dict | None
+      Error dictionary with 'success': False if data unavailable, None if data is available.
+  """
+  # Check if data loading failed
+  data_failed = result is None or not result.get('success', False)
+  
+  if not data_failed:
+    return None  # Data is available, no error
+  
+  # Build reason string
+  reasons = []
+  if needs_initial_state:
+    reasons.append(f"initial state ({initial_state_flag})")
+  if needs_comparison:
+    reasons.append(f"comparison ({comparison_flag})")
+  
+  if not reasons:
+    return None  # Data not actually needed
+  
+  if len(reasons) > 1:
+    reason_str = reasons[0] + "\n            and " + reasons[1]
+  else:
+    reason_str = reasons[0]
+  
+  print(f"\n    [ERROR] {data_name} is required for {reason_str} but is unavailable.")
+  
+  return {'success': False, 'message': f'{data_name} unavailable'}
+
 
 def main(
   input_object_type    : str,
@@ -94,7 +150,7 @@ def main(
     norad_id : str
       NORAD Catalog ID of the satellite.
     timespan : list[datetime]
-      Start and end time for propagation as datetime objects 
+      Start and end time for propagation as datetime objects.
     include_drag : bool
       Flag to enable/disable Atmospheric Drag.
     compare_tle : bool
@@ -113,7 +169,7 @@ def main(
   
   Output:
   -------
-    dict
+    result : dict
       Dictionary containing the results of the high-fidelity propagation.
   """
   
@@ -158,26 +214,18 @@ def main(
     )
     
     # Check if Horizons data is required but unavailable
-    horizons_failed = result_jpl_horizons_ephemeris is None or not result_jpl_horizons_ephemeris.get('success', False)
-    
-    if horizons_failed:
-      if config.initial_state_source == 'jpl_horizons':
-        print("\n[ERROR] JPL Horizons ephemeris is required for initial state but is unavailable.")
-        print("        Options:")
-        print("          1. Run again and download when prompted")
-        print("          2. Use --initial-state-source tle to use TLE-derived initial state")
-        unload_files(True)
-        stop_logging(logger)
-        sys.exit(1)
-      
-      if config.compare_jpl_horizons:
-        print("\n[ERROR] JPL Horizons ephemeris is required for --compare-jpl-horizons but is unavailable.")
-        print("        Options:")
-        print("          1. Run again and download when prompted")
-        print("          2. Remove --compare-jpl-horizons flag to skip Horizons comparison")
-        unload_files(True)
-        stop_logging(logger)
-        sys.exit(1)
+    error = check_data_availability(
+      result              = result_jpl_horizons_ephemeris,
+      data_name           = "JPL Horizons ephemeris",
+      needs_initial_state = config.initial_state_source == 'jpl_horizons',
+      needs_comparison    = config.compare_jpl_horizons,
+      initial_state_flag  = "--initial-state-source jpl_horizons",
+      comparison_flag     = "--compare-jpl-horizons",
+    )
+    if error:
+      unload_files(True)
+      stop_logging(logger)
+      return error
 
   # Get Celestrak TLE (if needed for initial state or comparison)
   result_celestrak_tle = None
@@ -194,26 +242,18 @@ def main(
     extract_tle_to_config(config, result_celestrak_tle)
     
     # Check if TLE data is required but unavailable
-    tle_failed = result_celestrak_tle is None or not result_celestrak_tle.get('success', False)
-    
-    if tle_failed:
-      if config.initial_state_source == 'tle':
-        print("\n[ERROR] TLE is required for initial state but is unavailable.")
-        print("        Options:")
-        print("          1. Run again and download when prompted")
-        print("          2. Use --initial-state-source jpl_horizons to use Horizons-derived initial state")
-        unload_files(True)
-        stop_logging(logger)
-        sys.exit(1)
-      
-      if config.compare_tle:
-        print("\n[ERROR] TLE is required for --compare-tle but is unavailable.")
-        print("        Options:")
-        print("          1. Run again and download when prompted")
-        print("          2. Remove --compare-tle flag to skip TLE/SGP4 comparison")
-        unload_files(True)
-        stop_logging(logger)
-        sys.exit(1)
+    error = check_data_availability(
+      result              = result_celestrak_tle,
+      data_name           = "TLE",
+      needs_initial_state = config.initial_state_source == 'tle',
+      needs_comparison    = config.compare_tle,
+      initial_state_flag  = "--initial-state-source tle",
+      comparison_flag     = "--compare-tle",
+    )
+    if error:
+      unload_files(True)
+      stop_logging(logger)
+      return error
 
   # Determine initial state (from Horizons or TLE)
   initial_state = get_initial_state(

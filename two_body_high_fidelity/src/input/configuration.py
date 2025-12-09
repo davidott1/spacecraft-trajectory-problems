@@ -29,7 +29,7 @@ def print_input_configuration(
     norad_id : str
       NORAD catalog ID of the satellite.
     desired_timespan : list
-      Initial and final time in ISO format (e.g., ['2025-10-01T00:00:00', '2025-10-02T00:00:00']) as list of strings.
+      Initial and final time in ISO format as list of strings.
     include_drag : bool
       Flag to enable/disable Drag force modeling.
     compare_tle : bool
@@ -37,13 +37,17 @@ def print_input_configuration(
     compare_jpl_horizons : bool
       Flag to enable/disable JPL Horizons comparison.
     third_bodies_list : list
-      List of third bodies to include (e.g., ['SUN', 'MOON']). Empty list if disabled.
+      List of third bodies to include. Empty list if disabled.
     zonal_harmonics_list : list
-      List of zonal harmonics to include (e.g., ['J2', 'J3']). Empty list if disabled.
+      List of zonal harmonics to include. Empty list if disabled.
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
     initial_state_source : str
       Source for the initial state vector ('jpl_horizons' or 'tle').
+      
+  Output:
+  -------
+    None
   """
   # Define defaults for comparison
   defaults = {
@@ -110,7 +114,9 @@ def print_input_configuration(
     print(row_line)
 
 
-def print_paths(config: SimpleNamespace) -> None:
+def print_paths(
+  config : SimpleNamespace,
+) -> None:
   """
   Print the paths configuration.
   
@@ -118,6 +124,10 @@ def print_paths(config: SimpleNamespace) -> None:
   ------
     config : SimpleNamespace
       Configuration object containing path attributes.
+      
+  Output:
+  -------
+    None
   """
   data_folderpath = config.output_folderpath.parent / 'data'
   
@@ -144,6 +154,10 @@ def print_configuration(
   ------
     config : SimpleNamespace
       Configuration object containing all input and path attributes.
+      
+  Output:
+  -------
+    None
   """
   print_input_configuration(
     input_object_type    = config.input_object_type,
@@ -177,8 +191,10 @@ def normalize_input(
   
   Output:
   -------
-    tuple[str, str]
-      Normalized input object type and initial state source.
+    input_object_type : str
+      Normalized input object type.
+    initial_state_source : str
+      Normalized initial state source.
   """
   # Normalize input object type
   input_object_type = input_object_type.replace('-', '_').replace(' ', '_')
@@ -213,14 +229,18 @@ def build_config(
       Type of input object (e.g., norad-id).
     norad_id : str
       NORAD catalog ID of the satellite.
-    timespan_dt : list
+    timespan_dt : list[datetime]
       Initial and final time as list of datetime objects.
     include_drag : bool
       Flag to enable/disable Drag force modeling.
+    compare_tle : bool
+      Flag to enable/disable TLE comparison.
+    compare_jpl_horizons : bool
+      Flag to enable/disable JPL Horizons comparison.
     third_bodies : list | None
-      List of third bodies to include (e.g., ['SUN', 'MOON']). None if disabled.
+      List of third bodies to include. None if disabled.
     zonal_harmonics : list | None
-      List of zonal harmonics to include (e.g., ['J2', 'J3']). None disables all.
+      List of zonal harmonics to include. None disables all.
       Empty list [] also disables all zonal harmonics.
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
@@ -229,7 +249,7 @@ def build_config(
   
   Output:
   -------
-    SimpleNamespace
+    config : SimpleNamespace
       Configuration object containing parsed and calculated propagation parameters.
   
   Raises:
@@ -345,7 +365,7 @@ def setup_paths_and_files(
       
   Output:
   -------
-    dict
+    paths : dict
       A dictionary containing paths to output, data, SPICE kernels,
       Horizons ephemeris folder, TLEs folder, and leap seconds files.
   """
@@ -390,7 +410,7 @@ def setup_paths_and_files(
 
 
 def extract_tle_to_config(
-  config              : SimpleNamespace,
+  config               : SimpleNamespace,
   result_celestrak_tle : Optional[dict],
 ) -> None:
   """
@@ -402,6 +422,10 @@ def extract_tle_to_config(
       Configuration object to store TLE data on.
     result_celestrak_tle : dict | None
       Result dictionary from get_celestrak_tle containing TLE data.
+      
+  Output:
+  -------
+    None
   """
   if result_celestrak_tle and result_celestrak_tle.get('success'):
     config.tle_line_0   = result_celestrak_tle['tle_line_0']

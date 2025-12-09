@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 from sgp4.api import Satrec
 
 def modify_tle_bstar(
-  tle_line1   : str,
-  bstar_value : float = 0.0,
+  tle_line_1  : str,
+  new_bstar   : float,
 ) -> str:
   """
   Modify the B* drag term in TLE line 1.
@@ -18,22 +18,22 @@ def modify_tle_bstar(
   
   Output:
   -------
-    str
+    modified_tle_line_1 : str
       Modified TLE line 1 with new B* value.
   """
   # B* is in columns 54-61 (0-indexed: 53-60) in format: ±.nnnnn±n
   # Example: " 12345-3" means 0.12345 × 10^-3
   
-  if bstar_value == 0.0:
+  if new_bstar == 0.0:
     bstar_str = " 00000-0"
   else:
     # Convert to scientific notation and format
-    exponent = math.floor(math.log10(abs(bstar_value)))
-    mantissa = bstar_value / (10 ** exponent)
+    exponent = math.floor(math.log10(abs(new_bstar)))
+    mantissa = new_bstar / (10 ** exponent)
     # Adjust to TLE format: mantissa in [0.1, 1) range
     mantissa = mantissa / 10
     exponent = exponent + 1
-    sign = '-' if bstar_value < 0 else ' '
+    sign = '-' if new_bstar < 0 else ' '
     # Format mantissa as "0.nnnnn" and extract the 5 decimal digits
     # Handle edge case where rounding might produce "1.00000"
     mantissa_formatted = f"{abs(mantissa):.5f}"
@@ -47,7 +47,7 @@ def modify_tle_bstar(
     bstar_str = f"{sign}{mantissa_digits}{exp_sign}{abs(exponent)}"
   
   # Replace B* in TLE line 1 (columns 53-60)
-  modified_line1 = tle_line1[:53] + bstar_str + tle_line1[61:]
+  modified_line1 = tle_line_1[:53] + bstar_str + tle_line_1[61:]
   
   # Recalculate checksum (last character)
   checksum = 0
@@ -62,8 +62,8 @@ def modify_tle_bstar(
 
 
 def get_tle_satellite_and_tle_epoch(
-  tle_line1 : str,
-  tle_line2 : str,
+  tle_line_1 : str,
+  tle_line_2 : str,
 ) -> tuple[datetime, Satrec]:
   """
   Create Satrec object and extract epoch from TLE. Deconstruct datetime from year 
@@ -71,15 +71,17 @@ def get_tle_satellite_and_tle_epoch(
   
   Input:
   ------
-    tle_line1 : str
-      First line of TLE.
-    tle_line2 : str
-      Second line of TLE.
-  
+    tle_line_1 : str
+      TLE line 1.
+    tle_line_2 : str
+      TLE line 2.
+      
   Output:
   -------
-    tuple[datetime, Satrec]
-      Epoch datetime and Satellite object.
+    epoch_datetime : datetime
+      TLE epoch as datetime object.
+    satellite : Satrec
+      SGP4 satellite object.
       
   Notes:
   ------
@@ -109,8 +111,8 @@ def get_tle_satellite_and_tle_epoch(
   """
   # Satellite object of TLE
   tle_satellite = Satrec.twoline2rv(
-    tle_line1,
-    tle_line2,
+    tle_line_1,
+    tle_line_2,
   )
   
   # Extract year

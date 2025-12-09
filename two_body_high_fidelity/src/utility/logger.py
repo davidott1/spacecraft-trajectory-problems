@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 from typing  import Optional
+import logging
 
 
 class DualOutputLogger:
@@ -88,10 +89,10 @@ class DualOutputLogger:
 
 
 def start_logging(
-  log_filepath: Path,
-) -> DualOutputLogger:
+  log_filepath : Path,
+) -> logging.Logger:
   """
-  Create and start a DualOutputLogger for the given filepath.
+  Start logging to both console and file.
   
   Input:
   ------
@@ -100,23 +101,47 @@ def start_logging(
       
   Output:
   -------
-    DualOutputLogger
-      The started logger instance (call .stop() when done).
+    logger : logging.Logger
+      Configured logger instance.
   """
-  logger = DualOutputLogger(log_filepath)
-  logger.start()
+  logger = logging.getLogger()
+  logger.setLevel(logging.DEBUG)
+  
+  # Create handlers
+  c_handler = logging.StreamHandler()
+  f_handler = logging.FileHandler(log_filepath)
+  c_handler.setLevel(logging.ERROR)
+  f_handler.setLevel(logging.DEBUG)
+  
+  # Create formatters and add them to the handlers
+  c_format = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+  f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+  c_handler.setFormatter(c_format)
+  f_handler.setFormatter(f_format)
+  
+  # Add the handlers to the logger
+  logger.addHandler(c_handler)
+  logger.addHandler(f_handler)
+  
   return logger
 
 
 def stop_logging(
-  logger: DualOutputLogger,
+  logger : logging.Logger,
 ) -> None:
   """
-  Stop the DualOutputLogger and restore original stdout.
+  Stop logging and close all handlers.
   
   Input:
   ------
-    logger : DualOutputLogger
-      The logger instance to stop.
+    logger : logging.Logger
+      Logger instance to stop.
+      
+  Output:
+  -------
+    None
   """
-  logger.stop()
+  handlers = logger.handlers[:]
+  for handler in handlers:
+    handler.close()
+    logger.removeHandler(handler)
