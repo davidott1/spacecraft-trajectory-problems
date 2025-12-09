@@ -245,14 +245,11 @@ def build_config(
   )
   
   # Handle zonal harmonics logic
-  include_zonal_harmonics = zonal_harmonics is not None
-  if zonal_harmonics is not None:
-    zonal_harmonics_list = zonal_harmonics
-  else:
-    zonal_harmonics_list = []
+  include_zonal_harmonics = zonal_harmonics is not None and len(zonal_harmonics) > 0
+  zonal_harmonics_list    = zonal_harmonics if zonal_harmonics is not None else []
 
   # Handle third bodies logic
-  include_third_body = third_bodies is not None
+  include_third_body = third_bodies is not None and len(third_bodies) > 0
   third_bodies_list  = [b.upper() for b in third_bodies] if third_bodies is not None else []
 
   # Unpack timespan

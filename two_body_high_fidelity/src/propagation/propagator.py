@@ -423,10 +423,12 @@ def run_high_fidelity_propagation(
   else:
     print("          Zonal Harmonics : None")
   
-  if include_third_body:
-    print("        Third-Body")
+  print("        Third-Body")
+  if include_third_body and len(third_bodies_list) > 0:
     print(f"          Bodies    : {', '.join(third_bodies_list)}")
     print("          Ephemeris : SPICE (High Accuracy)")
+  else:
+    print("          Bodies    : None")
       
   print("      Atmospheric Drag")
   if include_drag:
