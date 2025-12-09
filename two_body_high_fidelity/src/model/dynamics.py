@@ -138,12 +138,20 @@ class TwoBodyGravity:
         
         Input:
         ------
-        gp : float
-            Gravitational parameter of central body [m³/s²]
-        j2, j3, j4 : float
-            Harmonic coefficients for oblateness
-        pos_ref : float
-            Reference radius for harmonic coefficients [m]
+            gp : float
+                Gravitational parameter of central body [m³/s²]
+            j2 : float
+                J2 harmonic coefficient for oblateness
+            j3 : float
+                J3 harmonic coefficient for oblateness
+            j4 : float
+                J4 harmonic coefficient for oblateness
+            pos_ref : float
+                Reference radius for harmonic coefficients [m]
+                
+        Output:
+        -------
+            None
         """
         self.gp      = gp
         self.pos_ref = pos_ref
@@ -160,13 +168,13 @@ class TwoBodyGravity:
         
         Input:
         ------
-        pos_vec : np.ndarray
-            Position vector [m]
+            pos_vec : np.ndarray
+                Position vector [m]
         
         Output:
         -------
-        acc_vec : np.ndarray
-            Acceleration vector [m/s²]
+            acc_vec : np.ndarray
+                Acceleration vector [m/s²]
         """
         pos_mag = np.linalg.norm(pos_vec)
         return -self.gp * pos_vec / pos_mag**3
@@ -181,26 +189,26 @@ class TwoBodyGravity:
         
         Input:
         ------
-        time : float
-            Current time [s]
-        pos_vec : np.ndarray
-            Position vector [m] in Inertial frame (J2000).
+            time : float
+                Current time [s]
+            pos_vec : np.ndarray
+                Position vector [m] in Inertial frame (J2000).
         
         Output:
         -------
-        acc_vec : np.ndarray
-            Acceleration vector [m/s²]
+            acc_vec : np.ndarray
+                Acceleration vector [m/s²]
 
         Notes:
         ------
-        Technically, zonal harmonics are defined in the Body-Fixed frame.
-        However, Zonal harmonics (J2, J3...) are rotationally symmetric about the 
-        Z-axis (longitude independent). Therefore, the Earth's daily rotation (spin) 
-        does not affect the force, only the orientation of the Pole (Z-axis).
-        
-        This implementation assumes the Inertial Z-axis is aligned with the 
-        Body Z-axis (ignoring Precession/Nutation). Under this assumption, 
-        inertial coordinates can be used directly.
+            Technically, zonal harmonics are defined in the Body-Fixed frame.
+            However, Zonal harmonics (J2, J3...) are rotationally symmetric about the 
+            Z-axis (longitude independent). Therefore, the Earth's daily rotation (spin) 
+            does not affect the force, only the orientation of the Pole (Z-axis).
+            
+            This implementation assumes the Inertial Z-axis is aligned with the 
+            Body Z-axis (ignoring Precession/Nutation). Under this assumption, 
+            inertial coordinates can be used directly.
         """
         if self.j2 == 0.0:
             return np.zeros(3)
@@ -224,30 +232,30 @@ class TwoBodyGravity:
         pos_vec : np.ndarray,
     ) -> np.ndarray:
         """
-        J3 oblateness perturbation
+        Compute J3 oblateness perturbation acceleration.
         
         Input:
         ------
-        time : float
-            Current time [s]
-        pos_vec : np.ndarray
-            Position vector [m] in Inertial frame (J2000).
+            time : float
+                Current time [s]
+            pos_vec : np.ndarray
+                Position vector [m] in Inertial frame (J2000).
         
         Output:
         -------
-        acc_vec : np.ndarray
-            Acceleration vector [m/s²]
+            acc_vec : np.ndarray
+                Acceleration vector [m/s²]
 
         Notes:
         ------
-        Technically, zonal harmonics are defined in the Body-Fixed frame.
-        However, Zonal harmonics (J2, J3...) are rotationally symmetric about the 
-        Z-axis (longitude independent). Therefore, the Earth's daily rotation (spin) 
-        does not affect the force, only the orientation of the Pole (Z-axis).
-        
-        This implementation assumes the Inertial Z-axis is aligned with the 
-        Body Z-axis (ignoring Precession/Nutation). Under this assumption, 
-        inertial coordinates can be used directly.
+            Technically, zonal harmonics are defined in the Body-Fixed frame.
+            However, Zonal harmonics (J2, J3...) are rotationally symmetric about the 
+            Z-axis (longitude independent). Therefore, the Earth's daily rotation (spin) 
+            does not affect the force, only the orientation of the Pole (Z-axis).
+            
+            This implementation assumes the Inertial Z-axis is aligned with the 
+            Body Z-axis (ignoring Precession/Nutation). Under this assumption, 
+            inertial coordinates can be used directly.
         """
         if self.j3 == 0.0:
             return np.zeros(3)
@@ -276,26 +284,26 @@ class TwoBodyGravity:
         
         Input:
         ------
-        time : float
-            Current time [s]
-        pos_vec : np.ndarray
-            Position vector [m] in Inertial frame (J2000).
+            time : float
+                Current time [s]
+            pos_vec : np.ndarray
+                Position vector [m] in Inertial frame (J2000).
         
         Output:
         -------
-        acc_vec : np.ndarray
-            Acceleration vector [m/s²]
+            acc_vec : np.ndarray
+                Acceleration vector [m/s²]
 
         Notes:
         ------
-        Technically, zonal harmonics are defined in the Body-Fixed frame.
-        However, Zonal harmonics (J2, J3...) are rotationally symmetric about the 
-        Z-axis (longitude independent). Therefore, the Earth's daily rotation (spin) 
-        does not affect the force, only the orientation of the Pole (Z-axis).
-        
-        This implementation assumes the Inertial Z-axis is aligned with the 
-        Body Z-axis (ignoring Precession/Nutation). Under this assumption, 
-        inertial coordinates can be used directly.
+            Technically, zonal harmonics are defined in the Body-Fixed frame.
+            However, Zonal harmonics (J2, J3...) are rotationally symmetric about the 
+            Z-axis (longitude independent). Therefore, the Earth's daily rotation (spin) 
+            does not affect the force, only the orientation of the Pole (Z-axis).
+            
+            This implementation assumes the Inertial Z-axis is aligned with the 
+            Body Z-axis (ignoring Precession/Nutation). Under this assumption, 
+            inertial coordinates can be used directly.
         """
         if self.j4 == 0.0:
             return np.zeros(3)
@@ -319,8 +327,8 @@ class TwoBodyGravity:
 
 class ThirdBodyGravity:
     """
-    Third-body gravitational perturbations from Sun, Moon, and other bodies
-    Uses SPICE ephemerides
+    Third-body gravitational perturbations from Sun, Moon, and other bodies.
+    Uses SPICE ephemerides.
     """
     
     def __init__(
@@ -329,14 +337,18 @@ class ThirdBodyGravity:
         spice_kernel_folderpath : str   = None,
     ):
         """
-        Initialize third-body gravity model
+        Initialize third-body gravity model.
         
         Input:
         ------
-        bodies : list of str
-            Which bodies to include (default: ['sun', 'moon'])
-        spice_kernel_folderpath : str
-            Path to SPICE kernel folderpath
+            bodies : list
+                Which bodies to include (default: ['sun', 'moon']).
+            spice_kernel_folderpath : str
+                Path to SPICE kernel folderpath.
+                
+        Output:
+        -------
+            None
         """
         self.bodies = bodies if bodies else ['sun', 'moon']
         self._load_spice_kernels(spice_kernel_folderpath)
@@ -346,7 +358,7 @@ class ThirdBodyGravity:
         kernel_folderpath : Optional[Path],
     ) -> None:
         """
-        Load required SPICE kernels
+        Load required SPICE kernels.
         
         Download from: https://naif.jpl.nasa.gov/pub/naif/generic_kernels/
         
@@ -354,6 +366,15 @@ class ThirdBodyGravity:
         - LSK (Leap Second Kernel): naif0012.tls
         - SPK (Planetary Ephemeris): de430.bsp or de440.bsp
         - PCK (Planetary Constants): pck00010.tpc
+        
+        Input:
+        ------
+            kernel_folderpath : Path | None
+                Path to folder containing SPICE kernels.
+                
+        Output:
+        -------
+            None
         """
         import spiceypy as spice
 
@@ -394,21 +415,21 @@ class ThirdBodyGravity:
         frame      : str = 'J2000',
     ) -> np.ndarray:
         """
-        Get position of celestial body at given time
+        Get position of celestial body at given time using SPICE.
         
         Input:
         ------
-        body_name : str
-            'SUN' or 'MOON'
-        et_seconds : float
-            Ephemeris time in seconds past J2000 epoch
-        frame : str
-            Reference frame (default: 'J2000')
+            body_name : str
+                Body name ('SUN' or 'MOON').
+            et_seconds : float
+                Ephemeris time in seconds past J2000 epoch.
+            frame : str
+                Reference frame (default: 'J2000').
         
         Output:
         -------
-        pos_vec : np.ndarray (3,)
-            Position vector [m]
+            pos_vec : np.ndarray
+                Position vector [m].
         """
         import spiceypy as spice
         # SPICE state relative to Earth
@@ -427,17 +448,17 @@ class ThirdBodyGravity:
         body_name : str,
     ) -> int:
         """
-        Get NAIF ID for body
+        Get NAIF ID for body.
         
         Input:
         ------
-        body_name : str
-            Body name ('SUN' or 'MOON')
+            body_name : str
+                Body name ('SUN' or 'MOON').
         
         Output:
         -------
-        naif_id : int
-            NAIF ID code
+            naif_id : int
+                NAIF ID code.
         """
         naif_ids = {
             'SUN'  : 10,
@@ -451,19 +472,19 @@ class ThirdBodyGravity:
         pos_sat_vec : np.ndarray,
     ) -> np.ndarray:
         """
-        Third-body point mass perturbations (Sun, Moon)
+        Compute third-body point mass perturbations (Sun, Moon).
         
         Input:
         ------
-        time : float
-            Current Ephemeris Time (ET) [s]
-        pos_sat_vec : np.ndarray
-            Satellite position vector [m]
+            time : float
+                Current Ephemeris Time (ET) [s].
+            pos_sat_vec : np.ndarray
+                Satellite position vector [m].
         
         Output:
         -------
-        acc_vec : np.ndarray
-            Third-body acceleration [m/s²]
+            acc_vec : np.ndarray
+                Third-body acceleration [m/s²].
         """
         # Ephemeris time is seconds from J2000 epoch
         et_seconds = time
@@ -499,7 +520,7 @@ class ThirdBodyGravity:
 
 class Gravity:
     """
-    Gravitational acceleration coordinator
+    Gravitational acceleration coordinator.
     
     Computes gravity as:
         gravity = two_body_point_mass + two_body_oblate + third_body_point_mass + 
@@ -518,22 +539,30 @@ class Gravity:
         spice_kernel_folderpath : str   = None,
     ):
         """
-        Initialize gravity acceleration components
+        Initialize gravity acceleration components.
         
         Input:
         ------
-        gp : float
-            Gravitational parameter of central body [m³/s²]
-        j2, j3, j4 : float
-            Harmonic coefficients for oblateness
-        pos_ref : float
-            Reference radius for harmonic coefficients [m]
-        enable_third_body : bool
-            Enable Sun/Moon gravitational perturbations
-        third_body_bodies : list of str
-            Which bodies to include (default: ['sun', 'moon'])
-        spice_kernel_folderpath : str
-            Path to SPICE kernel folderpath
+            gp : float
+                Gravitational parameter of central body [m³/s²].
+            j2 : float
+                J2 harmonic coefficient for oblateness.
+            j3 : float
+                J3 harmonic coefficient for oblateness.
+            j4 : float
+                J4 harmonic coefficient for oblateness.
+            pos_ref : float
+                Reference radius for harmonic coefficients [m].
+            enable_third_body : bool
+                Enable Sun/Moon gravitational perturbations.
+            third_body_bodies : list
+                Which bodies to include (default: ['sun', 'moon']).
+            spice_kernel_folderpath : str
+                Path to SPICE kernel folderpath.
+                
+        Output:
+        -------
+            None
         """
         # Two-body gravity
         self.two_body = TwoBodyGravity(
@@ -560,19 +589,19 @@ class Gravity:
         pos_vec : np.ndarray,
     ) -> np.ndarray:
         """
-        Compute total gravity acceleration
+        Compute total gravity acceleration.
         
         Input:
         ------
-        time : float
-            Current Ephemeris Time (ET) [s]
-        pos_vec : np.ndarray
-            Position vector [m]
+            time : float
+                Current Ephemeris Time (ET) [s].
+            pos_vec : np.ndarray
+                Position vector [m].
         
         Output:
         -------
-        acc_vec : np.ndarray
-            Total gravity acceleration [m/s²]
+            acc_vec : np.ndarray
+                Total gravity acceleration [m/s²].
         """
         # Initialize acceleration vector
         acc_vec = np.zeros(3)
@@ -594,17 +623,17 @@ class Gravity:
         pos_vec : np.ndarray,
     ) -> np.ndarray:
         """
-        Two-body point mass gravity
+        Compute two-body point mass gravity acceleration.
         
         Input:
         ------
-        pos_vec : np.ndarray
-            Position vector [m]
+            pos_vec : np.ndarray
+                Position vector [m].
         
         Output:
         -------
-        acc_vec : np.ndarray
-            Acceleration vector [m/s²]
+            acc_vec : np.ndarray
+                Acceleration vector [m/s²].
         """
         return self.two_body.point_mass(pos_vec)
     
@@ -614,19 +643,19 @@ class Gravity:
         pos_vec : np.ndarray,
     ) -> np.ndarray:
         """
-        Two-body oblateness (J2, J3, J4)
+        Compute two-body oblateness (J2, J3, J4) acceleration.
         
         Input:
         ------
-        time : float
-            Current time [s]
-        pos_vec : np.ndarray
-            Position vector [m]
+            time : float
+                Current time [s].
+            pos_vec : np.ndarray
+                Position vector [m].
         
         Output:
         -------
-        acc_vec : np.ndarray
-            Acceleration vector [m/s²]
+            acc_vec : np.ndarray
+                Acceleration vector [m/s²].
         """
         acc_vec  = self.two_body.oblate_j2(time, pos_vec)
         acc_vec += self.two_body.oblate_j3(time, pos_vec)
@@ -639,19 +668,19 @@ class Gravity:
         pos_vec : np.ndarray,
     ) -> np.ndarray:
         """
-        Third-body point mass perturbations
+        Compute third-body point mass perturbations.
         
         Input:
         ------
-        time : float
-            Current time [s]
-        pos_vec : np.ndarray
-            Position vector [m]
+            time : float
+                Current time [s].
+            pos_vec : np.ndarray
+                Position vector [m].
         
         Output:
         -------
-        acc_vec : np.ndarray
-            Acceleration vector [m/s²]
+            acc_vec : np.ndarray
+                Acceleration vector [m/s²].
         """
         if self.third_body is None:
             return np.zeros(3)
@@ -663,19 +692,19 @@ class Gravity:
         pos_vec : np.ndarray,
     ) -> np.ndarray:
         """
-        Third-body oblateness perturbations (future implementation)
+        Compute third-body oblateness perturbations (future implementation).
         
         Input:
         ------
-        time : float
-            Current time [s]
-        pos_vec : np.ndarray
-            Position vector [m]
+            time : float
+                Current time [s]
+            pos_vec : np.ndarray
+                Position vector [m]
         
         Output:
         -------
-        acc_vec : np.ndarray
-            Acceleration vector [m/s²]
+            acc_vec : np.ndarray
+                Acceleration vector [m/s²]
         """
         # TODO: Implement third-body oblateness
         return np.zeros(3)
@@ -690,15 +719,15 @@ class Gravity:
         
         Input:
         ------
-        pos_vec : np.ndarray
-            Position vector [m]
-        vel_vec : np.ndarray
-            Velocity vector [m/s]
+            pos_vec : np.ndarray
+                Position vector [m]
+            vel_vec : np.ndarray
+                Velocity vector [m/s]
         
         Output:
         -------
-        acc_vec : np.ndarray
-            Acceleration vector [m/s²]
+            acc_vec : np.ndarray
+                Acceleration vector [m/s²]
         """
         # TODO: Implement post-Newtonian corrections
         return np.zeros(3)
@@ -714,83 +743,87 @@ class AtmosphericDrag:
     """
     
     def __init__(
-        self,
-        cd   : float = 2.2,
-        area : float = 0.0,
-        mass : float = 1.0,
+      self,
+      cd   : float = 2.2,
+      area : float = 0.0,
+      mass : float = 1.0,
     ):
-        """
-        Initialize drag model
-        
-        Input:
-        ------
+      """
+      Initialize drag model
+      
+      Input:
+      ------
         cd : float
-            Drag coefficient
+          Drag coefficient.
         area : float
-            Cross-sectional area [m²]
+          Cross-sectional area [m²].
         mass : float
-            Spacecraft mass [kg]
-        """
-        self.cd   = cd
-        self.area = area
-        self.mass = mass
+          Spacecraft mass [kg].
+              
+      Output:
+      -------
+        None
+      """
+      self.cd   = cd
+      self.area = area
+      self.mass = mass
     
     def compute(
-        self,
-        pos_vec : np.ndarray,
-        vel_vec : np.ndarray,
+      self,
+      pos_vec : np.ndarray,
+      vel_vec : np.ndarray,
     ) -> np.ndarray:
-        """
-        Compute drag acceleration
-        
-        Input:
-        ------
+      """
+      Compute drag acceleration
+      
+      Input:
+      ------
         pos_vec : np.ndarray
-            Position vector [m]
+          Position vector [m]
         vel_vec : np.ndarray
-            Velocity vector [m/s]
-        
-        Output:
-        -------
+          Velocity vector [m/s]
+      
+      Output:
+      -------
         acc_vec : np.ndarray
-            Drag acceleration [m/s²]
-        """
-        # Position magnitude and altitude
-        pos_mag = np.linalg.norm(pos_vec)
-        alt     = pos_mag - PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR
-        
-        # Atmospheric density at current altitude
-        rho = self._atmospheric_density(float(alt))
-        
-        # Velocity relative to rotating atmosphere
-        omega_earth = np.array([0, 0, PHYSICALCONSTANTS.EARTH.OMEGA])
-        vel_rel_vec = vel_vec - np.cross(omega_earth, pos_vec)
-        vel_rel_mag = np.linalg.norm(vel_rel_vec)
-        
-        if vel_rel_mag == 0:
-            return np.zeros(3)
-        
-        # Drag acceleration
-        acc_drag_mag = 0.5 * rho * (self.cd * self.area / self.mass) * vel_rel_mag**2
-        acc_drag_dir = -vel_rel_vec / vel_rel_mag
-        
-        return acc_drag_mag * acc_drag_dir
+          Drag acceleration [m/s²]
+      """
+      # Position magnitude and altitude
+      pos_mag = np.linalg.norm(pos_vec)
+      alt     = pos_mag - PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR
+      
+      # Atmospheric density at current altitude
+      rho = self._atmospheric_density(float(alt))
+      
+      # Velocity relative to rotating atmosphere
+      omega_earth = np.array([0, 0, PHYSICALCONSTANTS.EARTH.OMEGA])
+      vel_rel_vec = vel_vec - np.cross(omega_earth, pos_vec)
+      vel_rel_mag = np.linalg.norm(vel_rel_vec)
+      
+      if vel_rel_mag == 0:
+        return np.zeros(3)
+      
+      # Drag acceleration
+      acc_drag_mag = 0.5 * rho * (self.cd * self.area / self.mass) * vel_rel_mag**2
+      acc_drag_dir = -vel_rel_vec / vel_rel_mag
+      
+      return acc_drag_mag * acc_drag_dir
     
     def _atmospheric_density(
-        self,
-        altitude : float,
+      self,
+      altitude : float,
     ) -> float:
         """
         Simplified exponential atmospheric density model
         
         Input:
         ------
-        altitude : float
+          altitude : float
             Altitude above Earth's surface [m]
         
         Output:
         -------
-        density : float
+          density : float
             Atmospheric density [kg/m³]
         """
         if altitude < 0:
@@ -808,45 +841,49 @@ class SolarRadiationPressure:
     """
     
     def __init__(
-        self,
-        cr   : float = 1.3,
-        area : float = 0.0,
-        mass : float = 1.0,
+      self,
+      cr   : float = 1.3,
+      area : float = 0.0,
+      mass : float = 1.0,
     ):
-        """
-        Initialize SRP model
-        
-        Input:
-        ------
+      """
+      Initialize SRP model
+      
+      Input:
+      ------
         cr : float
-            Radiation pressure coefficient
+          Radiation pressure coefficient
         area : float
-            Cross-sectional area [m²]
+          Cross-sectional area [m²]
         mass : float
-            Spacecraft mass [kg]
-        """
-        self.cr   = cr
-        self.area = area
-        self.mass = mass
+          Spacecraft mass [kg]
+              
+      Output:
+      -------
+        None
+      """
+      self.cr   = cr
+      self.area = area
+      self.mass = mass
     
     def compute(
-        self,
-        time    : float,
-        pos_vec : np.ndarray,
+      self,
+      time    : float,
+      pos_vec : np.ndarray,
     ) -> np.ndarray:
         """
         Compute SRP acceleration (not yet implemented)
         
         Input:
         ------
-        time : float
+          time : float
             Current time [s]
-        pos_vec : np.ndarray
+          pos_vec : np.ndarray
             Position vector [m]
         
         Output:
         -------
-        acc_vec : np.ndarray
+          acc_vec : np.ndarray
             SRP acceleration [m/s²]
         """
         # TODO: Implement solar radiation pressure
@@ -862,130 +899,138 @@ class Acceleration:
     Acceleration coordinator - orchestrates all acceleration components
     
     Computes total acceleration as:
-        total = gravity + drag + solar_radiation_pressure
+      total = gravity + drag + solar_radiation_pressure
     
     where:
-        gravity = two_body_point_mass + third_body_point_mass + 
-                  two_body_oblate (J2, J3, J4) + relativity (future)
+      gravity = two_body_point_mass + third_body_point_mass + 
+                two_body_oblate (J2, J3, J4) + relativity (future)
     """
     
     def __init__(
-        self,
-        gp                      : float,
-        j2                      : float = 0.0,
-        j3                      : float = 0.0,
-        j4                      : float = 0.0,
-        pos_ref                 : float = 0.0,
-        mass                    : float = 1.0,
-        enable_drag             : bool  = False,
-        cd                      : float = 0.0,
-        area_drag               : float = 0.0,
-        enable_third_body       : bool  = False,
-        third_body_bodies       : list  = None,
-        spice_kernel_folderpath : str   = None,
-        enable_srp              : bool  = False,
-        cr                      : float = 0.0,
-        area_srp                : float = 0.0,
+      self,
+      gp                      : float,
+      j2                      : float = 0.0,
+      j3                      : float = 0.0,
+      j4                      : float = 0.0,
+      pos_ref                 : float = 0.0,
+      mass                    : float = 1.0,
+      enable_drag             : bool  = False,
+      cd                      : float = 0.0,
+      area_drag               : float = 0.0,
+      enable_third_body       : bool  = False,
+      third_body_bodies       : list  = None,
+      spice_kernel_folderpath : str   = None,
+      enable_srp              : bool  = False,
+      cr                      : float = 0.0,
+      area_srp                : float = 0.0,
     ):
-        """
-        Initialize acceleration coordinator
-        
-        Input:
-        ------
+      """
+      Initialize acceleration coordinator
+      
+      Input:
+      ------
         gp : float
-            Gravitational parameter of central body [m³/s²]
-        j2, j3, j4 : float
-            Harmonic coefficients for oblateness
+          Gravitational parameter of central body [m³/s²]
+        j2 : float
+          J2 harmonic coefficient for oblateness
+        j3 : float
+          J3 harmonic coefficient for oblateness
+        j4 : float
+          J4 harmonic coefficient for oblateness
         pos_ref : float
-            Reference radius for harmonic coefficients [m]
-        cd : float
-            Drag coefficient
-        area_drag : float
-            Cross-sectional area [m²]
+          Reference radius for harmonic coefficients [m]
         mass : float
-            Spacecraft mass [kg]
+          Spacecraft mass [kg]
         enable_drag : bool
-            Enable atmospheric drag
+          Enable atmospheric drag
+        cd : float
+          Drag coefficient
+        area_drag : float
+          Cross-sectional area [m²]
         enable_third_body : bool
-            Enable Sun/Moon gravitational perturbations
+          Enable Sun/Moon gravitational perturbations
         third_body_bodies : list of str
-            Which bodies to include (default: ['sun', 'moon'])
+          Which bodies to include (default: ['sun', 'moon'])
         spice_kernel_folderpath : str
-            Path to SPICE kernel folderpath
+          Path to SPICE kernel folderpath
         enable_srp : bool
-            Enable solar radiation pressure (not yet implemented)
+          Enable solar radiation pressure (not yet implemented)
         cr : float
-            Radiation pressure coefficient
+          Radiation pressure coefficient
         area_srp : float
-            Cross-sectional area for SRP [m²]
-        """
+          Cross-sectional area for SRP [m²]
+              
+      Output:
+      -------
+        None
+      """
         # Create acceleration component instances
-        self.gravity = Gravity(
-            gp                      = gp,
-            j2                      = j2,
-            j3                      = j3,
-            j4                      = j4,
-            pos_ref                 = pos_ref,
-            enable_third_body       = enable_third_body,
-            third_body_bodies       = third_body_bodies,
-            spice_kernel_folderpath = spice_kernel_folderpath,
+      self.gravity = Gravity(
+        gp                      = gp,
+        j2                      = j2,
+        j3                      = j3,
+        j4                      = j4,
+        pos_ref                 = pos_ref,
+        enable_third_body       = enable_third_body,
+        third_body_bodies       = third_body_bodies,
+        spice_kernel_folderpath = spice_kernel_folderpath,
+      )
+      
+      self.enable_drag = enable_drag
+      if self.enable_drag and cd > 0 and area_drag > 0 and mass > 0:
+        self.drag = AtmosphericDrag(
+          cd   = cd,
+          area = area_drag,
+          mass = mass,
         )
-        
-        self.enable_drag = enable_drag
-        if self.enable_drag and cd > 0 and area_drag > 0 and mass > 0:
-            self.drag = AtmosphericDrag(
-                cd   = cd,
-                area = area_drag,
-                mass = mass,
-            )
-        else:
-            self.drag = None
-        
-        self.enable_srp = enable_srp
-        if self.enable_srp:
-            self.srp = SolarRadiationPressure(
-                cr   = cr,
-                area = area_srp,
-                mass = mass,
-            )
-        else:
-            self.srp = None
+      else:
+        self.drag = None
+      
+      self.enable_srp = enable_srp
+      if self.enable_srp:
+        self.srp = SolarRadiationPressure(
+          cr   = cr,
+          area = area_srp,
+          mass = mass,
+        )
+      else:
+          self.srp = None
     
     def compute(
-        self,
-        time    : float,
-        pos_vec : np.ndarray,
-        vel_vec : np.ndarray,
+      self,
+      time    : float,
+      pos_vec : np.ndarray,
+      vel_vec : np.ndarray,
     ) -> np.ndarray:
-        """
-        Compute total acceleration from all components
-        
-        Input:
-        ------
+      """
+      Compute total acceleration from all components
+      
+      Input:
+      ------
         time : float
-            Current Ephemeris Time (ET) [s]
+          Current Ephemeris Time (ET) [s]
         pos_vec : np.ndarray
-            Position vector [m]
+          Position vector [m]
         vel_vec : np.ndarray
-            Velocity vector [m/s]
-        
-        Output:
-        -------
+          Velocity vector [m/s]
+      
+      Output:
+      -------
         acc_vec : np.ndarray
-            Total acceleration [m/s²]
-        """
-        # Gravity (always)
-        acc_vec = self.gravity.compute(time, pos_vec)
-        
-        # Atmospheric drag (optional)
-        if self.drag is not None:
-            acc_vec += self.drag.compute(pos_vec, vel_vec)
-        
-        # Solar radiation pressure (optional)
-        if self.srp is not None:
-            acc_vec += self.srp.compute(time, pos_vec)
-        
-        return acc_vec
+          Total acceleration [m/s²]
+      """
+      # Gravity (always)
+      acc_vec = self.gravity.compute(time, pos_vec)
+      
+      # Atmospheric drag (optional)
+      if self.drag is not None:
+        acc_vec += self.drag.compute(pos_vec, vel_vec)
+      
+      # Solar radiation pressure (optional)
+      if self.srp is not None:
+        acc_vec += self.srp.compute(time, pos_vec)
+      
+      return acc_vec
 
 
 # =============================================================================
@@ -993,53 +1038,57 @@ class Acceleration:
 # =============================================================================
 
 class GeneralStateEquationsOfMotion:
+  """
+  General state equations of motion for orbit propagation
+  """
+  
+  def __init__(
+    self,
+    acceleration : Acceleration,
+  ):
     """
-    General state equations of motion for orbit propagation
+    Initialize equations of motion
+    
+    Input:
+    ------
+      acceleration : Acceleration
+        Acceleration coordinator instance
+            
+    Output:
+    -------
+      None
     """
+    self.acceleration = acceleration
+  
+  def state_time_derivative(
+      self,
+      time      : float,
+      state_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Compute state time derivative for ODE integration
     
-    def __init__(
-        self,
-        acceleration : Acceleration,
-    ):
-        """
-        Initialize equations of motion
-        
-        Input:
-        ------
-        acceleration : Acceleration
-            Acceleration coordinator instance
-        """
-        self.acceleration = acceleration
+    Input:
+    ------
+      time : float
+        Current Ephemeris Time (ET) [s]
+      state_vec : np.ndarray
+        Current state vector [pos, vel] [m, m/s]
     
-    def state_time_derivative(
-        self,
-        time      : float,
-        state_vec : np.ndarray,
-    ) -> np.ndarray:
-        """
-        Compute state time derivative for ODE integration
-        
-        Input:
-        ------
-        time : float
-            Current Ephemeris Time (ET) [s]
-        state_vec : np.ndarray
-            Current state vector [pos, vel] [m, m/s]
-        
-        Output:
-        -------
-        state_dot_vec : np.ndarray
-            Time derivative of state vector [vel, acc] [m/s, m/s²]
-        """
-        pos_vec = state_vec[0:3]
-        vel_vec = state_vec[3:6]
-        acc_vec = self.acceleration.compute(time, pos_vec, vel_vec)
-        
-        state_dot_vec      = np.zeros(6)
-        state_dot_vec[0:3] = vel_vec
-        state_dot_vec[3:6] = acc_vec
-        
-        return state_dot_vec
+    Output:
+    -------
+      state_dot_vec : np.ndarray
+        Time derivative of state vector [vel, acc] [m/s, m/s²]
+    """
+    pos_vec = state_vec[0:3]
+    vel_vec = state_vec[3:6]
+    acc_vec = self.acceleration.compute(time, pos_vec, vel_vec)
+    
+    state_dot_vec      = np.zeros(6)
+    state_dot_vec[0:3] = vel_vec
+    state_dot_vec[3:6] = acc_vec
+    
+    return state_dot_vec
 
 
 # =============================================================================
@@ -1047,168 +1096,160 @@ class GeneralStateEquationsOfMotion:
 # =============================================================================
 
 class TwoBody_RootSolvers:
+  """
+  Root solvers for two-body orbital mechanics.
+  """
+  
+  @staticmethod
+  def kepler(
+    ma       : float,
+    ecc      : float,
+    tol      : float = 1e-10,
+    max_iter : int   = 50
+  ) -> float:
     """
-    Root solvers for two-body orbital mechanics
-    """
+    Solve Kepler's equation ma = ea - ecc*sin(ea) for eccentric anomaly ea.
     
-    @staticmethod
-    def kepler(
-        ma       : float,
-        ecc      : float,
-        tol      : float = 1e-10,
-        max_iter : int   = 50
-    ) -> float:
-      """
-      Solve Kepler's equation ma = ea - ecc*sin(ea) for eccentric anomaly ea.
-      
-      Input:
-      ------
+    Input:
+    ------
       ma : float
-          Mean anomaly [rad]
+        Mean anomaly [rad]
       ecc : float
-          Eccentricity
+        Eccentricity
       tol : float
-          Convergence tolerance
+        Convergence tolerance
       max_iter : int
-          Maximum iterations
-      
-      Output:
-      -------
+        Maximum iterations
+    
+    Output:
+    -------
       ea : float
-          Eccentric anomaly [rad]
-      """
-      # Initial guess
-      if ecc < 0.8:
-        ea = ma
+        Eccentric anomaly [rad]
+    """
+    # Initial guess
+    if ecc < 0.8:
+      ea = ma
+    else:
+      ea = np.pi
+    
+    # Newton-Raphson iteration
+    for i in range(max_iter+1):
+      func       = ea - ecc * np.sin(ea) - ma
+      func_prime = 1 - ecc * np.cos(ea)
+      delta_ea   = -func / func_prime
+      if abs(delta_ea) < tol:
+        return ea
+      if i == max_iter:
+        print("Kepler's equation not converged")
+        break
+      ea = ea + delta_ea
+    
+    return ea  # return best estimate if not converged
+  
+  # Alias for kepler function - converts mean anomaly to eccentric anomaly
+  M2E_kepler = kepler
+  
+  @staticmethod
+  def lambert(
+    pos_o_vec : np.ndarray,
+    pos_f_vec : np.ndarray,
+    delta_t   : float,
+    gp        : float,
+    prograde  : bool  = True,
+    max_iter  : int   = 100,
+    tol       : float = 1e-6
+  ) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Solve Lambert's problem for transfer orbit between two position vectors.
+    
+    Input:
+    ------
+      pos_o_vec : np.ndarray
+        Initial position vector [m]
+      pos_f_vec : np.ndarray
+        Final position vector [m]
+      delta_t : float
+        Time of flight [s]
+      gp : float
+        Gravitational parameter [m³/s²]
+      prograde : bool
+        True for prograde, False for retrograde
+      max_iter : int
+        Maximum iterations
+      tol : float
+        Convergence tolerance
+    
+    Output:
+    -------
+      vel_o_vec : np.ndarray
+        Initial velocity vector [m/s]
+      vel_f_vec : np.ndarray
+        Final velocity vector [m/s]
+    """
+    # Compute magnitudes and chord
+    pos_o_mag = np.linalg.norm(pos_o_vec)
+    pos_f_mag = np.linalg.norm(pos_f_vec)
+    c_vec     = pos_f_vec - pos_o_vec
+    c_mag     = np.linalg.norm(c_vec)
+    
+    # Semi-latus rectum
+    s = 0.5 * (pos_o_mag + pos_f_mag + c_mag)
+    
+    # Minimum energy semi-major axis
+    a_min = s / 2
+    
+    # Time of flight for minimum energy orbit
+    beta_min = 2 * np.arcsin(np.sqrt((s - c_mag) / s))
+    if not prograde:
+      beta_min = -beta_min
+    tof_min = np.sqrt(a_min**3 / gp) * (np.pi - beta_min + np.sin(beta_min))
+    
+    if delta_t < tof_min:
+      raise ValueError("Time of flight is less than minimum energy transfer time.")
+    
+    # Initial guess for semi-major axis
+    a_low  = a_min
+    a_high = 1e10 * a_min
+    a      = 0.5 * (a_low + a_high)
+    
+    for _ in range(max_iter):
+      # Compute time of flight for current semi-major axis
+      alpha = 2 * np.arcsin(np.sqrt(s / (2 * a)))
+      beta  = 2 * np.arcsin(np.sqrt((s - c_mag) / (2 * a)))
+      if not prograde:
+        beta = -beta
+      
+      tof = np.sqrt(a**3 / gp) * (alpha - beta - (np.sin(alpha) - np.sin(beta)))
+      
+      if abs(tof - delta_t) < tol:
+        break
+      
+      if tof < delta_t:
+        a_low = a
       else:
-        ea = np.pi
+        a_high = a
       
-      # Newton-Raphson iteration
-      for i in range(max_iter+1):
-        func       = ea - ecc * np.sin(ea) - ma
-        func_prime = 1 - ecc * np.cos(ea)
-        delta_ea   = -func / func_prime
-        if abs(delta_ea) < tol:
-          return ea
-        if i == max_iter:
-          print("Kepler's equation not converged")
-          break
-        ea = ea + delta_ea
-      
-      return ea  # return best estimate if not converged
+      a = 0.5 * (a_low + a_high)
     
-    # Alias for kepler function - converts mean anomaly to eccentric anomaly
-    M2E_kepler = kepler
+    # Compute velocities at pos_o_vec and pos_f_vec
+    f     = 1 - pos_f_mag / a * (1 - np.cos(alpha))
+    g     = pos_o_mag * pos_f_mag * np.sin(alpha) / np.sqrt(gp * a * (1 - np.cos(alpha)))
+    g_dot = 1 - pos_o_mag / a * (1 - np.cos(alpha))
     
-    @staticmethod
-    def lambert(
-        pos_o_vec : np.ndarray,
-        pos_f_vec : np.ndarray,
-        delta_t   : float,
-        gp        : float,
-        prograde  : bool  = True,
-        max_iter  : int   = 100,
-        tol       : float = 1e-6
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Solve Lambert's problem for transfer orbit between two position vectors.
-        
-        Input:
-        ------
-        pos_o_vec : np.ndarray
-            Initial position vector [m]
-        pos_f_vec : np.ndarray
-            Final position vector [m]
-        delta_t : float
-            Time of flight [s]
-        gp : float
-            Gravitational parameter [m³/s²]
-        prograde : bool
-            True for prograde, False for retrograde
-        max_iter : int
-            Maximum iterations
-        tol : float
-            Convergence tolerance
-        
-        Output:
-        -------
-        vel_o_vec : np.ndarray
-            Initial velocity vector [m/s]
-        vel_f_vec : np.ndarray
-            Final velocity vector [m/s]
-        """
-        # Compute magnitudes and chord
-        pos_o_mag = np.linalg.norm(pos_o_vec)
-        pos_f_mag = np.linalg.norm(pos_f_vec)
-        c_vec     = pos_f_vec - pos_o_vec
-        c_mag     = np.linalg.norm(c_vec)
-        
-        # Semi-latus rectum
-        s = 0.5 * (pos_o_mag + pos_f_mag + c_mag)
-        
-        # Minimum energy semi-major axis
-        a_min = s / 2
-        
-        # Time of flight for minimum energy orbit
-        beta_min = 2 * np.arcsin(np.sqrt((s - c_mag) / s))
-        if not prograde:
-            beta_min = -beta_min
-        tof_min = np.sqrt(a_min**3 / gp) * (np.pi - beta_min + np.sin(beta_min))
-        
-        if delta_t < tof_min:
-            raise ValueError("Time of flight is less than minimum energy transfer time.")
-        
-        # Initial guess for semi-major axis
-        a_low  = a_min
-        a_high = 1e10 * a_min
-        a      = 0.5 * (a_low + a_high)
-        
-        for _ in range(max_iter):
-            # Compute time of flight for current semi-major axis
-            alpha = 2 * np.arcsin(np.sqrt(s / (2 * a)))
-            beta  = 2 * np.arcsin(np.sqrt((s - c_mag) / (2 * a)))
-            if not prograde:
-                beta = -beta
-            
-            tof = np.sqrt(a**3 / gp) * (alpha - beta - (np.sin(alpha) - np.sin(beta)))
-            
-            if abs(tof - delta_t) < tol:
-                break
-            
-            if tof < delta_t:
-                a_low = a
-            else:
-                a_high = a
-            
-            a = 0.5 * (a_low + a_high)
-        
-        # Compute velocities at pos_o_vec and pos_f_vec
-        f     = 1 - pos_f_mag / a * (1 - np.cos(alpha))
-        g     = pos_o_mag * pos_f_mag * np.sin(alpha) / np.sqrt(gp * a * (1 - np.cos(alpha)))
-        g_dot = 1 - pos_o_mag / a * (1 - np.cos(alpha))
-        
-        vel_o_vec = (pos_f_vec - f * pos_o_vec) / g
-        vel_f_vec = (g_dot * pos_f_vec - pos_o_vec) / g
-        
-        return vel_o_vec, vel_f_vec
+    vel_o_vec = (pos_f_vec - f * pos_o_vec) / g
+    vel_f_vec = (g_dot * pos_f_vec - pos_o_vec) / g
+    
+    return vel_o_vec, vel_f_vec
 
 
 class OrbitConverter:
     """
-    Conversion between position/velocity and classical orbital elements
+    Conversion between position/velocity and classical orbital elements.
     
-    Summary:
-    --------
     Provides comprehensive conversion utilities for orbital mechanics, including:
     - Cartesian state (position/velocity) ↔ classical orbital elements
     - Anomaly transformations (true, eccentric, mean, hyperbolic, parabolic)
     - Support for all orbit types (circular, elliptical, parabolic, hyperbolic, rectilinear)
-    
-    Key Methods:
-    ------------
-    - pv_to_coe() : Convert position/velocity to orbital elements
-    - coe_to_pv() : Convert orbital elements to position/velocity
-    - Anomaly conversions: ea_to_ta, ta_to_ea, ma_to_ea, ea_to_ma, etc.
     """
     
     @staticmethod
@@ -1222,52 +1263,39 @@ class OrbitConverter:
       
       Input:
       ------
-      pos_vec : np.ndarray
-          Position vector [m]
-      vel_vec : np.ndarray
-          Velocity vector [m/s]
-      gp : float
-          Gravitational parameter [m³/s²]
+        pos_vec : np.ndarray
+          Position vector [m].
+        vel_vec : np.ndarray
+          Velocity vector [m/s].
+        gp : float
+          Gravitational parameter [m³/s²].
           
       Output:
       -------
-      dict : Dictionary containing orbital elements:
-        sma  : semi-major axis [m] (or np.inf for parabolic orbits)
-        ecc  : eccentricity [-]
-        inc  : inclination [rad]
-        raan : right ascension of the ascending node [rad]
-        aop  : argument of periapsis [rad]
-        ma   : mean anomaly [rad] (None for rectilinear or parabolic)
-        ta   : true anomaly [rad] (None for rectilinear)
-        ea   : eccentric anomaly [rad] (None for hyperbolic/parabolic/non-rectilinear-elliptic)
-        ha   : hyperbolic anomaly [rad] (None for elliptic/parabolic/non-rectilinear-hyperbolic)
-        pa   : parabolic anomaly [rad] (None for elliptic/hyperbolic)
+        coe : dict
+          Dictionary containing orbital elements:
+          - sma  : semi-major axis [m] (or np.inf for parabolic orbits)
+          - ecc  : eccentricity [-]
+          - inc  : inclination [rad]
+          - raan : right ascension of the ascending node [rad]
+          - aop  : argument of periapsis [rad]
+          - ma   : mean anomaly [rad] (None for rectilinear or parabolic)
+          - ta   : true anomaly [rad] (None for rectilinear)
+          - ea   : eccentric anomaly [rad] (None for hyperbolic/parabolic)
+          - ha   : hyperbolic anomaly [rad] (None for elliptic/parabolic)
+          - pa   : parabolic anomaly [rad] (None for elliptic/hyperbolic)
 
       Notes:
-      ------      
-      - Handles circular, elliptical, parabolic, hyperbolic, and rectilinear orbits
-        - circular:       e = 0           a > 0
-        - elliptical-2D:  0 < e < 1       a > 0
-        - elliptical-1D:  e = 1           a > 0 (rectilinear)
-        - parabolic:      e = 1           a = inf
-        - hyperbolic:     e > 1           a < 0
-      - For rectilinear motion:
-          * Elliptic   : returns ea (eccentric anomaly)
-          * Hyperbolic : returns ha (hyperbolic anomaly)
-      - For non-rectilinear motion:
-          * Elliptic   : returns ta, ea, ma
-          * Hyperbolic : returns ta, ha, ma
-          * Parabolic  : returns ta, pa, ma
-      - For the circular case, the ascending node (AN) and argument of periapsis (AP) 
-        are ill-defined, along with the associated eccentricity direction vector (ie) 
-        and periapsis direction vector (ip) of the perifocal frame. In this circular 
-        orbit case, the unit vector ie is set equal to the normalized inertial 
-        position vector (ir).
-      - Anomaly fields not applicable to the orbit type are set to None.
+      ------
+        - Handles circular, elliptical, parabolic, hyperbolic, and rectilinear orbits
+        - For the circular case, the ascending node (AN) and argument of periapsis (AP) 
+          are ill-defined. The unit vector ie is set equal to the normalized inertial 
+          position vector (ir).
+        - Anomaly fields not applicable to the orbit type are set to None.
 
       Source:
       -------
-      Modified from
+        Modified from
         Analytical Mechanics of Space Systems, Fourth Edition
         Hanspeter Schaub and John L. Junkins
         DOI: https://doi.org/10.2514/4.105210
@@ -1388,167 +1416,167 @@ class OrbitConverter:
 
     @staticmethod
     def coe_to_pv(
-        coe : dict,
-        gp  : float = PHYSICALCONSTANTS.EARTH.GP,
+      coe : dict,
+      gp  : float = PHYSICALCONSTANTS.EARTH.GP,
     ) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Convert classical orbital elements to position and velocity vectors.
-        Handles all orbit types including parabolic and rectilinear cases.
-        
-        Input:
-        ------
-        coe : dict
-          sma  : semi-major axis [m]
-          ecc  : eccentricity [-]
-          inc  : inclination [rad]
-          raan : RAAN [rad]
-          aop  : argument of periapsis [rad]
-          ta   : true anomaly [rad] (for non-rectilinear orbits)
-          ea   : eccentric anomaly [rad] (for rectilinear elliptic only)
-          For parabolic orbits (ecc≈1), one of the following must be provided
-          to define the orbit's size, as 'sma' is infinite:
-            - periapsis   : periapsis radius [m]
-            - slr         : semi-latus rectum [m]
-            - ang_mom_mag : angular momentum magnitude [m²/s]
-        gp : float
-          Gravitational parameter [m³/s²]
-        
-        Output:
-        -------
+      """
+      Convert classical orbital elements to position and velocity vectors.
+      Handles all orbit types including parabolic and rectilinear cases.
+      
+      Input:
+      ------
+      coe : dict
+        sma  : semi-major axis [m]
+        ecc  : eccentricity [-]
+        inc  : inclination [rad]
+        raan : RAAN [rad]
+        aop  : argument of periapsis [rad]
+        ta   : true anomaly [rad] (for non-rectilinear orbits)
+        ea   : eccentric anomaly [rad] (for rectilinear elliptic only)
+        For parabolic orbits (ecc≈1), one of the following must be provided
+        to define the orbit's size, as 'sma' is infinite:
+          - periapsis   : periapsis radius [m]
+          - slr         : semi-latus rectum [m]
+          - ang_mom_mag : angular momentum magnitude [m²/s]
+      gp : float
+        Gravitational parameter [m³/s²]
+      
+      Output:
+      -------
         pos_vec : np.ndarray
-            Position vector [m]
+          Position vector [m]
         vel_vec : np.ndarray
-            Velocity vector [m/s]
-        
-        Notes:
-        ------
-        The code can handle the following orbit types:
-          - circular      :  e = 0           a > 0
-          - elliptical-2D :  0 < e < 1       a > 0
-          - elliptical-1D :  e = 1           a > 0 and finite (rectilinear)
-          - parabolic-2D  :  e = 1           a = inf
-          - hyperbolic-2D :  e > 1           a < 0
-        The code does not handle the following orbit types:
-          - parabolic-1D  :  e = 1           a = ? (rectilinear)
-          - hyperbolic-1D :  e > 1           a < 0 and finite (rectilinear)
+          Velocity vector [m/s]
+      
+      Notes:
+      ------
+      The code can handle the following orbit types:
+        - circular      :  e = 0           a > 0
+        - elliptical-2D :  0 < e < 1       a > 0
+        - elliptical-1D :  e = 1           a > 0 and finite (rectilinear)
+        - parabolic-2D  :  e = 1           a = inf
+        - hyperbolic-2D :  e > 1           a < 0
+      The code does not handle the following orbit types:
+        - parabolic-1D  :  e = 1           a = ? (rectilinear)
+        - hyperbolic-1D :  e > 1           a < 0 and finite (rectilinear)
 
-        Source:
-        -------
+      Source:
+      -------
         Modified from
-          Analytical Mechanics of Space Systems, Fourth Edition
-          Hanspeter Schaub and John L. Junkins
-          DOI: https://doi.org/10.2514/4.105210
-        """
-        # Extract orbital elements
-        sma  = coe['sma' ]
-        ecc  = coe['ecc' ]
-        inc  = coe['inc' ]
-        raan = coe['raan']
-        aop  = coe['aop']
+        Analytical Mechanics of Space Systems, Fourth Edition
+        Hanspeter Schaub and John L. Junkins
+        DOI: https://doi.org/10.2514/4.105210
+      """
+      # Extract orbital elements
+      sma  = coe['sma' ]
+      ecc  = coe['ecc' ]
+      inc  = coe['inc' ]
+      raan = coe['raan']
+      aop  = coe['aop']
 
-        # Rectilinear vs. non-rectilinear case handling
-        if ecc == 1.0 and sma > 0 and np.isfinite(sma):
-          # Rectilinear elliptic orbit case
+      # Rectilinear vs. non-rectilinear case handling
+      if ecc == 1.0 and sma > 0 and np.isfinite(sma):
+        # Rectilinear elliptic orbit case
 
-          # Extract eccentric anomaly
-          ea = coe.get('ea', None)
-          if ea is None:
-            raise ValueError("Eccentric anomaly 'ea' must be provided for rectilinear elliptic orbits")
+        # Extract eccentric anomaly
+        ea = coe.get('ea', None)
+        if ea is None:
+          raise ValueError("Eccentric anomaly 'ea' must be provided for rectilinear elliptic orbits")
 
-          # Position and velocity magnitudes
-          pos_mag = sma * (1 - ecc * np.cos(ea))
-          vel_mag = np.sqrt(2 * gp / pos_mag - gp / sma)
+        # Position and velocity magnitudes
+        pos_mag = sma * (1 - ecc * np.cos(ea))
+        vel_mag = np.sqrt(2 * gp / pos_mag - gp / sma)
+        
+        # Position vector
+        pos_dir = np.array([
+          np.cos(raan) * np.cos(aop) - np.sin(raan) * np.sin(aop) * np.cos(inc),
+          np.sin(raan) * np.cos(aop) + np.cos(raan) * np.sin(aop) * np.cos(inc),
+          np.sin( aop) * np.sin(inc)
+        ])
+        pos_vec = pos_mag * pos_dir
+        
+        # Velocity direction (along or opposite to position direction)
+        if np.sin(ea) > 0:
+          vel_vec = -vel_mag * pos_dir
+        else:
+          vel_vec =  vel_mag * pos_dir
+      
+      else:
+        # Non-rectilinear cases: elliptic-2D, hyperbolic, parabolic
+
+        # Extract true anomaly
+        ta = coe.get('ta', None)  
+        if ta is None:
+          raise ValueError("True anomaly 'ta' must be provided for non-rectilinear orbits")
+
+        # Orbit conic cases: parabolic vs. elliptic/hyperbolic
+        if ecc == 1:
+          # Parabolic case
+          #   Priority cascade for size input parameter:
+          #   1. 'periapsis' (highest priority)
+          #   2. 'slr'
+          #   3. 'ang_mom_mag' (lowest priority)
+
+          # Fetch all possible inputs first
+          periapsis_mag = coe.get('periapsis', None)
+          slr_val       = coe.get('slr', None)
+          ang_mom_mag   = coe.get('ang_mom_mag', None)
+
+          # Apply priority cascade
+          if periapsis_mag is not None:
+            slr = 2 * periapsis_mag
+            # Build a list of ignored parameters for a specific warning
+            ignored_params = []
+            if slr_val is not None:
+              ignored_params.append("'slr'")
+            if ang_mom_mag is not None:
+              ignored_params.append("'ang_mom_mag'")
+            if ignored_params:
+              ignored_str = " and ".join(ignored_params)
+              warning_msg = (
+                "Multiple size parameters for non-rectilinear parabolic orbit found in 'coe' dict. "
+                f"Using 'periapsis' (highest priority). Ignoring {ignored_str}."
+              )
+              warnings.warn(warning_msg, UserWarning)
+
+          elif slr_val is not None:
+            slr = slr_val
+            # Warn if lower-priority key was also present
+            if ang_mom_mag is not None:
+              warnings.warn("Multiple parabolic input parameters found to coe_to_pv function. 'periapsis' is None. Using 'slr' and ignoring 'ang_mom_mag'.", UserWarning)
           
-          # Position vector
-          pos_dir = np.array([
-            np.cos(raan) * np.cos(aop) - np.sin(raan) * np.sin(aop) * np.cos(inc),
-            np.sin(raan) * np.cos(aop) + np.cos(raan) * np.sin(aop) * np.cos(inc),
-            np.sin(aop) * np.sin(inc)
-          ])
-          pos_vec = pos_mag * pos_dir
+          elif ang_mom_mag is not None:
+              slr = ang_mom_mag**2 / gp
+              # No warning needed, this is the last resort
           
-          # Velocity direction (along or opposite to position direction)
-          if np.sin(ea) > 0:
-            vel_vec = -vel_mag * pos_dir
           else:
-            vel_vec =  vel_mag * pos_dir
+              # All three are None, this is a fatal error
+              raise ValueError("Either 'periapsis', 'slr', or 'ang_mom_mag' must be provided for parabolic orbits")
         
         else:
-          # Non-rectilinear cases: elliptic-2D, hyperbolic, parabolic
+          # Elliptic and hyperbolic cases
+          slr = sma * (1 - ecc**2)  # semi-latus rectum
 
-          # Extract true anomaly
-          ta = coe.get('ta', None)  
-          if ta is None:
-            raise ValueError("True anomaly 'ta' must be provided for non-rectilinear orbits")
+        # Position magnitude, true latitude angle, angular momentum magnitude
+        pos_mag     = slr / (1 + ecc * np.cos(ta))  # orbit radius
+        theta       = aop + ta                      # true latitude angle
+        ang_mom_mag = np.sqrt(gp * slr)             # orbit angular momentum magnitude
 
-          # Orbit conic cases: parabolic vs. elliptic/hyperbolic
-          if ecc == 1:
-            # Parabolic case
-            #   Priority cascade for size input parameter:
-            #   1. 'periapsis' (highest priority)
-            #   2. 'slr'
-            #   3. 'ang_mom_mag' (lowest priority)
-
-            # Fetch all possible inputs first
-            periapsis_mag = coe.get('periapsis', None)
-            slr_val       = coe.get('slr', None)
-            ang_mom_mag   = coe.get('ang_mom_mag', None)
-
-            # Apply priority cascade
-            if periapsis_mag is not None:
-                slr = 2 * periapsis_mag
-                # Build a list of ignored parameters for a specific warning
-                ignored_params = []
-                if slr_val is not None:
-                    ignored_params.append("'slr'")
-                if ang_mom_mag is not None:
-                    ignored_params.append("'ang_mom_mag'")
-                if ignored_params:
-                    ignored_str = " and ".join(ignored_params)
-                    warning_msg = (
-                        "Multiple size parameters for non-rectilinear parabolic orbit found in 'coe' dict. "
-                        f"Using 'periapsis' (highest priority). Ignoring {ignored_str}."
-                    )
-                    warnings.warn(warning_msg, UserWarning)
-
-            elif slr_val is not None:
-                slr = slr_val
-                # Warn if lower-priority key was also present
-                if ang_mom_mag is not None:
-                    warnings.warn("Multiple parabolic input parameters found to coe_to_pv function. 'periapsis' is None. Using 'slr' and ignoring 'ang_mom_mag'.", UserWarning)
-            
-            elif ang_mom_mag is not None:
-                slr = ang_mom_mag**2 / gp
-                # No warning needed, this is the last resort
-            
-            else:
-                # All three are None, this is a fatal error
-                raise ValueError("Either 'periapsis', 'slr', or 'ang_mom_mag' must be provided for parabolic orbits")
-          
-          else:
-            # Elliptic and hyperbolic cases
-            slr = sma * (1 - ecc**2)  # semi-latus rectum
-
-          # Position magnitude, true latitude angle, angular momentum magnitude
-          pos_mag     = slr / (1 + ecc * np.cos(ta))  # orbit radius
-          theta       = aop + ta                      # true latitude angle
-          ang_mom_mag = np.sqrt(gp * slr)             # orbit angular momentum magnitude
-
-          # Position vector
-          pos_vec = np.array([
-            pos_mag * (np.cos(raan) * np.cos(theta) - np.sin(raan) * np.sin(theta) * np.cos(inc)),
-            pos_mag * (np.sin(raan) * np.cos(theta) + np.cos(raan) * np.sin(theta) * np.cos(inc)),
-            pos_mag * (                                              np.sin(theta) * np.sin(inc))
-          ])
-          
-          # Velocity vector
-          vel_vec = np.array([
-            -gp / ang_mom_mag * (np.cos(raan) * (np.sin(theta) + ecc * np.sin(aop)) + np.sin(raan) * (np.cos(theta) + ecc * np.cos(aop)) * np.cos(inc)),
-            -gp / ang_mom_mag * (np.sin(raan) * (np.sin(theta) + ecc * np.sin(aop)) - np.cos(raan) * (np.cos(theta) + ecc * np.cos(aop)) * np.cos(inc)),
-            -gp / ang_mom_mag * (                                                                    -(np.cos(theta) + ecc * np.cos(aop)) * np.sin(inc))
-          ])
+        # Position vector
+        pos_vec = np.array([
+          pos_mag * (np.cos(raan) * np.cos(theta) - np.sin(raan) * np.sin(theta) * np.cos(inc)),
+          pos_mag * (np.sin(raan) * np.cos(theta) + np.cos(raan) * np.sin(theta) * np.cos(inc)),
+          pos_mag * (                                              np.sin(theta) * np.sin(inc))
+        ])
         
-        return pos_vec, vel_vec
+        # Velocity vector
+        vel_vec = np.array([
+          -gp / ang_mom_mag * (np.cos(raan) * (np.sin(theta) + ecc * np.sin(aop)) + np.sin(raan) * (np.cos(theta) + ecc * np.cos(aop)) * np.cos(inc)),
+          -gp / ang_mom_mag * (np.sin(raan) * (np.sin(theta) + ecc * np.sin(aop)) - np.cos(raan) * (np.cos(theta) + ecc * np.cos(aop)) * np.cos(inc)),
+          -gp / ang_mom_mag * (                                                                   -(np.cos(theta) + ecc * np.cos(aop)) * np.sin(inc))
+        ])
+      
+      return pos_vec, vel_vec
 
     @staticmethod
     def ea_to_ta(
@@ -1561,19 +1589,19 @@ class OrbitConverter:
       
       Input:
       ------
-      ea : float
-          Eccentric anomaly [rad]
-      ecc : float
-          Eccentricity (0 <= ecc < 1)
+          ea : float
+              Eccentric anomaly [rad]
+          ecc : float
+              Eccentricity (0 <= ecc < 1)
       
       Output:
       -------
-      ta : float
+        ta : float
           True anomaly [rad]
 
       Source:
       -------
-      Modified from
+        Modified from
         Analytical Mechanics of Space Systems, Fourth Edition
         Hanspeter Schaub and John L. Junkins
         DOI: https://doi.org/10.2514/4.105210
@@ -1599,27 +1627,27 @@ class OrbitConverter:
       
       Input:
       ------
-      ea : float
+        ea : float
           Eccentric anomaly [rad]
-      ecc : float
+        ecc : float
           Eccentricity (0 <= ecc < 1)
       
       Output:
       -------
-      ma : float
+        ma : float
           Mean anomaly [rad]
 
       Source:
       -------
-      Modified from
+        Modified from
         Analytical Mechanics of Space Systems, Fourth Edition
         Hanspeter Schaub and John L. Junkins
         DOI: https://doi.org/10.2514/4.105210
       """
       if 0 <= ecc < 1:
-          ma = ea - ecc * np.sin(ea)
+        ma = ea - ecc * np.sin(ea)
       else:
-          raise ValueError(f"ea_to_ma() requires 0 <= ecc < 1, received ecc = {ecc}")
+        raise ValueError(f"ea_to_ma() requires 0 <= ecc < 1, received ecc = {ecc}")
 
       return ma
     
@@ -1634,30 +1662,30 @@ class OrbitConverter:
       
       Input:
       ------
-      ta : float
+        ta : float
           True anomaly [rad]
-      ecc : float
+        ecc : float
           Eccentricity (0 <= ecc < 1)
       
       Output:
       -------
-      ea : float
+        ea : float
           Eccentric anomaly [rad]
       
       Source:
       -------
-      Modified from
+        Modified from
         Analytical Mechanics of Space Systems, Fourth Edition
         Hanspeter Schaub and John L. Junkins
         DOI: https://doi.org/10.2514/4.105210
       """
       if 0 <= ecc < 1:
-          ea = 2 * np.arctan2(
-              np.sqrt(1 - ecc) * np.sin(ta / 2),
-              np.sqrt(1 + ecc) * np.cos(ta / 2)
-          )
+        ea = 2 * np.arctan2(
+          np.sqrt(1 - ecc) * np.sin(ta / 2),
+          np.sqrt(1 + ecc) * np.cos(ta / 2)
+        )
       else:
-          raise ValueError(f"ta_to_ea() requires 0 <= ecc < 1, received ecc = {ecc}")
+        raise ValueError(f"ta_to_ea() requires 0 <= ecc < 1, received ecc = {ecc}")
       
       return ea
     
@@ -1671,34 +1699,29 @@ class OrbitConverter:
       
       Input:
       ------
-      ta  : float
-        True anomaly [rad]
-      ecc : float
-        Eccentricity (ecc > 1)
+        ta : float
+          True anomaly [rad]
+        ecc : float
+          Eccentricity (ecc > 1)
 
       Output:
       -------
-      ha : float
-          Hyperbolic anomaly [rad]
-
-      Output:
-      -------
-      ha : float
+        ha : float
           Hyperbolic anomaly [rad]
 
       Source:
       -------
-      Modified from
+        Modified from
         Analytical Mechanics of Space Systems, Fourth Edition
         Hanspeter Schaub and John L. Junkins
         DOI: https://doi.org/10.2514/4.105210
       """
       if ecc > 1:
-          ha = 2 * np.arctanh(
-              np.sqrt((ecc - 1) / (ecc + 1)) * np.tan(ta / 2)
-          )
+        ha = 2 * np.arctanh(
+          np.sqrt((ecc - 1) / (ecc + 1)) * np.tan(ta / 2)
+        )
       else:
-          raise ValueError(f"ta_to_ha() requires ecc > 1, received ecc = {ecc}")
+        raise ValueError(f"ta_to_ha() requires ecc > 1, received ecc = {ecc}")
 
       return ha
     
@@ -1712,19 +1735,19 @@ class OrbitConverter:
       
       Input:
       ------
-      ha : float
+        ha : float
           Hyperbolic anomaly [rad]
-      ecc : float
+        ecc : float
           Eccentricity (ecc > 1)
       
       Output:
       -------
-      ta : float
+        ta : float
           True anomaly [rad]
 
       Source:
       -------
-      Modified from
+        Modified from
         Analytical Mechanics of Space Systems, Fourth Edition
         Hanspeter Schaub and John L. Junkins
         DOI: https://doi.org/10.2514/4.105210
@@ -1748,19 +1771,19 @@ class OrbitConverter:
       
       Input:
       ------
-      ha : float
+        ha : float
           Hyperbolic anomaly [rad]
-      ecc : float
-          Eccentricity (e > 1)
+        ecc : float
+          Eccentricity (ecc > 1)
       
       Output:
       -------
-      mha : float
+        mha : float
           Mean hyperbolic anomaly [rad]
 
       Source:
       -------
-      Modified from
+        Modified from
         Analytical Mechanics of Space Systems, Fourth Edition
         Hanspeter Schaub and John L. Junkins
         DOI: https://doi.org/10.2514/4.105210
@@ -1786,18 +1809,18 @@ class OrbitConverter:
       
       Input:
       ------
-      ma : float
+        ma : float
           Mean anomaly [rad]
-      ecc : float
-          Eccentricity (0 <= e < 1)
-      tol : float
+        ecc : float
+          Eccentricity (0 <= ecc < 1)
+        tol : float
           Convergence tolerance
-      max_iter : int
+        max_iter : int
           Maximum iterations
       
       Output:
       -------
-      ea : float
+        ea : float
           Eccentric anomaly [rad]
       """
       return TwoBody_RootSolvers.kepler(ma, ecc, tol, max_iter)
@@ -1815,23 +1838,23 @@ class OrbitConverter:
       
       Input:
       ------
-      ma : float
+        mha : float
           Mean hyperbolic anomaly [rad]
-      ecc : float
-          Eccentricity (e > 1)
-      tol : float
+        ecc : float
+          Eccentricity (ecc > 1)
+        tol : float
           Convergence tolerance
-      max_iter : int
+        max_iter : int
           Maximum iterations
       
       Output:
       -------
-      ha : float
+        ha : float
           Hyperbolic anomaly [rad]
 
       Source:
       -------
-      Modified from
+        Modified from
         Analytical Mechanics of Space Systems, Fourth Edition
         Hanspeter Schaub and John L. Junkins
         DOI: https://doi.org/10.2514/4.105210

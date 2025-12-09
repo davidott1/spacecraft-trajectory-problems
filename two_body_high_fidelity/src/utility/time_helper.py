@@ -24,7 +24,7 @@ def format_time_offset(
   
   Output:
   -------
-    str
+    formatted_str : str
       Formatted string like "+47d 21h 30m 20.357s" or "-1d 02h 15m 00.000s"
   """
   sign    = '+' if seconds >= 0 else '-'
@@ -50,9 +50,6 @@ def parse_time(
   - Space-separated: "2025-10-01 00:00:00"
   - With microseconds: "2025-10-01 00:00:00.123456"
   
-  The 'Z' suffix (UTC indicator) is stripped before parsing for 
-  Python < 3.11 compatibility.
-  
   Input:
   ------
     time_str : str
@@ -60,7 +57,7 @@ def parse_time(
       
   Output:
   -------
-    datetime
+    dt : datetime
       Parsed datetime object.
   """
   # Handle 'Z' suffix for Python < 3.11 compatibility

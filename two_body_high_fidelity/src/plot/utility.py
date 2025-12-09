@@ -12,13 +12,15 @@ def get_equal_limits(
   
   Input:
   ------
-  ax : matplotlib.axes._subplots.Axes3DSubplot
-    The 3D axes object.
+    ax : matplotlib.axes._subplots.Axes3DSubplot
+      The 3D axes object.
     
   Output:
   -------
-  tuple[float, float]
-    The minimum and maximum limits for all axes.
+    min_limit : float
+      The minimum limit for all axes.
+    max_limit : float
+      The maximum limit for all axes.
   """
   x_limits   = ax.get_xlim3d()
   y_limits   = ax.get_ylim3d()
@@ -45,6 +47,10 @@ def add_utc_time_axis(
       The epoch time corresponding to t=0.
     max_time : float
       The maximum time value on the primary x-axis.
+      
+  Output:
+  -------
+    None
   """
   ax2 = ax.twiny()
   ax2.set_xlim(ax.get_xlim())
@@ -65,7 +71,27 @@ def add_utc_time_axis(
   ax2.xaxis.tick_top()
 
 
-def add_stats(ax, data, label):
+def add_stats(
+  ax    : Any,
+  data  : np.ndarray,
+  label : str,
+) -> None:
+  """
+  Add statistics text box to a plot axis.
+  
+  Input:
+  ------
+    ax : matplotlib.axes.Axes
+      The axes object to add statistics to.
+    data : np.ndarray
+      Data array to compute statistics from.
+    label : str
+      Label prefix for statistics text.
+      
+  Output:
+  -------
+    None
+  """
   stats = (
     f'{label} Mean : {np.mean(data):.3f}\n'
     f'{label} RMS  : {np.sqrt(np.mean(data**2)):.3f}\n'

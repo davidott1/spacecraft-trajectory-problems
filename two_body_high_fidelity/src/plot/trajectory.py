@@ -32,7 +32,7 @@ def plot_3d_trajectories(
       
   Output:
   -------
-    matplotlib.figure.Figure
+    fig : matplotlib.figure.Figure
       Figure object containing the 3D plots.
   """
   fig = plt.figure(figsize=(18,10))
@@ -124,7 +124,7 @@ def plot_time_series(
       
   Output:
   -------
-    matplotlib.figure.Figure
+    fig : matplotlib.figure.Figure
       Figure object containing the time series plots.
   """
   
@@ -256,7 +256,7 @@ def plot_3d_error(
       
   Output:
   -------
-    matplotlib.figure.Figure
+    fig : matplotlib.figure.Figure
       Figure object containing the 3D error plots.
   """
   fig = plt.figure(figsize=(18,10))
@@ -337,7 +337,7 @@ def plot_time_series_error(
       
   Output:
   -------
-    matplotlib.figure.Figure
+    fig : matplotlib.figure.Figure
       Figure object containing the time series error plots.
   """
   # Use plot_time_s for both datasets

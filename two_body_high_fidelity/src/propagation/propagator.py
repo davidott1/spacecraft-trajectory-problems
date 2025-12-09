@@ -54,8 +54,8 @@ def propagate_tle(
       
   Output:
   -------
-    dict
-      Result dictionary with 'success', 'state', 'time', 'message'.
+    result : dict
+      Result dictionary with 'success', 'state', 'time', 'message', 'frame', 'coe'.
   """
   # Input validation
   if (time_o is not None or time_f is not None) and time_eval is not None:
@@ -206,7 +206,7 @@ def get_tle_initial_state(
   
   Output:
   -------
-    np.ndarray
+    initial_state : np.ndarray
       Initial state [x, y, z, vx, vy, vz] in m and m/s.
   """
   # Modify TLE to disable drag if requested
@@ -260,7 +260,7 @@ def propagate_state_numerical_integration(
   gp                  : float                = PHYSICALCONSTANTS.EARTH.GP,
 ) -> dict:
   """
-  Propagate an orbit from initial cartesian state.
+  Propagate an orbit from initial cartesian state using numerical integration.
   
   Input:
   ------
@@ -289,17 +289,16 @@ def propagate_state_numerical_integration(
       If specified, solution is evaluated at uniformly spaced times.
     gp : float, optional
       Gravitational parameter for orbital element conversion [m³/s²].
-      If None, uses dynamics.gravity.two_body.gp.
   
   Output:
   -------
-    dict
+    result : dict
       Dictionary containing:
       - success : bool - Integration success flag
       - message : str - Status message
       - time : np.ndarray - Time array [s]
       - state : np.ndarray - State history [6 x N]
-      - final_state : np.ndarray - Final state vector
+      - state_f : np.ndarray - Final state vector
       - coe : dict - Classical orbital elements time series (if requested)
   """
   # Time span for integration
@@ -383,7 +382,50 @@ def run_high_fidelity_propagation(
   
   Creates an equal-spaced time grid. If comparing to JPL Horizons,
   also stores interpolated results at ephemeris times.
+  
+  Input:
+  ------
+    initial_state : np.ndarray
+      Initial state vector [pos, vel] in meters and m/s.
+    time_o_dt : datetime
+      Initial time as datetime object.
+    time_f_dt : datetime
+      Final time as datetime object.
+    mass : float
+      Spacecraft mass [kg].
+    include_drag : bool
+      Flag to enable atmospheric drag.
+    cd : float
+      Drag coefficient.
+    area_drag : float
+      Cross-sectional area for drag [m²].
+    cr : float
+      Radiation pressure coefficient.
+    area_srp : float
+      Cross-sectional area for SRP [m²].
+    include_third_body : bool
+      Flag to enable third-body gravity.
+    third_bodies_list : list
+      List of third bodies (e.g., ['SUN', 'MOON']).
+    include_zonal_harmonics : bool
+      Flag to enable zonal harmonics.
+    zonal_harmonics_list : list
+      List of zonal harmonics (e.g., ['J2', 'J3', 'J4']).
+    include_srp : bool
+      Flag to enable solar radiation pressure.
+    spice_kernels_folderpath : Path
+      Path to SPICE kernels folder.
+    result_jpl_horizons_ephemeris : dict | None
+      JPL Horizons ephemeris result for comparison.
+    compare_jpl_horizons : bool
+      Flag to enable Horizons comparison.
+      
+  Output:
+  -------
+    result : dict
+      Result dictionary containing propagation results.
   """
+  # Print header
   print("\nHigh-Fidelity Model")
 
   # Calculate Ephemeris Times (ET) for integration
@@ -426,7 +468,7 @@ def run_high_fidelity_propagation(
   print("        Third-Body")
   if include_third_body:
     print(f"          Bodies    : {', '.join(third_bodies_list)}")
-    print("          Ephemeris : SPICE (High Accuracy)")
+    print("          Ephemeris : SPICE")
   else:
     print("          Bodies    : None")
       
@@ -561,8 +603,29 @@ def run_sgp4_propagation(
   compare_jpl_horizons          : bool,
 ) -> Optional[dict]:
   """
-  Propagate SGP4 on equal-spaced grid. If comparing to Horizons,
-  also stores results at ephemeris times.
+  Propagate SGP4 on equal-spaced grid.
+  
+  If comparing to Horizons, also stores results at ephemeris times.
+  
+  Input:
+  ------
+    result_jpl_horizons_ephemeris : dict | None
+      JPL Horizons ephemeris result for comparison.
+    tle_line_1 : str
+      First line of TLE.
+    tle_line_2 : str
+      Second line of TLE.
+    time_o_dt : datetime
+      Initial time as datetime object.
+    time_f_dt : datetime
+      Final time as datetime object.
+    compare_jpl_horizons : bool
+      Flag to enable Horizons comparison.
+      
+  Output:
+  -------
+    result : dict | None
+      Result dictionary containing SGP4 propagation results, or None if failed.
   """
   print("\nSGP4 Model")
 
@@ -664,6 +727,56 @@ def run_propagations(
 ) -> tuple[dict, Optional[dict]]:
   """
   Run high-fidelity and SGP4 propagations.
+  
+  Input:
+  ------
+    initial_state : np.ndarray
+      Initial state vector [pos, vel] in meters and m/s.
+    time_o_dt : datetime
+      Initial time as datetime object.
+    time_f_dt : datetime
+      Final time as datetime object.
+    mass : float
+      Spacecraft mass [kg].
+    include_drag : bool
+      Flag to enable atmospheric drag.
+    compare_tle : bool
+      Flag to enable TLE/SGP4 comparison.
+    compare_jpl_horizons : bool
+      Flag to enable Horizons comparison.
+    cd : float
+      Drag coefficient.
+    area_drag : float
+      Cross-sectional area for drag [m²].
+    cr : float
+      Radiation pressure coefficient.
+    area_srp : float
+      Cross-sectional area for SRP [m²].
+    include_third_body : bool
+      Flag to enable third-body gravity.
+    third_bodies_list : list
+      List of third bodies (e.g., ['SUN', 'MOON']).
+    include_zonal_harmonics : bool
+      Flag to enable zonal harmonics.
+    zonal_harmonics_list : list
+      List of zonal harmonics (e.g., ['J2', 'J3', 'J4']).
+    include_srp : bool
+      Flag to enable solar radiation pressure.
+    spice_kernels_folderpath : Path
+      Path to SPICE kernels folder.
+    result_jpl_horizons_ephemeris : dict | None
+      JPL Horizons ephemeris result for comparison.
+    tle_line_1 : str
+      First line of TLE.
+    tle_line_2 : str
+      Second line of TLE.
+      
+  Output:
+  -------
+    result_high_fidelity : dict
+      High-fidelity propagation result.
+    result_sgp4 : dict | None
+      SGP4 propagation result or None.
   """
   # High-fidelity propagation
   result_high_fidelity = run_high_fidelity_propagation(
