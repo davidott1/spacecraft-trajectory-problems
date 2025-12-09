@@ -34,7 +34,7 @@ def print_results_summary(
     ecc  = result_high_fidelity['coe']['ecc' ][-1]
     inc  = result_high_fidelity['coe']['inc' ][-1] * CONVERTER.DEG_PER_RAD
     raan = result_high_fidelity['coe']['raan'][-1] * CONVERTER.DEG_PER_RAD
-    argp = result_high_fidelity['coe']['argp'][-1] * CONVERTER.DEG_PER_RAD
+    aop  = result_high_fidelity['coe']['aop' ][-1] * CONVERTER.DEG_PER_RAD
     ta   = result_high_fidelity['coe']['ta'  ][-1] * CONVERTER.DEG_PER_RAD
     ea   = result_high_fidelity['coe']['ea'  ][-1] * CONVERTER.DEG_PER_RAD
     ma   = result_high_fidelity['coe']['ma'  ][-1] * CONVERTER.DEG_PER_RAD
@@ -50,7 +50,7 @@ def print_results_summary(
     print(f"      ECC  : { ecc:>19.12e}")
     print(f"      INC  : { inc:>19.12e} deg")
     print(f"      RAAN : {raan:>19.12e} deg")
-    print(f"      ARGP : {argp:>19.12e} deg")
+    print(f"      AOP  : { aop:>19.12e} deg")
     print(f"      TA   : {  ta:>19.12e} deg")
     print(f"      EA   : {  ea:>19.12e} deg")
     print(f"      MA   : {  ma:>19.12e} deg")

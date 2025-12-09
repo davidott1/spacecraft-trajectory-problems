@@ -1236,7 +1236,7 @@ class OrbitConverter:
         ecc  : eccentricity [-]
         inc  : inclination [rad]
         raan : right ascension of the ascending node [rad]
-        argp : argument of periapsis [rad]
+        aop  : argument of periapsis [rad]
         ma   : mean anomaly [rad] (None for rectilinear or parabolic)
         ta   : true anomaly [rad] (None for rectilinear)
         ea   : eccentric anomaly [rad] (None for hyperbolic/parabolic/non-rectilinear-elliptic)
@@ -1329,7 +1329,7 @@ class OrbitConverter:
       # Compute the 3-1-3 orbit plane orientation angles
       raan = np.arctan2(ang_mom_dir[0], -ang_mom_dir[1])
       inc  = np.arccos(ang_mom_dir[2])
-      argp = np.arctan2(ecc_dir[2], periapsis_dir[2])
+      aop  = np.arctan2(ecc_dir[2], periapsis_dir[2])
       
       # Compute anomalies
       ma = None
@@ -1377,7 +1377,7 @@ class OrbitConverter:
         'ecc'  : ecc_mag,
         'inc'  : inc,
         'raan' : raan,
-        'argp' : argp,
+        'aop'  : aop,
         'ma'   : ma,
         'ta'   : ta,
         'ea'   : ea,
@@ -1402,7 +1402,7 @@ class OrbitConverter:
           ecc  : eccentricity [-]
           inc  : inclination [rad]
           raan : RAAN [rad]
-          argp : argument of periapsis [rad]
+          aop  : argument of periapsis [rad]
           ta   : true anomaly [rad] (for non-rectilinear orbits)
           ea   : eccentric anomaly [rad] (for rectilinear elliptic only)
           For parabolic orbits (ecc≈1), one of the following must be provided
@@ -1444,7 +1444,7 @@ class OrbitConverter:
         ecc  = coe['ecc' ]
         inc  = coe['inc' ]
         raan = coe['raan']
-        argp = coe['argp']
+        aop  = coe['aop']
 
         # Rectilinear vs. non-rectilinear case handling
         if ecc == 1.0 and sma > 0 and np.isfinite(sma):
@@ -1461,9 +1461,9 @@ class OrbitConverter:
           
           # Position vector
           pos_dir = np.array([
-            np.cos(raan) * np.cos(argp) - np.sin(raan) * np.sin(argp) * np.cos(inc),
-            np.sin(raan) * np.cos(argp) + np.cos(raan) * np.sin(argp) * np.cos(inc),
-            np.sin(argp) * np.sin(inc)
+            np.cos(raan) * np.cos(aop) - np.sin(raan) * np.sin(aop) * np.cos(inc),
+            np.sin(raan) * np.cos(aop) + np.cos(raan) * np.sin(aop) * np.cos(inc),
+            np.sin(aop) * np.sin(inc)
           ])
           pos_vec = pos_mag * pos_dir
           
@@ -1531,7 +1531,7 @@ class OrbitConverter:
 
           # Position magnitude, true latitude angle, angular momentum magnitude
           pos_mag     = slr / (1 + ecc * np.cos(ta))  # orbit radius
-          theta       = argp + ta                     # true latitude angle
+          theta       = aop + ta                      # true latitude angle
           ang_mom_mag = np.sqrt(gp * slr)             # orbit angular momentum magnitude
 
           # Position vector
@@ -1543,9 +1543,9 @@ class OrbitConverter:
           
           # Velocity vector
           vel_vec = np.array([
-            -gp / ang_mom_mag * (np.cos(raan) * (np.sin(theta) + ecc * np.sin(argp)) + np.sin(raan) * (np.cos(theta) + ecc * np.cos(argp)) * np.cos(inc)),
-            -gp / ang_mom_mag * (np.sin(raan) * (np.sin(theta) + ecc * np.sin(argp)) - np.cos(raan) * (np.cos(theta) + ecc * np.cos(argp)) * np.cos(inc)),
-            -gp / ang_mom_mag * (                                                                    -(np.cos(theta) + ecc * np.cos(argp)) * np.sin(inc))
+            -gp / ang_mom_mag * (np.cos(raan) * (np.sin(theta) + ecc * np.sin(aop)) + np.sin(raan) * (np.cos(theta) + ecc * np.cos(aop)) * np.cos(inc)),
+            -gp / ang_mom_mag * (np.sin(raan) * (np.sin(theta) + ecc * np.sin(aop)) - np.cos(raan) * (np.cos(theta) + ecc * np.cos(aop)) * np.cos(inc)),
+            -gp / ang_mom_mag * (                                                                    -(np.cos(theta) + ecc * np.cos(aop)) * np.sin(inc))
           ])
         
         return pos_vec, vel_vec

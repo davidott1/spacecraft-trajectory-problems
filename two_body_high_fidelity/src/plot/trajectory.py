@@ -198,14 +198,14 @@ def plot_time_series(
   ax_raan.grid(True)
   ax_raan.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
 
-  # Plot argp vs time (row 4, column 1)
-  ax_argp = plt.subplot2grid((6, 2), (4, 1), sharex=ax_pos)
-  argp_unwrapped = np.unwrap(coe['argp']) * CONVERTER.DEG_PER_RAD
-  ax_argp.plot(time, argp_unwrapped, 'b-', linewidth=1.5)
-  ax_argp.tick_params(labelbottom=False)
-  ax_argp.set_ylabel('Argument of Perigee\n[deg]')
-  ax_argp.grid(True)
-  ax_argp.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+  # Plot aop vs time (row 4, column 1)
+  ax_aop = plt.subplot2grid((6, 2), (4, 1), sharex=ax_pos)
+  aop_unwrapped = np.unwrap(coe['aop']) * CONVERTER.DEG_PER_RAD
+  ax_aop.plot(time, aop_unwrapped, 'b-', linewidth=1.5)
+  ax_aop.tick_params(labelbottom=False)
+  ax_aop.set_ylabel('Argument of Periapsis\n[deg]')
+  ax_aop.grid(True)
+  ax_aop.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
 
   # Plot ta, ea, ma vs time (row 5, column 1)
   ax_anom = plt.subplot2grid((6, 2), (5, 1), sharex=ax_pos)
@@ -228,7 +228,7 @@ def plot_time_series(
       add_utc_time_axis(ax, epoch, max_time)
 
   # Align y-axis labels for right column
-  fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_argp, ax_anom])
+  fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_aop, ax_anom])
   
   # Align y-axis labels for left column
   fig.align_ylabels([ax_pos, ax_vel])
@@ -471,18 +471,18 @@ def plot_time_series_error(
   ax_raan.grid(True)
   ax_raan.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
 
-  # Plot argument of perigee error (row 4, column 1)
-  ax_argp = plt.subplot2grid((6, 2), (4, 1), sharex=ax_pos)
-  if 'argp' in coe_ref and 'argp' in coe_comp:
-    # Handle angle wrapping for ArgP
-    argp_error_rad = np.arctan2(np.sin(coe_comp['argp'] - coe_ref['argp']), 
-                   np.cos(coe_comp['argp'] - coe_ref['argp']))
-    argp_error = argp_error_rad * CONVERTER.DEG_PER_RAD
-    ax_argp.plot(time, argp_error, 'b-', linewidth=1.5)
-  ax_argp.tick_params(labelbottom=False)
-  ax_argp.set_ylabel('Argument of\nPerigee Error\n[deg]')
-  ax_argp.grid(True)
-  ax_argp.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+  # Plot argument of periapsis error (row 4, column 1)
+  ax_aop = plt.subplot2grid((6, 2), (4, 1), sharex=ax_pos)
+  if 'aop' in coe_ref and 'aop' in coe_comp:
+    # Handle angle wrapping for AOP
+    aop_error_rad = np.arctan2(np.sin(coe_comp['aop'] - coe_ref['aop']), 
+                   np.cos(coe_comp['aop'] - coe_ref['aop']))
+    aop_error = aop_error_rad * CONVERTER.DEG_PER_RAD
+    ax_aop.plot(time, aop_error, 'b-', linewidth=1.5)
+  ax_aop.tick_params(labelbottom=False)
+  ax_aop.set_ylabel('Argument of\nPeriapsis Error\n[deg]')
+  ax_aop.grid(True)
+  ax_aop.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
 
   # Plot true anomaly error vs time (row 5, column 1)
   ax_ta = plt.subplot2grid((6, 2), (5, 1), sharex=ax_pos)
@@ -502,7 +502,7 @@ def plot_time_series_error(
     add_utc_time_axis(ax_pos, epoch, time_ref[-1])
 
   # Align y-axis labels
-  fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_argp, ax_ta])
+  fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_aop, ax_ta])
   fig.align_ylabels([ax_pos, ax_vel])
   
   fig.suptitle(title, fontsize=16)
