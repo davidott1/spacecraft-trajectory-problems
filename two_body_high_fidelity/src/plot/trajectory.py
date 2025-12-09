@@ -317,7 +317,7 @@ def plot_time_series_error(
   result_comp : dict, 
   epoch       : Optional[datetime.datetime] = None, 
   title       : str                         = "Time Series Error", 
-  use_ric     : bool                        = True
+  use_ric     : bool                        = True,
 ) -> Figure:
   """
   Create time series error plots between reference and comparison trajectories.
@@ -344,18 +344,19 @@ def plot_time_series_error(
   time_ref  = result_ref['plot_time_s']
   time_comp = result_comp['plot_time_s']
   
-  # Check if time grids match
-  if not np.array_equal(time_ref, time_comp):
+  state_ref  = result_ref['state']
+  state_comp = result_comp['state']
+  coe_ref    = result_ref['coe']
+  coe_comp   = result_comp['coe']
+  
+  # Verify time grids match (use allclose for floating-point comparison)
+  if len(time_ref) != len(time_comp) or not np.allclose(time_ref, time_comp, rtol=1e-9, atol=1e-9):
     raise ValueError(
       f"Time grids don't match! "
       f"Reference has {len(time_ref)} points from {time_ref[0]:.1f} to {time_ref[-1]:.1f} s, "
       f"Comparison has {len(time_comp)} points from {time_comp[0]:.1f} to {time_comp[-1]:.1f} s. "
       f"Both datasets must use the same time grid for error comparison."
     )
-  
-  state_ref  = result_ref['state']
-  state_comp = result_comp['state']
-  coe_comp   = result_comp['coe']
   
   # Create figure with subplots matching the grid structure
   fig = plt.figure(figsize=(18, 10))
@@ -429,8 +430,8 @@ def plot_time_series_error(
 
   # Plot sma error vs time (row 0, column 1)
   ax_sma = plt.subplot2grid((6, 2), (0, 1), sharex=ax_pos)
-  if 'sma' in result_ref['coe'] and 'sma' in coe_comp:
-    sma_error = result_ref['coe']['sma'] - coe_comp['sma']
+  if 'sma' in coe_ref and 'sma' in coe_comp:
+    sma_error = coe_comp['sma'] - coe_ref['sma']
     ax_sma.plot(time, sma_error, 'b-', linewidth=1.5)
   ax_sma.tick_params(labelbottom=False)
   ax_sma.set_ylabel('SMA Error\n[m]')
@@ -439,8 +440,8 @@ def plot_time_series_error(
 
   # Plot eccentricity error vs time (row 1, column 1)
   ax_ecc = plt.subplot2grid((6, 2), (1, 1), sharex=ax_pos)
-  if 'ecc' in result_ref['coe'] and 'ecc' in coe_comp:
-    ecc_error = result_ref['coe']['ecc'] - coe_comp['ecc']
+  if 'ecc' in coe_ref and 'ecc' in coe_comp:
+    ecc_error = coe_comp['ecc'] - coe_ref['ecc']
     ax_ecc.plot(time, ecc_error, 'b-', linewidth=1.5)
   ax_ecc.tick_params(labelbottom=False)
   ax_ecc.set_ylabel('Eccentricity Error\n[-]')
@@ -449,8 +450,8 @@ def plot_time_series_error(
 
   # Plot inclination error (row 2, column 1)
   ax_inc = plt.subplot2grid((6, 2), (2, 1), sharex=ax_pos)
-  if 'inc' in result_ref['coe'] and 'inc' in coe_comp:
-    inc_error = (result_ref['coe']['inc'] - coe_comp['inc']) * CONVERTER.DEG_PER_RAD
+  if 'inc' in coe_ref and 'inc' in coe_comp:
+    inc_error = (coe_comp['inc'] - coe_ref['inc']) * CONVERTER.DEG_PER_RAD
     ax_inc.plot(time, inc_error, 'b-', linewidth=1.5)
   ax_inc.tick_params(labelbottom=False)
   ax_inc.set_ylabel('Inclination Error\n[deg]')
@@ -459,10 +460,10 @@ def plot_time_series_error(
 
   # Plot RAAN error vs time (row 3, column 1)
   ax_raan = plt.subplot2grid((6, 2), (3, 1), sharex=ax_pos)
-  if 'raan' in result_ref['coe'] and 'raan' in coe_comp:
+  if 'raan' in coe_ref and 'raan' in coe_comp:
     # Handle angle wrapping for RAAN
-    raan_error_rad = np.arctan2(np.sin(result_ref['coe']['raan'] - coe_comp['raan']), 
-                   np.cos(result_ref['coe']['raan'] - coe_comp['raan']))
+    raan_error_rad = np.arctan2(np.sin(coe_comp['raan'] - coe_ref['raan']), 
+                   np.cos(coe_comp['raan'] - coe_ref['raan']))
     raan_error = raan_error_rad * CONVERTER.DEG_PER_RAD
     ax_raan.plot(time, raan_error, 'b-', linewidth=1.5)
   ax_raan.tick_params(labelbottom=False)
@@ -472,10 +473,10 @@ def plot_time_series_error(
 
   # Plot argument of perigee error (row 4, column 1)
   ax_argp = plt.subplot2grid((6, 2), (4, 1), sharex=ax_pos)
-  if 'argp' in result_ref['coe'] and 'argp' in coe_comp:
+  if 'argp' in coe_ref and 'argp' in coe_comp:
     # Handle angle wrapping for ArgP
-    argp_error_rad = np.arctan2(np.sin(result_ref['coe']['argp'] - coe_comp['argp']), 
-                   np.cos(result_ref['coe']['argp'] - coe_comp['argp']))
+    argp_error_rad = np.arctan2(np.sin(coe_comp['argp'] - coe_ref['argp']), 
+                   np.cos(coe_comp['argp'] - coe_ref['argp']))
     argp_error = argp_error_rad * CONVERTER.DEG_PER_RAD
     ax_argp.plot(time, argp_error, 'b-', linewidth=1.5)
   ax_argp.tick_params(labelbottom=False)
@@ -485,10 +486,10 @@ def plot_time_series_error(
 
   # Plot true anomaly error vs time (row 5, column 1)
   ax_ta = plt.subplot2grid((6, 2), (5, 1), sharex=ax_pos)
-  if 'ta' in result_ref['coe'] and 'ta' in coe_comp:
+  if 'ta' in coe_ref and 'ta' in coe_comp:
     # Handle angle wrapping for TA
-    ta_error_rad = np.arctan2(np.sin(result_ref['coe']['ta'] - coe_comp['ta']), 
-                   np.cos(result_ref['coe']['ta'] - coe_comp['ta']))
+    ta_error_rad = np.arctan2(np.sin(coe_comp['ta'] - coe_ref['ta']), 
+                   np.cos(coe_comp['ta'] - coe_ref['ta']))
     ta_error = ta_error_rad * CONVERTER.DEG_PER_RAD
     ax_ta.plot(time, ta_error, 'b-', linewidth=1.5)
   ax_ta.set_xlabel('Time\n[s]')
@@ -513,7 +514,7 @@ def generate_error_plots(
   result_jpl_horizons_ephemeris    : Optional[dict],
   result_high_fidelity_propagation : dict,
   result_sgp4_propagation          : Optional[dict],
-  desired_time_o_dt                : datetime.datetime,
+  time_o_dt                        : datetime.datetime,
   figures_folderpath               : Path,
   compare_jpl_horizons             : bool,
   compare_tle                      : bool,
@@ -521,29 +522,6 @@ def generate_error_plots(
 ) -> None:
   """
   Generate and save error comparison plots.
-  
-  Input:
-  ------
-    result_horizons : dict | None
-      Horizons ephemeris result.
-    result_high_fidelity : dict
-      High-fidelity propagation result.
-    result_sgp4 : dict | None
-      SGP4 propagation result.
-    desired_time_o_dt : datetime
-      Simulation start time (for plot labels).
-    figures_folderpath : Path
-      Directory to save plots.
-    compare_jpl_horizons : bool
-      Flag to enable comparison with Horizons.
-    compare_tle : bool
-      Flag to enable comparison with TLE/SGP4.
-    object_name : str
-      Name of the object for plot titles and filenames.
-      
-  Output:
-  -------
-    None
   """
   # If neither comparison is requested, do nothing
   if not (compare_jpl_horizons or compare_tle):
@@ -556,18 +534,28 @@ def generate_error_plots(
   has_high_fidelity = result_high_fidelity_propagation.get('success', False)
   has_sgp4          = result_sgp4_propagation is not None and result_sgp4_propagation.get('success', False)
   
+  # Check for pre-computed ephemeris-time data
+  has_hf_at_ephem   = has_high_fidelity and 'at_ephem_times' in result_high_fidelity_propagation
+  has_sgp4_at_ephem = has_sgp4 and 'at_ephem_times' in result_sgp4_propagation
+  
   # Lowercase name for filenames
   name_lower = object_name.lower()
 
-  # 1. High-Fidelity Relative To JPL Horizons
-  if compare_jpl_horizons and has_horizons and has_high_fidelity:
-    print("    High-Fidelity Relative To JPL Horizons")
+  # High-Fidelity Relative To JPL Horizons (compare at ephemeris times)
+  if compare_jpl_horizons and has_horizons and has_hf_at_ephem:
+    print("    High-Fidelity Relative To JPL Horizons (at ephemeris times)")
     
-    # Time series error plot (high_fidelity - horizons)
+    # Build result dict for comparison using pre-computed at_ephem_times data
+    hf_at_ephem = {
+      'plot_time_s' : result_high_fidelity_propagation['at_ephem_times']['plot_time_s'],
+      'state'       : result_high_fidelity_propagation['at_ephem_times']['state'],
+      'coe'         : result_high_fidelity_propagation['at_ephem_times']['coe'],
+    }
+    
     fig_err_ts = plot_time_series_error(
       result_ref  = result_jpl_horizons_ephemeris,
-      result_comp = result_high_fidelity_propagation,
-      epoch       = desired_time_o_dt,
+      result_comp = hf_at_ephem,
+      epoch       = time_o_dt,
       use_ric     = True,
     )
     title = f'{object_name}: RIC Position/Velocity Errors: High-Fidelity Relative To JPL Horizons'
@@ -577,15 +565,15 @@ def generate_error_plots(
     print(f"      Time-Series Error : <figures_folderpath>/{filename}")
     plt.close(fig_err_ts)
 
-  # 2. High-Fidelity Relative To SGP4
+  # High-Fidelity Relative To SGP4 (compare at equal grid times)
   if compare_tle and has_high_fidelity and has_sgp4:
-    print("    High-Fidelity Relative To SGP4")
+    print("    High-Fidelity Relative To SGP4 (at equal grid times)")
     
-    # Time series error plot (high_fidelity - sgp4)
+    # Use equal grid data (main plot_time_s, state, coe)
     fig_err_ts = plot_time_series_error(
       result_ref  = result_sgp4_propagation,
       result_comp = result_high_fidelity_propagation,
-      epoch       = desired_time_o_dt,
+      epoch       = time_o_dt,
       use_ric     = True,
     )
     title = f'{object_name}: RIC Position/Velocity Errors: High-Fidelity Relative To SGP4'
@@ -595,15 +583,21 @@ def generate_error_plots(
     print(f"      Time-Series Error : <figures_folderpath>/{filename}")
     plt.close(fig_err_ts)
 
-  # 3. SGP4 Relative To JPL Horizons
-  if compare_jpl_horizons and compare_tle and has_horizons and has_sgp4:
-    print("    SGP4 Relative To JPL Horizons")
+  # SGP4 Relative To JPL Horizons (compare at ephemeris times)
+  if compare_jpl_horizons and compare_tle and has_horizons and has_sgp4_at_ephem:
+    print("    SGP4 Relative To JPL Horizons (at ephemeris times)")
     
-    # Time series error plot (sgp4 - horizons)
+    # Build result dict for comparison using pre-computed at_ephem_times data
+    sgp4_at_ephem = {
+      'plot_time_s' : result_sgp4_propagation['at_ephem_times']['plot_time_s'],
+      'state'       : result_sgp4_propagation['at_ephem_times']['state'],
+      'coe'         : result_sgp4_propagation['at_ephem_times']['coe'],
+    }
+    
     fig_err_ts = plot_time_series_error(
       result_ref  = result_jpl_horizons_ephemeris,
-      result_comp = result_sgp4_propagation,
-      epoch       = desired_time_o_dt,
+      result_comp = sgp4_at_ephem,
+      epoch       = time_o_dt,
       use_ric     = True,
     )
     title = f'{object_name}: RIC Position/Velocity Errors: SGP4 Relative To JPL Horizons'
@@ -619,7 +613,7 @@ def generate_3d_and_time_series_plots(
   result_jpl_horizons_ephemeris    : Optional[dict],
   result_high_fidelity_propagation : dict,
   result_sgp4_propagation          : Optional[dict],
-  desired_time_o_dt                : datetime.datetime,
+  time_o_dt                        : datetime.datetime,
   figures_folderpath               : Path,
   compare_jpl_horizons             : bool,
   compare_tle                      : bool,
@@ -636,7 +630,7 @@ def generate_3d_and_time_series_plots(
       High-fidelity propagation result.
     result_sgp4 : dict | None
       SGP4 propagation result.
-    desired_time_o_dt : datetime
+    time_o_dt : datetime
       Simulation start time (for plot labels).
     figures_folderpath : Path
       Directory to save plots.
@@ -656,30 +650,30 @@ def generate_3d_and_time_series_plots(
   # Lowercase name for filenames
   name_lower = object_name.lower()
 
-  # Horizons plots (first)
+  # Horizons plots
   if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
     print("    JPL-Horizons-Ephemeris Plots")
 
-    fig1 = plot_3d_trajectories(result_jpl_horizons_ephemeris, epoch=desired_time_o_dt, frame="J2000")
+    fig1 = plot_3d_trajectories(result_jpl_horizons_ephemeris, epoch=time_o_dt, frame="J2000")
     fig1.suptitle(f'{object_name} Orbit - JPL Horizons - 3D', fontsize=16)
     fig1.savefig(figures_folderpath / f'3d_{name_lower}_jpl_horizons.png', dpi=300, bbox_inches='tight')
     print(f"      3D          : <figures_folderpath>/3d_{name_lower}_jpl_horizons.png")
     
-    fig2 = plot_time_series(result_jpl_horizons_ephemeris, epoch=desired_time_o_dt)
+    fig2 = plot_time_series(result_jpl_horizons_ephemeris, epoch=time_o_dt)
     fig2.suptitle(f'{object_name} Orbit - JPL Horizons - Time Series', fontsize=16)
     fig2.savefig(figures_folderpath / f'timeseries_{name_lower}_jpl_horizons.png', dpi=300, bbox_inches='tight')
     print(f"      Time Series : <figures_folderpath>/timeseries_{name_lower}_jpl_horizons.png")
   
-  # High-fidelity plots (second)
+  # High-fidelity plots
   if result_high_fidelity_propagation.get('success'):
     print("    High-Fidelity-Model Plots")
 
-    fig3 = plot_3d_trajectories(result_high_fidelity_propagation, epoch=desired_time_o_dt, frame="J2000")
+    fig3 = plot_3d_trajectories(result_high_fidelity_propagation, epoch=time_o_dt, frame="J2000")
     fig3.suptitle(f'{object_name} Orbit - High-Fidelity Model - 3D', fontsize=16)
     fig3.savefig(figures_folderpath / f'3d_{name_lower}_high_fidelity.png', dpi=300, bbox_inches='tight')
     print(f"      3D          : <figures_folderpath>/3d_{name_lower}_high_fidelity.png")
     
-    fig4 = plot_time_series(result_high_fidelity_propagation, epoch=desired_time_o_dt)
+    fig4 = plot_time_series(result_high_fidelity_propagation, epoch=time_o_dt)
     fig4.suptitle(f'{object_name} Orbit - High-Fidelity Model - Time Series', fontsize=16)
     fig4.savefig(figures_folderpath / f'timeseries_{name_lower}_high_fidelity.png', dpi=300, bbox_inches='tight')
     print(f"      Time Series : <figures_folderpath>/timeseries_{name_lower}_high_fidelity.png")
@@ -689,13 +683,13 @@ def generate_3d_and_time_series_plots(
     print("    SGP4-Model Plots")
     
     # 3D trajectory plot
-    fig_sgp4_hz_3d = plot_3d_trajectories(result_sgp4_propagation, epoch=desired_time_o_dt, frame="J2000")
+    fig_sgp4_hz_3d = plot_3d_trajectories(result_sgp4_propagation, epoch=time_o_dt, frame="J2000")
     fig_sgp4_hz_3d.suptitle(f'{object_name} Orbit - SGP4 Model - 3D', fontsize=16)
     fig_sgp4_hz_3d.savefig(figures_folderpath / f'3d_{name_lower}_sgp4.png', dpi=300, bbox_inches='tight')
     print(f"      3D          : <figures_folderpath>/3d_{name_lower}_sgp4.png")
     
     # Time series plot
-    fig_sgp4_hz_ts = plot_time_series(result_sgp4_propagation, epoch=desired_time_o_dt)
+    fig_sgp4_hz_ts = plot_time_series(result_sgp4_propagation, epoch=time_o_dt)
     fig_sgp4_hz_ts.suptitle(f'{object_name} Orbit - SGP4 Model - Time Series', fontsize=16)
     fig_sgp4_hz_ts.savefig(figures_folderpath / f'timeseries_{name_lower}_sgp4.png', dpi=300, bbox_inches='tight')
     print(f"      Time Series : <figures_folderpath>/timeseries_{name_lower}_sgp4.png")
@@ -705,7 +699,7 @@ def generate_plots(
   result_jpl_horizons_ephemeris    : Optional[dict],
   result_high_fidelity_propagation : dict,
   result_sgp4_propagation          : Optional[dict],
-  desired_time_o_dt                : datetime.datetime,
+  time_o_dt                        : datetime.datetime,
   figures_folderpath               : Path,
   compare_jpl_horizons             : bool = False,
   compare_tle                      : bool = False,
@@ -722,7 +716,7 @@ def generate_plots(
       High-fidelity propagation result.
     result_sgp4 : dict | None
       SGP4 propagation result.
-    desired_time_o_dt : datetime
+    time_o_dt : datetime
       Simulation start time (for plot labels).
     figures_folderpath : Path
       Directory to save plots.
@@ -745,7 +739,7 @@ def generate_plots(
     result_jpl_horizons_ephemeris    = result_jpl_horizons_ephemeris,
     result_high_fidelity_propagation = result_high_fidelity_propagation,
     result_sgp4_propagation          = result_sgp4_propagation,
-    desired_time_o_dt                = desired_time_o_dt,
+    time_o_dt                        = time_o_dt,
     figures_folderpath               = figures_folderpath,
     compare_jpl_horizons             = compare_jpl_horizons,
     compare_tle                      = compare_tle,
@@ -758,7 +752,7 @@ def generate_plots(
       result_jpl_horizons_ephemeris    = result_jpl_horizons_ephemeris,
       result_high_fidelity_propagation = result_high_fidelity_propagation,
       result_sgp4_propagation          = result_sgp4_propagation,
-      desired_time_o_dt                = desired_time_o_dt,
+      time_o_dt                        = time_o_dt,
       figures_folderpath               = figures_folderpath,
       compare_jpl_horizons             = compare_jpl_horizons,
       compare_tle                      = compare_tle,
