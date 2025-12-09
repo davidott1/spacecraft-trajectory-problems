@@ -89,7 +89,7 @@ def propagate_tle(
       'ecc'  : np.zeros(num_points),
       'inc'  : np.zeros(num_points),
       'raan' : np.zeros(num_points),
-      'argp' : np.zeros(num_points),
+      'aop'  : np.zeros(num_points),
       'ma'   : np.zeros(num_points),
       'ta'   : np.zeros(num_points),
       'ea'   : np.zeros(num_points),
@@ -331,7 +331,7 @@ def propagate_state_numerical_integration(
     'ecc'  : np.zeros(num_steps),
     'inc'  : np.zeros(num_steps),
     'raan' : np.zeros(num_steps),
-    'argp' : np.zeros(num_steps),
+    'aop'  : np.zeros(num_steps),
     'ma'   : np.zeros(num_steps),
     'ta'   : np.zeros(num_steps),
     'ea'   : np.zeros(num_steps),
@@ -424,7 +424,7 @@ def run_high_fidelity_propagation(
     print("          Zonal Harmonics : None")
   
   print("        Third-Body")
-  if include_third_body and len(third_bodies_list) > 0:
+  if include_third_body:
     print(f"          Bodies    : {', '.join(third_bodies_list)}")
     print("          Ephemeris : SPICE (High Accuracy)")
   else:
@@ -522,7 +522,7 @@ def run_high_fidelity_propagation(
         'ecc'  : np.zeros(len(ephem_times_et)),
         'inc'  : np.zeros(len(ephem_times_et)),
         'raan' : np.zeros(len(ephem_times_et)),
-        'argp' : np.zeros(len(ephem_times_et)),
+        'aop'  : np.zeros(len(ephem_times_et)),
         'ma'   : np.zeros(len(ephem_times_et)),
         'ta'   : np.zeros(len(ephem_times_et)),
         'ea'   : np.zeros(len(ephem_times_et)),
