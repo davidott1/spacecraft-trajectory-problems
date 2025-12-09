@@ -54,6 +54,7 @@ Usage:
       --srp \
       --drag
 """
+import sys
 from typing                            import Optional
 from datetime                          import datetime, timedelta
 
@@ -155,6 +156,28 @@ def main(
       norad_id                = config.norad_id,
       object_name             = config.object_name,
     )
+    
+    # Check if Horizons data is required but unavailable
+    horizons_failed = result_jpl_horizons_ephemeris is None or not result_jpl_horizons_ephemeris.get('success', False)
+    
+    if horizons_failed:
+      if config.initial_state_source == 'jpl_horizons':
+        print("\n[ERROR] JPL Horizons ephemeris is required for initial state but is unavailable.")
+        print("        Options:")
+        print("          1. Run again and download when prompted")
+        print("          2. Use --initial-state-source tle to use TLE-derived initial state")
+        unload_files(True)
+        stop_logging(logger)
+        sys.exit(1)
+      
+      if config.compare_jpl_horizons:
+        print("\n[ERROR] JPL Horizons ephemeris is required for --compare-jpl-horizons but is unavailable.")
+        print("        Options:")
+        print("          1. Run again and download when prompted")
+        print("          2. Remove --compare-jpl-horizons flag to skip Horizons comparison")
+        unload_files(True)
+        stop_logging(logger)
+        sys.exit(1)
 
   # Get Celestrak TLE (if needed for initial state or comparison)
   result_celestrak_tle = None
@@ -169,6 +192,28 @@ def main(
     
     # Extract TLE data to config
     extract_tle_to_config(config, result_celestrak_tle)
+    
+    # Check if TLE data is required but unavailable
+    tle_failed = result_celestrak_tle is None or not result_celestrak_tle.get('success', False)
+    
+    if tle_failed:
+      if config.initial_state_source == 'tle':
+        print("\n[ERROR] TLE is required for initial state but is unavailable.")
+        print("        Options:")
+        print("          1. Run again and download when prompted")
+        print("          2. Use --initial-state-source jpl_horizons to use Horizons-derived initial state")
+        unload_files(True)
+        stop_logging(logger)
+        sys.exit(1)
+      
+      if config.compare_tle:
+        print("\n[ERROR] TLE is required for --compare-tle but is unavailable.")
+        print("        Options:")
+        print("          1. Run again and download when prompted")
+        print("          2. Remove --compare-tle flag to skip TLE/SGP4 comparison")
+        unload_files(True)
+        stop_logging(logger)
+        sys.exit(1)
 
   # Determine initial state (from Horizons or TLE)
   initial_state = get_initial_state(

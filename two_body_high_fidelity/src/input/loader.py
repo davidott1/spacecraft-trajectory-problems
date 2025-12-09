@@ -355,6 +355,14 @@ def get_horizons_ephemeris(
         print(f"               :   ... stdout: {e.stdout}")
       except Exception as e:
         print(f"Error : {e}")
+  
+  # Check if we have a compatible file after potential download
+  if compatible_file is None:
+    print(f"    Filepath   : None (no compatible file available)")
+    return {
+      'success' : False,
+      'message' : 'No JPL Horizons ephemeris file available',
+    }
 
   # Display the file being loaded
   try:
