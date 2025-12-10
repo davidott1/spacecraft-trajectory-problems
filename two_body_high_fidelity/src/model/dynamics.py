@@ -66,13 +66,13 @@ Utility Classes:
 Usage Example:
 --------------
   from src.model.dynamics import Acceleration, GeneralStateEquationsOfMotion
-  from src.model.constants import PHYSICALCONSTANTS
+  from src.model.constants import SOLARSYSTEMCONSTANTS
   
   # Initialize acceleration model
   acceleration = Acceleration(
-      gp                = PHYSICALCONSTANTS.EARTH.GP,
-      j2                = PHYSICALCONSTANTS.EARTH.J2,
-      pos_ref           = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR,
+      gp                = SOLARSYSTEMCONSTANTS.EARTH.GP,
+      j2                = SOLARSYSTEMCONSTANTS.EARTH.J2,
+      pos_ref           = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR,
       enable_drag       = True,
       cd                = 2.2,
       area_drag         = 10.0,
@@ -113,7 +113,7 @@ import spiceypy as spice
 from pathlib import Path
 from typing  import Optional
 
-from src.model.constants import PHYSICALCONSTANTS, CONVERTER
+from src.model.constants import SOLARSYSTEMCONSTANTS, CONVERTER
 
 
 # =============================================================================
@@ -494,9 +494,9 @@ class ThirdBodyGravity:
 
         # Get gravitational parameter [m³/s²]
         if body.upper() == 'SUN':
-          GP = PHYSICALCONSTANTS.SUN.GP
+          GP = SOLARSYSTEMCONSTANTS.SUN.GP
         elif body.upper() == 'MOON':
-          GP = PHYSICALCONSTANTS.MOON.GP
+          GP = SOLARSYSTEMCONSTANTS.MOON.GP
         else:
           continue
 
@@ -789,13 +789,13 @@ class AtmosphericDrag:
       """
       # Position magnitude and altitude
       pos_mag = np.linalg.norm(pos_vec)
-      alt     = pos_mag - PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR
+      alt     = pos_mag - SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
       
       # Atmospheric density at current altitude
       rho = self._atmospheric_density(float(alt))
       
       # Velocity relative to rotating atmosphere
-      omega_earth = np.array([0, 0, PHYSICALCONSTANTS.EARTH.OMEGA])
+      omega_earth = np.array([0, 0, SOLARSYSTEMCONSTANTS.EARTH.OMEGA])
       vel_rel_vec = vel_vec - np.cross(omega_earth, pos_vec)
       vel_rel_mag = np.linalg.norm(vel_rel_vec)
       
@@ -829,7 +829,7 @@ class AtmosphericDrag:
         altitude = 0
       
       # Simplified exponential model
-      rho = PHYSICALCONSTANTS.EARTH.RHO_0 * np.exp(-altitude / PHYSICALCONSTANTS.EARTH.H_0)
+      rho = SOLARSYSTEMCONSTANTS.EARTH.RHO_0 * np.exp(-altitude / SOLARSYSTEMCONSTANTS.EARTH.H_0)
       
       return rho
 
@@ -871,8 +871,8 @@ class SolarRadiationPressure:
     
     def compute(
       self,
-      time    : float,
-      pos_vec : np.ndarray,
+      time                 : float,
+      earth_to_sat_pos_vec : np.ndarray,
     ) -> np.ndarray:
       """
       Compute SRP acceleration.
@@ -881,12 +881,12 @@ class SolarRadiationPressure:
       ------
         time : float
           Current Ephemeris Time (ET) [s]
-        pos_vec : np.ndarray
-          Spacecraft position vector relative to Earth [m]
+        earth_to_sat_pos_vec : np.ndarray
+          Spacecraft position vector relative to Earth [m], i.e. Earth to spacecraft vector.
       
       Output:
       -------
-        acc_vec : np.ndarray
+        earth_to_sat_acc_vec : np.ndarray
           SRP acceleration [m/s²]
       """
       # Check for valid parameters
@@ -894,34 +894,35 @@ class SolarRadiationPressure:
         return np.zeros(3)
       
       # Get Sun position relative to Earth using SPICE
-      sun_pos_vec = self._get_sun_position(time)
+      earth_to_sun_pos_vec = self._get_sun_position(time)
       
       # Vector from spacecraft to Sun
-      sat_to_sun_pos_vec = sun_pos_vec - pos_vec
+      sat_to_sun_pos_vec = earth_to_sun_pos_vec - earth_to_sat_pos_vec
       sat_to_sun_pos_mag = np.linalg.norm(sat_to_sun_pos_vec)
       sat_to_sun_pos_dir = sat_to_sun_pos_vec / sat_to_sun_pos_mag
+
+      # Direction of solar radiation pressure force is from Sun to spacecraft
+      acc_dir = -sat_to_sun_pos_dir
       
-      # Check if spacecraft is in Earth's shadow
-      shadow_factor = self._compute_shadow_factor(pos_vec, sun_pos_vec)
+      # Compute shadow factor (0.0 = full shadow, 1.0 = full sunlight)
+      shadow_factor = self._compute_shadow_factor(earth_to_sat_pos_vec, earth_to_sun_pos_vec)
       
+      # If in full shadow, no SRP acceleration
       if shadow_factor == 0.0:
         return np.zeros(3)
       
       # Distance from Sun to spacecraft [m]
-      #   approximately same as Sun-Earth distance for Earth-orbiting satellites
       sun_to_sat_pos_mag = sat_to_sun_pos_mag
       
       # Solar radiation pressure at spacecraft distance
-      #   P = P_1AU * (1 AU / r)^2
-      p_srp = PHYSICALCONSTANTS.P_SRP_1AU * (CONVERTER.M_PER_AU / sun_to_sat_pos_mag)**2
+      #   P = P_at_1au * ( 1_au / r_au )^2 = 4.56e-6 N/m² * ( 149597870700 m / r_m )^2
+      pressure_srp  = SOLARSYSTEMCONSTANTS.EARTH.PRESSURE_SRP * (CONVERTER.M_PER_AU * CONVERTER.ONE_AU / sun_to_sat_pos_mag)**2
       
       # SRP acceleration magnitude
-      #   a = (P * Cr * A / m) * shadow_factor
-      acc_mag = (p_srp * self.cr * self.area / self.mass) * shadow_factor
+      acc_mag = (pressure_srp * self.cr * self.area / self.mass) * shadow_factor
       
       # SRP acceleration direction (away from Sun)
-      # Force is in the direction from Sun to spacecraft
-      acc_vec = -acc_mag * sat_to_sun_pos_dir
+      acc_vec = acc_mag * acc_dir
       
       return acc_vec
     
@@ -956,17 +957,17 @@ class SolarRadiationPressure:
     
     def _compute_shadow_factor(
       self,
-      sat_pos_vec : np.ndarray,
-      sun_pos_vec : np.ndarray,
+      earth_to_sat_pos_vec : np.ndarray,
+      earth_to_sun_pos_vec : np.ndarray,
     ) -> float:
       """
       Compute shadow factor using cylindrical Earth shadow model.
       
       Input:
       ------
-        sat_pos_vec : np.ndarray
+        earth_to_sat_pos_vec : np.ndarray
           Spacecraft position vector relative to Earth [m].
-        sun_pos_vec : np.ndarray
+        earth_to_sun_pos_vec : np.ndarray
           Sun position vector relative to Earth [m].
       
       Output:
@@ -980,28 +981,34 @@ class SolarRadiationPressure:
         cylinder with radius equal to Earth's equatorial radius, extending
         from Earth in the anti-Sun direction.
       """
-      # Unit vector from Earth to Sun
-      sun_pos_dir = sun_pos_vec / np.linalg.norm(sun_pos_vec)
+      # Direction from Earth to Sun
+      earth_to_sun_pos_dir = earth_to_sun_pos_vec / np.linalg.norm(earth_to_sun_pos_vec)
       
       # Project spacecraft position onto Sun direction
       # (distance along Sun-Earth line, positive toward Sun)
-      proj_along_sun = np.dot(sat_pos_vec, sun_pos_dir)
+      earth_to_sat_parallel_pos_mag = np.dot(earth_to_sat_pos_vec, earth_to_sun_pos_dir)
       
-      # If spacecraft is on the sunlit side of Earth (toward Sun), it's in sunlight
-      if proj_along_sun >= 0:
-        return 1.0
-      
-      # Spacecraft is on the shadow side of Earth
-      # Calculate perpendicular distance from spacecraft to Sun-Earth line
-      perp_vec = sat_pos_vec - proj_along_sun * sun_pos_dir
-      perp_dist = np.linalg.norm(perp_vec)
-      
-      # If perpendicular distance is greater than Earth radius, spacecraft is in sunlight
-      if perp_dist > PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR:
-        return 1.0
-      
-      # Spacecraft is in Earth's cylindrical shadow (umbra)
-      return 0.0
+      # Check if spacecraft is in front of or behind Earth relative to Sun
+      if earth_to_sat_parallel_pos_mag >= 0:
+        # Spacecraft is on the sunlit side of Earth if positive projection
+        shadow_factor = 1.0
+      else:
+        # Spacecraft is on the shadow side of Earth if negative projection
+
+        # Calculate perpendicular distance from spacecraft to Sun-Earth line
+        earth_to_sat_perpendicular_pos_vec = earth_to_sat_pos_vec - earth_to_sat_parallel_pos_mag * earth_to_sun_pos_dir
+        earth_to_sat_perpendicular_pos_mag = np.linalg.norm(earth_to_sat_perpendicular_pos_vec)
+        
+        # Check if within Earth's shadow cylinder
+        if earth_to_sat_perpendicular_pos_mag > SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR:
+          # If perpendicular distance is greater than Earth radius, spacecraft is in sunlight
+          shadow_factor = 1.0
+        else:
+          # Spacecraft is in Earth's cylindrical shadow
+          shadow_factor = 0.0
+        
+      # Return shadow factor
+      return shadow_factor
 
 
 # =============================================================================
@@ -1370,7 +1377,7 @@ class OrbitConverter:
     def pv_to_coe(
       pos_vec : np.ndarray,
       vel_vec : np.ndarray,
-      gp      : float = PHYSICALCONSTANTS.EARTH.GP,
+      gp      : float = SOLARSYSTEMCONSTANTS.EARTH.GP,
     ) -> dict:
       """
       Convert Cartesian position and velocity vectors to classical orbital elements.
@@ -1531,7 +1538,7 @@ class OrbitConverter:
     @staticmethod
     def coe_to_pv(
       coe : dict,
-      gp  : float = PHYSICALCONSTANTS.EARTH.GP,
+      gp  : float = SOLARSYSTEMCONSTANTS.EARTH.GP,
     ) -> tuple[np.ndarray, np.ndarray]:
       """
       Convert classical orbital elements to position and velocity vectors.
