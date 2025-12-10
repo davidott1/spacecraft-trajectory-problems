@@ -1,4 +1,10 @@
 class CONVERTER:
+  # Unity Values
+  ONE_AU  = 1.0                            # [astronomical unit]
+  ONE_M   = 1.0                            # [meter]
+  ONE_SEC = 1.0                            # [second]
+  ONE_KG  = 1.0                            # [kilogram]
+
   # Angle Conversions
   RAD_PER_DEG = 3.141592653589793 / 180.0  # [radian] per [degree]
   DEG_PER_RAD = 180.0 / 3.141592653589793  # [degree] per [radian]
@@ -19,13 +25,17 @@ class CONVERTER:
   M_PER_SEC__PER__AU_PER_DAY = M_PER_AU / SEC_PER_DAY  # [meters/second] per [astronomical units/day]
 
 class PHYSICALCONSTANTS:
+  speed_of_light = 299792458.0  # Speed of light in vacuum [m/s]
+
+class SOLARSYSTEMCONSTANTS:
   """
   Class to hold physical constants.
   Some constants are from "OrbitalMotion", created by Hanspeter Schaub on 6/19/05.
   """
   
-  # Solar radiation pressure at 1 AU [N/m²]
-  P_SRP_1AU = 4.56e-6
+  # G_SC      = 1361.0   # solar constant [W/m²] at 1 AU
+  # P_SRP_1AU = G_SC / PHYSICALCONSTANTS.speed_of_light  # solar radiation pressure at 1 AU [N/m²]. approx 4.56e-6 N/m².
+  # # P_SRP_1AU = 4.56e-6  # Solar radiation pressure at 1 AU [N/m²]
   
   class SUN:
     class RADIUS:
@@ -95,6 +105,10 @@ class PHYSICALCONSTANTS:
     # Reference atmosphere parameters (simplified exponential model)
     RHO_0 = 1.225                           # Earth's sea level density [kg/m³]
     H_0   = 8500.0                          # Earth's scale height [m]
+
+    # Solar radiation pressure at Earth's distance
+    G_SC         = 1361.0                                    # solar constant [W/m²] at 1 AU
+    PRESSURE_SRP = G_SC / PHYSICALCONSTANTS.speed_of_light   # solar radiation pressure at 1 AU [N/m²]. approx 4.56e-6 N/m².
 
   class MOON:
     class RADIUS:

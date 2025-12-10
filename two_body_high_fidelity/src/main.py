@@ -35,14 +35,14 @@ Usage:
 
   Example Commands:
     python -m src.main \
-    --input-object-type <type> \
-    --norad-id <id> \
-    --timespan <start> <end> \
-    [--initial-state-source jpl_horizons] \
-    [--zonal-harmonics J2 J3 J4] \
-    [--third-bodies sun moon] \
-    [--srp] \
-    [--drag]
+      --input-object-type <type> \
+      --norad-id <id> \
+      --timespan <start> <end> \
+      [--initial-state-source jpl_horizons] \
+      [--zonal-harmonics J2 J3 J4] \
+      [--third-bodies sun moon] \
+      [--srp] \
+      [--drag]
       
     python -m src.main \
       --input-object-type norad-id \
@@ -322,14 +322,14 @@ if __name__ == "__main__":
   
   # Run main function
   main(
-    input_object_type    = args.input_object_type,
-    norad_id             = args.norad_id,
-    timespan             = args.timespan,
-    include_drag         = args.include_drag,
-    compare_tle          = args.compare_tle,
-    compare_jpl_horizons = args.compare_jpl_horizons,
-    third_bodies         = args.third_bodies,
-    zonal_harmonics      = args.zonal_harmonics,
-    include_srp          = args.include_srp,
-    initial_state_source = args.initial_state_source,
+    args.input_object_type,
+    args.norad_id,
+    args.timespan,
+    args.include_drag,
+    args.compare_tle,
+    args.compare_jpl_horizons,
+    args.third_bodies,
+    args.zonal_harmonics,
+    args.include_srp,
+    args.initial_state_source,
   )
