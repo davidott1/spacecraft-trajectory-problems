@@ -13,7 +13,8 @@ from scipy.integrate   import solve_ivp
 from scipy.interpolate import interp1d
 from sgp4.api          import jday
 
-from src.model.dynamics        import GeneralStateEquationsOfMotion, Acceleration, OrbitConverter
+from src.model.dynamics        import GeneralStateEquationsOfMotion, Acceleration
+from src.model.orbit_converter import OrbitConverter
 from src.model.constants       import SOLARSYSTEMCONSTANTS
 from src.model.time_converter  import utc_to_et
 from src.model.frame_converter import FrameConverter

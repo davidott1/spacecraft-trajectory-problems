@@ -6,7 +6,7 @@ from typing              import Optional
 
 from src.propagation.propagator import propagate_tle
 from src.model.time_converter   import utc_to_et
-from src.model.dynamics         import OrbitConverter
+from src.model.orbit_converter  import OrbitConverter
 from src.model.constants        import SOLARSYSTEMCONSTANTS, CONVERTER
 from src.utility.time_helper    import format_time_offset
 
