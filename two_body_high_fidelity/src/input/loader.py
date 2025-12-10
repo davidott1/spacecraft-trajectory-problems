@@ -696,6 +696,16 @@ def get_celestrak_tle(
       - all_tles : list[dict] (all TLEs in the file)
       Returns None if loading failed.
   """
+  # Display TLE folderpath
+  try:
+    rel_folderpath = tles_folderpath.relative_to(Path.cwd())
+    display_folderpath = f"<project_folderpath>/{rel_folderpath}"
+  except ValueError:
+    display_folderpath = tles_folderpath
+
+  print("  Celestrak TLE")
+  print(f"    Folderpath : {display_folderpath}")
+
   # Construct expected TLE filepath
   time_o_str   = desired_time_o_dt.strftime('%Y%m%dT%H%M%SZ')
   time_f_str   = desired_time_f_dt.strftime('%Y%m%dT%H%M%SZ')
@@ -714,20 +724,10 @@ def get_celestrak_tle(
     if compatible_file is not None:
       tle_filepath = compatible_file
   
-  # Display TLE filepath
-  try:
-    rel_path     = tle_filepath.relative_to(Path.cwd())
-    display_path = f"<project_folderpath>/{rel_path}"
-  except ValueError:
-    display_path = tle_filepath
-
-  print("  Celestrak TLE")
-  print(f"    Filepath  : {display_path}")
-  
   # Check if TLE file exists (either exact match or compatible file)
   if not tle_filepath.exists():
     # Prompt user to download
-    print(f"               :   ... TLE file not found. Download from Celestrak? (y/n)", end=" ", flush=True)
+    print(f"               :   ... No compatible files found. Download from Celestrak? (y/n)", end=" ", flush=True)
     user_response = input().strip().lower()
     
     if user_response == 'y':
@@ -768,17 +768,26 @@ def get_celestrak_tle(
           'message' : f"TLE download failed: {e}",
         }
     else:
+      print(f"    Filepath   : None (no compatible file available)")
       return {
         'success' : False,
         'message' : f"TLE file not found: {tle_filepath}",
       }
 
+  # Display the file being loaded
+  try:
+    rel_path = tle_filepath.relative_to(Path.cwd())
+    display_path = f"<project_folderpath>/{rel_path}"
+  except ValueError:
+    display_path = tle_filepath
+  print(f"    Filepath   : {display_path}")
+
   # Load TLE from file
   result = load_tle_file(tle_filepath, desired_time_o_dt)
   
   if result and result.get('success'):
-    print(f"    TLE Count : {len(result.get('all_tles', []))} TLE(s)")
-    print(f"    TLE Epoch : {result['tle_epoch_dt'].strftime('%Y-%m-%d %H:%M:%S')} UTC (closest to desired initial time)")
+    print(f"    TLE Count  : {len(result.get('all_tles', []))} TLE(s)")
+    print(f"    TLE Epoch  : {result['tle_epoch_dt'].strftime('%Y-%m-%d %H:%M:%S')} UTC (closest to desired initial time)")
   
   return result
 
