@@ -23,9 +23,9 @@ Usage:
 
   Argument                     Required   Description
   ---------------------------  --------   --------------------------------------------------
+  --initial-state-source       No         Source of initial state (jpl_horizons or tle)
   --initial-state-norad-id     Yes        NORAD ID for the initial state object
   --timespan                   Yes        Start and end time (ISO format)
-  --initial-state-source       No         Source of initial state (jpl_horizons or tle)
   --zonal-harmonics            No         Enable zonal harmonics (requires arguments e.g. J2)
   --third-bodies               No         Enable third-body gravity (requires arguments e.g. sun)
   --srp                        No         Enable Solar Radiation Pressure
@@ -43,9 +43,9 @@ Usage:
       [--drag]
       
     python -m src.main \
+      --initial-state-source jpl_horizons \
       --initial-state-norad-id 25544 \
       --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00 \
-      --initial-state-source jpl_horizons \
       --zonal-harmonics J2 J3 J4 \
       --third-bodies sun moon \
       --srp \
