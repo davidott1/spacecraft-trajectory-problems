@@ -62,7 +62,7 @@
     coeff    : 1.3                                                                      # solar radiation pressure coefficient, typically c_r [-]
     area__m2 : 15.0                                                                     # srp cross-sectional area [m²]
 
-# GEO satellites (Geostationary Orbit, ~35,786 km altitude)
+# GEO satellites (Geostationary Earth Orbit, ~35,786 km altitude)
 '41866'      :                                                                          # norad id as top-level key
   name       : "GOES-16 - GOES-R"                                                       # object name
   norad_id   : 41866                                                                    # norad id
