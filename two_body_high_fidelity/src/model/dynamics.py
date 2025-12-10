@@ -107,7 +107,7 @@ import spiceypy as spice
 from pathlib import Path
 from typing  import Optional
 
-from src.model.constants import SOLARSYSTEMCONSTANTS, CONVERTER
+from src.model.constants import SOLARSYSTEMCONSTANTS, CONVERTER, NAIFIDS
 
 
 # =============================================================================
@@ -391,18 +391,18 @@ class ThirdBodyGravity:
       Input:
       ------
         body_name : str
-          Body name ('SUN' or 'MOON').
+          Body name (e.g. 'SUN', 'JUPITER').
       
       Output:
       -------
         naif_id : int
           NAIF ID code.
       """
-      naif_ids = {
-        'SUN'  : 10,
-        'MOON' : 301,
-      }
-      return naif_ids[body_name.upper()]
+      body_upper = body_name.upper()
+      if body_upper in NAIFIDS.NAME_TO_ID:
+        return NAIFIDS.NAME_TO_ID[body_upper]
+      
+      raise ValueError(f"Unknown body name for NAIF ID lookup: {body_name}")
 
     def point_mass(
       self,
@@ -430,12 +430,15 @@ class ThirdBodyGravity:
       # Compute acceleration for all bodies
       acc_vec = np.zeros(3)
       for body in self.bodies:
+        body_upper = body.upper()
+        
+        # Skip Earth if it's in the list (it's the central body)
+        if body_upper == 'EARTH':
+          continue
 
         # Get gravitational parameter [m³/s²]
-        if body.upper() == 'SUN':
-          GP = SOLARSYSTEMCONSTANTS.SUN.GP
-        elif body.upper() == 'MOON':
-          GP = SOLARSYSTEMCONSTANTS.MOON.GP
+        if hasattr(SOLARSYSTEMCONSTANTS, body_upper):
+          GP = getattr(SOLARSYSTEMCONSTANTS, body_upper).GP
         else:
           continue
 
@@ -443,6 +446,10 @@ class ThirdBodyGravity:
         pos_centbody_to_pertbody_vec = self._get_position_body_spice(body, et_seconds)
         pos_centbody_to_pertbody_mag = np.linalg.norm(pos_centbody_to_pertbody_vec)
         
+        # Safety check
+        if pos_centbody_to_pertbody_mag == 0:
+          continue
+
         # Position of satellite to perturbing body [m]
         pos_sat_to_pertbody_vec = pos_centbody_to_pertbody_vec - pos_sat_vec
         pos_sat_to_pertbody_mag = np.linalg.norm(pos_sat_to_pertbody_vec)

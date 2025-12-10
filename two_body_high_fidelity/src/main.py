@@ -23,8 +23,7 @@ Usage:
 
   Argument                     Required   Description
   ---------------------------  --------   --------------------------------------------------
-  --input-object-type          Yes        Type of input object (e.g., norad-id)
-  --norad-id                   Yes*       NORAD ID (required for norad-id type)
+  --initial-state-norad-id     Yes        NORAD ID for the initial state object
   --timespan                   Yes        Start and end time (ISO format)
   --initial-state-source       No         Source of initial state (jpl_horizons or tle)
   --zonal-harmonics            No         Enable zonal harmonics (requires arguments e.g. J2)
@@ -35,8 +34,7 @@ Usage:
 
   Example Commands:
     python -m src.main \
-      --input-object-type <type> \
-      --norad-id <id> \
+      --initial-state-norad-id <id> \
       --timespan <start> <end> \
       [--initial-state-source jpl_horizons] \
       [--zonal-harmonics J2 J3 J4] \
@@ -45,8 +43,7 @@ Usage:
       [--drag]
       
     python -m src.main \
-      --input-object-type norad-id \
-      --norad-id 25544 \
+      --initial-state-norad-id 25544 \
       --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00 \
       --initial-state-source jpl_horizons \
       --zonal-harmonics J2 J3 J4 \
@@ -124,16 +121,15 @@ def check_data_availability(
 
 
 def main(
-  input_object_type    : str,
-  norad_id             : str,
-  timespan             : list[datetime],
-  include_drag         : bool           = False,
-  compare_tle          : bool           = False,
-  compare_jpl_horizons : bool           = False,
-  third_bodies         : Optional[list] = None,
-  zonal_harmonics      : Optional[list] = None,
-  include_srp          : bool           = False,
-  initial_state_source : str            = 'jpl_horizons',
+  initial_state_norad_id : str,
+  timespan               : list[datetime],
+  include_drag           : bool           = False,
+  compare_tle            : bool           = False,
+  compare_jpl_horizons   : bool           = False,
+  third_bodies           : Optional[list] = None,
+  zonal_harmonics        : Optional[list] = None,
+  include_srp            : bool           = False,
+  initial_state_source   : str            = 'jpl_horizons',
 ) -> dict:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -145,9 +141,7 @@ def main(
   
   Input:
   ------
-    input_object_type : str
-      Type of input object (e.g., 'norad-id').
-    norad_id : str
+    initial_state_norad_id : str
       NORAD Catalog ID of the satellite.
     timespan : list[datetime]
       Start and end time for propagation as datetime objects.
@@ -175,8 +169,7 @@ def main(
   
   # Process inputs and setup
   config = build_config(
-    input_object_type,
-    norad_id,
+    initial_state_norad_id,
     timespan,
     include_drag,
     compare_tle,
@@ -209,7 +202,7 @@ def main(
       jpl_horizons_folderpath = config.jpl_horizons_folderpath,
       desired_time_o_dt       = config.time_o_dt,
       desired_time_f_dt       = config.time_f_dt,
-      norad_id                = config.norad_id,
+      norad_id                = config.initial_state_norad_id,
       object_name             = config.object_name,
     )
     
@@ -231,7 +224,7 @@ def main(
   result_celestrak_tle = None
   if config.initial_state_source == 'tle' or config.compare_tle:
     result_celestrak_tle = get_celestrak_tle(
-      norad_id        = config.norad_id,
+      norad_id        = config.initial_state_norad_id,
       object_name     = config.object_name,
       tles_folderpath = config.tles_folderpath,
       desired_time_o_dt = config.time_o_dt,
@@ -322,8 +315,7 @@ if __name__ == "__main__":
   
   # Run main function
   main(
-    args.input_object_type,
-    args.norad_id,
+    args.initial_state_norad_id,
     args.timespan,
     args.include_drag,
     args.compare_tle,

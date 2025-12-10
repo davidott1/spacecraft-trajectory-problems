@@ -8,25 +8,22 @@ from src.utility.time_helper import parse_time
 
 
 def print_input_configuration(
-  input_object_type    : str,
-  norad_id             : str,
-  desired_timespan     : list,
-  include_drag         : bool,
-  compare_tle          : bool,
-  compare_jpl_horizons : bool,
-  third_bodies_list    : list,
-  zonal_harmonics_list : list,
-  include_srp          : bool,
-  initial_state_source : str,
+  initial_state_norad_id : str,
+  desired_timespan       : list,
+  include_drag           : bool,
+  compare_tle            : bool,
+  compare_jpl_horizons   : bool,
+  third_bodies_list      : list,
+  zonal_harmonics_list   : list,
+  include_srp            : bool,
+  initial_state_source   : str,
 ) -> None:
   """
   Print the input configuration in a formatted table.
 
   Input:
   ------
-    input_object_type : str
-      Type of input object (e.g., 'norad-id').
-    norad_id : str
+    initial_state_norad_id : str
       NORAD catalog ID of the satellite.
     desired_timespan : list
       Initial and final time in ISO format as list of strings.
@@ -51,16 +48,15 @@ def print_input_configuration(
   """
   # Define defaults for comparison
   defaults = {
-    'input_object_type'    : None,
-    'norad_id'             : None,
-    'timespan'             : None,
-    'initial_state_source' : 'jpl_horizons',
-    'zonal_harmonics'      : [],
-    'third_bodies'         : [],
-    'include_drag'         : False,
-    'include_srp'          : False,
-    'compare_jpl_horizons' : False,
-    'compare_tle'          : False,
+    'initial_state_norad_id' : None,
+    'timespan'               : None,
+    'initial_state_source'   : 'jpl_horizons',
+    'zonal_harmonics'        : [],
+    'third_bodies'           : [],
+    'include_drag'           : False,
+    'include_srp'            : False,
+    'compare_jpl_horizons'   : False,
+    'compare_tle'            : False,
   }
   
   # Format values for display
@@ -70,16 +66,15 @@ def print_input_configuration(
   
   # Build configuration entries: (name, value, default, user_set)
   entries = [
-    ('input_object_type',    input_object_type,    defaults['input_object_type'],    input_object_type is not None),
-    ('norad_id',             norad_id,             defaults['norad_id'],             norad_id          is not None and norad_id != ''),
-    ('timespan',             timespan_str,         defaults['timespan'],             desired_timespan  is not None),
-    ('initial_state_source', initial_state_source, defaults['initial_state_source'], initial_state_source != defaults['initial_state_source']),
-    ('zonal_harmonics',      zonal_str,            defaults['zonal_harmonics'],      zonal_harmonics_list is not None and len(zonal_harmonics_list) > 0),
-    ('third_bodies',         third_str,            defaults['third_bodies'],         third_bodies_list    is not None and len(third_bodies_list) > 0),
-    ('include_drag',         include_drag,         defaults['include_drag'],         include_drag         != defaults['include_drag']),
-    ('include_srp',          include_srp,          defaults['include_srp'],          include_srp          != defaults['include_srp']),
-    ('compare_jpl_horizons', compare_jpl_horizons, defaults['compare_jpl_horizons'], compare_jpl_horizons != defaults['compare_jpl_horizons']),
-    ('compare_tle',          compare_tle,          defaults['compare_tle'],          compare_tle          != defaults['compare_tle']),
+    ('initial_state_source',   initial_state_source,   defaults['initial_state_source'],   initial_state_source   != defaults['initial_state_source']),
+    ('initial_state_norad_id', initial_state_norad_id, defaults['initial_state_norad_id'], initial_state_norad_id is not None),
+    ('timespan',               timespan_str,           defaults['timespan'],               desired_timespan       is not None),
+    ('zonal_harmonics',        zonal_str,              defaults['zonal_harmonics'],        zonal_harmonics_list   is not None and len(zonal_harmonics_list) > 0),
+    ('third_bodies',           third_str,              defaults['third_bodies'],           third_bodies_list      is not None and len(third_bodies_list) > 0),
+    ('include_drag',           include_drag,           defaults['include_drag'],           include_drag           != defaults['include_drag']),
+    ('include_srp',            include_srp,            defaults['include_srp'],            include_srp            != defaults['include_srp']),
+    ('compare_jpl_horizons',   compare_jpl_horizons,   defaults['compare_jpl_horizons'],   compare_jpl_horizons   != defaults['compare_jpl_horizons']),
+    ('compare_tle',            compare_tle,            defaults['compare_tle'],            compare_tle            != defaults['compare_tle']),
   ]
   
   # Convert entries to strings for width calculation
@@ -160,74 +155,62 @@ def print_configuration(
     None
   """
   print_input_configuration(
-    input_object_type    = config.input_object_type,
-    norad_id             = config.norad_id,
-    desired_timespan     = config.desired_timespan,
-    include_drag         = config.include_drag,
-    compare_tle          = config.compare_tle,
-    compare_jpl_horizons = config.compare_jpl_horizons,
-    third_bodies_list    = config.third_bodies_list,
-    zonal_harmonics_list = config.zonal_harmonics_list,
-    include_srp          = config.include_srp,
-    initial_state_source = config.initial_state_source,
+    initial_state_norad_id = config.initial_state_norad_id,
+    desired_timespan       = config.desired_timespan,
+    include_drag           = config.include_drag,
+    compare_tle            = config.compare_tle,
+    compare_jpl_horizons   = config.compare_jpl_horizons,
+    third_bodies_list      = config.third_bodies_list,
+    zonal_harmonics_list   = config.zonal_harmonics_list,
+    include_srp            = config.include_srp,
+    initial_state_source   = config.initial_state_source,
   )
   
   print_paths(config)
 
 
 def normalize_input(
-  input_object_type    : str,
   initial_state_source : str,
-) -> tuple[str, str]:
+) -> str:
   """
-  Normalize input strings for object type and initial state source.
+  Normalize input string for initial state source.
   
   Input:
   ------
-    input_object_type : str
-      Type of input object (e.g., 'norad-id').
     initial_state_source : str
       Source for the initial state vector (e.g., 'jpl-horizons').
   
   Output:
   -------
-    input_object_type : str
-      Normalized input object type.
     initial_state_source : str
       Normalized initial state source.
   """
-  # Normalize input object type
-  input_object_type = input_object_type.replace('-', '_').replace(' ', '_')
-
   # Normalize initial state source
   initial_state_source = initial_state_source.lower().replace('-', '_').replace(' ', '_')
   if 'horizons' in initial_state_source:
     initial_state_source = 'jpl_horizons'
   
   # Return normalized values
-  return input_object_type, initial_state_source
+  return initial_state_source
 
 
 def build_config(
-  input_object_type    : str,
-  norad_id             : str,
-  timespan_dt          : list[datetime],
-  include_drag         : bool           = False,
-  compare_tle          : bool           = False,
-  compare_jpl_horizons : bool           = False,
-  third_bodies         : Optional[list] = None,
-  zonal_harmonics      : Optional[list] = None,
-  include_srp          : bool           = False,
-  initial_state_source : str            = 'jpl_horizons',
+  initial_state_norad_id : str,
+  timespan_dt            : list[datetime],
+  include_drag           : bool           = False,
+  compare_tle            : bool           = False,
+  compare_jpl_horizons   : bool           = False,
+  third_bodies           : Optional[list] = None,
+  zonal_harmonics        : Optional[list] = None,
+  include_srp            : bool           = False,
+  initial_state_source   : str            = 'jpl_horizons',
 ) -> SimpleNamespace:
   """
   Parse, validate, and set up input parameters for orbit propagation.
   
   Input:
   ------
-    input_object_type : str
-      Type of input object (e.g., norad-id).
-    norad_id : str
+    initial_state_norad_id : str
       NORAD catalog ID of the satellite.
     timespan_dt : list[datetime]
       Initial and final time as list of datetime objects.
@@ -259,8 +242,7 @@ def build_config(
   """
   
   # Normalize inputs
-  input_object_type, initial_state_source = normalize_input(
-    input_object_type,
+  initial_state_source = normalize_input(
     initial_state_source,
   )
   
@@ -277,24 +259,24 @@ def build_config(
   time_f_dt = timespan_dt[1]
   delta_time_s = (time_f_dt - time_o_dt).total_seconds()
   
-  # Validate: NORAD ID required for norad-id input type
-  if input_object_type == 'norad_id' and not norad_id:
-    raise ValueError("NORAD ID is required when input-object-type is 'norad-id'")
+  # Validate: NORAD ID required
+  if not initial_state_norad_id:
+    raise ValueError("Initial State NORAD ID is required")
 
   # Validate: norad is in supported objects
   supported_objects = load_supported_objects()
-  if norad_id not in supported_objects:
-    raise ValueError(f"NORAD ID {norad_id} is not supported. Supported IDs: {list(supported_objects.keys())}")
+  if initial_state_norad_id not in supported_objects:
+    raise ValueError(f"NORAD ID {initial_state_norad_id} is not supported. Supported IDs: {list(supported_objects.keys())}")
 
   # Get object properties
-  obj_props = supported_objects[norad_id]
+  obj_props = supported_objects[initial_state_norad_id]
 
   # Get object name
   object_name = obj_props.get('name', 'object_name')
 
   # Set up paths and files
   paths = setup_paths_and_files(
-    norad_id   = norad_id,
+    norad_id   = initial_state_norad_id,
     obj_name   = object_name,
     time_o_dt  = time_o_dt,
     time_f_dt  = time_f_dt,
@@ -302,9 +284,8 @@ def build_config(
   
   return SimpleNamespace(
     # Store original input values for print_configuration
-    input_object_type = input_object_type,
-    norad_id          = norad_id,
-    desired_timespan  = timespan_dt,  # Keep for print_configuration
+    initial_state_norad_id = initial_state_norad_id,
+    desired_timespan       = timespan_dt,  # Keep for print_configuration
     # Parsed and calculated values
     obj_props                = obj_props,
     object_name              = object_name,
