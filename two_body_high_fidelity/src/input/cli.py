@@ -62,10 +62,12 @@ def parse_command_line_arguments(
     '--third-bodies',
     '--include-third-bodies',
     dest    = 'third_bodies',
-    nargs   = '+', # accepts 1 or more args.
-    choices = ['SUN', 'MOON', 'sun', 'moon'],
-    default = None,
-    help    = "Enable third-body gravity. Required args: SUN MOON (e.g. --third-bodies SUN).",
+    nargs    = '+', # accepts 1 or more args.
+    type     = str,
+    choices  = ['SUN', 'MOON', 'MERCURY', 'VENUS', 'MARS', 'JUPITER', 'SATURN', 'URANUS', 'NEPTUNE', 'PLUTO',
+                'sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'],
+    default  = None,
+    help     = 'Enable third-body gravity perturbations. Options: SUN, MOON, MERCURY, VENUS, MARS, JUPITER, SATURN, URANUS, NEPTUNE, PLUTO',
   )
   parser.add_argument(
     '--zonal-harmonics',
