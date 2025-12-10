@@ -9,14 +9,83 @@
   srp        :                                                                          # solar radiation pressure parameters
     coeff    : 1.2                                                                      # solar radiation pressure coefficient, typically c_r [-]
     area__m2 : 1000.0                                                                   # srp cross-sectional area [m²]
+'25994'      :                                                                          # norad id as top-level key
+  name       : "TERRA"                                                                  # object name
+  norad_id   : 25994                                                                    # norad id
+  mass__kg   : 4860.0                                                                   # mass [kg]
+  drag       :                                                                          # drag parameters
+    coeff    : 2.2                                                                      # drag coefficient, typically c_d [-]
+    area__m2 : 20.0                                                                     # drag cross-sectional area [m²]
+  srp        :                                                                          # solar radiation pressure parameters
+    coeff    : 1.3                                                                      # solar radiation pressure coefficient, typically c_r [-]
+    area__m2 : 20.0                                                                     # srp cross-sectional area [m²]
+'27424'      :                                                                          # norad id as top-level key
+  name       : "AQUA"                                                                   # object name
+  norad_id   : 27424                                                                    # norad id
+  mass__kg   : 2850.0                                                                   # mass [kg]
+  drag       :                                                                          # drag parameters
+    coeff    : 2.2                                                                      # drag coefficient, typically c_d [-]
+    area__m2 : 20.0                                                                     # drag cross-sectional area [m²]
+  srp        :                                                                          # solar radiation pressure parameters
+    coeff    : 1.3                                                                      # solar radiation pressure coefficient, typically c_r [-]
+    area__m2 : 20.0                                                                     # srp cross-sectional area [m²]
 
 # MEO satellites (Medium Earth Orbit, ~20,200 km altitude)
-# ... add MEO satellites here if needed ...
+'26407'      :                                                                          # norad id as top-level key
+  name       : "GPS BIIRM-5 (PRN 31) / NAVSTAR-48"                                      # object name
+  norad_id   : 26407                                                                    # norad id
+  mass__kg   : 2032.0                                                                   # mass [kg]
+  drag       :                                                                          # drag parameters
+    coeff    : 2.2                                                                      # drag coefficient, typically c_d [-]
+    area__m2 : 15.0                                                                     # drag cross-sectional area [m²]
+  srp        :                                                                          # solar radiation pressure parameters
+    coeff    : 1.3                                                                      # solar radiation pressure coefficient, typically c_r [-]
+    area__m2 : 15.0                                                                     # srp cross-sectional area [m²]
+'38833'      :                                                                          # norad id as top-level key
+  name       : "GPS-IIF-2 / NAVSTAR-67"                                                 # object name
+  norad_id   : 38833                                                                    # norad id
+  mass__kg   : 2032.0                                                                   # mass [kg]
+  drag       :                                                                          # drag parameters
+    coeff    : 2.2                                                                      # drag coefficient, typically c_d [-]
+    area__m2 : 15.0                                                                     # drag cross-sectional area [m²]
+  srp        :                                                                          # solar radiation pressure parameters
+    coeff    : 1.3                                                                      # solar radiation pressure coefficient, typically c_r [-]
+    area__m2 : 15.0                                                                     # srp cross-sectional area [m²]
+'39166'      :                                                                          # norad id as top-level key
+  name       : "GPS-IIF-3 / NAVSTAR-68"                                                 # object name
+  norad_id   : 39166                                                                    # norad id
+  mass__kg   : 2032.0                                                                   # mass [kg]
+  drag       :                                                                          # drag parameters
+    coeff    : 2.2                                                                      # drag coefficient, typically c_d [-]
+    area__m2 : 15.0                                                                     # drag cross-sectional area [m²]
+  srp        :                                                                          # solar radiation pressure parameters
+    coeff    : 1.3                                                                      # solar radiation pressure coefficient, typically c_r [-]
+    area__m2 : 15.0                                                                     # srp cross-sectional area [m²]
 
 # GEO satellites (Geostationary Orbit, ~35,786 km altitude)
 '41866'      :                                                                          # norad id as top-level key
-  name       : "GOES-16"                                                                # object name
+  name       : "GOES-16 / GOES-R"                                                       # object name
   norad_id   : 41866                                                                    # norad id
+  mass__kg   : 2227.0                                                                   # mass [kg]
+  drag       :                                                                          # drag parameters
+    coeff    : 2.0                                                                      # drag coefficient, typically c_d [-]
+    area__m2 : 10.0                                                                     # drag cross-sectional area [m²]
+  srp        :                                                                          # solar radiation pressure parameters
+    coeff    : 1.3                                                                      # solar radiation pressure coefficient, typically c_r [-]
+    area__m2 : 10.0                                                                     # srp cross-sectional area [m²]
+'43226'      :                                                                          # norad id as top-level key
+  name       : "GOES-17 / GOES-S"                                                       # object name
+  norad_id   : 43226                                                                    # norad id
+  mass__kg   : 2227.0                                                                   # mass [kg]
+  drag       :                                                                          # drag parameters
+    coeff    : 2.0                                                                      # drag coefficient, typically c_d [-]
+    area__m2 : 10.0                                                                     # drag cross-sectional area [m²]
+  srp        :                                                                          # solar radiation pressure parameters
+    coeff    : 1.3                                                                      # solar radiation pressure coefficient, typically c_r [-]
+    area__m2 : 10.0                                                                     # srp cross-sectional area [m²]
+'51850'      :                                                                          # norad id as top-level key
+  name       : "GOES-18 / GOES-T"                                                       # object name
+  norad_id   : 51850                                                                    # norad id
   mass__kg   : 2227.0                                                                   # mass [kg]
   drag       :                                                                          # drag parameters
     coeff    : 2.0                                                                      # drag coefficient, typically c_d [-]
