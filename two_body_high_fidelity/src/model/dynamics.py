@@ -8,60 +8,55 @@ Summary:
 --------
 This module provides a comprehensive framework for modeling spacecraft orbital dynamics,
 including gravitational forces (two-body and third-body), atmospheric drag, and solar 
-radiation pressure. It features a hierarchical acceleration model architecture, orbital 
-element conversions, anomaly transformations, and specialized solvers for Kepler's equation 
-and Lambert's problem. The module supports all orbit types (circular, elliptical, parabolic, 
-hyperbolic, and rectilinear) and integrates with SPICE for high-accuracy ephemerides.
+radiation pressure. It features a hierarchical acceleration model architecture and 
+integrates with SPICE for high-accuracy ephemerides.
 
 Class Structure:
 ----------------
 Acceleration Hierarchy:
-    Acceleration (coordinator)
-    ├── Gravity
-    │   ├── TwoBodyGravity
-    │   │   ├── point_mass()
-    │   │   └── oblate (J2, J3, J4)
-    │   └── ThirdBodyGravity
-    │       ├── point_mass() (Sun, Moon)
-    │       ├── oblate() (future)
-    │       └── SPICE/analytical ephemerides
-    ├── AtmosphericDrag
-    │   └── Exponential density model
-    └── SolarRadiationPressure (future)
+    GeneralStateEquationsOfMotion (ODE interface)
+    └── Acceleration (coordinator)
+        ├── Gravity
+        │   ├── TwoBodyGravity
+        │   │   ├── point_mass()
+        │   │   └── oblate (J2, J3, J4)
+        │   └── ThirdBodyGravity
+        │       ├── point_mass() (Sun, Moon)
+        │       ├── oblate() (future)
+        │       └── SPICE/analytical ephemerides
+        ├── AtmosphericDrag
+        │   └── Exponential density model
+        └── SolarRadiationPressure
 
 Main Components:
 ----------------
-1. **Acceleration** - Top-level coordinator that computes:
+1. **GeneralStateEquationsOfMotion** - Defines the state derivative (d/dt [r, v] = [v, a]) for numerical integration.
+
+2. **Acceleration** - Top-level coordinator that computes:
    total = gravity + drag + solar_radiation_pressure
 
-2. **Gravity** - Gravitational acceleration coordinator with methods:
+3. **Gravity** - Gravitational acceleration coordinator with methods:
    - two_body_point_mass()
    - two_body_oblate()
    - third_body_point_mass()
    - third_body_oblate() (future)
    - relativity() (future)
 
-3. **TwoBodyGravity** - Central body gravity:
+4. **TwoBodyGravity** - Central body gravity:
    - point_mass() - Keplerian two-body
    - oblate_j2() - J2 oblateness
    - oblate_j3() - J3 oblateness
    - oblate_j4() - J4 oblateness
 
-4. **ThirdBodyGravity** - Perturbations from Sun, Moon, etc.:
+5. **ThirdBodyGravity** - Perturbations from Sun, Moon, etc.:
    - point_mass() - Third-body point mass
    - SPICE ephemerides or analytical approximations
 
-5. **AtmosphericDrag** - Atmospheric drag model:
+6. **AtmosphericDrag** - Atmospheric drag model:
    - Exponential density model
    - Rotating atmosphere
 
-6. **SolarRadiationPressure** - SRP model (future)
-
-Utility Classes:
-----------------
-- GeneralStateEquationsOfMotion - ODE integration interface
-- TwoBody_RootSolvers - Kepler's equation, Lambert's problem
-- CoordinateSystemConverter - Position/velocity ↔ orbital elements
+7. **SolarRadiationPressure** - SRP model
 
 Usage Example:
 --------------
