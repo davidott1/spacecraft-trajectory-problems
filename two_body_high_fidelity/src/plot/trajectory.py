@@ -9,7 +9,7 @@ from matplotlib.figure import Figure
 from matplotlib.lines  import Line2D
 
 from src.plot.utility          import get_equal_limits, add_utc_time_axis
-from src.model.constants       import CONVERTER, PHYSICALCONSTANTS
+from src.model.constants       import CONVERTER, SOLARSYSTEMCONSTANTS
 from src.model.frame_converter import FrameConverter
 
 
@@ -56,8 +56,8 @@ def plot_3d_trajectories(
   # Add Earth ellipsoid
   u       = np.linspace(0, 2 * np.pi, 50)
   v       = np.linspace(0, np.pi, 50)
-  r_eq    = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR
-  r_pol   = PHYSICALCONSTANTS.EARTH.RADIUS.POLAR
+  r_eq    = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
+  r_pol   = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.POLAR
   x_earth = r_eq * np.outer(np.cos(u), np.sin(v))
   y_earth = r_eq * np.outer(np.sin(u), np.sin(v))
   z_earth = r_pol * np.outer(np.ones(np.size(u)), np.cos(v))

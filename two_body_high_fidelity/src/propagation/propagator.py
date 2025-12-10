@@ -14,7 +14,7 @@ from scipy.interpolate import interp1d
 from sgp4.api          import jday
 
 from src.model.dynamics        import GeneralStateEquationsOfMotion, Acceleration, OrbitConverter
-from src.model.constants       import PHYSICALCONSTANTS
+from src.model.constants       import SOLARSYSTEMCONSTANTS
 from src.model.time_converter  import utc_to_et
 from src.model.frame_converter import FrameConverter
 from src.utility.tle_helper    import modify_tle_bstar, get_tle_satellite_and_tle_epoch
@@ -157,7 +157,7 @@ def propagate_tle(
       coe = OrbitConverter.pv_to_coe(
         posvel_vec_array[0:3, i],
         posvel_vec_array[3:6, i],
-        gp = PHYSICALCONSTANTS.EARTH.GP,
+        gp = SOLARSYSTEMCONSTANTS.EARTH.GP,
       )
       for key in coe_time_series.keys():
         if coe[key] is not None:
@@ -257,7 +257,7 @@ def propagate_state_numerical_integration(
   t_eval              : Optional[np.ndarray] = None,
   get_coe_time_series : bool                 = False,
   num_points          : Optional[int]        = None,
-  gp                  : float                = PHYSICALCONSTANTS.EARTH.GP,
+  gp                  : float                = SOLARSYSTEMCONSTANTS.EARTH.GP,
 ) -> dict:
   """
   Propagate an orbit from initial cartesian state using numerical integration.
@@ -440,13 +440,13 @@ def run_high_fidelity_propagation(
   active_harmonics = []
   if include_zonal_harmonics:
     if 'J2' in zonal_harmonics_list:
-      j2_val = PHYSICALCONSTANTS.EARTH.J2
+      j2_val = SOLARSYSTEMCONSTANTS.EARTH.J2
       active_harmonics.append('J2')
     if 'J3' in zonal_harmonics_list:
-      j3_val = PHYSICALCONSTANTS.EARTH.J3
+      j3_val = SOLARSYSTEMCONSTANTS.EARTH.J3
       active_harmonics.append('J3')
     if 'J4' in zonal_harmonics_list:
-      j4_val = PHYSICALCONSTANTS.EARTH.J4
+      j4_val = SOLARSYSTEMCONSTANTS.EARTH.J4
       active_harmonics.append('J4')
 
   # Print configuration
@@ -488,11 +488,11 @@ def run_high_fidelity_propagation(
   
   # Define acceleration model
   acceleration = Acceleration(
-    gp                      = PHYSICALCONSTANTS.EARTH.GP,
+    gp                      = SOLARSYSTEMCONSTANTS.EARTH.GP,
     j2                      = j2_val,
     j3                      = j3_val,
     j4                      = j4_val,
-    pos_ref                 = PHYSICALCONSTANTS.EARTH.RADIUS.EQUATOR,
+    pos_ref                 = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR,
     mass                    = mass,
     enable_drag             = include_drag,
     cd                      = cd,
@@ -529,7 +529,7 @@ def run_high_fidelity_propagation(
     dense_output        = True,
     t_eval              = t_eval_grid,
     get_coe_time_series = True,
-    gp                  = PHYSICALCONSTANTS.EARTH.GP,
+    gp                  = SOLARSYSTEMCONSTANTS.EARTH.GP,
   )
 
   print("Complete")
@@ -573,7 +573,7 @@ def run_high_fidelity_propagation(
         coe = OrbitConverter.pv_to_coe(
           state_at_ephem[0:3, i],
           state_at_ephem[3:6, i],
-          PHYSICALCONSTANTS.EARTH.GP
+          SOLARSYSTEMCONSTANTS.EARTH.GP
         )
         for key in coe_at_ephem.keys():
           if coe[key] is not None:

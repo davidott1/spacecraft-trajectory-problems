@@ -7,7 +7,7 @@ from typing              import Optional
 from src.propagation.propagator import propagate_tle
 from src.model.time_converter   import utc_to_et
 from src.model.dynamics         import OrbitConverter
-from src.model.constants        import PHYSICALCONSTANTS, CONVERTER
+from src.model.constants        import SOLARSYSTEMCONSTANTS, CONVERTER
 from src.utility.time_helper    import format_time_offset
 
 
@@ -64,7 +64,7 @@ def get_initial_state(
     coe = OrbitConverter.pv_to_coe(
       pos_vec = horizons_initial_state[0:3],
       vel_vec = horizons_initial_state[3:6],
-      gp      = PHYSICALCONSTANTS.EARTH.GP,
+      gp      = SOLARSYSTEMCONSTANTS.EARTH.GP,
     )
 
     # Display Horizons-derived initial state
@@ -124,7 +124,7 @@ def get_initial_state(
   coe = OrbitConverter.pv_to_coe(
     pos_vec = tle_initial_state[0:3],
     vel_vec = tle_initial_state[3:6],
-    gp      = PHYSICALCONSTANTS.EARTH.GP,
+    gp      = SOLARSYSTEMCONSTANTS.EARTH.GP,
   )
 
   # Display TLE-derived initial state
