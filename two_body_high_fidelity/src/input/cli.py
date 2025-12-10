@@ -1,6 +1,5 @@
-import argparse
 import sys
-from datetime import datetime
+import argparse
 from src.utility.time_helper import parse_time
 
 
@@ -25,23 +24,17 @@ def parse_command_line_arguments(
     parser.print_help(sys.stderr)
     sys.exit(1)
   
-  # Object definition arguments
   parser.add_argument(
-    '--input-object-type',
-    type     = str,
-    choices  = ['norad-id', 'norad_id', 'norad id'],
+    '--initial-state-norad-id',
+    type=str,
     required = True,
-    help     = "Type of input object identifier.",
-  )
-  parser.add_argument(
-    '--norad-id',
-    type = str,
-    help = "NORAD Catalog ID of the satellite (e.g., '25544' for ISS).",
+    help     = 'NORAD ID for the initial state object'
   )
   
   # Time arguments
   parser.add_argument(
     '--timespan',
+    dest     = 'timespan',
     type     = parse_time,
     nargs    = 2,
     metavar  = ('TIME_START', 'TIME_END'),
@@ -49,15 +42,6 @@ def parse_command_line_arguments(
     help     = "Start and end time for propagation in ISO format (e.g., '2025-10-01T00:00:00 2025-10-02T00:00:00').",
   )
   
-  # Optional arguments
-  parser.add_argument(
-    '--include-spice',
-    '--spice',
-    dest    = 'include_spice',
-    action  = 'store_true',
-    default = False,
-    help    = "Enable SPICE functionality (disabled by default).",
-  )
   parser.add_argument(
     '--third-bodies',
     '--include-third-bodies',
@@ -110,7 +94,6 @@ def parse_command_line_arguments(
     help    = "Enable Solar Radiation Pressure (disabled by default).",
   )
   parser.add_argument(
-    '--initial-state',
     '--initial-state-source',
     dest    = 'initial_state_source',
     type    = str,
@@ -118,7 +101,7 @@ def parse_command_line_arguments(
     default = 'horizons',
     help    = "Source for initial state vector (default: horizons).",
   )
-
+  
   # Parse arguments
   args = parser.parse_args()
   
