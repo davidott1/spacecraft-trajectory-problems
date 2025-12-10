@@ -27,6 +27,58 @@ class CONVERTER:
 class PHYSICALCONSTANTS:
   speed_of_light = 299792458.0  # Speed of light in vacuum [m/s]
 
+class NAIFIDS:
+  """
+  NAIF ID codes for celestial bodies used by SPICE.
+  Reference: https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/req/naif_ids.html
+  
+  Notes:
+  ------
+  For planets with moons, DE440 ephemeris contains barycenters (1-9), not planet centers.
+  For third-body gravitational perturbations, barycenters are appropriate since:
+  1. The barycenter represents the center of mass of the planet system
+  2. The difference between barycenter and planet center is negligible at interplanetary distances
+  """
+  # Sun
+  SUN     = 10
+  
+  # Inner planets (planet centers available in DE440)
+  MERCURY = 199
+  VENUS   = 299
+  EARTH   = 399
+  MOON    = 301
+  
+  # Outer planets - use barycenters (planet centers not in DE440)
+  MARS            = 4    # Mars Barycenter
+  JUPITER         = 5    # Jupiter Barycenter
+  SATURN          = 6    # Saturn Barycenter
+  URANUS          = 7    # Uranus Barycenter
+  NEPTUNE         = 8    # Neptune Barycenter
+  PLUTO           = 9    # Pluto Barycenter
+  
+  # Planet center IDs (for reference, may not be in all SPK files)
+  MARS_CENTER     = 499
+  JUPITER_CENTER  = 599
+  SATURN_CENTER   = 699
+  URANUS_CENTER   = 799
+  NEPTUNE_CENTER  = 899
+  PLUTO_CENTER    = 999
+  
+  # Mapping from body name to NAIF ID (uses barycenters for outer planets)
+  NAME_TO_ID = {
+    'SUN'     : SUN,
+    'MERCURY' : MERCURY,
+    'VENUS'   : VENUS,
+    'EARTH'   : EARTH,
+    'MOON'    : MOON,
+    'MARS'    : MARS,
+    'JUPITER' : JUPITER,
+    'SATURN'  : SATURN,
+    'URANUS'  : URANUS,
+    'NEPTUNE' : NEPTUNE,
+    'PLUTO'   : PLUTO,
+  }
+
 class SOLARSYSTEMCONSTANTS:
   """
   Class to hold physical constants.
@@ -35,8 +87,7 @@ class SOLARSYSTEMCONSTANTS:
   
   # G_SC      = 1361.0   # solar constant [W/m²] at 1 AU
   # P_SRP_1AU = G_SC / PHYSICALCONSTANTS.speed_of_light  # solar radiation pressure at 1 AU [N/m²]. approx 4.56e-6 N/m².
-  # # P_SRP_1AU = 4.56e-6  # Solar radiation pressure at 1 AU [N/m²]
-  
+
   class SUN:
     class RADIUS:
       EQUATOR = 696340000.0                 # Sun's equatorial radius [m]
