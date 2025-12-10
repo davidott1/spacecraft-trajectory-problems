@@ -125,6 +125,25 @@ def load_spice_files(
     # Load leap seconds kernel first (minimal kernel set for time conversion)
     spice.furnsh(str(lsk_filepath))
 
+    # Load planetary ephemeris (SPK)
+    # Sort to ensure deterministic behavior. SPICE uses the last loaded kernel for precedence.
+    spk_files = sorted(list(spice_kernels_folderpath.glob('de*.bsp')))
+    if spk_files:
+      for spk_file in spk_files:
+        spice.furnsh(str(spk_file))
+        print(f"    Loaded SPK : {spk_file.name}")
+    else:
+      raise FileNotFoundError(f"No SPK files (de*.bsp) found in {spice_kernels_folderpath}")
+
+    # Load planetary constants (PCK)
+    pck_files = sorted(list(spice_kernels_folderpath.glob('pck*.tpc')))
+    if pck_files:
+      for pck_file in pck_files:
+        spice.furnsh(str(pck_file))
+        print(f"    Loaded PCK : {pck_file.name}")
+    else:
+      raise FileNotFoundError(f"No PCK files (pck*.tpc) found in {spice_kernels_folderpath}")
+
 
 def unload_spice_files(
   use_spice : bool,
