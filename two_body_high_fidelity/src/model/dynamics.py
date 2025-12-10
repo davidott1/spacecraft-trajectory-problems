@@ -50,7 +50,7 @@ Main Components:
 
 5. **ThirdBodyGravity** - Perturbations from Sun, Moon, etc.:
    - point_mass() - Third-body point mass
-   - SPICE ephemerides or analytical approximations
+   - SPICE ephemerides
 
 6. **AtmosphericDrag** - Atmospheric drag model:
    - Exponential density model
@@ -101,7 +101,6 @@ Sources:
 - Montenbruck, O., & Gill, E. (2000). Satellite Orbits: Models, Methods and Applications. Springer.
 """
 
-import warnings
 import numpy    as np
 import spiceypy as spice
 
@@ -347,61 +346,6 @@ class ThirdBodyGravity:
         None
       """
       self.bodies = bodies if bodies else ['sun', 'moon']
-      self._load_spice_kernels(spice_kernel_folderpath)
-    
-    def _load_spice_kernels(
-        self,
-        kernel_folderpath : Optional[Path],
-    ) -> None:
-      """
-      Load required SPICE kernels.
-      
-      Download from: https://naif.jpl.nasa.gov/pub/naif/generic_kernels/
-      
-      Required kernels:
-      - LSK (Leap Second Kernel): naif0012.tls
-      - SPK (Planetary Ephemeris): de430.bsp or de440.bsp
-      - PCK (Planetary Constants): pck00010.tpc
-      
-      Input:
-      ------
-        kernel_folderpath : Path | None
-          Path to folder containing SPICE kernels.
-              
-      Output:
-      -------
-        None
-      """
-
-      if kernel_folderpath is None:
-        # Default to a kernels folderpath in the project
-        kernel_folderpath = Path(__file__).parent.parent.parent / 'data' / 'spice_kernels'
-      
-      kernel_folderpath = Path(kernel_folderpath)
-      
-      if not kernel_folderpath.exists():
-        raise FileNotFoundError(
-          f"SPICE kernel folderpath not found: {kernel_folderpath}\n"
-          f"Please download kernels from https://naif.jpl.nasa.gov/pub/naif/generic_kernels/\n"
-          f"Required files:\n"
-          f"  - lsk/naif0012.tls\n"
-          f"  - spk/planets/de440.bsp (or de430.bsp)\n"
-          f"  - pck/pck00010.tpc"
-        )
-      
-      # Load planetary ephemeris
-      spk_files = list(kernel_folderpath.glob('de*.bsp'))
-      if spk_files:
-        spice.furnsh(str(spk_files[0]))  # Use first found
-      else:
-        raise FileNotFoundError(f"No SPK files (de*.bsp) found in {kernel_folderpath}")
-      
-      # Load planetary constants
-      pck_file = kernel_folderpath / 'pck00010.tpc'
-      if pck_file.exists():
-        spice.furnsh(str(pck_file))
-      else:
-        raise FileNotFoundError(f"PCK file not found: {pck_file}")
     
     def _get_position_body_spice(
       self,
