@@ -9,7 +9,7 @@ import sys
 import subprocess
 
 from src.model.time_converter import utc_to_et
-from src.model.dynamics       import OrbitConverter
+from src.model.orbit_converter import OrbitConverter
 from src.model.constants      import SOLARSYSTEMCONSTANTS
 from src.input.cli            import parse_time
 from src.utility.tle_helper   import get_tle_satellite_and_tle_epoch
