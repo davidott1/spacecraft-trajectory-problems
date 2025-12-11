@@ -24,11 +24,33 @@ def parse_command_line_arguments(
     parser.print_help(sys.stderr)
     sys.exit(1)
   
+  # Initial state arguments
+  parser.add_argument(
+    '--initial-state-source',
+    dest    = 'initial_state_source',
+    type    = str,
+    choices = [
+      'horizons', 'jpl-horizons', 'jpl_horizons', 'jpl horizons',
+      'tle', 
+      'sv', 'custom-sv', 'custom-state-vector', 'state-vector',
+    ],
+    default = 'horizons',
+    help    = "Source for initial state vector (default: horizons).",
+  )
   parser.add_argument(
     '--initial-state-norad-id',
     type=str,
-    required = True,
-    help     = 'NORAD ID for the initial state object'
+    required=False,
+    help='NORAD ID for the initial state object (required unless source is state-vector)'
+  )
+
+  parser.add_argument(
+    '--initial-state-filename',
+    '--initial-state-vector-file',
+    dest='initial_state_filename',
+    type=str,
+    required=False,
+    help='Filename of the custom state vector YAML file (in data/state_vectors)'
   )
   
   # Time arguments
@@ -93,14 +115,7 @@ def parse_command_line_arguments(
     default = False,
     help    = "Enable Solar Radiation Pressure (disabled by default).",
   )
-  parser.add_argument(
-    '--initial-state-source',
-    dest    = 'initial_state_source',
-    type    = str,
-    choices = ['horizons', 'jpl-horizons', 'jpl_horizons', 'jpl horizons', 'tle'],
-    default = 'horizons',
-    help    = "Source for initial state vector (default: horizons).",
-  )
+  
   
   # Parse arguments
   args = parser.parse_args()

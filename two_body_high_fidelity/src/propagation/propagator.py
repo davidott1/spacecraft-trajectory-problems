@@ -482,7 +482,7 @@ def run_high_fidelity_propagation(
 
   print("      Solar Radiation Pressure")
   if include_srp:
-    print( "        Model      : Conical Shadow (Spherical Earth)")
+    print( "        Model      : Cylindrical Shadow (Spherical Earth)")
     print(f"        Parameters : Cr={cr}, Area_SRP={area_srp} m²")
   else:
     print("        Model      : None")
@@ -506,8 +506,33 @@ def run_high_fidelity_propagation(
     spice_kernel_folderpath = str(spice_kernels_folderpath),
   )
   
+  # Get orbital period for grid density
+  period = OrbitConverter.pv_to_period(
+    initial_state[0:3],
+    initial_state[3:6],
+    SOLARSYSTEMCONSTANTS.EARTH.GP
+  )
+  
+  if np.isfinite(period):
+    # Elliptical orbit
+    # Determine number of points (100 points per period)
+    points_per_period = 100
+    num_periods       = abs(delta_time_s) / period
+    num_grid_points   = int(num_periods * points_per_period)
+    
+    # Ensure reasonable limits
+    if num_grid_points < 100:
+      num_grid_points = 100
+    # Cap at reasonable max to prevent memory issues for long propagations
+    if num_grid_points > 100000:
+      num_grid_points = 100000
+      print(f"    [WARNING] Grid points capped at {num_grid_points}")
+      
+  else:
+    # Hyperbolic or parabolic - fallback to fixed number
+    num_grid_points = 1000
+
   # Create equal-spaced time grid (in ET)
-  num_grid_points = 1000
   t_eval_grid = np.linspace(time_et_o, time_et_f, num_grid_points)
 
   print("    Numerical Integration")
