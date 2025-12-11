@@ -1,7 +1,6 @@
 # Data directories
 data/*
 !data/state_vectors/
-!data/state_vectors/*
 
 # Output directory
 output/
