@@ -25,6 +25,7 @@ Usage:
   ---------------------------  --------   --------------------------------------------------
   --initial-state-source       No         Source of initial state (jpl_horizons or tle)
   --initial-state-norad-id     Yes        NORAD ID for the initial state object
+  --initial-state-filename     No         Filename for custom state vector (required if source is sv)
   --timespan                   Yes        Start and end time (ISO format)
   --zonal-harmonics            No         Enable zonal harmonics (requires arguments e.g. J2)
   --third-bodies               No         Enable third-body gravity (requires arguments e.g. sun)
@@ -121,7 +122,8 @@ def check_data_availability(
 
 
 def main(
-  initial_state_norad_id : str,
+  initial_state_norad_id : Optional[str],
+  initial_state_filename : Optional[str],
   timespan               : list[datetime],
   include_drag           : bool           = False,
   compare_tle            : bool           = False,
@@ -170,6 +172,7 @@ def main(
   # Process inputs and setup
   config = build_config(
     initial_state_norad_id,
+    initial_state_filename,
     timespan,
     include_drag,
     compare_tle,
@@ -248,15 +251,21 @@ def main(
       stop_logging(logger)
       return error
 
-  # Determine initial state (from Horizons or TLE)
-  initial_state = get_initial_state(
-    tle_line_1                    = config.tle_line_1,
-    tle_line_2                    = config.tle_line_2,
-    time_o_dt                     = config.time_o_dt,
-    result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
-    initial_state_source          = config.initial_state_source,
-    to_j2000                      = True,
-  )
+  # Determine initial state (from Horizons, TLE, or Custom SV)
+  if config.initial_state_source == 'custom_state_vector':
+    print(f"  Initial State")
+    print(f"    Source : Custom State Vector File")
+    print(f"    File   : {config.initial_state_filename}")
+    initial_state = config.custom_state_vector
+  else:
+    initial_state = get_initial_state(
+      tle_line_1                    = config.tle_line_1,
+      tle_line_2                    = config.tle_line_2,
+      time_o_dt                     = config.time_o_dt,
+      result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
+      initial_state_source          = config.initial_state_source,
+      to_j2000                      = True,
+    )
 
   # Run propagations: high-fidelity and SGP4
   result_high_fidelity_propagation, result_sgp4_propagation = run_propagations(
@@ -316,6 +325,7 @@ if __name__ == "__main__":
   # Run main function
   main(
     args.initial_state_norad_id,
+    args.initial_state_filename,
     args.timespan,
     args.include_drag,
     args.compare_tle,

@@ -1,3 +1,6 @@
+import yaml
+import numpy as np
+
 from pathlib  import Path
 from datetime import datetime
 from types    import SimpleNamespace
@@ -8,7 +11,8 @@ from src.utility.time_helper import parse_time
 
 
 def print_input_configuration(
-  initial_state_norad_id : str,
+  initial_state_norad_id : Optional[str],
+  initial_state_filename : Optional[str],
   desired_timespan       : list,
   include_drag           : bool,
   compare_tle            : bool,
@@ -48,9 +52,10 @@ def print_input_configuration(
   """
   # Define defaults for comparison
   defaults = {
-    'initial_state_norad_id' : None,
-    'timespan'               : None,
     'initial_state_source'   : 'jpl_horizons',
+    'initial_state_norad_id' : None,
+    'initial_state_filename' : None,
+    'timespan'               : None,
     'zonal_harmonics'        : [],
     'third_bodies'           : [],
     'include_drag'           : False,
@@ -68,6 +73,7 @@ def print_input_configuration(
   entries = [
     ('initial_state_source',   initial_state_source,   defaults['initial_state_source'],   initial_state_source   != defaults['initial_state_source']),
     ('initial_state_norad_id', initial_state_norad_id, defaults['initial_state_norad_id'], initial_state_norad_id is not None),
+    ('initial_state_filename', initial_state_filename, defaults['initial_state_filename'], initial_state_filename is not None),
     ('timespan',               timespan_str,           defaults['timespan'],               desired_timespan       is not None),
     ('zonal_harmonics',        zonal_str,              defaults['zonal_harmonics'],        zonal_harmonics_list   is not None and len(zonal_harmonics_list) > 0),
     ('third_bodies',           third_str,              defaults['third_bodies'],           third_bodies_list      is not None and len(third_bodies_list) > 0),
@@ -137,6 +143,7 @@ def print_paths(
   print(f"    LSK Filepath             : <data_folderpath>/{config.lsk_filepath.relative_to(data_folderpath)}")
   print(f"    JPL Horizons Folderpath  : <data_folderpath>/{config.jpl_horizons_folderpath.relative_to(data_folderpath)}")
   print(f"    TLEs Folderpath          : <data_folderpath>/{config.tles_folderpath.relative_to(data_folderpath)}")
+  print(f"    State Vectors Folderpath : <data_folderpath>/{config.state_vectors_folderpath.relative_to(data_folderpath)}")
 
 
 def print_configuration(
@@ -156,6 +163,7 @@ def print_configuration(
   """
   print_input_configuration(
     initial_state_norad_id = config.initial_state_norad_id,
+    initial_state_filename = config.initial_state_filename,
     desired_timespan       = config.desired_timespan,
     include_drag           = config.include_drag,
     compare_tle            = config.compare_tle,
@@ -187,15 +195,19 @@ def normalize_input(
   """
   # Normalize initial state source
   initial_state_source = initial_state_source.lower().replace('-', '_').replace(' ', '_')
+  
   if 'horizons' in initial_state_source:
     initial_state_source = 'jpl_horizons'
+  elif initial_state_source in ['sv', 'custom_sv', 'custom_state_vector', 'state_vector']:
+    initial_state_source = 'custom_state_vector'
   
   # Return normalized values
   return initial_state_source
 
 
 def build_config(
-  initial_state_norad_id : str,
+  initial_state_norad_id : Optional[str],
+  initial_state_filename : Optional[str],
   timespan_dt            : list[datetime],
   include_drag           : bool           = False,
   compare_tle            : bool           = False,
@@ -259,36 +271,134 @@ def build_config(
   time_f_dt = timespan_dt[1]
   delta_time_s = (time_f_dt - time_o_dt).total_seconds()
   
-  # Validate: NORAD ID required
-  if not initial_state_norad_id:
-    raise ValueError("Initial State NORAD ID is required")
-
-  # Validate: norad is in supported objects
-  supported_objects = load_supported_objects()
-  if initial_state_norad_id not in supported_objects:
-    raise ValueError(f"NORAD ID {initial_state_norad_id} is not supported. Supported IDs: {list(supported_objects.keys())}")
-
-  # Get object properties
-  obj_props = supported_objects[initial_state_norad_id]
-
-  # Get object name
-  object_name = obj_props.get('name', 'object_name')
-
   # Set up paths and files
+  # Note: norad_id and obj_name might be None/placeholder if using custom SV
   paths = setup_paths_and_files(
-    norad_id   = initial_state_norad_id,
-    obj_name   = object_name,
+    norad_id   = initial_state_norad_id if initial_state_norad_id else "custom",
+    obj_name   = "custom_object", # Placeholder, updated later if possible
     time_o_dt  = time_o_dt,
     time_f_dt  = time_f_dt,
   )
+
+  # Initialize variables
+  obj_props           = {}
+  object_name         = "Unknown"
+  custom_state_vector = None
+
+  # --- Logic for Custom State Vector ---
+  if initial_state_source == 'custom_state_vector':
+    # Validation
+    if initial_state_norad_id is not None:
+      print(f"[WARNING] --initial-state-norad-id ({initial_state_norad_id}) is ignored when using custom state vector.")
+      # Or terminate as requested:
+      raise ValueError("Argument --initial-state-norad-id is not allowed when using a custom state vector.")
+      
+    if compare_tle or compare_jpl_horizons:
+      raise ValueError("Comparisons (TLE/Horizons) are not allowed when using a custom state vector.")
+      
+    if not initial_state_filename:
+      raise ValueError("Argument --initial-state-filename is required when using a custom state vector.")
+    
+    # Load Custom State Vector File
+    sv_filepath = paths['state_vectors_folderpath'] / initial_state_filename
+    if not sv_filepath.exists():
+      raise FileNotFoundError(f"Custom state vector file not found: {sv_filepath}")
+      
+    with open(sv_filepath, 'r') as f:
+      sv_data = yaml.safe_load(f)
+      
+    # Extract properties
+    object_name = sv_data.get('name', 'CustomObject')
+    
+    # Ensure defaults for mass, drag, srp if not present
+    if 'mass__kg' not in sv_data:
+        sv_data['mass__kg'] = 1000.0 # Default mass
+    
+    # Handle drag defaults
+    default_drag = {'coeff': 2.2, 'area__m2': 10.0}
+    if 'drag' not in sv_data or sv_data['drag'] is None:
+        sv_data['drag'] = default_drag
+    else:
+        # Fill in missing keys in existing drag dict
+        for k, v in default_drag.items():
+            if k not in sv_data['drag']:
+                sv_data['drag'][k] = v
+    
+    # Handle SRP defaults
+    default_srp = {'coeff': 1.3, 'area__m2': 10.0}
+    if 'srp' not in sv_data or sv_data['srp'] is None:
+        sv_data['srp'] = default_srp
+    else:
+        # Fill in missing keys in existing srp dict
+        for k, v in default_srp.items():
+            if k not in sv_data['srp']:
+                sv_data['srp'][k] = v
+
+    obj_props = sv_data
+    
+    # Extract state
+    # Support 'state' (6-element list) OR 'pos_vec__m' and 'vel_vec__m_per_s'
+    if 'state' in sv_data:
+        custom_state_vector = np.array(sv_data['state'])
+    elif 'pos_vec__m' in sv_data and ('vel_vec__m_per_s' in sv_data or 'vec_vec__m_per_s' in sv_data):
+        # Handle potential typo in YAML key
+        vel_key = 'vel_vec__m_per_s' if 'vel_vec__m_per_s' in sv_data else 'vec_vec__m_per_s'
+        
+        pos_raw = sv_data['pos_vec__m']
+        vel_raw = sv_data[vel_key]
+        
+        # Helper to parse "x, y, z" string or [x, y, z] list
+        def parse_vec3(raw_val):
+            if isinstance(raw_val, str):
+                # Remove brackets if present and split
+                clean = raw_val.replace('[', '').replace(']', '')
+                return np.array([float(x.strip()) for x in clean.split(',')])
+            elif isinstance(raw_val, list):
+                return np.array([float(x) for x in raw_val])
+            else:
+                raise ValueError(f"Unknown format for vector: {raw_val}")
+
+        pos = parse_vec3(pos_raw)
+        vel = parse_vec3(vel_raw)
+        custom_state_vector = np.concatenate((pos, vel))
+    else:
+      raise ValueError(f"Custom state vector file {initial_state_filename} must contain 'state' or 'pos_vec__m'/'vel_vec__m_per_s'.")
+
+  # --- Logic for Standard Sources (Horizons/TLE) ---
+  else:
+    # Validate: NORAD ID required
+    if not initial_state_norad_id:
+      raise ValueError("Initial State NORAD ID is required for Horizons/TLE sources.")
+
+    # Validate: norad is in supported objects
+    supported_objects = load_supported_objects()
+    if initial_state_norad_id not in supported_objects:
+      raise ValueError(f"NORAD ID {initial_state_norad_id} is not supported. Supported IDs: {list(supported_objects.keys())}")
+
+    # Get object properties
+    obj_props = supported_objects[initial_state_norad_id]
+
+    # Get object name
+    object_name = obj_props.get('name', 'object_name')
+    
+    # Update paths with correct name
+    paths = setup_paths_and_files(
+      norad_id   = initial_state_norad_id,
+      obj_name   = object_name,
+      time_o_dt  = time_o_dt,
+      time_f_dt  = time_f_dt,
+    )
+
   
   return SimpleNamespace(
     # Store original input values for print_configuration
     initial_state_norad_id = initial_state_norad_id,
+    initial_state_filename = initial_state_filename,
     desired_timespan       = timespan_dt,  # Keep for print_configuration
     # Parsed and calculated values
     obj_props                = obj_props,
     object_name              = object_name,
+    custom_state_vector      = custom_state_vector,
     time_o_dt                = time_o_dt,
     time_f_dt                = time_f_dt,
     delta_time_s             = delta_time_s,
@@ -315,6 +425,7 @@ def build_config(
     spice_kernels_folderpath = paths['spice_kernels_folderpath'],
     jpl_horizons_folderpath  = paths['jpl_horizons_folderpath'],
     tles_folderpath          = paths['tles_folderpath'],
+    state_vectors_folderpath = paths['state_vectors_folderpath'],
     lsk_filepath             = paths['lsk_filepath'],
     # Values calculated later
     tle_line_0   = None,
@@ -361,6 +472,9 @@ def setup_paths_and_files(
   
   # TLEs folderpath
   tles_folderpath = data_folderpath / 'tles'
+
+  # State Vectors folderpath
+  state_vectors_folderpath = data_folderpath / 'state_vectors'
   
   # Horizons ephemeris folder (loader will search for compatible files)
   jpl_horizons_folderpath = data_folderpath / 'ephems'
@@ -386,6 +500,7 @@ def setup_paths_and_files(
     'spice_kernels_folderpath' : spice_kernels_folderpath,
     'jpl_horizons_folderpath'  : jpl_horizons_folderpath,
     'tles_folderpath'          : tles_folderpath,
+    'state_vectors_folderpath' : state_vectors_folderpath,
     'lsk_filepath'             : lsk_filepath,
   }
 

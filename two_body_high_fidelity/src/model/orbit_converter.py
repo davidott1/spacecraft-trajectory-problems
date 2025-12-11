@@ -159,7 +159,7 @@ class OrbitConverter:
   - Anomaly transformations (true, eccentric, mean, hyperbolic, parabolic)
   - Support for all orbit types (circular, elliptical, parabolic, hyperbolic, rectilinear)
   """
-  
+
   @staticmethod
   def pv_to_coe(
     pos_vec : np.ndarray,
@@ -320,7 +320,6 @@ class OrbitConverter:
       'ha'   : ha,
       'pa'   : pa,
     }
-
 
   @staticmethod
   def coe_to_pv(
@@ -488,6 +487,98 @@ class OrbitConverter:
       ])
     
     return pos_vec, vel_vec
+
+  @staticmethod
+  def pv_to_specific_energy(
+    pos_vec : np.ndarray,
+    vel_vec : np.ndarray,
+    gp      : float = SOLARSYSTEMCONSTANTS.EARTH.GP,
+  ) -> float:
+    """
+    Calculate specific mechanical energy from Cartesian state vectors.
+    
+    Input:
+    ------
+      pos_vec : np.ndarray
+        Position vector [m].
+      vel_vec : np.ndarray
+        Velocity vector [m/s].
+      gp : float
+        Gravitational parameter [m³/s²].
+        
+    Output:
+    -------
+      epsilon : float
+        Specific mechanical energy [m²/s²].
+    """
+    # Ensure vectors are numpy arrays and flattened
+    pos_vec = np.asarray(pos_vec).flatten()
+    vel_vec = np.asarray(vel_vec).flatten()
+
+    pos_mag = np.linalg.norm(pos_vec)
+    vel_mag = np.linalg.norm(vel_vec)
+    
+    specific_energy = vel_mag**2 / 2.0 - gp / pos_mag
+    return float(specific_energy)
+
+  @staticmethod
+  def specific_energy_to_period(
+    specific_energy : float,
+    gp              : float = SOLARSYSTEMCONSTANTS.EARTH.GP,
+  ) -> float:
+    """
+    Calculate orbital period from specific mechanical energy.
+    
+    Input:
+    ------
+      specific_energy : float
+        Specific mechanical energy [m²/s²].
+      gp : float
+        Gravitational parameter [m³/s²].
+        
+    Output:
+    -------
+      period : float
+        Orbital period [s]. Returns np.inf for parabolic/hyperbolic orbits.
+    """
+    if specific_energy < 0:
+      # Elliptical orbit
+      sma    = -gp / (2.0 * specific_energy)
+      period = 2.0 * np.pi * np.sqrt(sma**3 / gp)
+      return float(period)
+    else:
+      # Parabolic or Hyperbolic
+      return np.inf
+
+  @staticmethod
+  def pv_to_period(
+    pos_vec : np.ndarray,
+    vel_vec : np.ndarray,
+    gp      : float = SOLARSYSTEMCONSTANTS.EARTH.GP,
+  ) -> float:
+    """
+    Calculate orbital period from Cartesian state vectors.
+    
+    Input:
+    ------
+      pos_vec : np.ndarray
+        Position vector [m].
+      vel_vec : np.ndarray
+        Velocity vector [m/s].
+      gp : float
+        Gravitational parameter [m³/s²].
+        
+    Output:
+    -------
+      period : float
+        Orbital period [s]. Returns np.inf for parabolic/hyperbolic orbits.
+    """
+    # Position and velocity vectors to specific energy
+    specific_energy = OrbitConverter.pv_to_specific_energy(pos_vec, vel_vec, gp)
+    
+    
+    # Specific energy to period
+    return OrbitConverter.specific_energy_to_period(specific_energy, gp)
 
   @staticmethod
   def ea_to_ta(
