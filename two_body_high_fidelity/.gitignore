@@ -2,6 +2,7 @@
 data/ephems/
 data/spice_kernels/
 data/tles/
+!data/state_vectors/
 
 # Output directory
 output/
