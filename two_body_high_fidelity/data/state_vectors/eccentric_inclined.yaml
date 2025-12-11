@@ -1,8 +1,11 @@
+# Orbit: a = 14000 km, e = 0.5, i = 45 deg, at periapsis (TA = 0)
+# Periapsis radius: r_p = a(1-e) = 7000 km
+# Periapsis velocity: v_p = sqrt(mu*(2/r_p - 1/a)) = 8724 m/s
 frame             : J2000                                                                    # reference frame of the state vector
 epoch             : 2025-10-01T00:00:00Z                                                     # epoch of the state vector in ISO format
 coordinate_system : cartesian                                                                # coordinate system of the state vector
-pos_vec__m        : 3500.0e3, 0.0e0, 0.0e0                                                   # position vector [m] (at periapsis)
-vec_vec__m_per_s  :    0.0e0, 7.551e3, 7.551e3                                               # velocity vector [m/s] (v_p*cos(45), v_p*sin(45))
+pos_vec__m        : 7000.0e3, 0.0e0, 0.0e0                                                   # position vector [m] (at periapsis)
+vec_vec__m_per_s  :    0.0e0, 6.169e3, 6.169e3                                               # velocity vector [m/s] (v_p*cos(45), v_p*sin(45))
 mass__kg          : 1000.0                                                                   # mass [kg]
 drag              :                                                                          # drag parameters
   coeff           : 2.2                                                                      # drag coefficient, c_d [-]
