@@ -48,7 +48,7 @@ def plot_3d_trajectories(
     start_utc = epoch.strftime('%Y-%m-%d %H:%M:%S UTC')
     end_time  = epoch + timedelta(seconds=result['plot_time_s'][-1])
     end_utc   = end_time.strftime('%Y-%m-%d %H:%M:%S UTC')
-    info_text += f"  |  Start: {start_utc}  |  End: {end_utc}"
+    info_text += f"  |  Initial: {start_utc}  |  Final: {end_utc}"
   
   # Plot 3D position trajectory
   ax1 = fig.add_subplot(121, projection='3d')
@@ -61,7 +61,7 @@ def plot_3d_trajectories(
   x_earth = r_eq * np.outer(np.cos(u), np.sin(v))
   y_earth = r_eq * np.outer(np.sin(u), np.sin(v))
   z_earth = r_pol * np.outer(np.ones(np.size(u)), np.cos(v))
-  ax1.plot_wireframe(x_earth, y_earth, z_earth, color='black', linewidth=0.5, alpha=0.6) # type: ignore
+  ax1.plot_wireframe(x_earth, y_earth, z_earth, color='black', linewidth=0.5, alpha=1.0) # type: ignore
   
   ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=1)
   ax1.scatter([pos_x[0]], [pos_y[0]], [pos_z[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2) # type: ignore
