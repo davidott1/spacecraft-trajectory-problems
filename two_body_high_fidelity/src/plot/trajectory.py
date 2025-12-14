@@ -125,7 +125,7 @@ def plot_3d_trajectories(
   fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=11, color='black',
            bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', alpha=0.9))
 
-  plt.tight_layout(rect=[0, 0.06, 1, 0.95])  # Leave space at bottom for info text and top for legend
+  plt.tight_layout(rect=(0.0, 0.06, 1.0, 0.95))  # Leave space at bottom for info text and top for legend
   return fig
 
 
