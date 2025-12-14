@@ -53,15 +53,15 @@ def plot_3d_trajectories(
   # Plot 3D position trajectory
   ax1 = fig.add_subplot(121, projection='3d')
   
-  # Add Earth ellipsoid
-  u       = np.linspace(0, 2 * np.pi, 50)
-  v       = np.linspace(0, np.pi, 50)
+  # Add Earth wireframe ellipsoid
+  u       = np.linspace(0, 2 * np.pi, 24)
+  v       = np.linspace(0, np.pi, 12)
   r_eq    = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
   r_pol   = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.POLAR
   x_earth = r_eq * np.outer(np.cos(u), np.sin(v))
   y_earth = r_eq * np.outer(np.sin(u), np.sin(v))
   z_earth = r_pol * np.outer(np.ones(np.size(u)), np.cos(v))
-  ax1.plot_surface(x_earth, y_earth, z_earth, color='lightblue', alpha=0.3, edgecolor='none') # type: ignore
+  ax1.plot_wireframe(x_earth, y_earth, z_earth, color='black', linewidth=0.5, alpha=0.6) # type: ignore
   
   ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=1)
   ax1.scatter([pos_x[0]], [pos_y[0]], [pos_z[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2) # type: ignore
@@ -71,10 +71,22 @@ def plot_3d_trajectories(
   ax1.set_zlabel('Pos-Z [m]') # type: ignore
   ax1.grid(True)
   ax1.set_box_aspect([1,1,1]) # type: ignore
-  min_limit, max_limit = get_equal_limits(ax1)
+  min_limit, max_limit = get_equal_limits(ax1, buffer_fraction=0.25)
+  
   ax1.set_xlim([min_limit, max_limit]) # type: ignore
   ax1.set_ylim([min_limit, max_limit]) # type: ignore
   ax1.set_zlim([min_limit, max_limit]) # type: ignore
+
+  # Add position trajectory shadows (projections onto planes)
+  shadow_color = 'gray'
+  shadow_alpha = 0.3
+  shadow_lw    = 0.5
+  # XY plane shadow (z = min_limit)
+  ax1.plot(pos_x, pos_y, np.full_like(pos_z, min_limit), color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  # XZ plane shadow (y = max_limit)
+  ax1.plot(pos_x, np.full_like(pos_y, max_limit), pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  # YZ plane shadow (x = min_limit)
+  ax1.plot(np.full_like(pos_x, min_limit), pos_y, pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
 
   # Plot 3D velocity trajectory
   ax2 = fig.add_subplot(122, projection='3d')
@@ -86,10 +98,19 @@ def plot_3d_trajectories(
   ax2.set_zlabel('Vel-Z [m/s]') # type: ignore
   ax2.grid(True)
   ax2.set_box_aspect([1,1,1]) # type: ignore
-  min_limit, max_limit = get_equal_limits(ax2)
-  ax2.set_xlim([min_limit, max_limit]) # type: ignore
-  ax2.set_ylim([min_limit, max_limit]) # type: ignore
-  ax2.set_zlim([min_limit, max_limit]) # type: ignore
+  min_limit_vel, max_limit_vel = get_equal_limits(ax2, buffer_fraction=0.25)
+  
+  ax2.set_xlim([min_limit_vel, max_limit_vel]) # type: ignore
+  ax2.set_ylim([min_limit_vel, max_limit_vel]) # type: ignore
+  ax2.set_zlim([min_limit_vel, max_limit_vel]) # type: ignore
+
+  # Add velocity trajectory shadows (projections onto planes)
+  # XY plane shadow (z = min_limit_vel)
+  ax2.plot(vel_x, vel_y, np.full_like(vel_z, min_limit_vel), color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  # XZ plane shadow (y = max_limit_vel)
+  ax2.plot(vel_x, np.full_like(vel_y, max_limit_vel), vel_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  # YZ plane shadow (x = min_limit_vel)
+  ax2.plot(np.full_like(vel_x, min_limit_vel), vel_y, vel_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
 
   # Create custom legend handles with black edges
   legend_handles = [

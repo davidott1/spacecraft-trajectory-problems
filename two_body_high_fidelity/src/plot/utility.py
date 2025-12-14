@@ -5,7 +5,8 @@ from typing   import Any
 
 
 def get_equal_limits(
-  ax : Any,
+  ax              : Any,
+  buffer_fraction : float = 0.0,
 ) -> tuple[float, float]:
   """
   Get equal limits for a 3D plot to ensure aspect ratio is preserved.
@@ -14,6 +15,9 @@ def get_equal_limits(
   ------
     ax : matplotlib.axes._subplots.Axes3DSubplot
       The 3D axes object.
+    buffer_fraction : float
+      Fraction of the range to add as buffer on each side (default 0.0).
+      E.g., 0.25 adds 25% buffer to each side.
     
   Output:
   -------
@@ -28,6 +32,14 @@ def get_equal_limits(
   all_limits = np.array([x_limits, y_limits, z_limits])
   min_limit  = np.min(all_limits[:, 0])
   max_limit  = np.max(all_limits[:, 1])
+  
+  # Apply buffer if specified
+  if buffer_fraction > 0:
+    range_limit = max_limit - min_limit
+    buffer      = buffer_fraction * range_limit
+    min_limit  -= buffer
+    max_limit  += buffer
+  
   return min_limit, max_limit
 
 
