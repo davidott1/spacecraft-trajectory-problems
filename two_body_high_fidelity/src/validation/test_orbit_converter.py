@@ -4,8 +4,26 @@ Unit Tests for Orbit Converter Module
 
 Tests for conversions between Cartesian state vectors and orbital elements.
 
-Run with:
-  pytest src/validation/test_orbit_converter.py -v
+Tests:
+------
+TestCartesianToKeplerian
+  - test_known_solution_circular_equatorial_orbit : verify COE for circular equatorial orbit
+  - test_known_solution_elliptical_orbit          : verify COE for elliptical orbit at periapsis
+  - test_known_solution_inclined_orbit            : verify inclination for inclined orbit
+  - test_roundtrip_pv_to_coe_to_pv                : verify pv -> coe -> pv returns original state
+
+TestKeplerianToCartesian
+  - test_known_solution_circular_at_ascending_node : verify position at ascending node
+  - test_known_solution_velocity_magnitude_circular : verify circular orbit velocity magnitude
+
+TestAnomalyConversions
+  - test_known_solution_circular_anomalies_equal : verify TA = EA = MA for circular orbit
+  - test_known_solution_anomalies_at_periapsis   : verify all anomalies = 0 at periapsis
+  - test_known_solution_anomalies_at_apoapsis    : verify all anomalies = π at apoapsis
+
+Usage:
+------
+  python -m pytest src/validation/test_orbit_converter.py -v
 """
 import pytest
 import numpy as np
@@ -15,61 +33,70 @@ from src.model.constants       import SOLARSYSTEMCONSTANTS, CONVERTER
 
 
 class TestCartesianToKeplerian:
-  """Tests for Cartesian to Keplerian element conversion."""
+  """
+  Tests for Cartesian to Keplerian element conversion.
+  """
   
-  def test_circular_equatorial_orbit(self):
-    """Test conversion for a circular equatorial orbit."""
-    gp = SOLARSYSTEMCONSTANTS.EARTH.GP
-    r  = 7000e3
-    v  = np.sqrt(gp / r)
+  def test_known_solution_circular_equatorial_orbit(self):
+    """
+    Test conversion for a circular equatorial orbit.
+    """
+    gp      = SOLARSYSTEMCONSTANTS.EARTH.GP
+    pos_mag = 7000e3
+    vel_mag = np.sqrt(gp / pos_mag)
     
-    pos_vec = np.array([r, 0.0, 0.0])
-    vel_vec = np.array([0.0, v, 0.0])
+    pos_vec = np.array([pos_mag, 0.0, 0.0])
+    vel_vec = np.array([0.0, vel_mag, 0.0])
     
     coe = OrbitConverter.pv_to_coe(pos_vec, vel_vec, gp)
     
-    assert np.isclose(coe['sma'], r, rtol=1e-10)
-    assert np.isclose(coe['ecc'], 0.0, atol=1e-10)
-    assert np.isclose(coe['inc'], 0.0, atol=1e-10)
+    assert np.isclose(coe['sma'], pos_mag, rtol=1e-10)
+    assert np.isclose(coe['ecc'],     0.0, atol=1e-10)
+    assert np.isclose(coe['inc'],     0.0, atol=1e-10)
   
-  def test_elliptical_orbit(self):
-    """Test conversion for an elliptical orbit."""
+  def test_known_solution_elliptical_orbit(self):
+    """
+    Test conversion for an elliptical orbit at periapsis.
+    """
     gp = SOLARSYSTEMCONSTANTS.EARTH.GP
     
-    # Periapsis at 7000 km, apoapsis at 14000 km
-    rp = 7000e3
-    ra = 14000e3
-    a  = (rp + ra) / 2
-    e  = (ra - rp) / (ra + rp)
+    periapsis_pos_mag = 7000e3
+    apoapsis_pos_mag  = 14000e3
+    sma = (periapsis_pos_mag + apoapsis_pos_mag) / 2
+    ecc = (apoapsis_pos_mag - periapsis_pos_mag) / (apoapsis_pos_mag + periapsis_pos_mag)
     
     # At periapsis
-    v_periapsis = np.sqrt(gp * (2/rp - 1/a))
+    periapsis_vel_mag = np.sqrt(gp * (2/periapsis_pos_mag - 1/sma))
     
-    pos_vec = np.array([rp, 0.0, 0.0])
-    vel_vec = np.array([0.0, v_periapsis, 0.0])
+    pos_vec = np.array([periapsis_pos_mag, 0.0, 0.0])
+    vel_vec = np.array([0.0, periapsis_vel_mag, 0.0])
     
     coe = OrbitConverter.pv_to_coe(pos_vec, vel_vec, gp)
     
-    assert np.isclose(coe['sma'], a, rtol=1e-10)
-    assert np.isclose(coe['ecc'], e, rtol=1e-10)
-    assert np.isclose(coe['ta'], 0.0, atol=1e-10)  # At periapsis, TA = 0
+    assert np.isclose(coe['sma'], sma, rtol=1e-10)
+    assert np.isclose(coe['ecc'], ecc, rtol=1e-10)
+    assert np.isclose(coe[ 'ta'], 0.0, atol=1e-10) 
   
-  def test_inclined_orbit(self):
-    """Test conversion for an inclined orbit."""
-    gp  = SOLARSYSTEMCONSTANTS.EARTH.GP
-    r   = 7000e3
-    v   = np.sqrt(gp / r)
-    inc = 45 * CONVERTER.RAD_PER_DEG
+  def test_known_solution_inclined_orbit(self):
+    """
+    Test conversion for an inclined orbit.
+    """
+    gp      = SOLARSYSTEMCONSTANTS.EARTH.GP
+    pos_mag = 7000e3
+    vel_mag = np.sqrt(gp / pos_mag)
+    inc     = 45 * CONVERTER.RAD_PER_DEG
     
-    pos_vec = np.array([r, 0.0, 0.0])
-    vel_vec = np.array([0.0, v * np.cos(inc), v * np.sin(inc)])
+    pos_vec = np.array([pos_mag, 0.0, 0.0])
+    vel_vec = np.array([0.0, vel_mag * np.cos(inc), vel_mag * np.sin(inc)])
     
     coe = OrbitConverter.pv_to_coe(pos_vec, vel_vec, gp)
     
     assert np.isclose(coe['inc'], inc, rtol=1e-10)
   
-  def test_roundtrip_conversion(self):
-    """Test that pv -> coe -> pv gives the same result."""
+  def test_roundtrip_pv_to_coe_to_pv(self):
+    """
+    Test that pv -> coe -> pv gives the same result.
+    """
     gp = SOLARSYSTEMCONSTANTS.EARTH.GP
     
     # Arbitrary state
@@ -80,25 +107,24 @@ class TestCartesianToKeplerian:
     coe = OrbitConverter.pv_to_coe(pos_vec, vel_vec, gp)
     
     # Convert back to Cartesian
-    pos_vec_back, vel_vec_back = OrbitConverter.coe_to_pv(
-      sma  = coe['sma'],
-      ecc  = coe['ecc'],
-      inc  = coe['inc'],
-      raan = coe['raan'],
-      aop  = coe['aop'],
-      ta   = coe['ta'],
-      gp   = gp,
+    back_pos_vec, back_vel_vec = OrbitConverter.coe_to_pv(
+      coe = coe,
+      gp  = gp,
     )
     
-    assert np.allclose(pos_vec, pos_vec_back, rtol=1e-10)
-    assert np.allclose(vel_vec, vel_vec_back, rtol=1e-10)
+    assert np.allclose(pos_vec, back_pos_vec, rtol=1e-10)
+    assert np.allclose(vel_vec, back_vel_vec, rtol=1e-10)
 
 
 class TestKeplerianToCartesian:
-  """Tests for Keplerian to Cartesian conversion."""
+  """
+  Tests for Keplerian to Cartesian conversion.
+  """
   
-  def test_circular_orbit_at_ascending_node(self):
-    """Test circular orbit at the ascending node."""
+  def test_known_solution_circular_at_ascending_node(self):
+    """
+    Test circular orbit at the ascending node.
+    """
     gp   = SOLARSYSTEMCONSTANTS.EARTH.GP
     sma  = 7000e3
     ecc  = 0.0
@@ -107,40 +133,66 @@ class TestKeplerianToCartesian:
     aop  = 0.0
     ta   = 0.0
     
-    pos_vec, vel_vec = OrbitConverter.coe_to_pv(sma, ecc, inc, raan, aop, ta, gp)
+    coe = {}
+    coe[ 'sma'] = sma
+    coe[ 'ecc'] = ecc
+    coe[ 'inc'] = inc
+    coe['raan'] = raan
+    coe[ 'aop'] = aop
+    coe[  'ta'] = ta
+
+    pos_vec, vel_vec = OrbitConverter.coe_to_pv(
+      coe = coe,
+      gp  = gp,
+    )
     
     # At ascending node with RAAN=0, should be on X-axis
     assert np.isclose(pos_vec[1], 0.0, atol=1e-6)
     assert np.isclose(np.linalg.norm(pos_vec), sma, rtol=1e-10)
   
-  def test_velocity_magnitude_circular(self):
-    """Test velocity magnitude for circular orbit."""
+  def test_known_solution_velocity_magnitude_circular(self):
+    """
+    Test velocity magnitude for circular orbit.
+    """
     gp  = SOLARSYSTEMCONSTANTS.EARTH.GP
     sma = 7000e3
     
+    coe = {}
+    coe[ 'sma'] = sma
+    coe[ 'ecc'] = 0.0
+    coe[ 'inc'] = 0.0
+    coe['raan'] = 0.0
+    coe[ 'aop'] = 0.0
+    coe[  'ta'] = 0.0
+
     pos_vec, vel_vec = OrbitConverter.coe_to_pv(
-      sma=sma, ecc=0.0, inc=0.0, raan=0.0, aop=0.0, ta=0.0, gp=gp
+      coe = coe, 
+      gp  = gp,
     )
     
-    expected_v = np.sqrt(gp / sma)
-    actual_v   = np.linalg.norm(vel_vec)
+    expected_vel_mag = np.sqrt(gp / sma)
+    actual_vel_mag   = np.linalg.norm(vel_vec)
     
-    assert np.isclose(actual_v, expected_v, rtol=1e-10)
+    assert np.isclose(actual_vel_mag, expected_vel_mag, rtol=1e-10)
 
 
 class TestAnomalyConversions:
-  """Tests for anomaly conversions (TA, EA, MA)."""
+  """
+  Tests for anomaly conversions (TA, EA, MA).
+  """
   
-  def test_circular_orbit_anomalies_equal(self):
-    """For circular orbit, TA = EA = MA."""
-    gp = SOLARSYSTEMCONSTANTS.EARTH.GP
-    r  = 7000e3
-    v  = np.sqrt(gp / r)
+  def test_known_solution_circular_anomalies_equal(self):
+    """
+    For circular orbit, TA = EA = MA.
+    """
+    gp      = SOLARSYSTEMCONSTANTS.EARTH.GP
+    pos_mag = 7000e3
+    vel_mag = np.sqrt(gp / pos_mag)
     
     # Position at 45 degrees
     theta   = 45 * CONVERTER.RAD_PER_DEG
-    pos_vec = np.array([r * np.cos(theta), r * np.sin(theta), 0.0])
-    vel_vec = np.array([-v * np.sin(theta), v * np.cos(theta), 0.0])
+    pos_vec = np.array([pos_mag * np.cos(theta), pos_mag * np.sin(theta), 0.0])
+    vel_vec = np.array([-vel_mag * np.sin(theta), vel_mag * np.cos(theta), 0.0])
     
     coe = OrbitConverter.pv_to_coe(pos_vec, vel_vec, gp)
     
@@ -148,18 +200,20 @@ class TestAnomalyConversions:
     assert np.isclose(coe['ta'], coe['ea'], atol=1e-8)
     assert np.isclose(coe['ta'], coe['ma'], atol=1e-8)
   
-  def test_anomalies_at_periapsis(self):
-    """At periapsis, all anomalies should be zero."""
+  def test_known_solution_anomalies_at_periapsis(self):
+    """
+    At periapsis, all anomalies should be zero.
+    """
     gp = SOLARSYSTEMCONSTANTS.EARTH.GP
     
     # Elliptical orbit at periapsis
-    rp = 7000e3
-    ra = 14000e3
-    a  = (rp + ra) / 2
-    vp = np.sqrt(gp * (2/rp - 1/a))
+    periapsis_pos_mag = 7000e3
+    apoapsis_pos_mag  = 14000e3
+    sma               = (periapsis_pos_mag + apoapsis_pos_mag) / 2
+    periapsis_vel_mag = np.sqrt(gp * (2/periapsis_pos_mag - 1/sma))
     
-    pos_vec = np.array([rp, 0.0, 0.0])
-    vel_vec = np.array([0.0, vp, 0.0])
+    pos_vec = np.array([periapsis_pos_mag, 0.0, 0.0])
+    vel_vec = np.array([0.0, periapsis_vel_mag, 0.0])
     
     coe = OrbitConverter.pv_to_coe(pos_vec, vel_vec, gp)
     
@@ -167,18 +221,20 @@ class TestAnomalyConversions:
     assert np.isclose(coe['ea'], 0.0, atol=1e-10)
     assert np.isclose(coe['ma'], 0.0, atol=1e-10)
   
-  def test_anomalies_at_apoapsis(self):
-    """At apoapsis, all anomalies should be pi."""
+  def test_known_solution_anomalies_at_apoapsis(self):
+    """
+    At apoapsis, all anomalies should be pi.
+    """
     gp = SOLARSYSTEMCONSTANTS.EARTH.GP
     
     # Elliptical orbit at apoapsis
-    rp = 7000e3
-    ra = 14000e3
-    a  = (rp + ra) / 2
-    va = np.sqrt(gp * (2/ra - 1/a))
+    periapsis_pos_mag = 7000e3
+    apoapsis_pos_mag  = 14000e3
+    sma               = (periapsis_pos_mag + apoapsis_pos_mag) / 2
+    apoapsis_vel_mag  = np.sqrt(gp * (2/apoapsis_pos_mag - 1/sma))
     
-    pos_vec = np.array([-ra, 0.0, 0.0])  # Apoapsis on -X axis
-    vel_vec = np.array([0.0, -va, 0.0])  # Velocity in -Y direction
+    pos_vec = np.array([-apoapsis_pos_mag, 0.0, 0.0])  # Apoapsis on -X axis
+    vel_vec = np.array([0.0, -apoapsis_vel_mag, 0.0])  # Velocity in -Y direction
     
     coe = OrbitConverter.pv_to_coe(pos_vec, vel_vec, gp)
     
