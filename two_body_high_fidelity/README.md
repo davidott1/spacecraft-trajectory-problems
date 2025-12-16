@@ -116,9 +116,7 @@ two_body_high_fidelity/
 2. **Create a virtual environment** (recommended):
    ```bash
    python -m venv venv
-   source venv/bin/activate  # Linux/macOS
-   # or
-   venv\Scripts\activate     # Windows
+   source venv/bin/activate
    ```
 
 3. **Install dependencies**:
