@@ -203,9 +203,9 @@ class PropagatorValidator:
     
     energy = compute_energy_drift(states, self.gp)
     
-    E_0        = energy[0]
-    rel_drift  = np.abs((energy - E_0) / E_0)
-    max_drift  = np.max(rel_drift)
+    energy_o  = energy[0]
+    rel_drift = np.abs((energy - energy_o) / energy_o)
+    max_drift = np.max(rel_drift)
     
     passed = max_drift < tolerance
     
@@ -246,20 +246,20 @@ class PropagatorValidator:
     """
     states, times = self.propagator_func(initial_state, time_span)
     
-    h_mag = compute_angular_momentum_drift(states)
+    ang_mom_mag = compute_angular_momentum_drift(states)
     
-    h_0       = h_mag[0]
-    rel_drift = np.abs((h_mag - h_0) / h_0)
+    ang_mom_o = ang_mom_mag[0]
+    rel_drift = np.abs((ang_mom_mag - ang_mom_o) / ang_mom_o)
     max_drift = np.max(rel_drift)
     
     passed = max_drift < tolerance
     
     return {
-      'passed'    : passed,
-      'max_drift' : max_drift,
-      'tolerance' : tolerance,
-      'h_array'   : h_mag,
-      'message'   : f"Max relative angular momentum drift: {max_drift:.2e} (tolerance: {tolerance:.2e})",
+      'passed'        : passed,
+      'max_drift'     : max_drift,
+      'tolerance'     : tolerance,
+      'ang_mom_array' : ang_mom_mag,
+      'message'       : f"Max relative angular momentum drift: {max_drift:.2e} (tolerance: {tolerance:.2e})",
     }
   
   def compare_with_reference(

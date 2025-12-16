@@ -349,9 +349,9 @@ class ThirdBodyGravity:
     
     def _get_position_body_spice(
       self,
-      body_name  : str,
-      et_seconds : float,
-      frame      : str = 'J2000',
+      body_name : str,
+      time_et   : float,
+      frame     : str = 'J2000',
     ) -> np.ndarray:
       """
       Get position of celestial body at given time using SPICE.
@@ -360,7 +360,7 @@ class ThirdBodyGravity:
       ------
         body_name : str
           Body name ('SUN' or 'MOON').
-        et_seconds : float
+        time_et : float
           Ephemeris time in seconds past J2000 epoch.
         frame : str
           Reference frame (default: 'J2000').
@@ -373,7 +373,7 @@ class ThirdBodyGravity:
       # SPICE state relative to Earth
       state, _ = spice.spkez(
           targ   = self._get_naif_id(body_name),
-          et     = et_seconds,
+          et     = time_et,
           ref    = frame,
           abcorr = 'NONE',
           obs    = 399  # relative to Earth
@@ -410,7 +410,7 @@ class ThirdBodyGravity:
       pos_sat_vec : np.ndarray,
     ) -> np.ndarray:
       """
-      Compute third-body point mass perturbations (Sun, Moon).
+      Compute third-body point mass perturbations (Sun, Moon, etc.).
       
       Input:
       ------
@@ -551,132 +551,22 @@ class Gravity:
       # Initialize acceleration vector
       acc_vec = np.zeros(3)
       
-      # Two-body contributions
-      acc_vec += self.two_body_point_mass(pos_vec)
-      acc_vec += self.two_body_oblate(time, pos_vec)
+      # Two-body point mass
+      acc_vec += self.two_body.point_mass(pos_vec)
+      
+      # Two-body oblateness (J2, J3, J4)
+      acc_vec += self.two_body.oblate_j2(time, pos_vec)
+      acc_vec += self.two_body.oblate_j3(time, pos_vec)
+      acc_vec += self.two_body.oblate_j4(time, pos_vec)
       
       # Third-body contributions
-      if self.enable_third_body:
-        acc_vec += self.third_body_point_mass(time, pos_vec)
+      if self.enable_third_body and self.third_body is not None:
+        acc_vec += self.third_body.point_mass(time, pos_vec)
       
       # Future: third_body_oblate, relativity
       
       return acc_vec
     
-    def two_body_point_mass(
-        self,
-        pos_vec : np.ndarray,
-    ) -> np.ndarray:
-      """
-      Compute two-body point mass gravity acceleration.
-      
-      Input:
-      ------
-        pos_vec : np.ndarray
-          Position vector [m].
-      
-      Output:
-      -------
-        acc_vec : np.ndarray
-          Acceleration vector [m/s²].
-      """
-      return self.two_body.point_mass(pos_vec)
-    
-    def two_body_oblate(
-        self,
-        time    : float,
-        pos_vec : np.ndarray,
-    ) -> np.ndarray:
-      """
-      Compute two-body oblateness (J2, J3, J4) acceleration.
-      
-      Input:
-      ------
-        time : float
-          Current time [s].
-        pos_vec : np.ndarray
-          Position vector [m].
-      
-      Output:
-      -------
-        acc_vec : np.ndarray
-            Acceleration vector [m/s²].
-      """
-      acc_vec  = self.two_body.oblate_j2(time, pos_vec)
-      acc_vec += self.two_body.oblate_j3(time, pos_vec)
-      acc_vec += self.two_body.oblate_j4(time, pos_vec)
-      return acc_vec
-    
-    def third_body_point_mass(
-      self,
-      time    : float,
-      pos_vec : np.ndarray,
-    ) -> np.ndarray:
-      """
-      Compute third-body point mass perturbations.
-      
-      Input:
-      ------
-        time : float
-          Current time [s].
-        pos_vec : np.ndarray
-          Position vector [m].
-      
-      Output:
-      -------
-        acc_vec : np.ndarray
-          Acceleration vector [m/s²].
-      """
-      if self.third_body is None:
-        return np.zeros(3)
-      return self.third_body.point_mass(time, pos_vec)
-    
-    def third_body_oblate(
-      self,
-      time    : float,
-      pos_vec : np.ndarray,
-    ) -> np.ndarray:
-      """
-      Compute third-body oblateness perturbations (future implementation).
-      
-      Input:
-      ------
-        time : float
-          Current time [s]
-        pos_vec : np.ndarray
-          Position vector [m]
-      
-      Output:
-      -------
-        acc_vec : np.ndarray
-          Acceleration vector [m/s²]
-      """
-      # TODO: Implement third-body oblateness
-      return np.zeros(3)
-    
-    def relativity(
-      self,
-      pos_vec : np.ndarray,
-      vel_vec : np.ndarray,
-    ) -> np.ndarray:
-      """
-      Relativistic corrections (future implementation)
-      
-      Input:
-      ------
-        pos_vec : np.ndarray
-          Position vector [m]
-        vel_vec : np.ndarray
-          Velocity vector [m/s]
-      
-      Output:
-      -------
-        acc_vec : np.ndarray
-          Acceleration vector [m/s²]
-      """
-      # TODO: Implement post-Newtonian corrections
-      return np.zeros(3)
-
 
 # =============================================================================
 # Non-Gravitational Accelerations
@@ -874,14 +764,14 @@ class SolarRadiationPressure:
     
     def _get_sun_position(
       self,
-      et_seconds : float,
+      time_et : float,
     ) -> np.ndarray:
       """
       Get Sun position relative to Earth at given time using SPICE.
       
       Input:
       ------
-        et_seconds : float
+        time_et : float
           Ephemeris time in seconds past J2000 epoch.
       
       Output:
@@ -892,7 +782,7 @@ class SolarRadiationPressure:
       # Get Sun position relative to Earth
       state, _ = spice.spkez(
         targ   = 10,       # Sun NAIF ID
-        et     = et_seconds,
+        et     = time_et,
         ref    = 'J2000',
         abcorr = 'NONE',
         obs    = 399       # Earth NAIF ID
