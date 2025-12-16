@@ -369,20 +369,3 @@ Core dependencies (see `requirements.txt` for versions):
 
 - Park, R. S., et al. (2021). "The JPL Planetary and Lunar Ephemerides DE440 and DE441." *The Astronomical Journal*, 161(3), 105.
 
-## License
-
-MIT License - See LICENSE file for details.
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
-
-## Contact
-
-For questions or issues, please open a GitHub issue.
