@@ -107,7 +107,8 @@ import spiceypy as spice
 from pathlib import Path
 from typing  import Optional
 
-from src.model.constants import SOLARSYSTEMCONSTANTS, CONVERTER, NAIFIDS
+from src.model.constants       import SOLARSYSTEMCONSTANTS, CONVERTER, NAIFIDS
+from src.model.frame_converter import FrameConverter
 
 
 # =============================================================================
@@ -253,12 +254,8 @@ class TwoBodyGravity:
       return np.zeros(3)
 
     # Get rotation matrix from J2000 to Body-Fixed (IAU_EARTH)
-    #   - Requires SPICE kernels to be loaded
-    #   - spice.pxform returns the 3x3 rotation matrix rot_mat such that:
-    #       iau_earth_pos_vec = rot_mat * j2000_pos_vec
-    #   - The matrix depends on the ephemeris time (ET) 'time_et'.
     try:
-      rot_mat_j2000_to_iau_earth = spice.pxform('J2000', 'IAU_EARTH', time_et)
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
     except Exception:
       # Fallback or return zero if kernels not loaded/available
       return np.zeros(3)

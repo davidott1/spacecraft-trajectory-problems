@@ -1,4 +1,5 @@
 import numpy as np
+import spiceypy as spice
 from typing import Optional, Union
 
 from astropy             import units as u
@@ -6,6 +7,52 @@ from astropy.time        import Time as AstropyTime
 from astropy.coordinates import TEME, GCRS, CartesianRepresentation, CartesianDifferential
 
 class FrameConverter:
+  @staticmethod
+  def j2000_to_iau_earth(
+    time_et : float,
+  ) -> np.ndarray:
+    """
+    Get rotation matrix from J2000 to IAU_EARTH (body-fixed) frame using SPICE.
+    
+    Input:
+    ------
+      time_et : float
+        Ephemeris Time (ET) in seconds past J2000 epoch.
+    
+    Output:
+    -------
+      rot_mat : np.ndarray
+        3x3 rotation matrix such that: iau_earth_vec = rot_mat @ j2000_vec
+    
+    Notes:
+    ------
+      Requires SPICE kernels (PCK) to be loaded.
+    """
+    return spice.pxform('J2000', 'IAU_EARTH', time_et)
+
+  @staticmethod
+  def iau_earth_to_j2000(
+    time_et : float,
+  ) -> np.ndarray:
+    """
+    Get rotation matrix from IAU_EARTH (body-fixed) to J2000 frame using SPICE.
+    
+    Input:
+    ------
+      time_et : float
+        Ephemeris Time (ET) in seconds past J2000 epoch.
+    
+    Output:
+    -------
+      rot_mat : np.ndarray
+        3x3 rotation matrix such that: j2000_vec = rot_mat @ iau_earth_vec
+    
+    Notes:
+    ------
+      Requires SPICE kernels (PCK) to be loaded.
+    """
+    return spice.pxform('IAU_EARTH', 'J2000', time_et)
+
   @staticmethod
   def xyz_to_ric(
     xyz_ref_pos_vec : np.ndarray,
