@@ -374,9 +374,6 @@ class OrbitConverter:
       Hanspeter Schaub and John L. Junkins
       DOI: https://doi.org/10.2514/4.105210
     """
-    # Small number for numerical stability
-    eps = 1e-12
-    
     # Extract orbital elements
     sma  = coe['sma' ]
     ecc  = coe['ecc' ]
