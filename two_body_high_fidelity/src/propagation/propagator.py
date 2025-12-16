@@ -362,8 +362,8 @@ def propagate_state_numerical_integration(
 
 def run_high_fidelity_propagation(
   initial_state                 : np.ndarray,
-  time_o_dt                     : datetime,
-  time_f_dt                     : datetime,
+  time_o_utc_dt                 : datetime,
+  time_f_utc_dt                 : datetime,
   mass                          : float,
   include_drag                  : bool,
   cd                            : float,
@@ -386,10 +386,10 @@ def run_high_fidelity_propagation(
   ------
     initial_state : np.ndarray
       Initial state vector [pos, vel] in meters and m/s.
-    time_o_dt : datetime
-      Initial time as datetime object.
-    time_f_dt : datetime
-      Final time as datetime object.
+    time_o_utc_dt : datetime
+      Initial time as datetime object (UTC).
+    time_f_utc_dt : datetime
+      Final time as datetime object (UTC).
     mass : float
       Spacecraft mass [kg].
     include_drag : bool
@@ -428,9 +428,9 @@ def run_high_fidelity_propagation(
   print("\nHigh-Fidelity Model")
 
   # Calculate Ephemeris Times (ET) for integration
-  time_et_o = utc_to_et(time_o_dt)
-  time_et_f = utc_to_et(time_f_dt)
-  delta_time_s = (time_f_dt - time_o_dt).total_seconds()
+  time_et_o = utc_to_et(time_o_utc_dt)
+  time_et_f = utc_to_et(time_f_utc_dt)
+  delta_time_s = (time_f_utc_dt - time_o_utc_dt).total_seconds()
 
   # Determine active zonal harmonics
   j2_val = 0.0
@@ -451,8 +451,8 @@ def run_high_fidelity_propagation(
   # Print configuration
   print(f"  Configuration")
   print(f"    Timespan")
-  print(f"      Initial  : {time_o_dt} UTC / {time_et_o:.6f} ET")
-  print(f"      Final    : {time_f_dt} UTC / {time_et_f:.6f} ET")
+  print(f"      Initial  : {time_o_utc_dt} UTC / {time_et_o:.6f} ET")
+  print(f"      Final    : {time_f_utc_dt} UTC / {time_et_f:.6f} ET")
   print(f"      Duration : {delta_time_s} s")
   print(f"    Forces")
   print(f"      Gravity")
@@ -798,8 +798,8 @@ def run_propagations(
   # High-fidelity propagation
   result_high_fidelity = run_high_fidelity_propagation(
     initial_state                 = initial_state,
-    time_o_dt                     = time_o_dt,
-    time_f_dt                     = time_f_dt,
+    time_o_utc_dt                 = time_o_dt,
+    time_f_utc_dt                 = time_f_dt,
     mass                          = mass,
     include_drag                  = include_drag,
     cd                            = cd,
