@@ -7,12 +7,12 @@ Tests for gravitational accelerations, atmospheric drag, and SRP models.
 Tests:
 ------
 TestTwoBodyGravity
-  - test_sanity_check_point_mass_direction               : verify acceleration points toward central body
-  - test_sanity_check_point_mass_magnitude_scaling       : verify inverse square law (2x distance = 1/4 acceleration)
-  - test_sanity_check_point_mass_magnitude_leo           : verify ~8-9 m/s² at LEO altitude (~400 km)
-  - test_sanity_check_j2_acc_not_zero                    : verify J2 produces non-zero acceleration for inclined orbits
-  - test_sanity_check_j2_zero_when_disabled              : verify J2=0 produces zero J2 acceleration
-  - test_relative_check_j2_smaller_than_point_mass       : verify J2 << point mass (~1000x smaller)
+  - test_sanity_check_point_mass_direction         : verify acceleration points toward central body
+  - test_sanity_check_point_mass_magnitude_scaling : verify inverse square law (2x distance = 1/4 acceleration)
+  - test_sanity_check_point_mass_magnitude_leo     : verify ~8-9 m/s² at LEO altitude (~400 km)
+  - test_sanity_check_j2_acc_not_zero              : verify J2 produces non-zero acceleration for inclined orbits
+  - test_sanity_check_j2_zero_when_disabled        : verify J2=0 produces zero J2 acceleration
+  - test_relative_check_j2_smaller_than_point_mass : verify J2 << point mass (~1000x smaller)
 
 TestAtmosphericDrag
   - test_sanity_check_drag_opposes_velocity                : verify drag opposes velocity direction
