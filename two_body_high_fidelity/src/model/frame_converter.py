@@ -182,7 +182,7 @@ class FrameConverter:
     xyz_ref_vel_vec : np.ndarray,
   ) -> np.ndarray:
     """
-    Calculate the rotation matrix from Inertial (XYZ) to Radial-Intrack-Cross-track (RIC) frame.
+    Calculate the rotation matrix from Inertial (XYZ) to Radial-Intrack-Crosstrack (RIC) frame.
     
     Input:
     ------
@@ -205,7 +205,7 @@ class FrameConverter:
     """
     # r_hat unit vector
     xyz_ref_pos_hat = xyz_ref_pos_vec / np.linalg.norm(xyz_ref_pos_vec)
-    r_hat = xyz_ref_pos_hat
+    r_hat           = xyz_ref_pos_hat
 
     # c_hat unit vector
     ang_mom_vec = np.cross(xyz_ref_pos_vec, xyz_ref_vel_vec)
@@ -227,7 +227,7 @@ class FrameConverter:
     ric_ref_vel_vec : np.ndarray,
   ) -> np.ndarray:
     """
-    Calculate the rotation matrix from Radial-Intrack-Cross-track (RIC) to Inertial (XYZ) frame.
+    Calculate the rotation matrix from Radial-Intrack-Crosstrack (RIC) to Inertial (XYZ) frame.
     
     Input:
     ------
