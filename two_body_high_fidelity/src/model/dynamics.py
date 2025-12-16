@@ -126,6 +126,8 @@ class TwoBodyGravity:
     j2      : float = 0.0,
     j3      : float = 0.0,
     j4      : float = 0.0,
+    c22     : float = 0.0,
+    s22     : float = 0.0,
     pos_ref : float = 0.0,
   ):
     """
@@ -141,6 +143,10 @@ class TwoBodyGravity:
         J3 harmonic coefficient for oblateness
       j4 : float
         J4 harmonic coefficient for oblateness
+      c22 : float
+        C22 tesseral harmonic coefficient
+      s22 : float
+        S22 tesseral harmonic coefficient
       pos_ref : float
         Reference radius for harmonic coefficients [m]
             
@@ -153,6 +159,8 @@ class TwoBodyGravity:
     self.j2      = j2
     self.j3      = j3
     self.j4      = j4
+    self.c22     = c22
+    self.s22     = s22
   
   def point_mass(
     self,
@@ -221,6 +229,67 @@ class TwoBodyGravity:
     
     return acc_vec
   
+  def tesseral_22(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Compute C22 and S22 tesseral harmonic perturbation acceleration.
+    
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in inertial frame (J2000).
+    
+    Output:
+    -------
+      acc_vec : np.ndarray
+        Acceleration vector [m/s²] in Inertial frame.
+    """
+    if self.c22 == 0.0 and self.s22 == 0.0:
+      return np.zeros(3)
+
+    # Get rotation matrix from J2000 to Body-Fixed (IAU_EARTH)
+    #   - Requires SPICE kernels to be loaded
+    #   - spice.pxform returns the 3x3 rotation matrix rot_mat such that:
+    #       iau_earth_pos_vec = rot_mat * j2000_pos_vec
+    #   - The matrix depends on the ephemeris time (ET) 'time_et'.
+    try:
+      rot_mat_j2000_to_iau_earth = spice.pxform('J2000', 'IAU_EARTH', time_et)
+    except Exception:
+      # Fallback or return zero if kernels not loaded/available
+      return np.zeros(3)
+
+    # Rotate position to Body-Fixed frame
+    iau_earth_pos_vec   = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    pos_x, pos_y, pos_z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
+    
+    pos_mag_pwr2 = pos_x**2 + pos_y**2 + pos_z**2
+    pos_mag      = np.sqrt(pos_mag_pwr2)
+    pos_mag_pwr7 = pos_mag_pwr2**3 * pos_mag
+    
+    # Pre-compute terms for efficiency
+    term_common = self.c22 * (pos_x**2 - pos_y**2) + 2.0 * self.s22 * pos_x * pos_y
+    factor      = 3.0 * self.gp * self.pos_ref**2 / pos_mag_pwr7
+    
+    # Acceleration
+    #   potential -> acc_vec = gradient(potential) 
+    #     U22 = (3 * gp * earth_radius^2 / pos_mag^5) * (C22*(pos_x^2 - pos_y^2) + 2*S22*pos_x*pos_y)
+    #     acc_vec = d/dpos_vec(U22)
+    iau_earth_acc_x   = factor * (-5.0 * pos_x * term_common + pos_mag_pwr2 * ( 2.0 * self.c22 * pos_x + 2.0 * self.s22 * pos_y))
+    iau_earth_acc_y   = factor * (-5.0 * pos_y * term_common + pos_mag_pwr2 * (-2.0 * self.c22 * pos_y + 2.0 * self.s22 * pos_x))
+    iau_earth_acc_z   = factor * (-5.0 * pos_z * term_common)
+    iau_earth_acc_vec = np.array([iau_earth_acc_x, iau_earth_acc_y, iau_earth_acc_z])
+    
+    # Rotate acceleration back to inertial frame
+    j2000_acc_vec = rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
+    
+    # Return acceleration vector in inertial frame
+    return j2000_acc_vec
+
   def oblate_j3(
     self,
     time    : float,
@@ -255,17 +324,18 @@ class TwoBodyGravity:
     if self.j3 == 0.0:
         return np.zeros(3)
       
-    x, y, z = pos_vec[0], pos_vec[1], pos_vec[2]
-    pos_mag = np.linalg.norm(pos_vec)
-    posmag2 = pos_mag**2
-    posmag7 = posmag2 * posmag2 * posmag2 * pos_mag
+    pos_x, pos_y, pos_z = pos_vec[0], pos_vec[1], pos_vec[2]
+
+    pos_mag      = np.linalg.norm(pos_vec)
+    pos_mag_pwr2 = pos_mag**2
+    pos_mag_pwr7 = pos_mag_pwr2 * pos_mag_pwr2 * pos_mag_pwr2 * pos_mag
     
-    factor = 2.5 * self.j3 * self.gp * self.pos_ref**3 / posmag7
-    
+    factor = 2.5 * self.j3 * self.gp * self.pos_ref**3 / pos_mag_pwr7
+      
     acc_vec    = np.zeros(3)
-    acc_vec[0] = factor * x * z * (3 - 7 * z**2 / posmag2)
-    acc_vec[1] = factor * y * z * (3 - 7 * z**2 / posmag2)
-    acc_vec[2] = factor * (3 * z**2 - 7 * z**4 / posmag2 - 0.6 * posmag2)
+    acc_vec[0] = factor * pos_x * pos_z * (3.0 - 7.0 * pos_z**2 / pos_mag_pwr2)
+    acc_vec[1] = factor * pos_y * pos_z * (3.0 - 7.0 * pos_z**2 / pos_mag_pwr2)
+    acc_vec[2] = factor * (3.0 * pos_z**2 - 7.0 * pos_z**4 / pos_mag_pwr2 - 0.6 * pos_mag_pwr2)
     
     return acc_vec
   
@@ -303,19 +373,19 @@ class TwoBodyGravity:
     if self.j4 == 0.0:
       return np.zeros(3)
     
-    x, y, z = pos_vec[0], pos_vec[1], pos_vec[2]
+    pos_x, pos_y, pos_z = pos_vec[0], pos_vec[1], pos_vec[2]
     
     pos_mag      = np.linalg.norm(pos_vec)
     pos_mag_pwr2 = pos_mag**2
     pos_mag_pwr9 = pos_mag_pwr2**4 * pos_mag
     
-    z2_r2  = z**2 / pos_mag_pwr2
-    factor = 1.875 * self.j4 * self.gp * self.pos_ref**4 / pos_mag_pwr9
+    term_common = pos_z**2 / pos_mag_pwr2
+    factor      = 1.875 * self.j4 * self.gp * self.pos_ref**4 / pos_mag_pwr9
     
     acc_vec    = np.zeros(3)
-    acc_vec[0] = factor * x * (1 - 14 * z2_r2 + 21 * z2_r2**2)
-    acc_vec[1] = factor * y * (1 - 14 * z2_r2 + 21 * z2_r2**2)
-    acc_vec[2] = factor * z * (5 - 70 * z2_r2 / 3 + 21 * z2_r2**2)
+    acc_vec[0] = factor * pos_x * (1.0 - 14.0 * term_common + 21.0 * term_common**2)
+    acc_vec[1] = factor * pos_y * (1.0 - 14.0 * term_common + 21.0 * term_common**2)
+    acc_vec[2] = factor * pos_z * (5.0 - 70.0 * term_common / 3.0 + 21.0 * term_common**2)
     
     return acc_vec
     
@@ -328,8 +398,7 @@ class ThirdBodyGravity:
     
     def __init__(
       self,
-      bodies                  : list  = None,
-      spice_kernel_folderpath : str   = None,
+      bodies : list = None,
     ):
       """
       Initialize third-body gravity model.
@@ -338,8 +407,6 @@ class ThirdBodyGravity:
       ------
         bodies : list
             Which bodies to include (default: ['sun', 'moon']).
-        spice_kernel_folderpath : str
-          Path to SPICE kernel folderpath.
               
       Output:
       -------
@@ -478,10 +545,11 @@ class Gravity:
       j2                      : float = 0.0,
       j3                      : float = 0.0,
       j4                      : float = 0.0,
+      c22                     : float = 0.0,
+      s22                     : float = 0.0,
       pos_ref                 : float = 0.0,
       enable_third_body       : bool  = False,
       third_body_bodies       : list  = None,
-      spice_kernel_folderpath : str   = None,
     ):
       """
       Initialize gravity acceleration components.
@@ -496,14 +564,16 @@ class Gravity:
           J3 harmonic coefficient for oblateness.
         j4 : float
           J4 harmonic coefficient for oblateness.
+        c22 : float
+          C22 tesseral harmonic coefficient.
+        s22 : float
+          S22 tesseral harmonic coefficient.
         pos_ref : float
           Reference radius for harmonic coefficients [m].
         enable_third_body : bool
           Enable Sun/Moon gravitational perturbations.
         third_body_bodies : list
           Which bodies to include (default: ['sun', 'moon']).
-        spice_kernel_folderpath : str
-          Path to SPICE kernel folderpath.
               
       Output:
       -------
@@ -515,6 +585,8 @@ class Gravity:
         j2      = j2,
         j3      = j3,
         j4      = j4,
+        c22     = c22,
+        s22     = s22,
         pos_ref = pos_ref,
       )
         
@@ -522,8 +594,7 @@ class Gravity:
       self.enable_third_body = enable_third_body
       if self.enable_third_body:
         self.third_body = ThirdBodyGravity(
-          bodies                  = third_body_bodies,
-          spice_kernel_folderpath = spice_kernel_folderpath,
+          bodies = third_body_bodies,
         )
       else:
         self.third_body = None
@@ -558,6 +629,9 @@ class Gravity:
       acc_vec += self.two_body.oblate_j2(time, pos_vec)
       acc_vec += self.two_body.oblate_j3(time, pos_vec)
       acc_vec += self.two_body.oblate_j4(time, pos_vec)
+      
+      # Two-body tesseral (C22, S22)
+      acc_vec += self.two_body.tesseral_22(time, pos_vec)
       
       # Third-body contributions
       if self.enable_third_body and self.third_body is not None:
@@ -869,6 +943,8 @@ class Acceleration:
       j2                      : float = 0.0,
       j3                      : float = 0.0,
       j4                      : float = 0.0,
+      c22                     : float = 0.0,
+      s22                     : float = 0.0,
       pos_ref                 : float = 0.0,
       mass                    : float = 1.0,
       enable_drag             : bool  = False,
@@ -876,7 +952,6 @@ class Acceleration:
       area_drag               : float = 0.0,
       enable_third_body       : bool  = False,
       third_body_bodies       : list  = None,
-      spice_kernel_folderpath : str   = None,
       enable_srp              : bool  = False,
       cr                      : float = 0.0,
       area_srp                : float = 0.0,
@@ -894,6 +969,10 @@ class Acceleration:
           J3 harmonic coefficient for oblateness
         j4 : float
           J4 harmonic coefficient for oblateness
+        c22 : float
+          C22 tesseral harmonic coefficient
+        s22 : float
+          S22 tesseral harmonic coefficient
         pos_ref : float
           Reference radius for harmonic coefficients [m]
         mass : float
@@ -908,8 +987,6 @@ class Acceleration:
           Enable Sun/Moon gravitational perturbations
         third_body_bodies : list of str
           Which bodies to include (default: ['sun', 'moon'])
-        spice_kernel_folderpath : str
-          Path to SPICE kernel folderpath
         enable_srp : bool
           Enable solar radiation pressure (not yet implemented)
         cr : float
@@ -927,10 +1004,11 @@ class Acceleration:
         j2                      = j2,
         j3                      = j3,
         j4                      = j4,
+        c22                     = c22,
+        s22                     = s22,
         pos_ref                 = pos_ref,
         enable_third_body       = enable_third_body,
         third_body_bodies       = third_body_bodies,
-        spice_kernel_folderpath = spice_kernel_folderpath,
       )
       
       self.enable_drag = enable_drag

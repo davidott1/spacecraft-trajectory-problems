@@ -375,7 +375,6 @@ def run_high_fidelity_propagation(
   include_gravity_harmonics     : bool,
   gravity_harmonics_list        : list,
   include_srp                   : bool,
-  spice_kernels_folderpath      : Path,
   result_jpl_horizons_ephemeris : Optional[dict],
   compare_jpl_horizons          : bool,
 ) -> dict:
@@ -412,8 +411,6 @@ def run_high_fidelity_propagation(
       List of gravity harmonics (e.g., ['J2', 'J3', 'J4']).
     include_srp : bool
       Flag to enable solar radiation pressure.
-    spice_kernels_folderpath : Path
-      Path to SPICE kernels folder.
     result_jpl_horizons_ephemeris : dict | None
       JPL Horizons ephemeris result for comparison.
     compare_jpl_horizons : bool
@@ -491,7 +488,6 @@ def run_high_fidelity_propagation(
     area_drag               = area_drag,
     enable_third_body       = include_third_body,
     third_body_bodies       = third_bodies_list,
-    spice_kernel_folderpath = str(spice_kernels_folderpath),
     enable_srp              = include_srp,
     cr                      = cr,
     area_srp                = area_srp,
@@ -811,7 +807,6 @@ def run_propagations(
     include_gravity_harmonics     = include_gravity_harmonics,
     gravity_harmonics_list        = gravity_harmonics_list,
     include_srp                   = include_srp,
-    spice_kernels_folderpath      = spice_kernels_folderpath,
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     compare_jpl_horizons          = compare_jpl_horizons,
   )
