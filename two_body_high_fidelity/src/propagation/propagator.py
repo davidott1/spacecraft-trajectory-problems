@@ -17,7 +17,7 @@ from src.model.dynamics        import GeneralStateEquationsOfMotion, Acceleratio
 from src.model.orbit_converter import OrbitConverter
 from src.model.constants       import SOLARSYSTEMCONSTANTS
 from src.model.time_converter  import utc_to_et
-from src.model.frame_converter import FrameConverter
+from src.model.frame_converter import FrameConverter, VectorConverter
 from src.utility.tle_helper    import modify_tle_bstar, get_tle_satellite_and_tle_epoch
 from src.utility.time_helper   import format_time_offset
 
@@ -137,12 +137,12 @@ def propagate_tle(
     # Convert to desired frame
     if to_j2000:
       # Convert TEME to J2000/GCRS
-      j2000_pos_vec_T, j2000_vel_vec_T = FrameConverter.teme_to_j2000(
+      j2000_pos_vec_T, j2000_vel_vec_T = VectorConverter.teme_to_j2000(
         teme_pos_vec_arr_T,
         teme_vel_vec_arr_T,
         jd_arr + fr_arr,
         units_pos = 'm',
-        units_vel = 'm/s'
+        units_vel = 'm/s',
       )
       pos_vec_arr = j2000_pos_vec_T
       vel_vec_arr = j2000_vel_vec_T
@@ -236,7 +236,7 @@ def get_tle_initial_state(
   
   # Transform TEME to J2000/GCRS if requested
   if to_j2000:
-    j2000_pos_vec, j2000_vel_vec = FrameConverter.teme_to_j2000(teme_pos_vec, teme_vel_vec, jd + fr, units_pos='m', units_vel='m/s')
+    j2000_pos_vec, j2000_vel_vec = VectorConverter.teme_to_j2000(teme_pos_vec, teme_vel_vec, jd + fr, units_pos='m', units_vel='m/s')
     pos_vec = np.array(j2000_pos_vec)
     vel_vec = np.array(j2000_vel_vec)
   else:

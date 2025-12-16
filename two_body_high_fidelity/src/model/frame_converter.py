@@ -7,176 +7,6 @@ from astropy.coordinates import TEME, GCRS, CartesianRepresentation, CartesianDi
 
 class FrameConverter:
   @staticmethod
-  def teme_to_j2000(
-    teme_pos_vec : np.ndarray,
-    teme_vel_vec : np.ndarray,
-    jd_utc       : Union[float, np.ndarray],
-    units_pos    : str = 'm',
-    units_vel    : str = 'm/s'
-  ) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Convert TEME (True Equator Mean Equinox) to J2000/GCRS using astropy.
-    Supports vectorized inputs (3xN arrays) if jd_utc is an array of length N or scalar.
-    
-    Input:
-    ------
-      teme_pos_vec : np.ndarray
-        Position in TEME frame [m]. Shape (3,) or (3, N).
-      teme_vel_vec : np.ndarray
-        Velocity in TEME frame [m/s]. Shape (3,) or (3, N).
-      jd_utc : float | np.ndarray
-        Julian date in UTC scale (e.g. 2460310.5). Scalar or array of length N.
-      units_pos : str
-        Units for position input (default 'm').
-      units_vel : str
-        Units for velocity input (default 'm/s').
-    
-    Output:
-    -------
-      gcrs_pos_vec : np.ndarray
-        Position in GCRS frame [m]. Shape (3,) or (3, N).
-      gcrs_vel_vec : np.ndarray
-        Velocity in GCRS frame [m/s]. Shape (3,) or (3, N).
-
-    Usage:
-    ------
-      gcrs_pos_vec, gcrs_vel_vec = FrameConverter.teme_to_j2000(
-        teme_pos_vec = teme_pos_vec,
-        teme_vel_vec = teme_vel_vec,
-        jd_utc       = jd_utc,
-      )
-    """
-    # Create astropy Time object from UTC
-    astropy_time = AstropyTime(jd_utc, format='jd', scale='utc')
-    
-    # Determine units
-    if units_pos.lower() == 'km':
-      u_du = u.km # type: ignore
-    else:
-      u_du = u.m # type: ignore
-    if units_vel.lower() == 'km/s':
-      u_vu = u.km / u.s # type: ignore
-    else:
-      u_vu = u.m / u.s # type: ignore
-
-    # Create CartesianRepresentation using position and velocity in TEME frame
-    cart_rep = CartesianRepresentation(
-      x = teme_pos_vec[0] * u_du,
-      y = teme_pos_vec[1] * u_du,
-      z = teme_pos_vec[2] * u_du,
-      differentials = CartesianDifferential(
-        d_x = teme_vel_vec[0] * u_vu,
-        d_y = teme_vel_vec[1] * u_vu,
-        d_z = teme_vel_vec[2] * u_vu,
-      )
-    )
-    
-    # Create a coordinate object in the TEME frame
-    teme_cart_rep = TEME(cart_rep, obstime=astropy_time)
-    
-    # Transform the coordinates from the TEME frame to the GCRS (J2000) frame
-    gcrs_cart_rep = teme_cart_rep.transform_to(GCRS(obstime=astropy_time))
-      
-    # Extract the numerical position and velocity vectors from the GCRS frame object
-    gcrs_pos_vec = np.array([
-      gcrs_cart_rep.cartesian.x.to(u_du).value,
-      gcrs_cart_rep.cartesian.y.to(u_du).value,
-      gcrs_cart_rep.cartesian.z.to(u_du).value,
-    ])
-    gcrs_vel_vec = np.array([
-      gcrs_cart_rep.velocity.d_x.to(u_vu).value,
-      gcrs_cart_rep.velocity.d_y.to(u_vu).value,
-      gcrs_cart_rep.velocity.d_z.to(u_vu).value,
-    ])
-    
-    return gcrs_pos_vec, gcrs_vel_vec
-
-  @staticmethod
-  def j2000_to_teme(
-    j2000_pos_vec : np.ndarray,
-    j2000_vel_vec : np.ndarray,
-    jd_utc        : Union[float, np.ndarray],
-    units_pos     : str = 'm',
-    units_vel     : str = 'm/s',
-  ) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Convert J2000/GCRS to TEME (True Equator Mean Equinox) using astropy.
-    Supports vectorized inputs (3xN arrays) if jd_utc is an array of length N or scalar.
-    
-    Input:
-    ------
-      j2000_pos_vec : np.ndarray
-        Position in J2000/GCRS frame [m]. Shape (3,) or (3, N).
-      j2000_vel_vec : np.ndarray
-        Velocity in J2000/GCRS frame [m/s]. Shape (3,) or (3, N).
-      jd_utc : float | np.ndarray
-        Julian date in UTC scale (e.g. 2460310.5). Scalar or array of length N.
-      units_pos : str
-        Units for position input (default 'm').
-      units_vel : str
-        Units for velocity input (default 'm/s').
-    
-    Output:
-    -------
-      teme_pos_vec : np.ndarray
-        Position in TEME frame [m]. Shape (3,) or (3, N).
-      teme_vel_vec : np.ndarray
-        Velocity in TEME frame [m/s]. Shape (3,) or (3, N).
-
-    Usage:
-    ------
-      teme_pos_vec, teme_vel_vec = FrameConverter.j2000_to_teme(
-        j2000_pos_vec = j2000_pos_vec,
-        j2000_vel_vec = j2000_vel_vec,
-        jd_utc        = jd_utc,
-      )
-    """
-    # Create astropy Time object from UTC
-    astropy_time = AstropyTime(jd_utc, format='jd', scale='utc')
-    
-    # Determine units
-    if units_pos.lower() == 'km':
-      u_du = u.km # type: ignore
-    else:
-      u_du = u.m # type: ignore
-    if units_vel.lower() == 'km/s':
-      u_vu = u.km / u.s # type: ignore
-    else:
-      u_vu = u.m / u.s # type: ignore
-
-    # Create CartesianRepresentation using position and velocity in GCRS frame
-    cart_rep = CartesianRepresentation(
-      x = j2000_pos_vec[0] * u_du,
-      y = j2000_pos_vec[1] * u_du,
-      z = j2000_pos_vec[2] * u_du,
-      differentials = CartesianDifferential(
-        d_x = j2000_vel_vec[0] * u_vu,
-        d_y = j2000_vel_vec[1] * u_vu,
-        d_z = j2000_vel_vec[2] * u_vu,
-      )
-    )
-    
-    # Create a coordinate object in the GCRS frame
-    gcrs_cart_rep = GCRS(cart_rep, obstime=astropy_time)
-    
-    # Transform the coordinates from the GCRS frame to the TEME frame
-    teme_cart_rep = gcrs_cart_rep.transform_to(TEME(obstime=astropy_time))
-      
-    # Extract the numerical position and velocity vectors from the TEME frame object
-    teme_pos_vec = np.array([
-      teme_cart_rep.cartesian.x.to(u_du).value,
-      teme_cart_rep.cartesian.y.to(u_du).value,
-      teme_cart_rep.cartesian.z.to(u_du).value,
-    ])
-    teme_vel_vec = np.array([
-      teme_cart_rep.velocity.d_x.to(u_vu).value,
-      teme_cart_rep.velocity.d_y.to(u_vu).value,
-      teme_cart_rep.velocity.d_z.to(u_vu).value,
-    ])
-    
-    return teme_pos_vec, teme_vel_vec
-
-  @staticmethod
   def xyz_to_ric(
     xyz_ref_pos_vec : np.ndarray,
     xyz_ref_vel_vec : np.ndarray,
@@ -306,6 +136,176 @@ class FrameConverter:
 
 
 class VectorConverter:
+  @staticmethod
+  def teme_to_j2000(
+    teme_pos_vec : np.ndarray,
+    teme_vel_vec : np.ndarray,
+    jd_utc       : Union[float, np.ndarray],
+    units_pos    : str = 'm',
+    units_vel    : str = 'm/s'
+  ) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Convert TEME (True Equator Mean Equinox) to J2000/GCRS using astropy.
+    Supports vectorized inputs (3xN arrays) if jd_utc is an array of length N or scalar.
+    
+    Input:
+    ------
+      teme_pos_vec : np.ndarray
+        Position in TEME frame [m]. Shape (3,) or (3, N).
+      teme_vel_vec : np.ndarray
+        Velocity in TEME frame [m/s]. Shape (3,) or (3, N).
+      jd_utc : float | np.ndarray
+        Julian date in UTC scale (e.g. 2460310.5). Scalar or array of length N.
+      units_pos : str
+        Units for position input (default 'm').
+      units_vel : str
+        Units for velocity input (default 'm/s').
+    
+    Output:
+    -------
+      gcrs_pos_vec : np.ndarray
+        Position in GCRS frame [m]. Shape (3,) or (3, N).
+      gcrs_vel_vec : np.ndarray
+        Velocity in GCRS frame [m/s]. Shape (3,) or (3, N).
+
+    Usage:
+    ------
+      gcrs_pos_vec, gcrs_vel_vec = VectorConverter.teme_to_j2000(
+        teme_pos_vec = teme_pos_vec,
+        teme_vel_vec = teme_vel_vec,
+        jd_utc       = jd_utc,
+      )
+    """
+    # Create astropy Time object from UTC
+    astropy_time = AstropyTime(jd_utc, format='jd', scale='utc')
+    
+    # Determine units
+    if units_pos.lower() == 'km':
+      u_du = u.km # type: ignore
+    else:
+      u_du = u.m # type: ignore
+    if units_vel.lower() == 'km/s':
+      u_vu = u.km / u.s # type: ignore
+    else:
+      u_vu = u.m / u.s # type: ignore
+
+    # Create CartesianRepresentation using position and velocity in TEME frame
+    cart_rep = CartesianRepresentation(
+      x = teme_pos_vec[0] * u_du,
+      y = teme_pos_vec[1] * u_du,
+      z = teme_pos_vec[2] * u_du,
+      differentials = CartesianDifferential(
+        d_x = teme_vel_vec[0] * u_vu,
+        d_y = teme_vel_vec[1] * u_vu,
+        d_z = teme_vel_vec[2] * u_vu,
+      )
+    )
+    
+    # Create a coordinate object in the TEME frame
+    teme_cart_rep = TEME(cart_rep, obstime=astropy_time)
+    
+    # Transform the coordinates from the TEME frame to the GCRS (J2000) frame
+    gcrs_cart_rep = teme_cart_rep.transform_to(GCRS(obstime=astropy_time))
+      
+    # Extract the numerical position and velocity vectors from the GCRS frame object
+    gcrs_pos_vec = np.array([
+      gcrs_cart_rep.cartesian.x.to(u_du).value,
+      gcrs_cart_rep.cartesian.y.to(u_du).value,
+      gcrs_cart_rep.cartesian.z.to(u_du).value,
+    ])
+    gcrs_vel_vec = np.array([
+      gcrs_cart_rep.velocity.d_x.to(u_vu).value,
+      gcrs_cart_rep.velocity.d_y.to(u_vu).value,
+      gcrs_cart_rep.velocity.d_z.to(u_vu).value,
+    ])
+    
+    return gcrs_pos_vec, gcrs_vel_vec
+
+  @staticmethod
+  def j2000_to_teme(
+    j2000_pos_vec : np.ndarray,
+    j2000_vel_vec : np.ndarray,
+    jd_utc        : Union[float, np.ndarray],
+    units_pos     : str = 'm',
+    units_vel     : str = 'm/s',
+  ) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Convert J2000/GCRS to TEME (True Equator Mean Equinox) using astropy.
+    Supports vectorized inputs (3xN arrays) if jd_utc is an array of length N or scalar.
+    
+    Input:
+    ------
+      j2000_pos_vec : np.ndarray
+        Position in J2000/GCRS frame [m]. Shape (3,) or (3, N).
+      j2000_vel_vec : np.ndarray
+        Velocity in J2000/GCRS frame [m/s]. Shape (3,) or (3, N).
+      jd_utc : float | np.ndarray
+        Julian date in UTC scale (e.g. 2460310.5). Scalar or array of length N.
+      units_pos : str
+        Units for position input (default 'm').
+      units_vel : str
+        Units for velocity input (default 'm/s').
+    
+    Output:
+    -------
+      teme_pos_vec : np.ndarray
+        Position in TEME frame [m]. Shape (3,) or (3, N).
+      teme_vel_vec : np.ndarray
+        Velocity in TEME frame [m/s]. Shape (3,) or (3, N).
+
+    Usage:
+    ------
+      teme_pos_vec, teme_vel_vec = VectorConverter.j2000_to_teme(
+        j2000_pos_vec = j2000_pos_vec,
+        j2000_vel_vec = j2000_vel_vec,
+        jd_utc        = jd_utc,
+      )
+    """
+    # Create astropy Time object from UTC
+    astropy_time = AstropyTime(jd_utc, format='jd', scale='utc')
+    
+    # Determine units
+    if units_pos.lower() == 'km':
+      u_du = u.km # type: ignore
+    else:
+      u_du = u.m # type: ignore
+    if units_vel.lower() == 'km/s':
+      u_vu = u.km / u.s # type: ignore
+    else:
+      u_vu = u.m / u.s # type: ignore
+
+    # Create CartesianRepresentation using position and velocity in GCRS frame
+    cart_rep = CartesianRepresentation(
+      x = j2000_pos_vec[0] * u_du,
+      y = j2000_pos_vec[1] * u_du,
+      z = j2000_pos_vec[2] * u_du,
+      differentials = CartesianDifferential(
+        d_x = j2000_vel_vec[0] * u_vu,
+        d_y = j2000_vel_vec[1] * u_vu,
+        d_z = j2000_vel_vec[2] * u_vu,
+      )
+    )
+    
+    # Create a coordinate object in the GCRS frame
+    gcrs_cart_rep = GCRS(cart_rep, obstime=astropy_time)
+    
+    # Transform the coordinates from the GCRS frame to the TEME frame
+    teme_cart_rep = gcrs_cart_rep.transform_to(TEME(obstime=astropy_time))
+      
+    # Extract the numerical position and velocity vectors from the TEME frame object
+    teme_pos_vec = np.array([
+      teme_cart_rep.cartesian.x.to(u_du).value,
+      teme_cart_rep.cartesian.y.to(u_du).value,
+      teme_cart_rep.cartesian.z.to(u_du).value,
+    ])
+    teme_vel_vec = np.array([
+      teme_cart_rep.velocity.d_x.to(u_vu).value,
+      teme_cart_rep.velocity.d_y.to(u_vu).value,
+      teme_cart_rep.velocity.d_z.to(u_vu).value,
+    ])
+    
+    return teme_pos_vec, teme_vel_vec
+
   @staticmethod
   def xyz_to_ric(
     xyz_ref_pos_vec : np.ndarray,
