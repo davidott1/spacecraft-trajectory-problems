@@ -27,7 +27,7 @@ Usage:
   --initial-state-norad-id     Yes        NORAD ID for the initial state object
   --initial-state-filename     No         Filename for custom state vector (required if source is sv)
   --timespan                   Yes        Start and end time (ISO format)
-  --zonal-harmonics            No         Enable zonal harmonics (requires arguments e.g. J2)
+  --gravity-harmonics          No         Enable gravity harmonics (e.g. J2 J3 J4)
   --third-bodies               No         Enable third-body gravity (requires arguments e.g. sun)
   --srp                        No         Enable Solar Radiation Pressure
   --drag                       No         Enable Atmospheric Drag
@@ -38,8 +38,8 @@ Usage:
       --initial-state-norad-id <id> \
       --timespan <start> <end> \
       [--initial-state-source jpl_horizons] \
-      [--zonal-harmonics J2 J3 J4] \
-      [--third-bodies sun moon] \
+      [--gravity-harmonics HARMONICS(J2 J3 J4 C22 C33)] \
+      [--third-bodies PLANETS(SUN MOON MERCURY VENUS MARS JUPITER SATURN URANUS NEPTUNE PLUTO)] \
       [--srp] \
       [--drag]
       
@@ -47,7 +47,7 @@ Usage:
       --initial-state-source jpl_horizons \
       --initial-state-norad-id 25544 \
       --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00 \
-      --zonal-harmonics J2 J3 J4 \
+      --gravity-harmonics J2 J3 J4 \
       --third-bodies sun moon \
       --srp \
       --drag
@@ -129,7 +129,7 @@ def main(
   compare_tle            : bool           = False,
   compare_jpl_horizons   : bool           = False,
   third_bodies           : Optional[list] = None,
-  zonal_harmonics        : Optional[list] = None,
+  gravity_harmonics      : Optional[list] = None,
   include_srp            : bool           = False,
   initial_state_source   : str            = 'jpl_horizons',
 ) -> dict:
@@ -155,9 +155,9 @@ def main(
       Flag to enable/disable comparison with Horizons ephemeris.
     third_bodies : list | None
       List of third bodies to include (e.g., ['SUN', 'MOON']). None means disabled.
-    zonal_harmonics : list | None
-      List of specific zonal harmonics to include (e.g., ['J2', 'J3', 'J4']).
-      None means disabled. Empty list means no zonal harmonics.
+    gravity_harmonics : list | None
+      List of gravity harmonics to include (e.g., ['J2', 'J3', 'J4']).
+      None means disabled. Empty list means no harmonics.
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
     initial_state_source : str
@@ -178,7 +178,7 @@ def main(
     compare_tle,
     compare_jpl_horizons,
     third_bodies,
-    zonal_harmonics,
+    gravity_harmonics,
     include_srp,
     initial_state_source,
   )
@@ -282,8 +282,8 @@ def main(
     area_srp                      = config.area_srp,
     include_third_body            = config.include_third_body,
     third_bodies_list             = config.third_bodies_list,
-    include_zonal_harmonics       = config.include_zonal_harmonics,
-    zonal_harmonics_list          = config.zonal_harmonics_list,
+    include_gravity_harmonics     = config.include_gravity_harmonics,
+    gravity_harmonics_list        = config.gravity_harmonics_list,
     include_srp                   = config.include_srp,
     spice_kernels_folderpath      = config.spice_kernels_folderpath,
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
@@ -331,7 +331,7 @@ if __name__ == "__main__":
     args.compare_tle,
     args.compare_jpl_horizons,
     args.third_bodies,
-    args.zonal_harmonics,
+    args.gravity_harmonics,
     args.include_srp,
     args.initial_state_source,
   )
