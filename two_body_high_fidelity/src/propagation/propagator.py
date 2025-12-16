@@ -614,6 +614,7 @@ def run_sgp4_propagation(
   time_o_dt                     : datetime,
   time_f_dt                     : datetime,
   compare_jpl_horizons          : bool,
+  time_eval_s                   : Optional[np.ndarray] = None,
 ) -> Optional[dict]:
   """
   Propagate SGP4 on equal-spaced grid.
@@ -634,6 +635,9 @@ def run_sgp4_propagation(
       Final time as datetime object.
     compare_jpl_horizons : bool
       Flag to enable Horizons comparison.
+    time_eval_s : np.ndarray | None
+      Optional time grid (seconds from time_o) to evaluate SGP4 at.
+      If provided, overrides the default 1000-point grid.
       
   Output:
   -------
@@ -654,9 +658,15 @@ def run_sgp4_propagation(
   time_offset_f_s = (time_f_dt - tle_epoch_dt).total_seconds()
   delta_time_s = time_offset_f_s - time_offset_o_s
   
-  # Create equal-spaced time grid (seconds from TLE epoch)
-  num_grid_points = 1000
-  sgp4_times_grid = np.linspace(time_offset_o_s, time_offset_f_s, num_grid_points)
+  # Create time grid (seconds from TLE epoch)
+  if time_eval_s is not None:
+    sgp4_times_grid = time_eval_s + time_offset_o_s
+    num_grid_points = len(sgp4_times_grid)
+    grid_type_str   = f"{num_grid_points} points (from high-fidelity grid)"
+  else:
+    num_grid_points = 1000
+    sgp4_times_grid = np.linspace(time_offset_o_s, time_offset_f_s, num_grid_points)
+    grid_type_str   = f"{num_grid_points} points (equal-spaced)"
 
   # Display propagation info
   print(f"  Configuration")
@@ -664,7 +674,7 @@ def run_sgp4_propagation(
   print(f"      Initial  : {time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
   print(f"      Final    : {time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
   print(f"      Duration : {delta_time_s:.1f} s")
-  print(f"      Grid     : {len(sgp4_times_grid)} points (equal-spaced)")
+  print(f"      Grid     : {grid_type_str}")
 
   print("\n  Compute")
   print("    SGP4 Propagation Running ... ", end='', flush=True)
@@ -705,7 +715,7 @@ def run_sgp4_propagation(
       # Store ephemeris-time results
       result_sgp4['at_ephem_times'] = {
         'plot_time_s' : ephem_times_s,
-        'integ_time_s' : ephemeris_times,
+        'integ_time_s' : ephem_times_from_tle,
         'state' : result_sgp4_at_ephem['state'],
         'coe' : result_sgp4_at_ephem['coe'],
       }
@@ -814,6 +824,11 @@ def run_propagations(
   # SGP4 propagation (if requested)
   result_sgp4 = None
   if compare_tle:
+    # Use high-fidelity time grid if available for direct comparison
+    time_eval_s = None
+    if result_high_fidelity.get('success'):
+      time_eval_s = result_high_fidelity.get('plot_time_s')
+    
     result_sgp4 = run_sgp4_propagation(
       result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
       tle_line_1                    = tle_line_1,
@@ -821,6 +836,7 @@ def run_propagations(
       time_o_dt                     = time_o_dt,
       time_f_dt                     = time_f_dt,
       compare_jpl_horizons          = compare_jpl_horizons,
+      time_eval_s                   = time_eval_s,
     )
 
   return result_high_fidelity, result_sgp4
