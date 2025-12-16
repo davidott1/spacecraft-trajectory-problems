@@ -19,6 +19,7 @@ from src.model.constants       import SOLARSYSTEMCONSTANTS
 from src.model.time_converter  import utc_to_et
 from src.model.frame_converter import FrameConverter
 from src.utility.tle_helper    import modify_tle_bstar, get_tle_satellite_and_tle_epoch
+from src.utility.time_helper   import format_time_offset
 
 
 def propagate_tle(
@@ -371,8 +372,8 @@ def run_high_fidelity_propagation(
   area_srp                      : float,
   include_third_body            : bool,
   third_bodies_list             : list,
-  include_zonal_harmonics       : bool,
-  zonal_harmonics_list          : list,
+  include_gravity_harmonics     : bool,
+  gravity_harmonics_list        : list,
   include_srp                   : bool,
   spice_kernels_folderpath      : Path,
   result_jpl_horizons_ephemeris : Optional[dict],
@@ -380,9 +381,6 @@ def run_high_fidelity_propagation(
 ) -> dict:
   """
   Configure and run the high-fidelity numerical propagator.
-  
-  Creates an equal-spaced time grid. If comparing to JPL Horizons,
-  also stores interpolated results at ephemeris times.
   
   Input:
   ------
@@ -408,10 +406,10 @@ def run_high_fidelity_propagation(
       Flag to enable third-body gravity.
     third_bodies_list : list
       List of third bodies (e.g., ['SUN', 'MOON']).
-    include_zonal_harmonics : bool
-      Flag to enable zonal harmonics.
-    zonal_harmonics_list : list
-      List of zonal harmonics (e.g., ['J2', 'J3', 'J4']).
+    include_gravity_harmonics : bool
+      Flag to enable gravity harmonics.
+    gravity_harmonics_list : list
+      List of gravity harmonics (e.g., ['J2', 'J3', 'J4']).
     include_srp : bool
       Flag to enable solar radiation pressure.
     spice_kernels_folderpath : Path
@@ -419,12 +417,12 @@ def run_high_fidelity_propagation(
     result_jpl_horizons_ephemeris : dict | None
       JPL Horizons ephemeris result for comparison.
     compare_jpl_horizons : bool
-      Flag to enable Horizons comparison.
+      Flag to enable comparison with Horizons.
       
   Output:
   -------
     result : dict
-      Result dictionary containing propagation results.
+      Dictionary containing propagation results.
   """
   # Print header
   print("\nHigh-Fidelity Model")
@@ -439,56 +437,49 @@ def run_high_fidelity_propagation(
   j3_val = 0.0
   j4_val = 0.0
   active_harmonics = []
-  if include_zonal_harmonics:
-    if 'J2' in zonal_harmonics_list:
+  if include_gravity_harmonics:
+    if 'J2' in gravity_harmonics_list:
       j2_val = SOLARSYSTEMCONSTANTS.EARTH.J2
       active_harmonics.append('J2')
-    if 'J3' in zonal_harmonics_list:
+    if 'J3' in gravity_harmonics_list:
       j3_val = SOLARSYSTEMCONSTANTS.EARTH.J3
       active_harmonics.append('J3')
-    if 'J4' in zonal_harmonics_list:
+    if 'J4' in gravity_harmonics_list:
       j4_val = SOLARSYSTEMCONSTANTS.EARTH.J4
       active_harmonics.append('J4')
 
   # Print configuration
-  print("  Configuration")
-  print( "    Timespan")
-  print(f"      Initial  : {time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {time_et_o:.6f} ET")
-  print(f"      Final    : {time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {time_et_f:.6f} ET")
-  print(f"      Duration : {delta_time_s:.1f} s")
-  
-  print("    Forces")
-  print("      Gravity")
-  print("        Earth")
-  print("          Two-Body Point Mass")
-  if active_harmonics:
+  print(f"  Configuration")
+  print(f"    Timespan")
+  print(f"      Initial  : {time_o_dt} UTC / {time_et_o:.6f} ET")
+  print(f"      Final    : {time_f_dt} UTC / {time_et_f:.6f} ET")
+  print(f"      Duration : {delta_time_s} s")
+  print(f"    Forces")
+  print(f"      Gravity")
+  print(f"        Earth")
+  print(f"          Two-Body Point Mass")
+  if include_gravity_harmonics:
     print(f"          Zonal Harmonics : {', '.join(active_harmonics)}")
   else:
-    print("          Zonal Harmonics : None")
+    print(f"          Zonal Harmonics : None")
   
-  print("        Third-Body")
   if include_third_body:
+    print(f"        Third-Body")
     print(f"          Bodies    : {', '.join(third_bodies_list)}")
-    print("          Ephemeris : SPICE")
-  else:
-    print("          Bodies    : None")
-      
-  print("      Atmospheric Drag")
-  if include_drag:
-    print( "        Model      : Exponential Atmosphere")
-    print(f"        Parameters : Cd={cd}, Area_Drag={area_drag} m², Mass={mass} kg")
-  else:
-    print("        Model      : None")
-
-  print("      Solar Radiation Pressure")
-  if include_srp:
-    print( "        Model      : Cylindrical Shadow (Spherical Earth)")
-    print(f"        Parameters : Cr={cr}, Area_SRP={area_srp} m²")
-  else:
-    print("        Model      : None")
+    print(f"          Ephemeris : SPICE")
   
-  # Define acceleration model
-  acceleration = Acceleration(
+  if include_drag:
+    print(f"      Atmospheric Drag")
+    print(f"        Model      : Exponential Atmosphere")
+    print(f"        Parameters : Cd={cd}, Area_Drag={area_drag} m², Mass={mass} kg")
+  
+  if include_srp:
+    print(f"      Solar Radiation Pressure")
+    print(f"        Model      : Cylindrical Shadow (Spherical Earth)")
+    print(f"        Parameters : Cr={cr}, Area_SRP={area_srp} m²")
+
+  # Initialize acceleration model
+  acceleration_model = Acceleration(
     gp                      = SOLARSYSTEMCONSTANTS.EARTH.GP,
     j2                      = j2_val,
     j3                      = j3_val,
@@ -498,12 +489,12 @@ def run_high_fidelity_propagation(
     enable_drag             = include_drag,
     cd                      = cd,
     area_drag               = area_drag,
-    enable_srp              = include_srp,
-    cr                      = cr,
-    area_srp                = area_srp,
     enable_third_body       = include_third_body,
     third_body_bodies       = third_bodies_list,
     spice_kernel_folderpath = str(spice_kernels_folderpath),
+    enable_srp              = include_srp,
+    cr                      = cr,
+    area_srp                = area_srp,
   )
   
   # Get orbital period for grid density
@@ -548,7 +539,7 @@ def run_high_fidelity_propagation(
     initial_state       = initial_state,
     time_o              = time_et_o,
     time_f              = time_et_f,
-    dynamics            = acceleration,
+    dynamics            = acceleration_model,
     method              = 'DOP853',
     rtol                = 1e-12,
     atol                = 1e-12,
@@ -718,7 +709,7 @@ def run_sgp4_propagation(
       # Store ephemeris-time results
       result_sgp4['at_ephem_times'] = {
         'plot_time_s' : ephem_times_s,
-        'integ_time_s' : ephem_times_from_tle,
+        'integ_time_s' : ephemeris_times,
         'state' : result_sgp4_at_ephem['state'],
         'coe' : result_sgp4_at_ephem['coe'],
       }
@@ -743,8 +734,8 @@ def run_propagations(
   area_srp                      : float,
   include_third_body            : bool,
   third_bodies_list             : list,
-  include_zonal_harmonics       : bool,
-  zonal_harmonics_list          : list,
+  include_gravity_harmonics     : bool,
+  gravity_harmonics_list        : list,
   include_srp                   : bool,
   spice_kernels_folderpath      : Path,
   result_jpl_horizons_ephemeris : Optional[dict],
@@ -782,10 +773,10 @@ def run_propagations(
       Flag to enable third-body gravity.
     third_bodies_list : list
       List of third bodies (e.g., ['SUN', 'MOON']).
-    include_zonal_harmonics : bool
-      Flag to enable zonal harmonics.
-    zonal_harmonics_list : list
-      List of zonal harmonics (e.g., ['J2', 'J3', 'J4']).
+    include_gravity_harmonics : bool
+      Flag to enable gravity harmonics.
+    gravity_harmonics_list : list
+      List of gravity harmonics (e.g., ['J2', 'J3', 'J4']).
     include_srp : bool
       Flag to enable solar radiation pressure.
     spice_kernels_folderpath : Path
@@ -817,8 +808,8 @@ def run_propagations(
     area_srp                      = area_srp,
     include_third_body            = include_third_body,
     third_bodies_list             = third_bodies_list,
-    include_zonal_harmonics       = include_zonal_harmonics,
-    zonal_harmonics_list          = zonal_harmonics_list,
+    include_gravity_harmonics     = include_gravity_harmonics,
+    gravity_harmonics_list        = gravity_harmonics_list,
     include_srp                   = include_srp,
     spice_kernels_folderpath      = spice_kernels_folderpath,
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,

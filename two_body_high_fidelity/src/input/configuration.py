@@ -18,7 +18,7 @@ def print_input_configuration(
   compare_tle            : bool,
   compare_jpl_horizons   : bool,
   third_bodies_list      : list,
-  zonal_harmonics_list   : list,
+  gravity_harmonics_list : list,
   include_srp            : bool,
   initial_state_source   : str,
 ) -> None:
@@ -39,8 +39,8 @@ def print_input_configuration(
       Flag to enable/disable JPL Horizons comparison.
     third_bodies_list : list
       List of third bodies to include. Empty list if disabled.
-    zonal_harmonics_list : list
-      List of zonal harmonics to include. Empty list if disabled.
+    gravity_harmonics_list : list
+      List of gravity harmonics to include. Empty list if disabled.
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
     initial_state_source : str
@@ -56,7 +56,7 @@ def print_input_configuration(
     'initial_state_norad_id' : None,
     'initial_state_filename' : None,
     'timespan'               : None,
-    'zonal_harmonics'        : [],
+    'gravity_harmonics'      : [],
     'third_bodies'           : [],
     'include_drag'           : False,
     'include_srp'            : False,
@@ -65,9 +65,9 @@ def print_input_configuration(
   }
   
   # Format values for display
-  timespan_str = f"{desired_timespan[0]} {desired_timespan[1]}" if desired_timespan else "None"
-  zonal_str    = ' '.join(zonal_harmonics_list) if zonal_harmonics_list else "None"
-  third_str    = ' '.join(third_bodies_list)    if third_bodies_list    else "None"
+  timespan_str  = f"{desired_timespan[0]} {desired_timespan[1]}" if desired_timespan else "None"
+  harmonics_str = ' '.join(gravity_harmonics_list) if gravity_harmonics_list else "None"
+  third_str     = ' '.join(third_bodies_list) if third_bodies_list else "None"
   
   # Build configuration entries: (name, value, default, user_set)
   entries = [
@@ -75,7 +75,7 @@ def print_input_configuration(
     ('initial_state_norad_id', initial_state_norad_id, defaults['initial_state_norad_id'], initial_state_norad_id is not None),
     ('initial_state_filename', initial_state_filename, defaults['initial_state_filename'], initial_state_filename is not None),
     ('timespan',               timespan_str,           defaults['timespan'],               desired_timespan       is not None),
-    ('zonal_harmonics',        zonal_str,              defaults['zonal_harmonics'],        zonal_harmonics_list   is not None and len(zonal_harmonics_list) > 0),
+    ('gravity_harmonics',      harmonics_str,          defaults['gravity_harmonics'],      gravity_harmonics_list is not None and len(gravity_harmonics_list) > 0),
     ('third_bodies',           third_str,              defaults['third_bodies'],           third_bodies_list      is not None and len(third_bodies_list) > 0),
     ('include_drag',           include_drag,           defaults['include_drag'],           include_drag           != defaults['include_drag']),
     ('include_srp',            include_srp,            defaults['include_srp'],            include_srp            != defaults['include_srp']),
@@ -169,7 +169,7 @@ def print_configuration(
     compare_tle            = config.compare_tle,
     compare_jpl_horizons   = config.compare_jpl_horizons,
     third_bodies_list      = config.third_bodies_list,
-    zonal_harmonics_list   = config.zonal_harmonics_list,
+    gravity_harmonics_list = config.gravity_harmonics_list,
     include_srp            = config.include_srp,
     initial_state_source   = config.initial_state_source,
   )
@@ -213,7 +213,7 @@ def build_config(
   compare_tle            : bool           = False,
   compare_jpl_horizons   : bool           = False,
   third_bodies           : Optional[list] = None,
-  zonal_harmonics        : Optional[list] = None,
+  gravity_harmonics      : Optional[list] = None,
   include_srp            : bool           = False,
   initial_state_source   : str            = 'jpl_horizons',
 ) -> SimpleNamespace:
@@ -234,9 +234,9 @@ def build_config(
       Flag to enable/disable JPL Horizons comparison.
     third_bodies : list | None
       List of third bodies to include. None if disabled.
-    zonal_harmonics : list | None
-      List of zonal harmonics to include. None disables all.
-      Empty list [] also disables all zonal harmonics.
+    gravity_harmonics : list | None
+      List of gravity harmonics to include (e.g., ['J2', 'J3', 'J4']).
+      None or empty list disables all harmonics.
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
     initial_state_source : str
@@ -258,9 +258,9 @@ def build_config(
     initial_state_source,
   )
   
-  # Handle zonal harmonics logic
-  include_zonal_harmonics = zonal_harmonics is not None and len(zonal_harmonics) > 0
-  zonal_harmonics_list    = zonal_harmonics if zonal_harmonics is not None else []
+  # Handle gravity harmonics logic (still uses zonal internally for now)
+  include_gravity_harmonics = gravity_harmonics is not None and len(gravity_harmonics) > 0
+  gravity_harmonics_list    = gravity_harmonics if gravity_harmonics is not None else []
 
   # Handle third bodies logic
   include_third_body = third_bodies is not None and len(third_bodies) > 0
@@ -394,39 +394,39 @@ def build_config(
     # Store original input values for print_configuration
     initial_state_norad_id = initial_state_norad_id,
     initial_state_filename = initial_state_filename,
-    desired_timespan       = timespan_dt,  # Keep for print_configuration
+    desired_timespan       = timespan_dt,
     # Parsed and calculated values
-    obj_props                = obj_props,
-    object_name              = object_name,
-    custom_state_vector      = custom_state_vector,
-    time_o_dt                = time_o_dt,
-    time_f_dt                = time_f_dt,
-    delta_time_s             = delta_time_s,
-    mass                     = obj_props['mass__kg'],
-    cd                       = obj_props['drag']['coeff'],
-    area_drag                = obj_props['drag']['area__m2'],
-    cr                       = obj_props['srp']['coeff'],
-    area_srp                 = obj_props['srp']['area__m2'],
-    include_spice            = True,
-    include_drag             = include_drag,
-    compare_tle              = compare_tle,
-    compare_jpl_horizons     = compare_jpl_horizons,
-    include_third_body       = include_third_body,
-    third_bodies_list        = third_bodies_list,
-    include_zonal_harmonics  = include_zonal_harmonics,
-    zonal_harmonics_list     = zonal_harmonics_list,
-    include_srp              = include_srp,
-    initial_state_source     = initial_state_source,
-    output_folderpath        = paths['output_folderpath'],
-    timestamp_folderpath     = paths['timestamp_folderpath'],
-    figures_folderpath       = paths['figures_folderpath'],
-    files_folderpath         = paths['files_folderpath'],
-    log_filepath             = paths['log_filepath'],
-    spice_kernels_folderpath = paths['spice_kernels_folderpath'],
-    jpl_horizons_folderpath  = paths['jpl_horizons_folderpath'],
-    tles_folderpath          = paths['tles_folderpath'],
-    state_vectors_folderpath = paths['state_vectors_folderpath'],
-    lsk_filepath             = paths['lsk_filepath'],
+    obj_props                 = obj_props,
+    object_name               = object_name,
+    custom_state_vector       = custom_state_vector,
+    time_o_dt                 = time_o_dt,
+    time_f_dt                 = time_f_dt,
+    delta_time_s              = delta_time_s,
+    mass                      = obj_props['mass__kg'],
+    cd                        = obj_props['drag']['coeff'],
+    area_drag                 = obj_props['drag']['area__m2'],
+    cr                        = obj_props['srp']['coeff'],
+    area_srp                  = obj_props['srp']['area__m2'],
+    include_spice             = True,
+    include_drag              = include_drag,
+    compare_tle               = compare_tle,
+    compare_jpl_horizons      = compare_jpl_horizons,
+    include_third_body        = include_third_body,
+    third_bodies_list         = third_bodies_list,
+    include_gravity_harmonics = include_gravity_harmonics,
+    gravity_harmonics_list    = gravity_harmonics_list,
+    include_srp               = include_srp,
+    initial_state_source      = initial_state_source,
+    output_folderpath         = paths['output_folderpath'],
+    timestamp_folderpath      = paths['timestamp_folderpath'],
+    figures_folderpath        = paths['figures_folderpath'],
+    files_folderpath          = paths['files_folderpath'],
+    log_filepath              = paths['log_filepath'],
+    spice_kernels_folderpath  = paths['spice_kernels_folderpath'],
+    jpl_horizons_folderpath   = paths['jpl_horizons_folderpath'],
+    tles_folderpath           = paths['tles_folderpath'],
+    state_vectors_folderpath  = paths['state_vectors_folderpath'],
+    lsk_filepath              = paths['lsk_filepath'],
     # Values calculated later
     tle_line_0   = None,
     tle_line_1   = None,

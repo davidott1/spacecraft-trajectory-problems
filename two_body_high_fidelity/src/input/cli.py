@@ -73,13 +73,12 @@ def parse_command_line_arguments(
     help     = 'Enable third-body gravity perturbations. Options: SUN, MOON, MERCURY, VENUS, MARS, JUPITER, SATURN, URANUS, NEPTUNE, PLUTO',
   )
   parser.add_argument(
-    '--zonal-harmonics',
-    '--include-zonal-harmonics',
-    dest    = 'zonal_harmonics',
-    nargs   = '+', # accepts 1 or more args.
-    choices = ['J2', 'J3', 'J4'],
+    '--gravity-harmonics',
+    dest    = 'gravity_harmonics',
+    nargs   = '+',
+    type    = str,
     default = None,
-    help    = "Enable zonal harmonics. Required args: J2 J3 J4 (e.g. --zonal-harmonics J2).",
+    help    = "Enable gravity harmonics. Options: J2 J3 J4 (zonal). Future: C22 S22 (tesseral).",
   )
   parser.add_argument(
     '--include-drag',
