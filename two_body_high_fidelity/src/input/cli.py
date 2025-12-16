@@ -40,17 +40,14 @@ def parse_command_line_arguments(
   parser.add_argument(
     '--initial-state-norad-id',
     type=str,
-    required=False,
-    help='NORAD ID for the initial state object (required unless source is state-vector)'
+    required = False,
+    help     = 'NORAD ID for the initial state object. Required if initial state source is jpl-horizons or tle.'
   )
-
   parser.add_argument(
     '--initial-state-filename',
-    '--initial-state-vector-file',
-    dest='initial_state_filename',
-    type=str,
-    required=False,
-    help='Filename of the custom state vector YAML file (in data/state_vectors)'
+    type     = str,
+    required = False,
+    help     = 'Filename of the custom state vector .yaml file in data/state_vectors. Required if initial state source is custom-state-vector.'
   )
   
   # Time arguments
