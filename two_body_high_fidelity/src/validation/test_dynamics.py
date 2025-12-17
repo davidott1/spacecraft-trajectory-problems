@@ -4,7 +4,6 @@ Dynamics Module Tests
 
 Regression tests for gravity, drag, and SRP models.
 """
-import pytest
 import numpy as np
 
 from src.model.dynamics import (
