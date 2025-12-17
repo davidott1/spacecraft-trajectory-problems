@@ -616,7 +616,7 @@ def find_compatible_tle_file(
   if not tles_folderpath.exists():
     return None
   
-  # Search for TLE files matching the NORAD ID (new format)
+  # Search for TLE files matching the NORAD ID
   glob_pattern = f'celestrak_tle_{norad_id}_*.txt'
   matching_files = list(tles_folderpath.glob(glob_pattern))
   
@@ -632,30 +632,33 @@ def find_compatible_tle_file(
     filename = filepath.stem  # Remove .txt extension
     parts = filename.split('_')
     
-    # Need at least: celestrak, tle, norad_id, name, start, end = 6 parts
-    if len(parts) < 6:
-      continue
+    # Need at least: celestrak, tle, norad_id, and then name parts, start, end
+    # Find the timestamp parts (they have 'T' in them)
+    timestamp_parts = [p for p in parts if 'T' in p and len(p) > 10]
     
-    try:
-      # Start time is second-to-last, end time is last
-      # Format: YYYYMMDDTHHMMSSz
-      start_str = parts[-2]  # e.g., "20251001T000000Z"
-      end_str = parts[-1]    # e.g., "20251002T000000Z"
-      
-      # Parse the datetime strings
-      file_start_dt = datetime.strptime(start_str, '%Y%m%dT%H%M%SZ')
-      file_end_dt = datetime.strptime(end_str, '%Y%m%dT%H%M%SZ')
-      
-      # Check if this file covers the desired timespan (with tolerance)
-      start_ok = file_start_dt <= (desired_time_o_dt + time_tolerance)
-      end_ok = file_end_dt >= (desired_time_f_dt - time_tolerance)
-      
-      if start_ok and end_ok:
-        return filepath
+    if len(timestamp_parts) >= 2:
+      try:
+        # Start and end times should be the last two timestamp-looking parts
+        start_str = timestamp_parts[-2]  # e.g., "20251001T000000Z"
+        end_str = timestamp_parts[-1]    # e.g., "20251002T000000Z"
         
-    except (ValueError, IndexError):
-      # Skip files with unparseable names
-      continue
+        # Parse the datetime strings
+        start_str_clean = start_str.rstrip('Zz')
+        end_str_clean = end_str.rstrip('Zz')
+        
+        file_start_dt = datetime.strptime(start_str_clean, '%Y%m%dT%H%M%S')
+        file_end_dt = datetime.strptime(end_str_clean, '%Y%m%dT%H%M%S')
+        
+        # Check if this file covers the desired timespan (with tolerance)
+        start_ok = file_start_dt <= (desired_time_o_dt + time_tolerance)
+        end_ok = file_end_dt >= (desired_time_f_dt - time_tolerance)
+        
+        if start_ok and end_ok:
+          return filepath
+          
+      except (ValueError, IndexError):
+        # Skip files with unparseable timestamps
+        continue
   
   return None
 
@@ -706,26 +709,22 @@ def get_celestrak_tle(
   print("  Celestrak TLE")
   print(f"    Folderpath : {display_folderpath}")
 
-  # Construct expected TLE filepath
-  time_o_str   = desired_time_o_dt.strftime('%Y%m%dT%H%M%SZ')
-  time_f_str   = desired_time_f_dt.strftime('%Y%m%dT%H%M%SZ')
-  tle_filename = f"celestrak_tle_{norad_id}_{object_name.lower()}_{time_o_str}_{time_f_str}.txt"
-  tle_filepath = tles_folderpath / tle_filename
+  # Search for compatible TLE files first
+  compatible_file = find_compatible_tle_file(
+    norad_id          = norad_id,
+    tles_folderpath   = tles_folderpath,
+    desired_time_o_dt = desired_time_o_dt,
+    desired_time_f_dt = desired_time_f_dt,
+  )
   
-  # Check if exact TLE file exists, otherwise search for compatible files
-  if not tle_filepath.exists():
-    compatible_file = find_compatible_tle_file(
-      norad_id          = norad_id,
-      tles_folderpath   = tles_folderpath,
-      desired_time_o_dt = desired_time_o_dt,
-      desired_time_f_dt = desired_time_f_dt,
-    )
-    
-    if compatible_file is not None:
-      tle_filepath = compatible_file
+  if compatible_file is not None:
+    tle_filepath = compatible_file
+  else:
+    # No compatible file found
+    tle_filepath = None
   
-  # Check if TLE file exists (either exact match or compatible file)
-  if not tle_filepath.exists():
+  # Check if TLE file exists
+  if tle_filepath is None or not tle_filepath.exists():
     # Prompt user to download
     print(f"               :   ... No compatible files found. Download from Celestrak? (y/n)", end=" ", flush=True)
     user_response = input().strip().lower()
@@ -741,15 +740,28 @@ def get_celestrak_tle(
           # Ensure TLEs folder exists
           tles_folderpath.mkdir(parents=True, exist_ok=True)
           
-          # Re-construct filepath for saving (use original expected name)
-          time_o_str   = desired_time_o_dt.strftime('%Y%m%dT%H%M%SZ')
-          time_f_str   = desired_time_f_dt.strftime('%Y%m%dT%H%M%SZ')
-          tle_filename = f"celestrak_tle_{norad_id}_{object_name.lower()}_{time_o_str}_{time_f_str}.txt"
+          # Clean object name for filename: replace spaces and hyphens with underscores
+          object_name_clean = object_name.lower()
+          # Replace spaces and hyphens with underscores
+          object_name_clean = object_name_clean.replace(' ', '_').replace('-', '_')
+          # Remove any other special characters (keep only alphanumeric and underscore)
+          object_name_clean = ''.join(c if c.isalnum() or c == '_' else '_' for c in object_name_clean)
+          # Collapse multiple consecutive underscores into a single underscore
+          while '__' in object_name_clean:
+            object_name_clean = object_name_clean.replace('__', '_')
+          # Strip leading/trailing underscores
+          object_name_clean = object_name_clean.strip('_')
+          
+          # Create filename with timespan search window
+          time_o_str = desired_time_o_dt.strftime('%Y%m%dT%H%M%SZ')
+          time_f_str = desired_time_f_dt.strftime('%Y%m%dT%H%M%SZ')
+          tle_filename = f"celestrak_tle_{norad_id}_{object_name_clean}_{time_o_str}_{time_f_str}.txt"
           tle_filepath = tles_folderpath / tle_filename
           
           # Save TLE to file (3-line format per TLE)
           with open(tle_filepath, 'w') as f:
-            f.write(f"{tle_data['tle_line_0']}\n")
+            if tle_data['tle_line_0']:
+              f.write(f"{tle_data['tle_line_0']}\n")
             f.write(f"{tle_data['tle_line_1']}\n")
             f.write(f"{tle_data['tle_line_2']}\n")
           
@@ -771,7 +783,7 @@ def get_celestrak_tle(
       print(f"    Filepath   : None (no compatible file available)")
       return {
         'success' : False,
-        'message' : f"TLE file not found: {tle_filepath}",
+        'message' : f"TLE file not found and download declined",
       }
 
   # Display the file being loaded
@@ -957,4 +969,105 @@ def download_tle_from_celestrak(
     return None
   except Exception as e:
     print(f"Error: {e}")
+    return None
+
+
+def load_tle(norad_id):
+  """
+  Loads TLE data for a specific NORAD ID.
+  First attempts to load from local file, then downloads if not found.
+  
+  Args:
+    norad_id: NORAD catalog ID
+    
+  Returns:
+    tuple: (tle_line1, tle_line2) or None if not found
+  """
+  # Try to load from local file first
+  tle_dir = Path(__file__).parent.parent.parent / "data" / "tles"
+  
+  # Use consistent naming: celestrak_tle_<norad_id>_<object_name>_<epoch>.txt
+  # Since we don't know the object name yet, search for files with the NORAD ID
+  if tle_dir.exists():
+    for tle_file in tle_dir.glob(f"celestrak_tle_{norad_id}_*.txt"):
+      try:
+        with open(tle_file, 'r') as f:
+          lines = f.readlines()
+          # Parse standard 3-line or 2-line TLE format
+          if len(lines) >= 2:
+            # Find the lines starting with "1 " and "2 "
+            line1 = None
+            line2 = None
+            for line in lines:
+              if line.startswith(f"1 {norad_id}"):
+                line1 = line.strip()
+              elif line.startswith(f"2 {norad_id}"):
+                line2 = line.strip()
+            
+            if line1 and line2:
+              print(f"Loaded TLE from file: {tle_file.name}")
+              return (line1, line2)
+      except Exception as e:
+        print(f"Error reading TLE file {tle_file}: {e}")
+  
+  # If not found locally, attempt to download from CelesTrak
+  print(f"TLE not found locally for NORAD ID {norad_id}. Attempting to download from CelesTrak...")
+  
+  try:
+    import requests
+    from sgp4.io import twoline2rv
+    from sgp4.earth_gravity import wgs72
+    from datetime import datetime
+    
+    # Try active satellite catalog first
+    url = f"https://celestrak.org/NORAD/elements/gp.php?CATNR={norad_id}&FORMAT=TLE"
+    response = requests.get(url, timeout=10)
+    
+    if response.status_code == 200 and response.text.strip():
+      lines = response.text.strip().split('\n')
+      if len(lines) >= 2:
+        # Extract object name from line 0 (if present)
+        object_name = lines[0].strip() if len(lines) >= 3 else f"object_{norad_id}"
+        # Clean object name for filename (remove special chars, spaces -> underscores)
+        object_name_clean = object_name.lower()
+        object_name_clean = ''.join(c if c.isalnum() or c in '-_' else '_' for c in object_name_clean)
+        object_name_clean = '_'.join(object_name_clean.split())  # collapse multiple underscores
+        
+        # Find TLE lines
+        line1 = None
+        line2 = None
+        for line in lines:
+          if line.startswith(f"1 {norad_id}"):
+            line1 = line.strip()
+          elif line.startswith(f"2 {norad_id}"):
+            line2 = line.strip()
+        
+        if line1 and line2:
+          # Parse epoch from TLE line 1 (columns 19-32)
+          epoch_str = line1[18:32]
+          year = int(epoch_str[:2])
+          year = 2000 + year if year < 50 else 1900 + year
+          day_of_year = float(epoch_str[2:])
+          epoch_date = datetime(year, 1, 1) + pd.Timedelta(days=day_of_year - 1)
+          epoch_iso = epoch_date.strftime('%Y%m%dT%H%M%SZ')
+          
+          # Save to file with consistent naming
+          tle_filename = f"celestrak_tle_{norad_id}_{object_name_clean}_{epoch_iso}.txt"
+          tle_path = tle_dir / tle_filename
+          tle_dir.mkdir(parents=True, exist_ok=True)
+          
+          with open(tle_path, 'w') as f:
+            if len(lines) >= 3:
+              f.write(f"{lines[0]}\n")  # Object name
+            f.write(f"{line1}\n")
+            f.write(f"{line2}\n")
+          
+          print(f"Downloaded and saved TLE to: {tle_filename}")
+          return (line1, line2)
+    
+    print(f"Could not retrieve TLE for NORAD ID {norad_id}")
+    return None
+    
+  except Exception as e:
+    print(f"Error downloading TLE: {e}")
     return None
