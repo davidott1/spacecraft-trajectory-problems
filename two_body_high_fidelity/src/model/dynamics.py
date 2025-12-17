@@ -47,6 +47,7 @@ Main Components:
    - oblate_j2() - J2 oblateness
    - oblate_j3() - J3 oblateness
    - oblate_j4() - J4 oblateness
+   - tesseral_22() - C22, S22 tesseral harmonics
 
 5. **ThirdBodyGravity** - Perturbations from Sun, Moon, etc.:
    - point_mass() - Third-body point mass

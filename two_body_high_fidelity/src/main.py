@@ -27,7 +27,7 @@ Usage:
   --initial-state-norad-id     Yes        NORAD ID for the initial state object
   --initial-state-filename     No         Filename for custom state vector (required if source is sv)
   --timespan                   Yes        Start and end time (ISO format)
-  --gravity-harmonics          No         Enable gravity harmonics (e.g. J2 J3 J4)
+  --gravity-harmonics          No         Enable gravity harmonics (e.g. J2 J3 J4 C22 S22)
   --third-bodies               No         Enable third-body gravity (requires arguments e.g. sun)
   --srp                        No         Enable Solar Radiation Pressure
   --drag                       No         Enable Atmospheric Drag
@@ -38,8 +38,8 @@ Usage:
       --initial-state-norad-id <id> \
       --timespan <start> <end> \
       [--initial-state-source jpl_horizons] \
-      [--gravity-harmonics HARMONICS(J2 J3 J4 C22 C33)] \
-      [--third-bodies PLANETS(SUN MOON MERCURY VENUS MARS JUPITER SATURN URANUS NEPTUNE PLUTO)] \
+      [--gravity-harmonics J2 J3 J4 C22 S22] \
+      [--third-bodies sun moon mercury venus mars jupiter saturn uranus neptune pluto] \
       [--srp] \
       [--drag]
       
