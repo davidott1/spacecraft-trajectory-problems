@@ -222,10 +222,10 @@ coordinate_system : cartesian
 pos_vec__m        : 7000.0e3, 0.0e0, 0.0e0
 vel_vec__m_per_s  :    0.0e0, 7.5e3, 0.0e0
 mass__kg          : 1000.0
-drag:
+drag              :
   coeff           : 2.2
   area__m2        : 10.0
-srp:
+srp               :
   coeff           : 1.3
   area__m2        : 10.0
 ```
