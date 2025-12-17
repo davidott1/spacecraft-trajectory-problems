@@ -84,3 +84,35 @@ def geo_initial_state():
     3.075e3,     # vy [m/s]
     0.0,         # vz [m/s]
   ])
+
+
+@pytest.fixture(scope="session", autouse=True)
+def test_data_paths(monkeypatch_session):
+  """
+  Override data paths to use test fixtures instead of user data.
+  This fixture runs automatically for all tests.
+  """
+  # Test fixtures directory (adjacent to this conftest.py)
+  fixtures_path = Path(__file__).parent / "fixtures"
+  
+  # Only override if fixtures exist (allows graceful fallback)
+  if fixtures_path.exists():
+    # Monkeypatch the setup_paths_and_files function or
+    # set environment variables that configuration.py reads
+    import os
+    os.environ['ORBIT_PROPAGATOR_TEST_DATA'] = str(fixtures_path)
+
+
+@pytest.fixture(scope="session")
+def monkeypatch_session():
+  """Session-scoped monkeypatch fixture."""
+  from _pytest.monkeypatch import MonkeyPatch
+  mp = MonkeyPatch()
+  yield mp
+  mp.undo()
+
+
+@pytest.fixture(scope="session")
+def fixtures_path():
+  """Return path to test fixtures directory."""
+  return Path(__file__).parent / "fixtures"

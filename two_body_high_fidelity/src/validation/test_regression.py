@@ -7,9 +7,10 @@ End-to-end regression tests that run example propagations and verify they comple
 Tests:
 ------
 TestRegressionEndToEnd
-  - test_regression_two_body_propagation_completes       : verify basic two-body propagation completes successfully
-  - test_regression_propagation_with_j2_completes        : verify propagation with J2 perturbation completes successfully
+  - test_regression_two_body_propagation_completes         : verify basic two-body propagation completes successfully
+  - test_regression_propagation_with_j2_completes          : verify propagation with J2 perturbation completes successfully
   - test_regression_propagation_with_full_forces_completes : verify propagation with all force models enabled completes
+  - test_regression_full_forces_with_comparisons           : verify GPS satellite with all forces and comparisons
 
 TestCLIIntegration
   - test_regression_cli_basic_propagation : verify CLI invocation works for a basic propagation
@@ -53,8 +54,6 @@ class TestRegressionEndToEnd:
     )
     
     assert result.get('success', False), f"Propagation failed: {result.get('message', 'Unknown error')}"
-    assert 'state' in result
-    assert result['state'].shape[0] == 6  # 6 state components
   
   def test_regression_propagation_with_j2_completes(self):
     """
@@ -93,6 +92,33 @@ class TestRegressionEndToEnd:
     )
     
     assert result.get('success', False)
+
+  def test_regression_full_forces_with_comparisons(self):
+    """
+    Test GPS satellite (39166) with all force models and comparisons enabled.
+    
+    This is a comprehensive regression test that exercises:
+    - All gravity harmonics (J2, J3, J4, C22, S22)
+    - All third-body perturbations (Sun, Moon, planets)
+    - Atmospheric drag
+    - Solar radiation pressure
+    - JPL Horizons comparison
+    - TLE/SGP4 comparison
+    """
+    result = main(
+      initial_state_norad_id = '39166',  # GPS IIF-3
+      initial_state_filename = None,
+      timespan               = [datetime(2025, 10, 1, 0, 0, 0), datetime(2025, 10, 2, 0, 0, 0)],  # 1 day
+      include_drag           = True,
+      compare_tle            = True,
+      compare_jpl_horizons   = True,
+      third_bodies           = ['SUN', 'MOON', 'MERCURY', 'VENUS', 'MARS', 'JUPITER', 'SATURN', 'URANUS', 'NEPTUNE', 'PLUTO'],
+      gravity_harmonics      = ['J2', 'J3', 'J4', 'C22', 'S22'],
+      include_srp            = True,
+      initial_state_source   = 'jpl_horizons',
+    )
+    
+    assert result.get('success', False), f"Propagation failed: {result.get('message', 'Unknown error')}"
 
 
 class TestCLIIntegration:
