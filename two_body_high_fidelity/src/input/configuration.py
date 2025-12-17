@@ -1,5 +1,6 @@
 import yaml
 import numpy as np
+import os
 
 from pathlib  import Path
 from datetime import datetime
@@ -273,13 +274,7 @@ def build_config(
   delta_time_s = (time_f_dt - time_o_dt).total_seconds()
   
   # Set up paths and files
-  # Note: norad_id and obj_name might be None/placeholder if using custom SV
-  paths = setup_paths_and_files(
-    norad_id   = initial_state_norad_id if initial_state_norad_id else "custom",
-    obj_name   = "custom_object", # Placeholder, updated later if possible
-    time_o_dt  = time_o_dt,
-    time_f_dt  = time_f_dt,
-  )
+  paths = setup_paths_and_files()
 
   # Initialize variables
   obj_props           = {}
@@ -383,12 +378,7 @@ def build_config(
     object_name = obj_props.get('name', 'object_name')
     
     # Update paths with correct name
-    paths = setup_paths_and_files(
-      norad_id   = initial_state_norad_id,
-      obj_name   = object_name,
-      time_o_dt  = time_o_dt,
-      time_f_dt  = time_f_dt,
-    )
+    paths = setup_paths_and_files()
 
   
   return SimpleNamespace(
@@ -436,25 +426,13 @@ def build_config(
   )
 
 
-def setup_paths_and_files(
-  norad_id  : str,
-  obj_name  : str,
-  time_o_dt : datetime,
-  time_f_dt : datetime,
-) -> dict:
+def setup_paths_and_files() -> dict:
   """
   Set up all required folder paths and file names for the propagation.
   
   Input:
   ------
-    norad_id : str
-      NORAD catalog ID of the satellite.
-    obj_name : str
-      Name of the object (e.g., 'ISS').
-    time_o_dt : datetime
-      Initial time as a datetime object.
-    time_f_dt : datetime
-      Final time as a datetime object.
+    None
       
   Output:
   -------
@@ -462,10 +440,17 @@ def setup_paths_and_files(
       A dictionary containing paths to output, data, SPICE kernels,
       Horizons ephemeris folder, TLEs folder, and leap seconds files.
   """
-  # Project and data paths
-  #   Adjusted for location in src/input/configuration.py (depth: src/input/configuration.py -> input -> src -> root)
-  project_root    = Path(__file__).parent.parent.parent
-  data_folderpath = project_root / 'data'
+  # Check for test data override (used by pytest fixtures)
+  test_data_path = os.environ.get('ORBIT_PROPAGATOR_TEST_DATA')
+  
+  if test_data_path:
+    # Use test fixtures
+    data_folderpath = Path(test_data_path)
+    project_root = Path(__file__).parent.parent.parent
+  else:
+    # Normal operation: use project data folder
+    project_root = Path(__file__).parent.parent.parent
+    data_folderpath = project_root / 'data'
   
   # SPICE kernels path
   spice_kernels_folderpath = data_folderpath / 'spice_kernels'
@@ -481,7 +466,7 @@ def setup_paths_and_files(
   jpl_horizons_folderpath = data_folderpath / 'ephems'
   
   # Define output folderpath
-  timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+  timestamp_str        = datetime.now().strftime("%Y%m%d_%H%M%S")
   output_folderpath    = project_root / 'output'
   timestamp_folderpath = output_folderpath / timestamp_str
   figures_folderpath   = timestamp_folderpath / 'figures'
