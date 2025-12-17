@@ -430,9 +430,11 @@ def run_high_fidelity_propagation(
   delta_time_s = (time_f_utc_dt - time_o_utc_dt).total_seconds()
 
   # Determine active zonal harmonics
-  j2_val = 0.0
-  j3_val = 0.0
-  j4_val = 0.0
+  j2_val  = 0.0
+  j3_val  = 0.0
+  j4_val  = 0.0
+  c22_val = 0.0
+  s22_val = 0.0
   active_harmonics = []
   if include_gravity_harmonics:
     if 'J2' in gravity_harmonics_list:
@@ -444,6 +446,12 @@ def run_high_fidelity_propagation(
     if 'J4' in gravity_harmonics_list:
       j4_val = SOLARSYSTEMCONSTANTS.EARTH.J4
       active_harmonics.append('J4')
+    if 'C22' in gravity_harmonics_list:
+      c22_val = SOLARSYSTEMCONSTANTS.EARTH.C22
+      active_harmonics.append('C22')
+    if 'S22' in gravity_harmonics_list:
+      s22_val = SOLARSYSTEMCONSTANTS.EARTH.S22
+      active_harmonics.append('S22')
 
   # Print configuration
   print(f"  Configuration")
@@ -456,9 +464,17 @@ def run_high_fidelity_propagation(
   print(f"        Earth")
   print(f"          Two-Body Point Mass")
   if include_gravity_harmonics:
-    print(f"          Zonal Harmonics : {', '.join(active_harmonics)}")
+    # Separate zonal and tesseral for display
+    zonal_harmonics    = [h for h in active_harmonics if h.startswith('J')]
+    tesseral_harmonics = [h for h in active_harmonics if h.startswith('C') or h.startswith('S')]
+    if zonal_harmonics:
+      print(f"          Zonal Harmonics    : {', '.join(zonal_harmonics)}")
+    else:
+      print(f"          Zonal Harmonics    : None")
+    if tesseral_harmonics:
+      print(f"          Tesseral Harmonics : {', '.join(tesseral_harmonics)}")
   else:
-    print(f"          Zonal Harmonics : None")
+    print(f"          Zonal Harmonics    : None")
   
   if include_third_body:
     print(f"        Third-Body")
@@ -481,6 +497,8 @@ def run_high_fidelity_propagation(
     j2                      = j2_val,
     j3                      = j3_val,
     j4                      = j4_val,
+    c22                     = c22_val,
+    s22                     = s22_val,
     pos_ref                 = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR,
     mass                    = mass,
     enable_drag             = include_drag,

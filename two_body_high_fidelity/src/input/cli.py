@@ -17,7 +17,10 @@ def parse_command_line_arguments(
     args : argparse.Namespace
       Parsed command-line arguments.
   """
-  parser = argparse.ArgumentParser(description="Run high-fidelity orbit propagation.")
+  parser = argparse.ArgumentParser(
+    description = 'High-fidelity orbit propagator',
+    formatter_class = argparse.RawDescriptionHelpFormatter,
+  )
   
   # If no arguments provided, print help and exit
   if len(sys.argv) == 1:
@@ -74,11 +77,10 @@ def parse_command_line_arguments(
   )
   parser.add_argument(
     '--gravity-harmonics',
-    dest    = 'gravity_harmonics',
-    nargs   = '+',
     type    = str,
-    default = None,
-    help    = "Enable gravity harmonics. Options: J2 J3 J4 (zonal). Future: C22 S22 (tesseral).",
+    nargs   = '*',
+    default = [],
+    help    = 'Gravity harmonics to include (e.g., J2 J3 J4 C22 S22). Default: none.',
   )
   parser.add_argument(
     '--include-drag',
