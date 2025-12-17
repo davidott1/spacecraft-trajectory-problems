@@ -4,28 +4,35 @@ Pytest Configuration and Fixtures
 
 Shared fixtures for all validation tests.
 """
+import os
 import pytest
-import numpy as np
-from pathlib import Path
+import numpy    as np
+import spiceypy as spice
 
+from pathlib             import Path
+from _pytest.monkeypatch import MonkeyPatch
 
 @pytest.fixture(scope="session")
 def project_root():
-  """Return the project root directory."""
+  """
+  Return the project root directory
+  """
   return Path(__file__).parent.parent.parent
 
 
 @pytest.fixture(scope="session")
 def spice_kernels_path(project_root):
-  """Return path to SPICE kernels."""
+  """
+  Return path to SPICE kernels
+  """
   return project_root / "data" / "spice_kernels"
 
 
 @pytest.fixture(scope="session")
 def load_spice_kernels(spice_kernels_path):
-  """Load SPICE kernels for tests that need them."""
-  import spiceypy as spice
-  
+  """
+  Load SPICE kernels for tests that need them
+  """
   # Load leap seconds kernel
   lsk_path = spice_kernels_path / "naif0012.tls"
   if lsk_path.exists():
@@ -49,11 +56,13 @@ def load_spice_kernels(spice_kernels_path):
 
 @pytest.fixture
 def leo_initial_state():
-  """Typical LEO initial state for testing."""
+  """
+  Typical LEO initial state for testing
+  """
   return np.array([
-    7000.0e3,    # x [m]
-    0.0,         # y [m]
-    0.0,         # z [m]
+    7000.0e3,    # rx [m]
+    0.0,         # ry [m]
+    0.0,         # rz [m]
     0.0,         # vx [m/s]
     7.5e3,       # vy [m/s]
     0.0,         # vz [m/s]
@@ -62,11 +71,13 @@ def leo_initial_state():
 
 @pytest.fixture
 def meo_initial_state():
-  """Typical MEO initial state (GPS-like) for testing."""
+  """
+  Typical MEO initial state (GPS-like) for testing
+  """
   return np.array([
-    26560.0e3,   # x [m]
-    0.0,         # y [m]
-    0.0,         # z [m]
+    26560.0e3,   # rx [m]
+    0.0,         # ry [m]
+    0.0,         # rz [m]
     0.0,         # vx [m/s]
     3.87e3,      # vy [m/s]
     0.0,         # vz [m/s]
@@ -75,11 +86,13 @@ def meo_initial_state():
 
 @pytest.fixture
 def geo_initial_state():
-  """Typical GEO initial state for testing."""
+  """
+  Typical GEO initial state for testing
+  """
   return np.array([
-    42164.0e3,   # x [m]
-    0.0,         # y [m]
-    0.0,         # z [m]
+    42164.0e3,   # rx [m]
+    0.0,         # ry [m]
+    0.0,         # rz [m]
     0.0,         # vx [m/s]
     3.075e3,     # vy [m/s]
     0.0,         # vz [m/s]
@@ -99,14 +112,14 @@ def test_data_paths(monkeypatch_session):
   if fixtures_path.exists():
     # Monkeypatch the setup_paths_and_files function or
     # set environment variables that configuration.py reads
-    import os
     os.environ['ORBIT_PROPAGATOR_TEST_DATA'] = str(fixtures_path)
 
 
 @pytest.fixture(scope="session")
 def monkeypatch_session():
-  """Session-scoped monkeypatch fixture."""
-  from _pytest.monkeypatch import MonkeyPatch
+  """
+  Session-scoped monkeypatch fixture
+  """
   mp = MonkeyPatch()
   yield mp
   mp.undo()
@@ -114,5 +127,7 @@ def monkeypatch_session():
 
 @pytest.fixture(scope="session")
 def fixtures_path():
-  """Return path to test fixtures directory."""
+  """
+  Return path to test fixtures directory
+  """
   return Path(__file__).parent / "fixtures"

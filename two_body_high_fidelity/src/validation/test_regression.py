@@ -39,6 +39,12 @@ class TestRegressionEndToEnd:
   def test_regression_two_body_propagation_completes(self):
     """
     Test that a basic two-body propagation completes successfully.
+
+    CLI Equivalent:
+    ---------------
+    python -m src.main \
+      --initial-state-norad-id 25544 \
+      --timespan 2025-10-01T00:00:00 2025-10-01T01:00:00
     """
     result = main(
       initial_state_norad_id = '25544',  # ISS
@@ -58,6 +64,13 @@ class TestRegressionEndToEnd:
   def test_regression_propagation_with_j2_completes(self):
     """
     Test that propagation with J2 perturbation completes successfully.
+
+    CLI Equivalent:
+    ---------------
+    python -m src.main \
+      --initial-state-norad-id 25544 \
+      --timespan 2025-10-01T00:00:00 2025-10-01T01:00:00 \
+      --gravity-harmonics J2
     """
     result = main(
       initial_state_norad_id = '25544',
@@ -77,6 +90,16 @@ class TestRegressionEndToEnd:
   def test_regression_propagation_with_full_forces_completes(self):
     """
     Test propagation with all force models enabled.
+
+    CLI Equivalent:
+    ---------------
+    python -m src.main \
+      --initial-state-norad-id 25544 \
+      --timespan 2025-10-01T00:00:00 2025-10-01T01:00:00 \
+      --gravity-harmonics J2 J3 J4 \
+      --third-bodies SUN MOON \
+      --drag \
+      --srp
     """
     result = main(
       initial_state_norad_id = '25544',
@@ -104,6 +127,18 @@ class TestRegressionEndToEnd:
     - Solar radiation pressure
     - JPL Horizons comparison
     - TLE/SGP4 comparison
+
+    CLI Equivalent:
+    ---------------
+    python -m src.main \
+      --initial-state-norad-id 39166 \
+      --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00 \
+      --gravity-harmonics J2 J3 J4 C22 S22 \
+      --third-bodies SUN MOON MERCURY VENUS MARS JUPITER SATURN URANUS NEPTUNE PLUTO \
+      --drag \
+      --srp \
+      --compare-tle \
+      --compare-jpl-horizons
     """
     result = main(
       initial_state_norad_id = '39166',  # GPS IIF-3
@@ -129,6 +164,12 @@ class TestCLIIntegration:
   def test_regression_cli_basic_propagation(self):
     """
     Test that CLI invocation works for a basic propagation.
+
+    CLI Equivalent:
+    ---------------
+    python -m src.main \
+      --initial-state-norad-id 25544 \
+      --timespan 2025-10-01T00:00:00 2025-10-01T00:30:00
     """
     result = subprocess.run(
       [
@@ -136,9 +177,9 @@ class TestCLIIntegration:
         '--initial-state-norad-id', '25544',
         '--timespan', '2025-10-01T00:00:00', '2025-10-01T00:30:00',
       ],
-      capture_output=True,
-      text=True,
-      cwd=str(__file__).rsplit('/src/', 1)[0],  # Project root
+      capture_output = True,
+      text           = True,
+      cwd            = str(__file__).rsplit('/src/', 1)[0],  # Project root
     )
     
     # Check process completed (exit code 0 means success)

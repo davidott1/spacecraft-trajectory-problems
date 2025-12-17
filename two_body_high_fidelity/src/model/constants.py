@@ -152,7 +152,6 @@ class SOLARSYSTEMCONSTANTS:
     
     # Tesseral harmonics (degree 2, order 2)
     # Values from EGM96/EGM2008 gravity models (normalized coefficients)
-    # C22 and S22 represent Earth's equatorial ellipticity
     C22 =  2.43914352e-6                    # C22 tesseral harmonic coefficient (normalized)
     S22 = -1.40016683e-6                    # S22 tesseral harmonic coefficient (normalized)
     
