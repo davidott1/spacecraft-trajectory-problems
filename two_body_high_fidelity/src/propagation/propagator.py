@@ -130,7 +130,7 @@ def propagate_tle(
     teme_pos_vec_arr *= 1000.0
     teme_vel_vec_arr *= 1000.0
 
-    # FrameConverter expects (3, N) for vectorized input.
+    # VectorConverter expects (3, N) for vectorized input.
     teme_pos_vec_arr_T = teme_pos_vec_arr.T # (3, N)
     teme_vel_vec_arr_T = teme_vel_vec_arr.T # (3, N)
     
