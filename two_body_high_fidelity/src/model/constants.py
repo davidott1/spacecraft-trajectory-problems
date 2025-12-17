@@ -150,10 +150,11 @@ class SOLARSYSTEMCONSTANTS:
     J3 = J3_WGS72
     J4 = J4_WGS72
     
-    # Tesseral harmonics (degree 2, order 2)
-    # Values from EGM96/EGM2008 gravity models (normalized coefficients)
-    C22 =  2.43914352e-6                    # C22 tesseral harmonic coefficient (normalized)
-    S22 = -1.40016683e-6                    # S22 tesseral harmonic coefficient (normalized)
+    # Tesseral harmonics (degree 2, order 1 and 2)
+    C21 = -1.86e-10                     # C21 tesseral harmonic coefficient (normalized)
+    S21 = -1.19e-9                      # S21 tesseral harmonic coefficient (normalized) 
+    C22 =  2.43914352e-6                # C22 tesseral harmonic coefficient (normalized)
+    S22 = -1.40016683e-6                # S22 tesseral harmonic coefficient (normalized)
     
     # Rotation rate
     OMEGA = 7.2921150e-5                    # Earth's rotation rate [rad/s]
