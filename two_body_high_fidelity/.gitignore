@@ -12,3 +12,6 @@ __pycache__/
 
 # Ignore generated images
 *.png
+
+# Ignore coverage data
+.coverage
