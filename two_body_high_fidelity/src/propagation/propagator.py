@@ -253,7 +253,7 @@ def propagate_state_numerical_integration(
   dynamics            : Acceleration,
   method              : str                  = 'DOP853', # DOP853 RK45
   rtol                : float                = 1e-12,
-  atol                : float                = 1e-12,
+  atol                : float                = 1e-15,
   dense_output        : bool                 = False,
   t_eval              : Optional[np.ndarray] = None,
   get_coe_time_series : bool                 = False,
@@ -432,6 +432,8 @@ def run_high_fidelity_propagation(
   j2 = 0.0
   j3 = 0.0
   j4 = 0.0
+  j5 = 0.0
+  j6 = 0.0
   c22 = 0.0
   s22 = 0.0
   
@@ -439,6 +441,8 @@ def run_high_fidelity_propagation(
     if 'J2' in gravity_harmonics_list: j2 = SOLARSYSTEMCONSTANTS.EARTH.J2
     if 'J3' in gravity_harmonics_list: j3 = SOLARSYSTEMCONSTANTS.EARTH.J3
     if 'J4' in gravity_harmonics_list: j4 = SOLARSYSTEMCONSTANTS.EARTH.J4
+    if 'J5' in gravity_harmonics_list: j5 = SOLARSYSTEMCONSTANTS.EARTH.J5
+    if 'J6' in gravity_harmonics_list: j6 = SOLARSYSTEMCONSTANTS.EARTH.J6
     if 'C22' in gravity_harmonics_list: c22 = SOLARSYSTEMCONSTANTS.EARTH.C22
     if 'S22' in gravity_harmonics_list: s22 = SOLARSYSTEMCONSTANTS.EARTH.S22
 
@@ -486,6 +490,8 @@ def run_high_fidelity_propagation(
     j2                      = j2,
     j3                      = j3,
     j4                      = j4,
+    j5                      = j5,
+    j6                      = j6,
     c22                     = c22,
     s22                     = s22,
     pos_ref                 = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR,
@@ -531,7 +537,7 @@ def run_high_fidelity_propagation(
 
   print("    Numerical Integration")
   print(f"      Method     : DOP853")
-  print(f"      Tolerances : rtol=1e-12, atol=1e-12")
+  print(f"      Tolerances : rtol=1e-12, atol=1e-15")  # Updated display
   print(f"      Grid       : {len(t_eval_grid)} points (equal-spaced)")
 
   print("\n  Compute")
@@ -545,7 +551,7 @@ def run_high_fidelity_propagation(
     dynamics            = acceleration,
     method              = 'DOP853',
     rtol                = 1e-12,
-    atol                = 1e-12,
+    atol                = 1e-15,
     dense_output        = True,
     t_eval              = t_eval_grid,
     get_coe_time_series = True,
