@@ -131,7 +131,7 @@ def print_paths(
   -------
     None
   """
-  data_folderpath = config.output_folderpath.parent / 'data'
+  data_folderpath = config.spice_kernels_folderpath.parent
   
   print("\nPaths and Files Setup")
   print(f"  Output Folderpath          : {config.output_folderpath}")

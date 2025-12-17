@@ -34,11 +34,19 @@ from src.main import main
 class TestRegressionEndToEnd:
   """
   End-to-end regression tests.
+
+  Usage:
+  ------
+  python -m pytest src/validation/test_regression.py::TestRegressionEndToEnd
   """
   
   def test_regression_two_body_propagation_completes(self):
     """
     Test that a basic two-body propagation completes successfully.
+
+    Usage:
+    ------
+    python -m pytest src/validation/test_regression.py::TestRegressionEndToEnd::test_regression_two_body_propagation_completes -v
 
     CLI Equivalent:
     ---------------
@@ -65,6 +73,10 @@ class TestRegressionEndToEnd:
     """
     Test that propagation with J2 perturbation completes successfully.
 
+    Usage:
+    ------
+    python -m pytest src/validation/test_regression.py::TestRegressionEndToEnd::test_regression_propagation_with_j2_completes -v
+
     CLI Equivalent:
     ---------------
     python -m src.main \
@@ -90,6 +102,10 @@ class TestRegressionEndToEnd:
   def test_regression_propagation_with_full_forces_completes(self):
     """
     Test propagation with all force models enabled.
+
+    Usage:
+    ------
+    python -m pytest src/validation/test_regression.py::TestRegressionEndToEnd::test_regression_propagation_with_full_forces_completes -v
 
     CLI Equivalent:
     ---------------
@@ -128,6 +144,10 @@ class TestRegressionEndToEnd:
     - JPL Horizons comparison
     - TLE/SGP4 comparison
 
+    Usage:
+    ------
+    python -m pytest src/validation/test_regression.py::TestRegressionEndToEnd::test_regression_full_forces_with_comparisons -v
+
     CLI Equivalent:
     ---------------
     python -m src.main \
@@ -159,11 +179,19 @@ class TestRegressionEndToEnd:
 class TestCLIIntegration:
   """
   Integration tests that verify CLI argument parsing works correctly.
+
+  Usage:
+  ------
+  python -m pytest src/validation/test_regression.py::TestCLIIntegration
   """
   
   def test_regression_cli_basic_propagation(self):
     """
     Test that CLI invocation works for a basic propagation.
+
+    Usage:
+    ------
+    python -m pytest src/validation/test_regression.py::TestCLIIntegration::test_regression_cli_basic_propagation -v
 
     CLI Equivalent:
     ---------------
