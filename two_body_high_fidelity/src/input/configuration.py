@@ -278,7 +278,6 @@ def build_config(
 
   # Initialize variables
   obj_props           = {}
-  object_name         = "Unknown"
   custom_state_vector = None
 
   # --- Logic for Custom State Vector ---
