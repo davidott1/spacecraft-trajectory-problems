@@ -92,10 +92,13 @@ two_body_high_fidelity/
     │
     └── validation/              # Test suite
         ├── __init__.py
+        ├── conftest.py          # Pytest configuration and fixtures
+        ├── fixtures/            # Static test data
         ├── test_dynamics.py     # Dynamics model tests
         ├── test_frame_converter.py
         ├── test_orbit_converter.py
-        └── test_propagator.py
+        ├── test_propagator.py
+        └── test_regression.py   # End-to-end regression tests
 ```
 
 ## Installation
@@ -139,7 +142,7 @@ python -m src.main \
   --initial-state-source jpl_horizons \
   --initial-state-norad-id 25544 \
   --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00 \
-  --zonal-harmonics J2 \
+  --gravity-harmonics J2 \
   --compare-jpl-horizons
 ```
 
@@ -158,7 +161,7 @@ Optional Arguments:
   --initial-state-source SOURCE  Initial state source: jpl_horizons, tle, or sv
                                  (default: jpl_horizons)
   --initial-state-filename FILE  YAML file for custom state vector (required if source=sv)
-  --zonal-harmonics J2 J3 J4     Enable zonal harmonics (specify which ones)
+  --gravity-harmonics J2 J3 J4   Enable gravity harmonics (specify which ones)
   --third-bodies sun moon        Enable third-body gravity (specify bodies)
   --drag                         Enable atmospheric drag
   --srp                          Enable solar radiation pressure
@@ -181,7 +184,7 @@ python -m src.main \
   --initial-state-source jpl_horizons \
   --initial-state-norad-id 25544 \
   --timespan 2025-10-01T00:00:00 2025-10-08T00:00:00 \
-  --zonal-harmonics J2 J3 J4 \
+  --gravity-harmonics J2 J3 J4 \
   --third-bodies sun moon \
   --drag \
   --srp \
@@ -195,7 +198,7 @@ python -m src.main \
   --initial-state-source tle \
   --initial-state-norad-id 25544 \
   --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00 \
-  --zonal-harmonics J2
+  --gravity-harmonics J2
 ```
 
 **4. Custom state vector:**
@@ -204,7 +207,7 @@ python -m src.main \
   --initial-state-source sv \
   --initial-state-filename equatorial.yaml \
   --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00 \
-  --zonal-harmonics J2 J3 J4
+  --gravity-harmonics J2 J3 J4
 ```
 
 ### Custom State Vectors
@@ -331,6 +334,7 @@ python -m pytest src/validation/ --cov=src --cov-report=html
 | `test_frame_converter.py` | J2000↔TEME, XYZ↔RIC transformations |
 | `test_orbit_converter.py` | Cartesian↔Keplerian conversions |
 | `test_propagator.py` | Integration and SGP4 propagation |
+| `test_regression.py` | End-to-end regression tests |
 
 ## Dependencies
 
