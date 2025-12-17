@@ -234,6 +234,7 @@ srp               :
 | J2 | Earth oblateness (dominant perturbation for LEO) |
 | J3 | North-south asymmetry |
 | J4 | Higher-order oblateness |
+| C22, S22 | Ellipticity of the equator (tesseral harmonics) |
 
 ### Third-Body Gravity
 
