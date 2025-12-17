@@ -19,6 +19,9 @@ astropy>=5.0
 # Data handling
 pandas>=1.3.0
 
+# HTTP requests (for TLE/Ephemeris downloads)
+requests>=2.25.0
+
 # Configuration file parsing
 pyyaml>=6.0
 
