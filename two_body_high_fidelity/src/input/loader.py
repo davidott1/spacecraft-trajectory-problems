@@ -362,12 +362,12 @@ def get_horizons_ephemeris(
       print(f"               :   ... Downloading {object_name} ({norad_id}) ...", end=" ", flush=True)
       
       try:
-        # Construct command to run the download module
+        # Construct command to run the standalone ephemeris download module
         cmd = [
-          sys.executable, "-m", "src.download.ephems_and_tles",
+          sys.executable, "-m", "src.download.ephems",
           norad_id,
-          desired_time_o_dt.strftime('%Y-%m-%dT%H:%M:%S'),
-          desired_time_f_dt.strftime('%Y-%m-%dT%H:%M:%S'),
+          desired_time_o_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
+          desired_time_f_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
           step
         ]
         subprocess.run(cmd, check=True, capture_output=True, text=True)
@@ -733,46 +733,41 @@ def get_celestrak_tle(
       print(f"               :   ... Downloading {object_name} ({norad_id}) ...", end=" ", flush=True)
       
       try:
-        # Download TLE from Celestrak
-        tle_data = download_tle_from_celestrak(norad_id)
+        # Construct command to run the standalone TLE download module
+        cmd = [
+          sys.executable, "-m", "src.download.tles",
+          norad_id,
+          desired_time_o_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
+          desired_time_f_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
+        ]
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        print("Done")
         
-        if tle_data:
-          # Ensure TLEs folder exists
-          tles_folderpath.mkdir(parents=True, exist_ok=True)
-          
-          # Clean object name for filename: replace spaces and hyphens with underscores
-          object_name_clean = object_name.lower()
-          # Replace spaces and hyphens with underscores
-          object_name_clean = object_name_clean.replace(' ', '_').replace('-', '_')
-          # Remove any other special characters (keep only alphanumeric and underscore)
-          object_name_clean = ''.join(c if c.isalnum() or c == '_' else '_' for c in object_name_clean)
-          # Collapse multiple consecutive underscores into a single underscore
-          while '__' in object_name_clean:
-            object_name_clean = object_name_clean.replace('__', '_')
-          # Strip leading/trailing underscores
-          object_name_clean = object_name_clean.strip('_')
-          
-          # Create filename with timespan search window
-          time_o_str = desired_time_o_dt.strftime('%Y%m%dT%H%M%SZ')
-          time_f_str = desired_time_f_dt.strftime('%Y%m%dT%H%M%SZ')
-          tle_filename = f"celestrak_tle_{norad_id}_{object_name_clean}_{time_o_str}_{time_f_str}.txt"
-          tle_filepath = tles_folderpath / tle_filename
-          
-          # Save TLE to file (3-line format per TLE)
-          with open(tle_filepath, 'w') as f:
-            if tle_data['tle_line_0']:
-              f.write(f"{tle_data['tle_line_0']}\n")
-            f.write(f"{tle_data['tle_line_1']}\n")
-            f.write(f"{tle_data['tle_line_2']}\n")
-          
-          print("Done")
+        # Search again for the downloaded file
+        compatible_file = find_compatible_tle_file(
+          norad_id          = norad_id,
+          tles_folderpath   = tles_folderpath,
+          desired_time_o_dt = desired_time_o_dt,
+          desired_time_f_dt = desired_time_f_dt,
+        )
+        
+        if compatible_file:
+          tle_filepath = compatible_file
         else:
-          print("Failed - No TLE data returned")
+          print("Failed - Downloaded file not found")
           return {
             'success' : False,
-            'message' : f"TLE download failed: No data returned",
+            'message' : f"TLE download completed but file not found",
           }
           
+      except subprocess.CalledProcessError as e:
+        print(f"Error")
+        print(f"               :   ... stderr: {e.stderr}")
+        print(f"               :   ... stdout: {e.stdout}")
+        return {
+          'success' : False,
+          'message' : f"TLE download failed: {e.stderr}",
+        }
       except Exception as e:
         print(f"Error : {e}")
         return {
@@ -913,161 +908,3 @@ def load_tle_file(
       'success' : False,
       'message' : str(e),
     }
-
-
-def download_tle_from_celestrak(
-  norad_id : str,
-) -> Optional[dict]:
-  """
-  Download TLE from Celestrak API.
-  
-  Input:
-  ------
-    norad_id : str
-      NORAD catalog ID.
-      
-  Output:
-  -------
-    result : dict | None
-      Dictionary containing TLE lines if successful, None otherwise.
-  """
-  import urllib.request
-  import urllib.error
-  
-  # Celestrak API URL for single satellite TLE
-  url = f"https://celestrak.org/NORAD/elements/gp.php?CATNR={norad_id}&FORMAT=TLE"
-  
-  try:
-    with urllib.request.urlopen(url, timeout=30) as response:
-      content = response.read().decode('utf-8')
-    
-    lines = [line.strip() for line in content.strip().split('\n') if line.strip()]
-    
-    if len(lines) < 2:
-      return None
-    
-    # Parse the response
-    if len(lines) >= 3 and lines[1].startswith('1 ') and lines[2].startswith('2 '):
-      # 3-line format
-      return {
-        'tle_line_0' : lines[0],
-        'tle_line_1' : lines[1],
-        'tle_line_2' : lines[2],
-      }
-    elif lines[0].startswith('1 ') and lines[1].startswith('2 '):
-      # 2-line format
-      return {
-        'tle_line_0' : "",
-        'tle_line_1' : lines[0],
-        'tle_line_2' : lines[1],
-      }
-    
-    return None
-    
-  except urllib.error.URLError as e:
-    print(f"URL Error: {e}")
-    return None
-  except Exception as e:
-    print(f"Error: {e}")
-    return None
-
-
-def load_tle(norad_id):
-  """
-  Loads TLE data for a specific NORAD ID.
-  First attempts to load from local file, then downloads if not found.
-  
-  Args:
-    norad_id: NORAD catalog ID
-    
-  Returns:
-    tuple: (tle_line1, tle_line2) or None if not found
-  """
-  # Try to load from local file first
-  tle_dir = Path(__file__).parent.parent.parent / "data" / "tles"
-  
-  # Use consistent naming: celestrak_tle_<norad_id>_<object_name>_<epoch>.txt
-  # Since we don't know the object name yet, search for files with the NORAD ID
-  if tle_dir.exists():
-    for tle_file in tle_dir.glob(f"celestrak_tle_{norad_id}_*.txt"):
-      try:
-        with open(tle_file, 'r') as f:
-          lines = f.readlines()
-          # Parse standard 3-line or 2-line TLE format
-          if len(lines) >= 2:
-            # Find the lines starting with "1 " and "2 "
-            line1 = None
-            line2 = None
-            for line in lines:
-              if line.startswith(f"1 {norad_id}"):
-                line1 = line.strip()
-              elif line.startswith(f"2 {norad_id}"):
-                line2 = line.strip()
-            
-            if line1 and line2:
-              print(f"Loaded TLE from file: {tle_file.name}")
-              return (line1, line2)
-      except Exception as e:
-        print(f"Error reading TLE file {tle_file}: {e}")
-  
-  # If not found locally, attempt to download from CelesTrak
-  print(f"TLE not found locally for NORAD ID {norad_id}. Attempting to download from CelesTrak...")
-  
-  try:
-    import requests
-    from sgp4.io import twoline2rv
-    from sgp4.earth_gravity import wgs72
-    from datetime import datetime
-    
-    # Try active satellite catalog first
-    url = f"https://celestrak.org/NORAD/elements/gp.php?CATNR={norad_id}&FORMAT=TLE"
-    response = requests.get(url, timeout=10)
-    
-    if response.status_code == 200 and response.text.strip():
-      lines = response.text.strip().split('\n')
-      if len(lines) >= 2:
-        # Extract object name from line 0 (if present)
-        object_name = lines[0].strip() if len(lines) >= 3 else f"object_{norad_id}"
-        # Clean object name for filename (remove special chars, spaces -> underscores)
-        object_name_clean = object_name.lower()
-        object_name_clean = ''.join(c if c.isalnum() or c in '-_' else '_' for c in object_name_clean)
-        object_name_clean = '_'.join(object_name_clean.split())  # collapse multiple underscores
-        
-        # Find TLE lines
-        line1 = None
-        line2 = None
-        for line in lines:
-          if line.startswith(f"1 {norad_id}"):
-            line1 = line.strip()
-          elif line.startswith(f"2 {norad_id}"):
-            line2 = line.strip()
-        
-        if line1 and line2:
-          # Parse epoch from TLE line 1 (columns 19-32)
-          epoch_str = line1[18:32]
-          year = int(epoch_str[:2])
-          year = 2000 + year if year < 50 else 1900 + year
-          day_of_year = float(epoch_str[2:])
-          epoch_date = datetime(year, 1, 1) + pd.Timedelta(days=day_of_year - 1)
-          epoch_iso = epoch_date.strftime('%Y%m%dT%H%M%SZ')
-          
-          # Save to file with consistent naming
-          tle_filename = f"celestrak_tle_{norad_id}_{object_name_clean}_{epoch_iso}.txt"
-          tle_path = tle_dir / tle_filename
-          tle_dir.mkdir(parents=True, exist_ok=True)
-          
-          with open(tle_path, 'w') as f:
-            if len(lines) >= 3:
-              f.write(f"{lines[0]}\n")  # Object name
-            f.write(f"{line1}\n")
-            f.write(f"{line2}\n")
-          
-          print(f"Downloaded and saved TLE to: {tle_filename}")
-          return (line1, line2)
-    
-    print(f"Could not retrieve TLE for NORAD ID {norad_id}")
-    return None
-    
-  except Exception as e:
-    print(f"Error downloading TLE: {e}")
-    return None

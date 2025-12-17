@@ -4,10 +4,10 @@ Download ephemeris and TLE data for any satellite by NORAD ID
 Usage:
   python -m src.download.ephems_and_tles <norad_id> <start_time> <end_time> [step]
   
-Example:
+Examples:
   python -m src.download.ephems_and_tles 25544 "2025-10-01" "2025-10-08"
   python -m src.download.ephems_and_tles 25544 "2025-10-01T00:00:00Z" "2025-10-02T00:00:00Z" 1m
-  python -m src.download.ephems_and_tles 25544 "2025-10-01 00:00" "2025-10-08 00:00"
+  python -m src.download.ephems_and_tles 39166 "2025-10-01" "2025-10-02" 5m
 """
 
 import requests
@@ -40,6 +40,7 @@ def get_satellite_name(
 ) -> str:
   """
   Get satellite name from NORAD ID or return generic name.
+  Names are formatted with underscores for consistent file naming.
   
   Input:
   ------
@@ -49,7 +50,7 @@ def get_satellite_name(
   Output:
   -------
   str:
-    Satellite name.
+    Satellite name with underscores.
   """
   known_satellites = {
     25544: 'iss',
@@ -57,10 +58,10 @@ def get_satellite_name(
     27424: 'aqua',
     26407: 'gps_iir_5',
     38833: 'gps_iif_2',
-    39166: 'gps_iif_3',
-    41866: 'goes16',
-    43226: 'goes17',
-    51850: 'goes18',
+    39166: 'gps_iif_3_navstar_68',  # Full name with underscores
+    41866: 'goes_16',
+    43226: 'goes_17',
+    51850: 'goes_18',
   }
   return known_satellites.get(norad_id, f'sat{norad_id}')
 
@@ -356,13 +357,15 @@ def download_horizons_ephemeris(
   return vectors
 
 def download_ephems_and_tles(
-  norad_id   : int,
-  start_time : datetime,
-  end_time   : datetime,
-  step       : str = '1h',
+  norad_id      : int,
+  start_time    : datetime,
+  end_time      : datetime,
+  step          : str = '1h',
+  download_ephem: bool = True,
+  download_tle  : bool = True,
 ) -> Dict:
   """
-  Download both HORIZONS ephemeris and TLE history for a satellite.
+  Download HORIZONS ephemeris and/or TLE data for a satellite.
   
   Input:
   ------
@@ -374,6 +377,10 @@ def download_ephems_and_tles(
     End time.
   step : str
     Time step for ephemeris (default: '1h').
+  download_ephem : bool
+    Whether to download ephemeris data (default: True).
+  download_tle : bool
+    Whether to download TLE data (default: True).
   
   Output:
   -------
@@ -388,9 +395,12 @@ def download_ephems_and_tles(
   start_timestamp_str = start_time.strftime('%Y%m%dT%H%M%SZ')
   end_timestamp_str   = end_time.strftime('%Y%m%dT%H%M%SZ')
   
-  # Define output file paths
-  horizons_file    = EPHEM_OUTPUT_DIR / f'horizons_ephem_{norad_id}_{sat_name}_{start_timestamp_str}_{end_timestamp_str}_{step}.csv'
-  tle_history_file = TLE_OUTPUT_DIR / f'celestrak_tles_{norad_id}_{sat_name}_{start_timestamp_str}_{end_timestamp_str}.txt'
+  # Define output file paths with consistent naming
+  # Ephemeris: horizons_ephem_<norad_id>_<name>_<start>_<end>_<step>.csv
+  horizons_file = EPHEM_OUTPUT_DIR / f'horizons_ephem_{norad_id}_{sat_name}_{start_timestamp_str}_{end_timestamp_str}_{step}.csv'
+  
+  # TLE: celestrak_tle_<norad_id>_<name>_<start>_<end>.txt
+  tle_file = TLE_OUTPUT_DIR / f'celestrak_tle_{norad_id}_{sat_name}_{start_timestamp_str}_{end_timestamp_str}.txt'
   
   horizons_status = "skipped"
   tle_status      = "skipped"
@@ -402,59 +412,79 @@ def download_ephems_and_tles(
   print(f"Satellite NORAD ID          : {norad_id}")
   print(f"Satellite name              : {sat_name.upper()}")
   print(f"Time range                  : {start_time} to {end_time}")
-  print(f"Ephemeris output folderpath : {EPHEM_OUTPUT_DIR}")
-  print(f"TLEs output folderpath      : {TLE_OUTPUT_DIR}")
+  print(f"Download ephemeris          : {download_ephem}")
+  print(f"Download TLE                : {download_tle}")
   
-  # Download HORIZONS ephemeris
-  print("\n" + "="*80)
-  print("PROCESSING HORIZONS EPHEMERIS")
-  print("="*80)
-  if horizons_file.exists():
-    print(f"HORIZONS file already exists, skipping download:\n  {horizons_file}")
-    horizons_data = None # Data not loaded, just confirming file exists
-  else:
-    horizons_data = download_horizons_ephemeris(
-      norad_id    = norad_id,
-      start_time  = start_time,
-      end_time    = end_time,
-      step        = step,
-      output_file = horizons_file
-    )
-    horizons_status = "downloaded"
+  if download_ephem:
+    print(f"Ephemeris output folderpath : {EPHEM_OUTPUT_DIR}")
+  if download_tle:
+    print(f"TLE output folderpath       : {TLE_OUTPUT_DIR}")
   
-  # Download TLE history
-  print("\n" + "="*80)
-  print("PROCESSING TLE HISTORY")
-  print("="*80)
-  if tle_history_file.exists():
-    print(f"TLE history file already exists, skipping download:\n  {tle_history_file}")
-    tle_history = None # Data not loaded, just confirming file exists
-  else:
-    try:
-      tle_history = download_historical_tles(
+  horizons_data = None
+  tle_data = None
+  
+  # Download HORIZONS ephemeris if requested
+  if download_ephem:
+    print("\n" + "="*80)
+    print("PROCESSING HORIZONS EPHEMERIS")
+    print("="*80)
+    if horizons_file.exists():
+      print(f"HORIZONS file already exists, skipping download:\n  {horizons_file}")
+    else:
+      horizons_data = download_horizons_ephemeris(
         norad_id    = norad_id,
         start_time  = start_time,
         end_time    = end_time,
-        output_file = tle_history_file
+        step        = step,
+        output_file = horizons_file
       )
-      tle_status = "downloaded"
-    except RuntimeError as e:
-      print(f"WARNING: TLE download skipped - {e}")
-      tle_history = None
-      tle_status = "skipped (no credentials)"
+      horizons_status = "downloaded"
+  
+  # Download TLE if requested
+  if download_tle:
+    print("\n" + "="*80)
+    print("PROCESSING TLE")
+    print("="*80)
+    if tle_file.exists():
+      print(f"TLE file already exists, skipping download:\n  {tle_file}")
+    else:
+      try:
+        # Try to download current TLE from Celestrak
+        line1, line2, epoch_jd = download_tle_for_satellite(
+          norad_id    = norad_id,
+          output_file = None,  # Don't save yet, we'll add name line
+        )
+        
+        # Save with object name as first line (3-line format)
+        with open(tle_file, 'w') as f:
+          # Write object name (uppercase with spaces/hyphens)
+          object_name = sat_name.upper().replace('_', ' ')
+          f.write(f"{object_name}\n")
+          f.write(f"{line1}\n")
+          f.write(f"{line2}\n")
+        
+        print(f"  Saved TLE to: {tle_file}")
+        tle_status = "downloaded"
+        tle_data = {'line1': line1, 'line2': line2, 'epoch_jd': epoch_jd}
+        
+      except RuntimeError as e:
+        print(f"WARNING: TLE download failed - {e}")
+        tle_status = "failed"
   
   print("\n" + "="*80)
   print("PROCESSING COMPLETE")
   print("="*80)
-  print(f"HORIZONS file    : {horizons_status}")
-  print(f"TLE history file : {tle_status}")
+  if download_ephem:
+    print(f"HORIZONS file : {horizons_status}")
+  if download_tle:
+    print(f"TLE file      : {tle_status}")
   print()
   
   return {
-    'horizons_file'    : horizons_file,
-    'tle_history_file' : tle_history_file,
+    'horizons_file'    : horizons_file if download_ephem else None,
+    'tle_file'         : tle_file if download_tle else None,
     'horizons_data'    : horizons_data,
-    'tle_history'      : tle_history,
+    'tle_data'         : tle_data,
     'sat_name'         : sat_name,
     'norad_id'         : norad_id,
   }
@@ -475,10 +505,10 @@ def parse_command_line_args() -> Tuple[int, datetime, datetime, str]:
   """
   if len(sys.argv) < 4:
     print("Usage: python -m src.download.ephems_and_tles <norad_id> <start_time> <end_time> [step]")
-    print("\nExample:")
+    print("\nExamples:")
     print('  python -m src.download.ephems_and_tles 25544 "2025-10-01" "2025-10-08"')
     print('  python -m src.download.ephems_and_tles 25544 "2025-10-01T00:00:00Z" "2025-10-02T00:00:00Z" 1m')
-    print('  python -m src.download.ephems_and_tles 25544 "2025-10-01 00:00" "2025-10-08 00:00"')
+    print('  python -m src.download.ephems_and_tles 39166 "2025-10-01" "2025-10-02" 5m')
     print("\nTime format (UTC assumed):")
     print("  YYYY-MM-DD")
     print("  YYYY-MM-DD HH:MM")
@@ -488,6 +518,7 @@ def parse_command_line_args() -> Tuple[int, datetime, datetime, str]:
     print("  YYYY-MM-DDTHH:MM:SSZ")
     print("\nCommon satellites:")
     print("  25544 - ISS")
+    print("  39166 - GPS IIF-3 (NAVSTAR 68)")
     print("  41866 - GOES-16")
     print("  43226 - GOES-17")
     print("  51850 - GOES-18")
@@ -499,10 +530,9 @@ def parse_command_line_args() -> Tuple[int, datetime, datetime, str]:
   # Parse times
   start_str = sys.argv[2]
   end_str   = sys.argv[3]
-  try:
-    step = sys.argv[4]
-  except IndexError:
-    step = '1h'
+  
+  # Get step if provided
+  step = sys.argv[4] if len(sys.argv) > 4 else '1h'
   
   try:
     start_time = parse_time(start_str)
@@ -537,4 +567,5 @@ def parse_command_line_args() -> Tuple[int, datetime, datetime, str]:
 
 if __name__ == "__main__":
   norad_id, start_time, end_time, step = parse_command_line_args()
-  download_ephems_and_tles(norad_id, start_time, end_time, step)
+  # Always download both when using the combined module
+  download_ephems_and_tles(norad_id, start_time, end_time, step, download_ephem=True, download_tle=True)
