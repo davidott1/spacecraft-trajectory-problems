@@ -31,17 +31,29 @@ def spice_kernels_path(project_root):
 @pytest.fixture(scope="session")
 def load_spice_kernels(spice_kernels_path):
   """
-  Load SPICE kernels for tests that need them
+  Load SPICE kernels for tests that need them.
+  
+  Download URLs:
+  --------------
+  - de440.bsp (High Precision): https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de440.bsp
+  - de440s.bsp (Small/Test):    https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de440s.bsp
+  - naif0012.tls (Leap Secs):   https://naif.jpl.nasa.gov/pub/naif/generic_kernels/lsk/naif0012.tls
+  - pck00010.tpc (Constants):   https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/pck00010.tpc
   """
+  
   # Load leap seconds kernel
   lsk_path = spice_kernels_path / "naif0012.tls"
   if lsk_path.exists():
     spice.furnsh(str(lsk_path))
   
   # Load planetary ephemeris
-  spk_path = spice_kernels_path / "de440.bsp"
-  if spk_path.exists():
-    spice.furnsh(str(spk_path))
+  spk_path_small = spice_kernels_path / "de440s.bsp"
+  if spk_path_small.exists():
+    spice.furnsh(str(spk_path_small))
+  else:
+    raise FileNotFoundError(
+      f"SPICE ephemeris kernel not found. Expected 'de440s.bsp' in {spice_kernels_path}"
+    )
   
   # Load planetary constants
   pck_path = spice_kernels_path / "pck00010.tpc"
