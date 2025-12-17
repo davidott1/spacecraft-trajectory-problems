@@ -1,6 +1,7 @@
 # Data directories
-data/*
-!data/state_vectors/
+data/ephems/
+data/spice_kernels/
+data/tles/
 
 # Output directory
 output/
@@ -11,10 +12,3 @@ __pycache__/
 
 # Ignore generated images
 *.png
-
-# Coverage files
-.coverage
-htmlcov/
-
-# Virtual Environment
-venv/
