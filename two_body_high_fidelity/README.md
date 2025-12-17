@@ -116,18 +116,12 @@ two_body_high_fidelity/
    cd spacecraft-trajectory-problems/two_body_high_fidelity
    ```
 
-2. **Create a virtual environment** (recommended):
-   ```bash
-   python -m venv venv
-   source venv/bin/activate
-   ```
-
-3. **Install dependencies**:
+2. **Install dependencies**:
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Download SPICE kernels**:
+3. **Download SPICE kernels**:
    
    Download and place in `data/spice_kernels/`:
    - **DE440 ephemeris**: `de440.bsp` from [NAIF](https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/)
