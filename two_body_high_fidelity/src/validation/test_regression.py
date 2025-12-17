@@ -22,10 +22,9 @@ Note:
 -----
   These tests require SPICE kernels and JPL Horizons ephemeris data to be available.
 """
-import pytest
 import subprocess
 import sys
-import numpy as np
+
 from datetime import datetime
 
 from src.main import main
