@@ -15,6 +15,7 @@ A Python-based high-fidelity orbital mechanics propagation tool for Earth-orbiti
   - [Custom State Vectors](#custom-state-vectors)
 - [Force Models](#force-models)
 - [Data Sources](#data-sources)
+- [Data Download Tools](#data-download-tools)
 - [Output](#output)
 - [Testing](#testing)
 - [Dependencies](#dependencies)
@@ -277,6 +278,83 @@ Download TLEs from [CelesTrak](https://celestrak.org/):
 Required kernels in `data/spice_kernels/`:
 - `de440.bsp` - Planetary ephemerides
 - `naif0012.tls` - Leap seconds
+
+## Data Download Tools
+
+The project includes automated download scripts for ephemeris and TLE data. These tools can fetch data directly from JPL Horizons and CelesTrak without manual browsing.
+
+### Download Both Ephemeris and TLE
+
+```bash
+python -m src.download.ephems_and_tles <norad_id> <start_time> <end_time> [step]
+```
+
+Example:
+```bash
+python -m src.download.ephems_and_tles 25544 "2025-10-01T00:00:00Z" "2025-10-02T00:00:00Z" 1m
+```
+
+### Download Ephemeris Only
+
+```bash
+python -m src.download.ephems <norad_id> <start_time> <end_time> [step]
+```
+
+Example:
+```bash
+python -m src.download.ephems 25544 "2025-10-01T00:00:00Z" "2025-10-02T00:00:00Z" 5m
+```
+
+### Download TLE Only
+
+```bash
+python -m src.download.tles <norad_id> <start_time> <end_time>
+```
+
+Example:
+```bash
+python -m src.download.tles 25544 "2025-10-01T00:00:00Z" "2025-10-02T00:00:00Z"
+```
+
+### Download Parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `norad_id` | NORAD catalog ID (e.g., 25544 for ISS) |
+| `start_time` | Start time in ISO format (YYYY-MM-DDTHH:MM:SSZ) |
+| `end_time` | End time in ISO format |
+| `step` | Time step for ephemeris (e.g., 1m, 5m, 1h) - ephemeris only |
+
+### Automatic Download During Execution
+
+The main program will automatically prompt to download missing data when needed:
+- If you specify `--compare-jpl-horizons` but ephemeris data is missing, it will offer to download
+- If you specify `--initial-state-source tle` but TLE data is missing, it will offer to download
+
+### Supported Objects
+
+The propagator currently supports the following satellites, with pre-configured mass and drag/SRP parameters:
+
+| Satellite | NORAD ID | Orbit Type | Description |
+|-----------|----------|------------|-------------|
+| ISS | 25544 | LEO | International Space Station |
+| Terra | 25994 | LEO | Earth observation satellite |
+| Aqua | 27424 | LEO | Earth observation satellite |
+| GPS BIIRM-5 | 26407 | MEO | NAVSTAR-48 (PRN 31) |
+| GPS IIF-2 | 38833 | MEO | NAVSTAR-67 |
+| GPS IIF-3 | 39166 | MEO | NAVSTAR-68 |
+| GOES-16 | 41866 | GEO | Geostationary weather satellite (GOES-R) |
+| GOES-17 | 43226 | GEO | Geostationary weather satellite (GOES-S) |
+| GOES-18 | 51850 | GEO | Geostationary weather satellite (GOES-T) |
+
+These objects are defined in `data/supported_objects.yaml` with their physical properties. To add support for additional satellites, update this configuration file with the appropriate NORAD ID, mass, and drag/SRP parameters.
+
+### Downloaded File Locations
+
+- **Ephemeris files**: Saved to `data/ephems/` with naming convention:
+  - `horizons_ephem_<norad_id>_<name>_<start>_<end>_<step>.csv`
+- **TLE files**: Saved to `data/tles/` with naming convention:
+  - `celestrak_tle_<norad_id>_<name>_<start>_<end>.txt`
 
 ## Output
 
