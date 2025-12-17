@@ -147,6 +147,10 @@ class TwoBodyGravity:
         J3 harmonic coefficient for oblateness
       j4 : float
         J4 harmonic coefficient for oblateness
+      j5 : float
+        J5 harmonic coefficient for oblateness
+      j6 : float
+        J6 harmonic coefficient for oblateness
       c22 : float
         C22 tesseral harmonic coefficient
       s22 : float
@@ -163,6 +167,8 @@ class TwoBodyGravity:
     self.j2      = j2
     self.j3      = j3
     self.j4      = j4
+    self.j5      = j5
+    self.j6      = j6
     self.c22     = c22
     self.s22     = s22
   
@@ -388,6 +394,98 @@ class TwoBodyGravity:
     acc_vec[2] = factor * pos_z * (5.0 - 70.0 * term_common / 3.0 + 21.0 * term_common**2)
     
     return acc_vec
+  
+  def oblate_j5(
+    self,
+    time    : float,
+    pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    J5 oblateness perturbation
+    
+    Input:
+    ------
+      time : float
+        Current time [s]
+      pos_vec : np.ndarray
+        Position vector [m] in Inertial frame (J2000).
+    
+    Output:
+    -------
+      acc_vec : np.ndarray
+        Acceleration vector [m/s²]
+    
+    Notes:
+    ------
+      See notes for oblate_j2 regarding frame assumptions.
+    """
+    if self.j5 == 0.0:
+      return np.zeros(3)
+    
+    pos_x, pos_y, pos_z = pos_vec[0], pos_vec[1], pos_vec[2]
+    
+    pos_mag       = np.linalg.norm(pos_vec)
+    pos_mag_pwr2  = pos_mag**2
+    pos_mag_pwr11 = pos_mag_pwr2**5 * pos_mag
+    
+    z_hat       = pos_z / pos_mag
+    z_hat_pwr2 = z_hat**2
+    z_hat_pwr4 = z_hat_pwr2**2
+    
+    factor = 1.875 * self.j5 * self.gp * self.pos_ref**5 / pos_mag_pwr11
+    
+    acc_vec    = np.zeros(3)
+    acc_vec[0] = factor * pos_x * z_hat * (3.0 - 30.0 * z_hat_pwr2 + 35.0 * z_hat_pwr4)
+    acc_vec[1] = factor * pos_y * z_hat * (3.0 - 30.0 * z_hat_pwr2 + 35.0 * z_hat_pwr4)
+    acc_vec[2] = factor * pos_z * (3.0 - 30.0 * z_hat_pwr2 + 35.0 * z_hat_pwr4 - 0.6)
+    
+    return acc_vec
+  
+  def oblate_j6(
+    self,
+    time    : float,
+    pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    J6 oblateness perturbation
+    
+    Input:
+    ------
+      time : float
+        Current time [s]
+      pos_vec : np.ndarray
+        Position vector [m] in Inertial frame (J2000).
+    
+    Output:
+    -------
+      acc_vec : np.ndarray
+        Acceleration vector [m/s²]
+    
+    Notes:
+    ------
+      See notes for oblate_j2 regarding frame assumptions.
+    """
+    if self.j6 == 0.0:
+      return np.zeros(3)
+    
+    pos_x, pos_y, pos_z = pos_vec[0], pos_vec[1], pos_vec[2]
+    
+    pos_mag       = np.linalg.norm(pos_vec)
+    pos_mag_pwr2  = pos_mag**2
+    pos_mag_pwr13 = pos_mag_pwr2**6 * pos_mag
+    
+    z_hat      = pos_z / pos_mag
+    z_hat_pwr2 = z_hat**2
+    z_hat_pwr3 = z_hat * z_hat_pwr2
+    
+    factor = 2.1875 * self.j6 * self.gp * self.pos_ref**6 / pos_mag_pwr13
+    
+    acc_vec    = np.zeros(3)
+    acc_vec[0] = factor * pos_x * (1.0 - 21.0 * z_hat +  63.0 * z_hat_pwr2 - 63.0 * z_hat_pwr3)
+    acc_vec[1] = factor * pos_y * (1.0 - 21.0 * z_hat +  63.0 * z_hat_pwr2 - 63.0 * z_hat_pwr3)
+    acc_vec[2] = factor * pos_z * (7.0 - 63.0 * z_hat + 126.0 * z_hat_pwr2 - 63.0 * z_hat_pwr3)
+    
+    return acc_vec
     
 
 class ThirdBodyGravity:
@@ -545,6 +643,8 @@ class Gravity:
       j2                      : float = 0.0,
       j3                      : float = 0.0,
       j4                      : float = 0.0,
+      j5                      : float = 0.0,
+      j6                      : float = 0.0,
       c22                     : float = 0.0,
       s22                     : float = 0.0,
       pos_ref                 : float = 0.0,
@@ -564,6 +664,10 @@ class Gravity:
           J3 harmonic coefficient for oblateness.
         j4 : float
           J4 harmonic coefficient for oblateness.
+        j5 : float
+          J5 harmonic coefficient for oblateness.
+        j6 : float
+          J6 harmonic coefficient for oblateness.
         c22 : float
           C22 tesseral harmonic coefficient.
         s22 : float
@@ -585,6 +689,8 @@ class Gravity:
         j2      = j2,
         j3      = j3,
         j4      = j4,
+        j5      = j5,
+        j6      = j6,
         c22     = c22,
         s22     = s22,
         pos_ref = pos_ref,
@@ -625,10 +731,12 @@ class Gravity:
       # Two-body point mass
       acc_vec += self.two_body.point_mass(pos_vec)
       
-      # Two-body oblateness (J2, J3, J4)
+      # Two-body oblateness (J2, J3, J4, J5, J6)
       acc_vec += self.two_body.oblate_j2(time, pos_vec)
       acc_vec += self.two_body.oblate_j3(time, pos_vec)
       acc_vec += self.two_body.oblate_j4(time, pos_vec)
+      acc_vec += self.two_body.oblate_j5(time, pos_vec)
+      acc_vec += self.two_body.oblate_j6(time, pos_vec)
       
       # Two-body tesseral (C22, S22)
       acc_vec += self.two_body.tesseral_22(time, pos_vec)
@@ -934,7 +1042,7 @@ class Acceleration:
     
     where:
       gravity = two_body_point_mass + third_body_point_mass + 
-                two_body_oblate (J2, J3, J4) + relativity (future)
+                two_body_oblate (J2, J3, J4, J5, J6) + relativity (future)
     """
     
     def __init__(
@@ -943,6 +1051,8 @@ class Acceleration:
       j2                      : float = 0.0,
       j3                      : float = 0.0,
       j4                      : float = 0.0,
+      j5                      : float = 0.0,
+      j6                      : float = 0.0,
       c22                     : float = 0.0,
       s22                     : float = 0.0,
       pos_ref                 : float = 0.0,
@@ -969,6 +1079,10 @@ class Acceleration:
           J3 harmonic coefficient for oblateness
         j4 : float
           J4 harmonic coefficient for oblateness
+        j5 : float
+          J5 harmonic coefficient for oblateness
+        j6 : float
+          J6 harmonic coefficient for oblateness
         c22 : float
           C22 tesseral harmonic coefficient
         s22 : float
@@ -988,7 +1102,7 @@ class Acceleration:
         third_body_bodies : list of str
           Which bodies to include (default: ['sun', 'moon'])
         enable_srp : bool
-          Enable solar radiation pressure (not yet implemented)
+          Enable solar radiation pressure
         cr : float
           Radiation pressure coefficient
         area_srp : float
@@ -998,12 +1112,14 @@ class Acceleration:
       -------
         None
       """
-        # Create acceleration component instances
+      # Create acceleration component instances
       self.gravity = Gravity(
         gp                      = gp,
         j2                      = j2,
         j3                      = j3,
         j4                      = j4,
+        j5                      = j5,
+        j6                      = j6,
         c22                     = c22,
         s22                     = s22,
         pos_ref                 = pos_ref,
