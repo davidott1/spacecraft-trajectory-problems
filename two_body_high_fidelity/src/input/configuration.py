@@ -258,9 +258,10 @@ def build_config(
     initial_state_source,
   )
   
-  # Handle gravity harmonics logic (still uses zonal internally for now)
+  # Handle gravity harmonics logic
+  # Normalize harmonic names to uppercase
   include_gravity_harmonics = gravity_harmonics is not None and len(gravity_harmonics) > 0
-  gravity_harmonics_list    = gravity_harmonics if gravity_harmonics is not None else []
+  gravity_harmonics_list    = [h.upper() for h in gravity_harmonics] if gravity_harmonics is not None else []
 
   # Handle third bodies logic
   include_third_body = third_bodies is not None and len(third_bodies) > 0
