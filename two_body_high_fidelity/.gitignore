@@ -15,3 +15,6 @@ __pycache__/
 
 # Ignore coverage data
 .coverage
+.pytest_cache/
+.env
+.vscode/
