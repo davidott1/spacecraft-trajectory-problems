@@ -428,29 +428,19 @@ def run_high_fidelity_propagation(
   time_et_f = utc_to_et(time_f_utc_dt)
   delta_time_s = (time_f_utc_dt - time_o_utc_dt).total_seconds()
 
-  # Determine active zonal harmonics
-  j2_val  = 0.0
-  j3_val  = 0.0
-  j4_val  = 0.0
-  c22_val = 0.0
-  s22_val = 0.0
-  active_harmonics = []
-  if include_gravity_harmonics:
-    if 'J2' in gravity_harmonics_list:
-      j2_val = SOLARSYSTEMCONSTANTS.EARTH.J2
-      active_harmonics.append('J2')
-    if 'J3' in gravity_harmonics_list:
-      j3_val = SOLARSYSTEMCONSTANTS.EARTH.J3
-      active_harmonics.append('J3')
-    if 'J4' in gravity_harmonics_list:
-      j4_val = SOLARSYSTEMCONSTANTS.EARTH.J4
-      active_harmonics.append('J4')
-    if 'C22' in gravity_harmonics_list:
-      c22_val = SOLARSYSTEMCONSTANTS.EARTH.C22
-      active_harmonics.append('C22')
-    if 'S22' in gravity_harmonics_list:
-      s22_val = SOLARSYSTEMCONSTANTS.EARTH.S22
-      active_harmonics.append('S22')
+  # Configure gravity harmonics
+  j2 = 0.0
+  j3 = 0.0
+  j4 = 0.0
+  c22 = 0.0
+  s22 = 0.0
+  
+  if include_gravity_harmonics and gravity_harmonics_list:
+    if 'J2' in gravity_harmonics_list: j2 = SOLARSYSTEMCONSTANTS.EARTH.J2
+    if 'J3' in gravity_harmonics_list: j3 = SOLARSYSTEMCONSTANTS.EARTH.J3
+    if 'J4' in gravity_harmonics_list: j4 = SOLARSYSTEMCONSTANTS.EARTH.J4
+    if 'C22' in gravity_harmonics_list: c22 = SOLARSYSTEMCONSTANTS.EARTH.C22
+    if 'S22' in gravity_harmonics_list: s22 = SOLARSYSTEMCONSTANTS.EARTH.S22
 
   # Print configuration
   print(f"  Configuration")
@@ -464,8 +454,8 @@ def run_high_fidelity_propagation(
   print(f"          Two-Body Point Mass")
   if include_gravity_harmonics:
     # Separate zonal and tesseral for display
-    zonal_harmonics    = [h for h in active_harmonics if h.startswith('J')]
-    tesseral_harmonics = [h for h in active_harmonics if h.startswith('C') or h.startswith('S')]
+    zonal_harmonics    = [h for h in gravity_harmonics_list if h.startswith('J')]
+    tesseral_harmonics = [h for h in gravity_harmonics_list if h.startswith('C') or h.startswith('S')]
     if zonal_harmonics:
       print(f"          Zonal Harmonics    : {', '.join(zonal_harmonics)}")
     else:
@@ -491,13 +481,13 @@ def run_high_fidelity_propagation(
     print(f"        Parameters : Cr={cr}, Area_SRP={area_srp} m²")
 
   # Initialize acceleration model
-  acceleration_model = Acceleration(
+  acceleration = Acceleration(
     gp                      = SOLARSYSTEMCONSTANTS.EARTH.GP,
-    j2                      = j2_val,
-    j3                      = j3_val,
-    j4                      = j4_val,
-    c22                     = c22_val,
-    s22                     = s22_val,
+    j2                      = j2,
+    j3                      = j3,
+    j4                      = j4,
+    c22                     = c22,
+    s22                     = s22,
     pos_ref                 = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR,
     mass                    = mass,
     enable_drag             = include_drag,
@@ -552,7 +542,7 @@ def run_high_fidelity_propagation(
     initial_state       = initial_state,
     time_o              = time_et_o,
     time_f              = time_et_f,
-    dynamics            = acceleration_model,
+    dynamics            = acceleration,
     method              = 'DOP853',
     rtol                = 1e-12,
     atol                = 1e-12,
