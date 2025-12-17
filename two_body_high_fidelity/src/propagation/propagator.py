@@ -19,7 +19,6 @@ from src.model.constants       import SOLARSYSTEMCONSTANTS
 from src.model.time_converter  import utc_to_et
 from src.model.frame_converter import VectorConverter
 from src.utility.tle_helper    import modify_tle_bstar, get_tle_satellite_and_tle_epoch
-from src.utility.time_helper   import format_time_offset
 
 
 def propagate_tle(
