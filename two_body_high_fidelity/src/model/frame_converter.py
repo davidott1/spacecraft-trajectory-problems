@@ -187,13 +187,13 @@ class VectorConverter:
   def teme_to_j2000(
     teme_pos_vec : np.ndarray,
     teme_vel_vec : np.ndarray,
-    jd_utc       : Union[float, np.ndarray],
+    time_jd_utc  : Union[float, np.ndarray],
     units_pos    : str = 'm',
     units_vel    : str = 'm/s'
   ) -> tuple[np.ndarray, np.ndarray]:
     """
     Convert TEME (True Equator Mean Equinox) to J2000/GCRS using astropy.
-    Supports vectorized inputs (3xN arrays) if jd_utc is an array of length N or scalar.
+    Supports vectorized inputs (3xN arrays) if time_jd_utc is an array of length N or scalar.
     
     Input:
     ------
@@ -201,7 +201,7 @@ class VectorConverter:
         Position in TEME frame [m]. Shape (3,) or (3, N).
       teme_vel_vec : np.ndarray
         Velocity in TEME frame [m/s]. Shape (3,) or (3, N).
-      jd_utc : float | np.ndarray
+      time_jd_utc : float | np.ndarray
         Julian date in UTC scale (e.g. 2460310.5). Scalar or array of length N.
       units_pos : str
         Units for position input (default 'm').
@@ -220,11 +220,11 @@ class VectorConverter:
       gcrs_pos_vec, gcrs_vel_vec = VectorConverter.teme_to_j2000(
         teme_pos_vec = teme_pos_vec,
         teme_vel_vec = teme_vel_vec,
-        jd_utc       = jd_utc,
+        time_jd_utc  = time_jd_utc,
       )
     """
     # Create astropy Time object from UTC
-    astropy_time = AstropyTime(jd_utc, format='jd', scale='utc')
+    astropy_time = AstropyTime(time_jd_utc, format='jd', scale='utc')
     
     # Determine units
     if units_pos.lower() == 'km':
@@ -272,13 +272,13 @@ class VectorConverter:
   def j2000_to_teme(
     j2000_pos_vec : np.ndarray,
     j2000_vel_vec : np.ndarray,
-    jd_utc        : Union[float, np.ndarray],
+    time_jd_utc   : Union[float, np.ndarray],
     units_pos     : str = 'm',
     units_vel     : str = 'm/s',
   ) -> tuple[np.ndarray, np.ndarray]:
     """
     Convert J2000/GCRS to TEME (True Equator Mean Equinox) using astropy.
-    Supports vectorized inputs (3xN arrays) if jd_utc is an array of length N or scalar.
+    Supports vectorized inputs (3xN arrays) if time_jd_utc is an array of length N or scalar.
     
     Input:
     ------
@@ -286,7 +286,7 @@ class VectorConverter:
         Position in J2000/GCRS frame [m]. Shape (3,) or (3, N).
       j2000_vel_vec : np.ndarray
         Velocity in J2000/GCRS frame [m/s]. Shape (3,) or (3, N).
-      jd_utc : float | np.ndarray
+      time_jd_utc : float | np.ndarray
         Julian date in UTC scale (e.g. 2460310.5). Scalar or array of length N.
       units_pos : str
         Units for position input (default 'm').
@@ -305,11 +305,11 @@ class VectorConverter:
       teme_pos_vec, teme_vel_vec = VectorConverter.j2000_to_teme(
         j2000_pos_vec = j2000_pos_vec,
         j2000_vel_vec = j2000_vel_vec,
-        jd_utc        = jd_utc,
+        time_jd_utc   = time_jd_utc,
       )
     """
     # Create astropy Time object from UTC
-    astropy_time = AstropyTime(jd_utc, format='jd', scale='utc')
+    astropy_time = AstropyTime(time_jd_utc, format='jd', scale='utc')
     
     # Determine units
     if units_pos.lower() == 'km':
