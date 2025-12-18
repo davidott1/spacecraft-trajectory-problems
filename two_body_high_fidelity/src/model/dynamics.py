@@ -130,6 +130,8 @@ class TwoBodyGravity:
     j4      : float = 0.0,
     j5      : float = 0.0,
     j6      : float = 0.0,
+    c21     : float = 0.0,
+    s21     : float = 0.0,
     c22     : float = 0.0,
     s22     : float = 0.0,
     pos_ref : float = 0.0,
@@ -151,6 +153,10 @@ class TwoBodyGravity:
         J5 harmonic coefficient for oblateness
       j6 : float
         J6 harmonic coefficient for oblateness
+      c21 : float
+        C21 tesseral harmonic coefficient
+      s21 : float
+        S21 tesseral harmonic coefficient
       c22 : float
         C22 tesseral harmonic coefficient
       s22 : float
@@ -169,6 +175,8 @@ class TwoBodyGravity:
     self.j4      = j4
     self.j5      = j5
     self.j6      = j6
+    self.c21     = c21
+    self.s21     = s21
     self.c22     = c22
     self.s22     = s22
   
@@ -248,6 +256,51 @@ class TwoBodyGravity:
     
     return j2000_acc_vec
   
+  def tesseral_21(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Compute C21 and S21 tesseral harmonic perturbation acceleration.
+    
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in inertial frame (J2000).
+    
+    Output:
+    -------
+      acc_vec : np.ndarray
+        Acceleration vector [m/s²] in Inertial frame.
+    """
+    if self.c21 == 0.0 and self.s21 == 0.0:
+      return np.zeros(3)
+
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      return np.zeros(3)
+
+    iau_earth_pos_vec   = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    pos_x, pos_y, pos_z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
+    
+    pos_mag_pwr2 = pos_x**2 + pos_y**2 + pos_z**2
+    pos_mag      = np.sqrt(pos_mag_pwr2)
+    pos_mag_pwr7 = pos_mag_pwr2**3 * pos_mag
+    
+    term_common = self.c21 * pos_x + self.s21 * pos_y
+    factor      = 3.0 * self.gp * self.pos_ref**2 / pos_mag_pwr7
+    
+    iau_earth_acc_x   = factor * pos_z * (self.c21 * pos_mag_pwr2 - 5.0 * pos_x * term_common)
+    iau_earth_acc_y   = factor * pos_z * (self.s21 * pos_mag_pwr2 - 5.0 * pos_y * term_common)
+    iau_earth_acc_z   = factor * (term_common * pos_mag_pwr2 - 5.0 * pos_z**2 * term_common)
+    iau_earth_acc_vec = np.array([iau_earth_acc_x, iau_earth_acc_y, iau_earth_acc_z])
+    
+    return rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
+
   def tesseral_22(
     self,
     time_et       : float,
@@ -696,6 +749,8 @@ class Gravity:
       j4                      : float = 0.0,
       j5                      : float = 0.0,
       j6                      : float = 0.0,
+      c21                     : float = 0.0,
+      s21                     : float = 0.0,
       c22                     : float = 0.0,
       s22                     : float = 0.0,
       pos_ref                 : float = 0.0,
@@ -719,6 +774,10 @@ class Gravity:
           J5 harmonic coefficient for oblateness.
         j6 : float
           J6 harmonic coefficient for oblateness.
+        c21 : float
+          C21 tesseral harmonic coefficient.
+        s21 : float
+          S21 tesseral harmonic coefficient.
         c22 : float
           C22 tesseral harmonic coefficient.
         s22 : float
@@ -742,6 +801,8 @@ class Gravity:
         j4      = j4,
         j5      = j5,
         j6      = j6,
+        c21     = c21,
+        s21     = s21,
         c22     = c22,
         s22     = s22,
         pos_ref = pos_ref,
@@ -789,7 +850,8 @@ class Gravity:
       acc_vec += self.two_body.oblate_j5(time, pos_vec)
       acc_vec += self.two_body.oblate_j6(time, pos_vec)
       
-      # Two-body tesseral (C22, S22)
+      # Two-body tesseral (C21, S21, C22, S22)
+      acc_vec += self.two_body.tesseral_21(time, pos_vec)
       acc_vec += self.two_body.tesseral_22(time, pos_vec)
       
       # Third-body contributions
@@ -1104,6 +1166,8 @@ class Acceleration:
       j4                      : float = 0.0,
       j5                      : float = 0.0,
       j6                      : float = 0.0,
+      c21                     : float = 0.0,
+      s21                     : float = 0.0,
       c22                     : float = 0.0,
       s22                     : float = 0.0,
       pos_ref                 : float = 0.0,
@@ -1134,6 +1198,10 @@ class Acceleration:
           J5 harmonic coefficient for oblateness
         j6 : float
           J6 harmonic coefficient for oblateness
+        c21 : float
+          C21 tesseral harmonic coefficient
+        s21 : float
+          S21 tesseral harmonic coefficient
         c22 : float
           C22 tesseral harmonic coefficient
         s22 : float
@@ -1171,6 +1239,8 @@ class Acceleration:
         j4                      = j4,
         j5                      = j5,
         j6                      = j6,
+        c21                     = c21,
+        s21                     = s21,
         c22                     = c22,
         s22                     = s22,
         pos_ref                 = pos_ref,
