@@ -134,6 +134,12 @@ class TwoBodyGravity:
     s21     : float = 0.0,
     c22     : float = 0.0,
     s22     : float = 0.0,
+    c31     : float = 0.0,
+    s31     : float = 0.0,
+    c32     : float = 0.0,
+    s32     : float = 0.0,
+    c33     : float = 0.0,
+    s33     : float = 0.0,
     pos_ref : float = 0.0,
   ):
     """
@@ -161,6 +167,18 @@ class TwoBodyGravity:
         C22 tesseral harmonic coefficient
       s22 : float
         S22 tesseral harmonic coefficient
+      c31 : float
+        C31 tesseral harmonic coefficient
+      s31 : float
+        S31 tesseral harmonic coefficient
+      c32 : float
+        C32 tesseral harmonic coefficient
+      s32 : float
+        S32 tesseral harmonic coefficient
+      c33 : float
+        C33 tesseral harmonic coefficient
+      s33 : float
+        S33 tesseral harmonic coefficient
       pos_ref : float
         Reference radius for harmonic coefficients [m]
             
@@ -179,6 +197,12 @@ class TwoBodyGravity:
     self.s21     = s21
     self.c22     = c22
     self.s22     = s22
+    self.c31     = c31
+    self.s31     = s31
+    self.c32     = c32
+    self.s32     = s32
+    self.c33     = c33
+    self.s33     = s33
   
   def point_mass(
     self,
@@ -357,6 +381,153 @@ class TwoBodyGravity:
     
     # Return acceleration vector in inertial frame
     return j2000_acc_vec
+
+  def tesseral_31(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Compute C31 and S31 tesseral harmonic perturbation acceleration.
+    
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in inertial frame (J2000).
+    
+    Output:
+    -------
+      acc_vec : np.ndarray
+        Acceleration vector [m/s²] in Inertial frame.
+    """
+    if self.c31 == 0.0 and self.s31 == 0.0:
+      return np.zeros(3)
+
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      return np.zeros(3)
+
+    iau_earth_pos_vec   = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    pos_x, pos_y, pos_z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
+    
+    pos_mag_pwr2 = pos_x**2 + pos_y**2 + pos_z**2
+    pos_mag      = np.sqrt(pos_mag_pwr2)
+    pos_mag_pwr9 = pos_mag_pwr2**4 * pos_mag
+    
+    term_common = self.c31 * pos_x + self.s31 * pos_y
+    factor      = 1.5 * self.gp * self.pos_ref**3 / pos_mag_pwr9
+    
+    # (5z^2 - r^2) term
+    z2_term = 5.0 * pos_z**2 - pos_mag_pwr2
+    
+    iau_earth_acc_x   = factor * (self.c31 * z2_term - 7.0 * pos_x * term_common * z2_term / pos_mag_pwr2 + 10.0 * pos_x * pos_z**2 * term_common / pos_mag_pwr2)
+    iau_earth_acc_y   = factor * (self.s31 * z2_term - 7.0 * pos_y * term_common * z2_term / pos_mag_pwr2 + 10.0 * pos_y * pos_z**2 * term_common / pos_mag_pwr2)
+    iau_earth_acc_z   = factor * (10.0 * pos_z * term_common - 7.0 * pos_z * term_common * z2_term / pos_mag_pwr2)
+    iau_earth_acc_vec = np.array([iau_earth_acc_x, iau_earth_acc_y, iau_earth_acc_z])
+    
+    return rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
+
+  def tesseral_32(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Compute C32 and S32 tesseral harmonic perturbation acceleration.
+    
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in inertial frame (J2000).
+    
+    Output:
+    -------
+      acc_vec : np.ndarray
+        Acceleration vector [m/s²] in Inertial frame.
+    """
+    if self.c32 == 0.0 and self.s32 == 0.0:
+      return np.zeros(3)
+
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      return np.zeros(3)
+
+    iau_earth_pos_vec   = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    pos_x, pos_y, pos_z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
+    
+    pos_mag_pwr2 = pos_x**2 + pos_y**2 + pos_z**2
+    pos_mag      = np.sqrt(pos_mag_pwr2)
+    pos_mag_pwr9 = pos_mag_pwr2**4 * pos_mag
+    
+    term_common = self.c32 * (pos_x**2 - pos_y**2) + 2.0 * self.s32 * pos_x * pos_y
+    factor      = 3.0 * self.gp * self.pos_ref**3 / pos_mag_pwr9
+    
+    iau_earth_acc_x   = factor * pos_z * (2.0 * self.c32 * pos_x + 2.0 * self.s32 * pos_y - 7.0 * pos_x * term_common / pos_mag_pwr2)
+    iau_earth_acc_y   = factor * pos_z * (-2.0 * self.c32 * pos_y + 2.0 * self.s32 * pos_x - 7.0 * pos_y * term_common / pos_mag_pwr2)
+    iau_earth_acc_z   = factor * (term_common - 7.0 * pos_z**2 * term_common / pos_mag_pwr2)
+    iau_earth_acc_vec = np.array([iau_earth_acc_x, iau_earth_acc_y, iau_earth_acc_z])
+    
+    return rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
+
+  def tesseral_33(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Compute C33 and S33 tesseral harmonic perturbation acceleration.
+    
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in inertial frame (J2000).
+    
+    Output:
+    -------
+      acc_vec : np.ndarray
+        Acceleration vector [m/s²] in Inertial frame.
+    """
+    if self.c33 == 0.0 and self.s33 == 0.0:
+      return np.zeros(3)
+
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      return np.zeros(3)
+
+    iau_earth_pos_vec   = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    pos_x, pos_y, pos_z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
+    
+    pos_mag_pwr2 = pos_x**2 + pos_y**2 + pos_z**2
+    pos_mag      = np.sqrt(pos_mag_pwr2)
+    pos_mag_pwr9 = pos_mag_pwr2**4 * pos_mag
+    
+    # cos(3*lon) term: x*(x^2-3y^2), sin(3*lon) term: y*(3x^2-y^2)
+    term_c33    = pos_x * (pos_x**2 - 3.0 * pos_y**2)
+    term_s33    = pos_y * (3.0 * pos_x**2 - pos_y**2)
+    term_common = self.c33 * term_c33 + self.s33 * term_s33
+    factor      = 1.0 * self.gp * self.pos_ref**3 / pos_mag_pwr9
+    
+    # Partial derivatives of term_c33 and term_s33
+    d_term_c33_dx = 3.0 * pos_x**2 - 3.0 * pos_y**2
+    d_term_c33_dy = -6.0 * pos_x * pos_y
+    d_term_s33_dx = 6.0 * pos_x * pos_y
+    d_term_s33_dy = 3.0 * pos_x**2 - 3.0 * pos_y**2
+    
+    iau_earth_acc_x   = factor * (self.c33 * d_term_c33_dx + self.s33 * d_term_s33_dx - 7.0 * pos_x * term_common / pos_mag_pwr2)
+    iau_earth_acc_y   = factor * (self.c33 * d_term_c33_dy + self.s33 * d_term_s33_dy - 7.0 * pos_y * term_common / pos_mag_pwr2)
+    iau_earth_acc_z   = factor * (-7.0 * pos_z * term_common / pos_mag_pwr2)
+    iau_earth_acc_vec = np.array([iau_earth_acc_x, iau_earth_acc_y, iau_earth_acc_z])
+    
+    return rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
 
   def oblate_j3(
     self,
@@ -753,6 +924,12 @@ class Gravity:
       s21                     : float = 0.0,
       c22                     : float = 0.0,
       s22                     : float = 0.0,
+      c31                     : float = 0.0,
+      s31                     : float = 0.0,
+      c32                     : float = 0.0,
+      s32                     : float = 0.0,
+      c33                     : float = 0.0,
+      s33                     : float = 0.0,
       pos_ref                 : float = 0.0,
       enable_third_body       : bool  = False,
       third_body_bodies       : list  = None,
@@ -782,6 +959,18 @@ class Gravity:
           C22 tesseral harmonic coefficient.
         s22 : float
           S22 tesseral harmonic coefficient.
+        c31 : float
+          C31 tesseral harmonic coefficient.
+        s31 : float
+          S31 tesseral harmonic coefficient.
+        c32 : float
+          C32 tesseral harmonic coefficient.
+        s32 : float
+          S32 tesseral harmonic coefficient.
+        c33 : float
+          C33 tesseral harmonic coefficient.
+        s33 : float
+          S33 tesseral harmonic coefficient.
         pos_ref : float
           Reference radius for harmonic coefficients [m].
         enable_third_body : bool
@@ -805,6 +994,12 @@ class Gravity:
         s21     = s21,
         c22     = c22,
         s22     = s22,
+        c31     = c31,
+        s31     = s31,
+        c32     = c32,
+        s32     = s32,
+        c33     = c33,
+        s33     = s33,
         pos_ref = pos_ref,
       )
         
@@ -853,6 +1048,11 @@ class Gravity:
       # Two-body tesseral (C21, S21, C22, S22)
       acc_vec += self.two_body.tesseral_21(time, pos_vec)
       acc_vec += self.two_body.tesseral_22(time, pos_vec)
+      
+      # Two-body tesseral (C31, S31, C32, S32, C33, S33)
+      acc_vec += self.two_body.tesseral_31(time, pos_vec)
+      acc_vec += self.two_body.tesseral_32(time, pos_vec)
+      acc_vec += self.two_body.tesseral_33(time, pos_vec)
       
       # Third-body contributions
       if self.enable_third_body and self.third_body is not None:
@@ -1170,6 +1370,12 @@ class Acceleration:
       s21                     : float = 0.0,
       c22                     : float = 0.0,
       s22                     : float = 0.0,
+      c31                     : float = 0.0,
+      s31                     : float = 0.0,
+      c32                     : float = 0.0,
+      s32                     : float = 0.0,
+      c33                     : float = 0.0,
+      s33                     : float = 0.0,
       pos_ref                 : float = 0.0,
       mass                    : float = 1.0,
       enable_drag             : bool  = False,
@@ -1206,6 +1412,18 @@ class Acceleration:
           C22 tesseral harmonic coefficient
         s22 : float
           S22 tesseral harmonic coefficient
+        c31 : float
+          C31 tesseral harmonic coefficient
+        s31 : float
+          S31 tesseral harmonic coefficient
+        c32 : float
+          C32 tesseral harmonic coefficient
+        s32 : float
+          S32 tesseral harmonic coefficient
+        c33 : float
+          C33 tesseral harmonic coefficient
+        s33 : float
+          S33 tesseral harmonic coefficient
         pos_ref : float
           Reference radius for harmonic coefficients [m]
         mass : float
@@ -1243,6 +1461,12 @@ class Acceleration:
         s21                     = s21,
         c22                     = c22,
         s22                     = s22,
+        c31                     = c31,
+        s31                     = s31,
+        c32                     = c32,
+        s32                     = s32,
+        c33                     = c33,
+        s33                     = s33,
         pos_ref                 = pos_ref,
         enable_third_body       = enable_third_body,
         third_body_bodies       = third_body_bodies,
