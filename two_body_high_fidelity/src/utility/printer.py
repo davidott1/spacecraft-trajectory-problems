@@ -27,7 +27,7 @@ def print_results_summary(
   if result_high_fidelity.get('success'):
     # Final time of high-fidelity propagation
     time_et_f      = result_high_fidelity['time'][-1]
-    time_utc_f_str = f"{et_to_utc(time_et_f)} UTC ({time_et_f:.6f} ET)"
+    time_utc_f_str = f"{et_to_utc(time_et_f)} UTC / {time_et_f:.6f} ET"
 
     # Final position and velocity vectors
     pos_vec_f = result_high_fidelity['state'][0:3, -1]

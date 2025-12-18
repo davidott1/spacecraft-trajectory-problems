@@ -681,11 +681,15 @@ def run_sgp4_propagation(
     sgp4_times_grid = np.linspace(time_offset_o_s, time_offset_f_s, num_grid_points)
     grid_type_str   = f"{num_grid_points} points (equal-spaced)"
 
+  # Calculate ET for display
+  time_et_o = utc_to_et(time_o_dt)
+  time_et_f = utc_to_et(time_f_dt)
+
   # Display propagation info
   print(f"  Configuration")
   print(f"    Timespan")
-  print(f"      Initial  : {time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
-  print(f"      Final    : {time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+  print(f"      Initial  : {time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {time_et_o:.6f} ET")
+  print(f"      Final    : {time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {time_et_f:.6f} ET")
   print(f"      Duration : {delta_time_s:.1f} s")
   print(f"      Grid     : {grid_type_str}")
 

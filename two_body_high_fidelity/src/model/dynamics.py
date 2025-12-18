@@ -194,37 +194,42 @@ class TwoBodyGravity:
   
   def oblate_j2(
       self,
-      time    : float,
-      pos_vec : np.ndarray,
+      time_et       : float,
+      j2000_pos_vec : np.ndarray,
   ) -> np.ndarray:
     """
     J2 oblateness perturbation
     
     Input:
     ------
-      time : float
-        Current time [s]
-      pos_vec : np.ndarray
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
         Position vector [m] in Inertial frame (J2000).
     
     Output:
     -------
       acc_vec : np.ndarray
-        Acceleration vector [m/s²]
+        Acceleration vector [m/s²] in J2000 frame.
 
     Notes:
     ------
-      Technically, zonal harmonics are defined in the Body-Fixed frame.
-      However, Zonal harmonics (J2, J3...) are rotationally symmetric about the 
-      Z-axis (longitude independent). Therefore, the Earth's daily rotation (spin) 
-      does not affect the force, only the orientation of the Pole (Z-axis).
-      
-      This implementation assumes the Inertial Z-axis is aligned with the 
-      Body Z-axis (ignoring Precession/Nutation). Under this assumption, 
-      inertial coordinates can be used directly.
+      Zonal harmonics are defined in the Body-Fixed frame. This method transforms
+      the position to IAU_EARTH, computes the acceleration, then transforms back
+      to J2000 to properly account for precession/nutation.
     """
     if self.j2 == 0.0:
       return np.zeros(3)
+    
+    # Get rotation matrix from J2000 to Body-Fixed (IAU_EARTH)
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      # Fallback to J2000 if transformation fails (kernels not loaded)
+      rot_mat_j2000_to_iau_earth = np.eye(3)
+    
+    # Transform position to body-fixed frame
+    pos_vec = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
     
     pos_mag      = np.linalg.norm(pos_vec)
     pos_mag_pwr2 = pos_mag**2
@@ -232,12 +237,16 @@ class TwoBodyGravity:
     
     factor = 1.5 * self.j2 * self.gp * self.pos_ref**2 / pos_mag_pwr5
     
-    acc_vec    = np.zeros(3)
-    acc_vec[0] = factor * pos_vec[0] * (5 * pos_vec[2]**2 / pos_mag_pwr2 - 1)
-    acc_vec[1] = factor * pos_vec[1] * (5 * pos_vec[2]**2 / pos_mag_pwr2 - 1)
-    acc_vec[2] = factor * pos_vec[2] * (5 * pos_vec[2]**2 / pos_mag_pwr2 - 3)
+    # Compute acceleration in body-fixed frame
+    iau_earth_acc_vec    = np.zeros(3)
+    iau_earth_acc_vec[0] = factor * pos_vec[0] * (5 * pos_vec[2]**2 / pos_mag_pwr2 - 1)
+    iau_earth_acc_vec[1] = factor * pos_vec[1] * (5 * pos_vec[2]**2 / pos_mag_pwr2 - 1)
+    iau_earth_acc_vec[2] = factor * pos_vec[2] * (5 * pos_vec[2]**2 / pos_mag_pwr2 - 3)
     
-    return acc_vec
+    # Transform acceleration back to J2000
+    j2000_acc_vec = rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
+    
+    return j2000_acc_vec
   
   def tesseral_22(
     self,
@@ -298,38 +307,41 @@ class TwoBodyGravity:
 
   def oblate_j3(
     self,
-    time    : float,
-    pos_vec : np.ndarray,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
   ) -> np.ndarray:
     """
     Compute J3 oblateness perturbation acceleration.
     
     Input:
     ------
-      time : float
-        Current time [s]
-      pos_vec : np.ndarray
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
         Position vector [m] in Inertial frame (J2000).
     
     Output:
     -------
       acc_vec : np.ndarray
-        Acceleration vector [m/s²]
+        Acceleration vector [m/s²] in J2000 frame.
 
     Notes:
     ------
-      Technically, zonal harmonics are defined in the Body-Fixed frame.
-      However, Zonal harmonics (J2, J3...) are rotationally symmetric about the 
-      Z-axis (longitude independent). Therefore, the Earth's daily rotation (spin) 
-      does not affect the force, only the orientation of the Pole (Z-axis).
-      
-      This implementation assumes the Inertial Z-axis is aligned with the 
-      Body Z-axis (ignoring Precession/Nutation). Under this assumption, 
-      inertial coordinates can be used directly.
+      Zonal harmonics are defined in the Body-Fixed frame. This method transforms
+      the position to IAU_EARTH, computes the acceleration, then transforms back
+      to J2000 to properly account for precession/nutation.
     """
     if self.j3 == 0.0:
-        return np.zeros(3)
-      
+      return np.zeros(3)
+    
+    # Get rotation matrix from J2000 to Body-Fixed (IAU_EARTH)
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      rot_mat_j2000_to_iau_earth = np.eye(3)
+    
+    # Transform position to body-fixed frame
+    pos_vec = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
     pos_x, pos_y, pos_z = pos_vec[0], pos_vec[1], pos_vec[2]
 
     pos_mag      = np.linalg.norm(pos_vec)
@@ -337,48 +349,55 @@ class TwoBodyGravity:
     pos_mag_pwr7 = pos_mag_pwr2 * pos_mag_pwr2 * pos_mag_pwr2 * pos_mag
     
     factor = 2.5 * self.j3 * self.gp * self.pos_ref**3 / pos_mag_pwr7
-      
-    acc_vec    = np.zeros(3)
-    acc_vec[0] = factor * pos_x * pos_z * (3.0 - 7.0 * pos_z**2 / pos_mag_pwr2)
-    acc_vec[1] = factor * pos_y * pos_z * (3.0 - 7.0 * pos_z**2 / pos_mag_pwr2)
-    acc_vec[2] = factor * (3.0 * pos_z**2 - 7.0 * pos_z**4 / pos_mag_pwr2 - 0.6 * pos_mag_pwr2)
     
-    return acc_vec
+    # Compute acceleration in body-fixed frame
+    iau_earth_acc_vec    = np.zeros(3)
+    iau_earth_acc_vec[0] = factor * pos_x * pos_z * (3.0 - 7.0 * pos_z**2 / pos_mag_pwr2)
+    iau_earth_acc_vec[1] = factor * pos_y * pos_z * (3.0 - 7.0 * pos_z**2 / pos_mag_pwr2)
+    iau_earth_acc_vec[2] = factor * (3.0 * pos_z**2 - 7.0 * pos_z**4 / pos_mag_pwr2 - 0.6 * pos_mag_pwr2)
+    
+    # Transform acceleration back to J2000
+    j2000_acc_vec = rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
+    
+    return j2000_acc_vec
   
   def oblate_j4(
     self,
-    time    : float,
-    pos_vec : np.ndarray,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
   ) -> np.ndarray:
     """
     J4 oblateness perturbation
     
     Input:
     ------
-      time : float
-        Current time [s]
-      pos_vec : np.ndarray
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
         Position vector [m] in Inertial frame (J2000).
     
     Output:
     -------
       acc_vec : np.ndarray
-        Acceleration vector [m/s²]
+        Acceleration vector [m/s²] in J2000 frame.
 
     Notes:
     ------
-      Technically, zonal harmonics are defined in the Body-Fixed frame.
-      However, Zonal harmonics (J2, J3...) are rotationally symmetric about the 
-      Z-axis (longitude independent). Therefore, the Earth's daily rotation (spin) 
-      does not affect the force, only the orientation of the Pole (Z-axis).
-      
-      This implementation assumes the Inertial Z-axis is aligned with the 
-      Body Z-axis (ignoring Precession/Nutation). Under this assumption, 
-      inertial coordinates can be used directly.
+      Zonal harmonics are defined in the Body-Fixed frame. This method transforms
+      the position to IAU_EARTH, computes the acceleration, then transforms back
+      to J2000 to properly account for precession/nutation.
     """
     if self.j4 == 0.0:
       return np.zeros(3)
     
+    # Get rotation matrix from J2000 to Body-Fixed (IAU_EARTH)
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      rot_mat_j2000_to_iau_earth = np.eye(3)
+    
+    # Transform position to body-fixed frame
+    pos_vec = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
     pos_x, pos_y, pos_z = pos_vec[0], pos_vec[1], pos_vec[2]
     
     pos_mag      = np.linalg.norm(pos_vec)
@@ -388,104 +407,136 @@ class TwoBodyGravity:
     term_common = pos_z**2 / pos_mag_pwr2
     factor      = 1.875 * self.j4 * self.gp * self.pos_ref**4 / pos_mag_pwr9
     
-    acc_vec    = np.zeros(3)
-    acc_vec[0] = factor * pos_x * (1.0 - 14.0 * term_common + 21.0 * term_common**2)
-    acc_vec[1] = factor * pos_y * (1.0 - 14.0 * term_common + 21.0 * term_common**2)
-    acc_vec[2] = factor * pos_z * (5.0 - 70.0 * term_common / 3.0 + 21.0 * term_common**2)
+    # Compute acceleration in body-fixed frame
+    iau_earth_acc_vec    = np.zeros(3)
+    iau_earth_acc_vec[0] = factor * pos_x * (1.0 - 14.0 * term_common + 21.0 * term_common**2)
+    iau_earth_acc_vec[1] = factor * pos_y * (1.0 - 14.0 * term_common + 21.0 * term_common**2)
+    iau_earth_acc_vec[2] = factor * pos_z * (5.0 - 70.0 * term_common / 3.0 + 21.0 * term_common**2)
     
-    return acc_vec
+    # Transform acceleration back to J2000
+    j2000_acc_vec = rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
+    
+    return j2000_acc_vec
   
   def oblate_j5(
     self,
-    time    : float,
-    pos_vec : np.ndarray,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
   ) -> np.ndarray:
     """
     J5 oblateness perturbation
     
     Input:
     ------
-      time : float
-        Current time [s]
-      pos_vec : np.ndarray
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
         Position vector [m] in Inertial frame (J2000).
     
     Output:
     -------
       acc_vec : np.ndarray
-        Acceleration vector [m/s²]
+        Acceleration vector [m/s²] in J2000 frame.
     
     Notes:
     ------
-      See notes for oblate_j2 regarding frame assumptions.
+      Zonal harmonics are defined in the Body-Fixed frame. This method transforms
+      the position to IAU_EARTH, computes the acceleration, then transforms back
+      to J2000 to properly account for precession/nutation.
     """
     if self.j5 == 0.0:
       return np.zeros(3)
     
+    # Get rotation matrix from J2000 to Body-Fixed (IAU_EARTH)
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      rot_mat_j2000_to_iau_earth = np.eye(3)
+    
+    # Transform position to body-fixed frame
+    pos_vec = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
     pos_x, pos_y, pos_z = pos_vec[0], pos_vec[1], pos_vec[2]
     
     pos_mag       = np.linalg.norm(pos_vec)
     pos_mag_pwr2  = pos_mag**2
     pos_mag_pwr11 = pos_mag_pwr2**5 * pos_mag
     
-    z_hat       = pos_z / pos_mag
+    z_hat      = pos_z / pos_mag
     z_hat_pwr2 = z_hat**2
     z_hat_pwr4 = z_hat_pwr2**2
     
     factor = 1.875 * self.j5 * self.gp * self.pos_ref**5 / pos_mag_pwr11
     
-    acc_vec    = np.zeros(3)
-    acc_vec[0] = factor * pos_x * z_hat * (3.0 - 30.0 * z_hat_pwr2 + 35.0 * z_hat_pwr4)
-    acc_vec[1] = factor * pos_y * z_hat * (3.0 - 30.0 * z_hat_pwr2 + 35.0 * z_hat_pwr4)
-    acc_vec[2] = factor * pos_z * (3.0 - 30.0 * z_hat_pwr2 + 35.0 * z_hat_pwr4 - 0.6)
+    # Compute acceleration in body-fixed frame
+    iau_earth_acc_vec    = np.zeros(3)
+    iau_earth_acc_vec[0] = factor * pos_x * z_hat * (3.0 - 30.0 * z_hat_pwr2 + 35.0 * z_hat_pwr4)
+    iau_earth_acc_vec[1] = factor * pos_y * z_hat * (3.0 - 30.0 * z_hat_pwr2 + 35.0 * z_hat_pwr4)
+    iau_earth_acc_vec[2] = factor * pos_z * (3.0 - 30.0 * z_hat_pwr2 + 35.0 * z_hat_pwr4 - 0.6)
     
-    return acc_vec
+    # Transform acceleration back to J2000
+    j2000_acc_vec = rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
+    
+    return j2000_acc_vec
   
   def oblate_j6(
     self,
-    time    : float,
-    pos_vec : np.ndarray,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
   ) -> np.ndarray:
     """
     J6 oblateness perturbation
     
     Input:
     ------
-      time : float
-        Current time [s]
-      pos_vec : np.ndarray
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
         Position vector [m] in Inertial frame (J2000).
     
     Output:
     -------
       acc_vec : np.ndarray
-        Acceleration vector [m/s²]
+        Acceleration vector [m/s²] in J2000 frame.
     
     Notes:
     ------
-      See notes for oblate_j2 regarding frame assumptions.
+      Zonal harmonics are defined in the Body-Fixed frame. This method transforms
+      the position to IAU_EARTH, computes the acceleration, then transforms back
+      to J2000 to properly account for precession/nutation.
     """
     if self.j6 == 0.0:
       return np.zeros(3)
     
-    pos_x, pos_y, pos_z = pos_vec[0], pos_vec[1], pos_vec[2]
+    # Get rotation matrix from J2000 to Body-Fixed (IAU_EARTH)
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      rot_mat_j2000_to_iau_earth = np.eye(3)
     
-    pos_mag       = np.linalg.norm(pos_vec)
+    # Transform position to body-fixed frame
+    iau_earth_pos_vec = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    iau_earth_pos_x, iau_earth_pos_y, iau_earth_pos_z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
+    
+    pos_mag       = np.linalg.norm(iau_earth_pos_vec)
     pos_mag_pwr2  = pos_mag**2
     pos_mag_pwr13 = pos_mag_pwr2**6 * pos_mag
     
-    z_hat      = pos_z / pos_mag
+    z_hat      = iau_earth_pos_z / pos_mag
     z_hat_pwr2 = z_hat**2
     z_hat_pwr3 = z_hat * z_hat_pwr2
     
     factor = 2.1875 * self.j6 * self.gp * self.pos_ref**6 / pos_mag_pwr13
     
-    acc_vec    = np.zeros(3)
-    acc_vec[0] = factor * pos_x * (1.0 - 21.0 * z_hat +  63.0 * z_hat_pwr2 - 63.0 * z_hat_pwr3)
-    acc_vec[1] = factor * pos_y * (1.0 - 21.0 * z_hat +  63.0 * z_hat_pwr2 - 63.0 * z_hat_pwr3)
-    acc_vec[2] = factor * pos_z * (7.0 - 63.0 * z_hat + 126.0 * z_hat_pwr2 - 63.0 * z_hat_pwr3)
+    # Compute acceleration in body-fixed frame
+    iau_earth_acc_vec    = np.zeros(3)
+    iau_earth_acc_vec[0] = factor * iau_earth_pos_x * (1.0 - 21.0 * z_hat +  63.0 * z_hat_pwr2 - 63.0 * z_hat_pwr3)
+    iau_earth_acc_vec[1] = factor * iau_earth_pos_y * (1.0 - 21.0 * z_hat +  63.0 * z_hat_pwr2 - 63.0 * z_hat_pwr3)
+    iau_earth_acc_vec[2] = factor * iau_earth_pos_z * (7.0 - 63.0 * z_hat + 126.0 * z_hat_pwr2 - 63.0 * z_hat_pwr3)
     
-    return acc_vec
+    # Transform acceleration back to J2000
+    j2000_acc_vec = rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
+    
+    return j2000_acc_vec
     
 
 class ThirdBodyGravity:

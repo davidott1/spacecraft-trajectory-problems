@@ -30,17 +30,50 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.parent  #
 
 from src.model.constants import CONVERTER
 from src.input.cli       import parse_time
+from src.input.loader    import load_supported_objects
 
 EPHEM_OUTPUT_DIR = PROJECT_ROOT / 'data' / 'ephems'
 TLE_OUTPUT_DIR   = PROJECT_ROOT / 'data' / 'tles'
+
+
+def sanitize_filename(
+  name : str,
+) -> str:
+  """
+  Sanitize a string for use in filenames.
+  Converts to lowercase, replaces spaces and special characters with underscores.
+  
+  Example: "GOES-17 - GOES-S" -> "goes_17_goes_s"
+  
+  Input:
+  ------
+  name : str
+    Original name string.
+  
+  Output:
+  -------
+  str:
+    Sanitized filename-safe string.
+  """
+  # Convert to lowercase
+  result = name.lower()
+  # Replace common special characters with underscores
+  for char in [' ', '-', '(', ')', '[', ']', '/', '\\', '.', ',', "'", '"']:
+    result = result.replace(char, '_')
+  # Remove consecutive underscores
+  while '__' in result:
+    result = result.replace('__', '_')
+  # Remove leading/trailing underscores
+  result = result.strip('_')
+  return result
 
 
 def get_satellite_name(
   norad_id : int,
 ) -> str:
   """
-  Get satellite name from NORAD ID or return generic name.
-  Names are formatted with underscores for consistent file naming.
+  Get satellite name from supported_objects.yaml or return generic name.
+  Names are sanitized for consistent file naming.
   
   Input:
   ------
@@ -50,20 +83,22 @@ def get_satellite_name(
   Output:
   -------
   str:
-    Satellite name with underscores.
+    Sanitized satellite name for filenames.
   """
-  known_satellites = {
-    25544: 'iss',
-    25994: 'terra',
-    27424: 'aqua',
-    26407: 'gps_iir_5',
-    38833: 'gps_iif_2',
-    39166: 'gps_iif_3_navstar_68',  # Full name with underscores
-    41866: 'goes_16',
-    43226: 'goes_17',
-    51850: 'goes_18',
-  }
-  return known_satellites.get(norad_id, f'sat{norad_id}')
+  # Load supported objects from YAML
+  supported_objects = load_supported_objects()
+  
+  # Convert norad_id to string for lookup (YAML keys are strings)
+  norad_id_str = str(norad_id)
+  
+  if norad_id_str in supported_objects:
+    # Get the 'name' field from the object properties
+    obj_props = supported_objects[norad_id_str]
+    raw_name = obj_props.get('name', f'object_{norad_id}')
+    return sanitize_filename(raw_name)
+  else:
+    # Return generic name if not in YAML
+    return f'sat{norad_id}'
 
 def download_tle_for_satellite(
   norad_id    : int,
@@ -272,9 +307,6 @@ def download_horizons_ephemeris(
   # Get vectors in ICRF/J2000 equatorial frame
   vectors = obj.vectors(refplane='earth', cache=False)
   
-  print(f"Retrieved {len(vectors)} data points")
-  print(f"Reference frame: ICRF/J2000 Earth equatorial (refplane='earth')")
-  
   # Add UTC time columns manually (TDB to UTC conversion)
   tdb_times = Time(vectors['datetime_jd'], format='jd', scale='tdb')
   utc_times = tdb_times.utc
@@ -391,6 +423,7 @@ def download_ephems_and_tles(
   EPHEM_OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
   TLE_OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
   
+  # Get satellite name from YAML (not from Horizons query)
   sat_name            = get_satellite_name(norad_id)
   start_timestamp_str = start_time.strftime('%Y%m%dT%H%M%SZ')
   end_timestamp_str   = end_time.strftime('%Y%m%dT%H%M%SZ')
@@ -410,7 +443,7 @@ def download_ephems_and_tles(
   print(f"PROCESSING STARTED")
   print("="*80)
   print(f"Satellite NORAD ID          : {norad_id}")
-  print(f"Satellite name              : {sat_name.upper()}")
+  print(f"Satellite name              : {sat_name}")
   print(f"Time range                  : {start_time} to {end_time}")
   print(f"Download ephemeris          : {download_ephem}")
   print(f"Download TLE                : {download_tle}")
@@ -445,19 +478,21 @@ def download_ephems_and_tles(
     print("\n" + "="*80)
     print("PROCESSING TLE")
     print("="*80)
+    
+    # Use the same sanitized name for TLE file
+    tle_file = TLE_OUTPUT_DIR / f'celestrak_tle_{norad_id}_{sat_name}_{start_timestamp_str}_{end_timestamp_str}.txt'
+    
     if tle_file.exists():
       print(f"TLE file already exists, skipping download:\n  {tle_file}")
     else:
       try:
-        # Try to download current TLE from Celestrak
         line1, line2, epoch_jd = download_tle_for_satellite(
           norad_id    = norad_id,
-          output_file = None,  # Don't save yet, we'll add name line
+          output_file = None,
         )
         
         # Save with object name as first line (3-line format)
         with open(tle_file, 'w') as f:
-          # Write object name (uppercase with spaces/hyphens)
           object_name = sat_name.upper().replace('_', ' ')
           f.write(f"{object_name}\n")
           f.write(f"{line1}\n")
@@ -481,8 +516,8 @@ def download_ephems_and_tles(
   print()
   
   return {
-    'horizons_file'    : horizons_file if download_ephem else None,
-    'tle_file'         : tle_file if download_tle else None,
+    'horizons_file'    : horizons_file,
+    'tle_file'         : tle_file,
     'horizons_data'    : horizons_data,
     'tle_data'         : tle_data,
     'sat_name'         : sat_name,
