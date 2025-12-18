@@ -156,6 +156,14 @@ class SOLARSYSTEMCONSTANTS:
     C22 =  2.43914352e-6                # C22 tesseral harmonic coefficient (normalized)
     S22 = -1.40016683e-6                # S22 tesseral harmonic coefficient (normalized)
     
+    # Tesseral harmonics (degree 3)
+    C31 =  2.03046e-6                   # C31 tesseral harmonic coefficient (normalized)
+    S31 =  2.48513e-7                   # S31 tesseral harmonic coefficient (normalized)
+    C32 =  9.04788e-7                   # C32 tesseral harmonic coefficient (normalized)
+    S32 = -6.19005e-7                   # S32 tesseral harmonic coefficient (normalized)
+    C33 =  7.21282e-7                   # C33 tesseral harmonic coefficient (normalized)
+    S33 =  1.41434e-6                   # S33 tesseral harmonic coefficient (normalized)
+    
     # Rotation rate
     OMEGA = 7.2921150e-5                    # Earth's rotation rate [rad/s]
     
