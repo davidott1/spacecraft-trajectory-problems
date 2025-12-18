@@ -790,7 +790,7 @@ def run_sgp4_propagation(
       # Store ephemeris-time results
       result_sgp4['at_ephem_times'] = {
         'plot_time_s' : ephem_times_s,
-        'integ_time_s' : ephemeris_times,
+        'integ_time_s' : ephem_times_from_tle,
         'state' : result_sgp4_at_ephem['state'],
         'coe' : result_sgp4_at_ephem['coe'],
       }
