@@ -132,6 +132,8 @@ def main(
   gravity_harmonics      : Optional[list] = None,
   include_srp            : bool           = False,
   initial_state_source   : str            = 'jpl_horizons',
+  gravity_harmonics_degree_order : Optional[list] = None,
+  gravity_harmonics_file         : Optional[str]  = None,
 ) -> dict:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -162,6 +164,10 @@ def main(
       Flag to enable/disable Solar Radiation Pressure.
     initial_state_source : str
       Source for the initial state vector ('jpl_horizons' or 'tle').
+    gravity_harmonics_degree_order : list | None
+      Degree and order for gravity harmonics (e.g., [4, 4]). None means disabled.
+    gravity_harmonics_file : str | None
+      Filename for custom gravity harmonics file. None means disabled.
   
   Output:
   -------
@@ -181,6 +187,8 @@ def main(
     gravity_harmonics,
     include_srp,
     initial_state_source,
+    gravity_harmonics_degree_order,
+    gravity_harmonics_file,
   )
 
   # Start logging to file
@@ -267,6 +275,17 @@ def main(
       to_j2000                      = True,
     )
 
+  # Load gravity field model if degree/order specified
+  gravity_model = None
+  if config.gravity_harmonics_degree is not None and config.gravity_harmonics_file is not None:
+    from src.input.loader import load_gravity_field_model
+    gravity_model = load_gravity_field_model(
+      gravity_folderpath = config.gravity_folderpath,
+      gravity_file       = config.gravity_harmonics_file,
+      max_degree         = config.gravity_harmonics_degree,
+      max_order          = config.gravity_harmonics_order,
+    )
+
   # Run propagations: high-fidelity and SGP4
   result_high_fidelity_propagation, result_sgp4_propagation = run_propagations(
     initial_state                 = initial_state,
@@ -289,6 +308,7 @@ def main(
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     tle_line_1                    = config.tle_line_1,
     tle_line_2                    = config.tle_line_2,
+    gravity_model                 = gravity_model,
   )
   
   # Display results and create plots
@@ -334,4 +354,6 @@ if __name__ == "__main__":
     args.gravity_harmonics,
     args.include_srp,
     args.initial_state_source,
+    args.gravity_harmonics_degree_order,
+    args.gravity_harmonics_file,
   )

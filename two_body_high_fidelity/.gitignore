@@ -1,7 +1,9 @@
-# Data directories
+# Data files and folders
 data/ephems/
+data/gravity_models/
 data/spice_kernels/
 data/tles/
+*.gfc
 
 # Output directory
 output/
