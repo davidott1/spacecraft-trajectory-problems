@@ -1,18 +1,17 @@
 import yaml
-import spiceypy as spice
-from pathlib import Path
-import numpy as np
-import pandas as pd
-from datetime import datetime, timedelta
-from typing import Optional
 import sys
 import subprocess
-
-from src.model.time_converter import utc_to_et
+import spiceypy as spice
+import numpy    as np
+import pandas   as pd
+from pathlib  import Path
+from datetime import datetime, timedelta
+from typing   import Optional
+from src.model.time_converter  import utc_to_et
 from src.model.orbit_converter import OrbitConverter
-from src.model.constants      import SOLARSYSTEMCONSTANTS
-from src.input.cli            import parse_time
-from src.utility.tle_helper   import get_tle_satellite_and_tle_epoch
+from src.model.constants       import PRINTFORMATTER, SOLARSYSTEMCONSTANTS
+from src.input.cli             import parse_time
+from src.utility.tle_helper    import get_tle_satellite_and_tle_epoch
 
 
 def load_supported_objects() -> dict:
@@ -69,7 +68,7 @@ def load_gravity_field_model(
   # Display gravity field info
   try:
     rel_folderpath = gravity_folderpath.relative_to(Path.cwd())
-    display_path = f"<project_folderpath>/{rel_folderpath}"
+    display_path   = f"<project_folderpath>/{rel_folderpath}"
   except ValueError:
     display_path = gravity_folderpath
 
@@ -95,8 +94,8 @@ def load_gravity_field_model(
       max_order  = max_order,
     )
     print(f"    Status     : Loaded successfully")
-    print(f"    GM         : {gravity_model.coeffs.gm:.6e} m³/s²")
-    print(f"    Radius     : {gravity_model.coeffs.radius:.3f} m")
+    print(f"    GP         : {gravity_model.coeffs.gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
+    print(f"    Radius     : {gravity_model.coeffs.radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
     return gravity_model
   except Exception as e:
     print(f"    Status     : Failed - {e}")
@@ -107,9 +106,13 @@ def load_files(
   use_spice                : bool,
   spice_kernels_folderpath : Path,
   lsk_filepath             : Path,
-) -> None:
+  gravity_folderpath       : Optional[Path] = None,
+  gravity_file             : Optional[str]  = None,
+  gravity_degree           : Optional[int]  = None,
+  gravity_order            : Optional[int]  = None,
+) -> Optional[object]:
   """
-  Load necessary files for the simulation, including SPICE kernels if enabled.
+  Load necessary files for the simulation, including SPICE kernels and gravity model.
   
   Input:
   ------
@@ -119,16 +122,39 @@ def load_files(
       Path to the SPICE kernels folder.
     lsk_filepath : Path
       Path to the leap seconds kernel file.
+    gravity_folderpath : Path, optional
+      Path to gravity models folder.
+    gravity_file : str, optional
+      Gravity model filename.
+    gravity_degree : int, optional
+      Maximum degree.
+    gravity_order : int, optional
+      Maximum order.
       
   Output:
   -------
-    None
+    gravity_model : SphericalHarmonicsGravity | None
+      Loaded gravity model if requested, otherwise None.
   """
   print("\nLoad Files")
   print(f"  Project Folderpath : {Path.cwd()}")
 
   # Load spice files if SPICE is enabled
   load_spice_files(use_spice, spice_kernels_folderpath, lsk_filepath)
+
+  # Load gravity model if requested
+  gravity_model = None
+  if gravity_file is not None and gravity_degree is not None and gravity_folderpath is not None:
+    # Default order to degree if not specified
+    order = gravity_order if gravity_order is not None else gravity_degree
+    gravity_model = load_gravity_field_model(
+      gravity_folderpath, 
+      gravity_file, 
+      gravity_degree, 
+      order
+    )
+    
+  return gravity_model
 
 
 def unload_files(
@@ -681,7 +707,7 @@ def find_compatible_tle_file(
     return None
   
   # Search for TLE files matching the NORAD ID
-  glob_pattern = f'celestrak_tle_{norad_id}_*.txt'
+  glob_pattern   = f'celestrak_tle_{norad_id}_*.txt'
   matching_files = list(tles_folderpath.glob(glob_pattern))
   
   if not matching_files:
@@ -694,7 +720,7 @@ def find_compatible_tle_file(
     # Parse timespan from filename
     # Format: celestrak_tle_<norad_id>_<name>_<start>_<end>.txt
     filename = filepath.stem  # Remove .txt extension
-    parts = filename.split('_')
+    parts    = filename.split('_')
     
     # Need at least: celestrak, tle, norad_id, and then name parts, start, end
     # Find the timestamp parts (they have 'T' in them)
@@ -703,12 +729,13 @@ def find_compatible_tle_file(
     if len(timestamp_parts) >= 2:
       try:
         # Start and end times should be the last two timestamp-looking parts
+        # Format: YYYYMMDDTHHMMSSz (uppercase Z)
         start_str = timestamp_parts[-2]  # e.g., "20251001T000000Z"
-        end_str = timestamp_parts[-1]    # e.g., "20251002T000000Z"
+        end_str   = timestamp_parts[-1]  # e.g., "20251002T000000Z"
         
         # Parse the datetime strings
         start_str_clean = start_str.rstrip('Zz')
-        end_str_clean = end_str.rstrip('Zz')
+        end_str_clean   = end_str.rstrip('Zz')
         
         file_start_dt = datetime.strptime(start_str_clean, '%Y%m%dT%H%M%S')
         file_end_dt = datetime.strptime(end_str_clean, '%Y%m%dT%H%M%S')
