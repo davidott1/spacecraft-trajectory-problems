@@ -39,6 +39,70 @@ def load_supported_objects() -> dict:
     return yaml.safe_load(f)
 
 
+def load_gravity_field_model(
+  gravity_folderpath : Path,
+  gravity_file       : str,
+  max_degree         : int,
+  max_order          : int,
+):
+  """
+  Load gravity field model from coefficient file.
+  
+  Input:
+  ------
+    gravity_folderpath : Path
+      Path to the folder containing gravity coefficient files.
+    gravity_file : str
+      Filename of the gravity coefficient file (e.g., 'EGM2008.gfc').
+    max_degree : int
+      Maximum degree for spherical harmonics expansion.
+    max_order : int
+      Maximum order for spherical harmonics expansion.
+      
+  Output:
+  -------
+    gravity_model : SphericalHarmonicsGravity | None
+      Loaded gravity model, or None if loading failed.
+  """
+  from src.model.gravity_field import load_gravity_field
+  
+  # Display gravity field info
+  try:
+    rel_folderpath = gravity_folderpath.relative_to(Path.cwd())
+    display_path = f"<project_folderpath>/{rel_folderpath}"
+  except ValueError:
+    display_path = gravity_folderpath
+
+  print("  Gravity Field Model")
+  print(f"    Folderpath : {display_path}")
+  
+  # Build full path to gravity file
+  gravity_filepath = gravity_folderpath / gravity_file
+  
+  if not gravity_filepath.exists():
+    print(f"    Filepath   : {gravity_file} (NOT FOUND)")
+    print(f"    Status     : Failed - file not found")
+    return None
+  
+  print(f"    Filepath   : {gravity_file}")
+  print(f"    Degree     : {max_degree}")
+  print(f"    Order      : {max_order}")
+  
+  try:
+    gravity_model = load_gravity_field(
+      filepath   = gravity_filepath,
+      max_degree = max_degree,
+      max_order  = max_order,
+    )
+    print(f"    Status     : Loaded successfully")
+    print(f"    GM         : {gravity_model.coeffs.gm:.6e} m³/s²")
+    print(f"    Radius     : {gravity_model.coeffs.radius:.3f} m")
+    return gravity_model
+  except Exception as e:
+    print(f"    Status     : Failed - {e}")
+    return None
+
+
 def load_files(
   use_spice                : bool,
   spice_kernels_folderpath : Path,

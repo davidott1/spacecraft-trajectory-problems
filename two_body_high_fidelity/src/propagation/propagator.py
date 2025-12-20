@@ -438,6 +438,7 @@ def run_high_fidelity_propagation(
   include_srp                   : bool,
   result_jpl_horizons_ephemeris : Optional[dict],
   compare_jpl_horizons          : bool,
+  gravity_model                 : Optional[object] = None,
 ) -> dict:
   """
   Configure and run the high-fidelity numerical propagator.
@@ -476,6 +477,8 @@ def run_high_fidelity_propagation(
       JPL Horizons ephemeris result for comparison.
     compare_jpl_horizons : bool
       Flag to enable comparison with Horizons.
+    gravity_model : object, optional
+      Spherical harmonics gravity model. If provided, replaces analytical harmonics.
       
   Output:
   -------
@@ -491,7 +494,8 @@ def run_high_fidelity_propagation(
   delta_time_s = (time_f_utc_dt - time_o_utc_dt).total_seconds()
 
   # Configure gravity harmonics using helper function
-  if include_gravity_harmonics and gravity_harmonics_list:
+  # Only use analytical harmonics if no gravity_model is provided
+  if gravity_model is None and include_gravity_harmonics and gravity_harmonics_list:
     harmonic_coeffs = _get_harmonic_coefficients(gravity_harmonics_list)
   else:
     harmonic_coeffs = _get_harmonic_coefficients([])  # All zeros
@@ -505,8 +509,16 @@ def run_high_fidelity_propagation(
   print(f"    Forces")
   print(f"      Gravity")
   print(f"        Earth")
-  print(f"          Two-Body Point Mass")
-  if include_gravity_harmonics:
+  
+  # Display gravity model info
+  if gravity_model is not None:
+    print(f"          Spherical Harmonics (Pines Algorithm)")
+    print(f"            Degree : {gravity_model.max_degree}")
+    print(f"            Order  : {gravity_model.max_order}")
+    print(f"            GM     : {gravity_model.coeffs.gm:.6e} m³/s²")
+    print(f"            Radius : {gravity_model.coeffs.radius:.3f} m")
+  elif include_gravity_harmonics:
+    print(f"          Two-Body Point Mass")
     # Separate zonal and tesseral for display
     zonal_harmonics    = [h for h in gravity_harmonics_list if h.startswith('J')]
     tesseral_harmonics = [h for h in gravity_harmonics_list if h.startswith('C') or h.startswith('S')]
@@ -517,6 +529,7 @@ def run_high_fidelity_propagation(
     if tesseral_harmonics:
       print(f"          Tesseral Harmonics : {', '.join(tesseral_harmonics)}")
   else:
+    print(f"          Two-Body Point Mass")
     print(f"          Zonal Harmonics    : None")
   
   if include_third_body:
@@ -562,6 +575,7 @@ def run_high_fidelity_propagation(
     enable_srp              = include_srp,
     cr                      = cr,
     area_srp                = area_srp,
+    gravity_model           = gravity_model,
   )
   
   # Get orbital period for grid density
@@ -820,9 +834,10 @@ def run_propagations(
   include_srp                   : bool,
   spice_kernels_folderpath      : Path,
   result_jpl_horizons_ephemeris : Optional[dict],
-  tle_line_1                    : str,
-  tle_line_2                    : str,
-) -> tuple[dict, Optional[dict]]:
+  tle_line_1                    : Optional[str],
+  tle_line_2                    : Optional[str],
+  gravity_model                 : Optional[object] = None,  # Add this parameter
+) -> tuple:
   """
   Run high-fidelity and SGP4 propagations.
   
@@ -868,6 +883,8 @@ def run_propagations(
       First line of TLE.
     tle_line_2 : str
       Second line of TLE.
+    gravity_model : object, optional
+      Spherical harmonics gravity model.
       
   Output:
   -------
@@ -894,6 +911,7 @@ def run_propagations(
     include_srp                   = include_srp,
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     compare_jpl_horizons          = compare_jpl_horizons,
+    gravity_model                 = gravity_model,
   )
   
   # SGP4 propagation (if requested)

@@ -20,6 +20,9 @@ def print_input_configuration(
   compare_jpl_horizons   : bool,
   third_bodies_list      : list,
   gravity_harmonics_list : list,
+  gravity_harmonics_degree : Optional[int],
+  gravity_harmonics_order  : Optional[int],
+  gravity_harmonics_file   : Optional[str],
   include_srp            : bool,
   initial_state_source   : str,
 ) -> None:
@@ -58,6 +61,9 @@ def print_input_configuration(
     'initial_state_filename' : None,
     'timespan'               : None,
     'gravity_harmonics'      : [],
+    'gravity_harmonics_degree': None,
+    'gravity_harmonics_order' : None,
+    'gravity_harmonics_file'  : None,
     'third_bodies'           : [],
     'include_drag'           : False,
     'include_srp'            : False,
@@ -68,6 +74,7 @@ def print_input_configuration(
   # Format values for display
   timespan_str  = f"{desired_timespan[0]} {desired_timespan[1]}" if desired_timespan else "None"
   harmonics_str = ' '.join(gravity_harmonics_list) if gravity_harmonics_list else "None"
+  gh_deg_order_str = f"{gravity_harmonics_degree} {gravity_harmonics_order}" if gravity_harmonics_degree is not None else "None"
   third_str     = ' '.join(third_bodies_list) if third_bodies_list else "None"
   
   # Build configuration entries: (name, value, default, user_set)
@@ -77,6 +84,8 @@ def print_input_configuration(
     ('initial_state_filename', initial_state_filename, defaults['initial_state_filename'], initial_state_filename is not None),
     ('timespan',               timespan_str,           defaults['timespan'],               desired_timespan       is not None),
     ('gravity_harmonics',      harmonics_str,          defaults['gravity_harmonics'],      gravity_harmonics_list is not None and len(gravity_harmonics_list) > 0),
+    ('gravity_degree_order',   gh_deg_order_str,       "None",                             gravity_harmonics_degree is not None),
+    ('gravity_file',           gravity_harmonics_file, defaults['gravity_harmonics_file'], gravity_harmonics_file is not None),
     ('third_bodies',           third_str,              defaults['third_bodies'],           third_bodies_list      is not None and len(third_bodies_list) > 0),
     ('include_drag',           include_drag,           defaults['include_drag'],           include_drag           != defaults['include_drag']),
     ('include_srp',            include_srp,            defaults['include_srp'],            include_srp            != defaults['include_srp']),
@@ -142,6 +151,7 @@ def print_paths(
   print(f"  Data Folderpath            : {data_folderpath}")
   print(f"    SPICE Kernels Folderpath : <data_folderpath>/{config.spice_kernels_folderpath.relative_to(data_folderpath)}")
   print(f"    LSK Filepath             : <data_folderpath>/{config.lsk_filepath.relative_to(data_folderpath)}")
+  print(f"    Gravity Folderpath       : <data_folderpath>/{config.gravity_folderpath.relative_to(data_folderpath)}")
   print(f"    JPL Horizons Folderpath  : <data_folderpath>/{config.jpl_horizons_folderpath.relative_to(data_folderpath)}")
   print(f"    TLEs Folderpath          : <data_folderpath>/{config.tles_folderpath.relative_to(data_folderpath)}")
   print(f"    State Vectors Folderpath : <data_folderpath>/{config.state_vectors_folderpath.relative_to(data_folderpath)}")
@@ -171,6 +181,9 @@ def print_configuration(
     compare_jpl_horizons   = config.compare_jpl_horizons,
     third_bodies_list      = config.third_bodies_list,
     gravity_harmonics_list = config.gravity_harmonics_list,
+    gravity_harmonics_degree = config.gravity_harmonics_degree,
+    gravity_harmonics_order  = config.gravity_harmonics_order,
+    gravity_harmonics_file   = config.gravity_harmonics_file,
     include_srp            = config.include_srp,
     initial_state_source   = config.initial_state_source,
   )
@@ -217,6 +230,8 @@ def build_config(
   gravity_harmonics      : Optional[list] = None,
   include_srp            : bool           = False,
   initial_state_source   : str            = 'jpl_horizons',
+  gravity_harmonics_degree_order : Optional[list] = None,
+  gravity_harmonics_file         : Optional[str] = None,
 ) -> SimpleNamespace:
   """
   Parse, validate, and set up input parameters for orbit propagation.
@@ -263,6 +278,13 @@ def build_config(
   # Normalize harmonic names to uppercase
   include_gravity_harmonics = gravity_harmonics is not None and len(gravity_harmonics) > 0
   gravity_harmonics_list    = [h.upper() for h in gravity_harmonics] if gravity_harmonics is not None else []
+
+  if gravity_harmonics_degree_order:
+    gravity_harmonics_degree = gravity_harmonics_degree_order[0]
+    gravity_harmonics_order  = gravity_harmonics_degree_order[1]
+  else:
+    gravity_harmonics_degree = None
+    gravity_harmonics_order  = None
 
   # Handle third bodies logic
   include_third_body = third_bodies is not None and len(third_bodies) > 0
@@ -405,6 +427,9 @@ def build_config(
     third_bodies_list         = third_bodies_list,
     include_gravity_harmonics = include_gravity_harmonics,
     gravity_harmonics_list    = gravity_harmonics_list,
+    gravity_harmonics_degree  = gravity_harmonics_degree,
+    gravity_harmonics_order   = gravity_harmonics_order,
+    gravity_harmonics_file    = gravity_harmonics_file,
     include_srp               = include_srp,
     initial_state_source      = initial_state_source,
     output_folderpath         = paths['output_folderpath'],
@@ -413,6 +438,7 @@ def build_config(
     files_folderpath          = paths['files_folderpath'],
     log_filepath              = paths['log_filepath'],
     spice_kernels_folderpath  = paths['spice_kernels_folderpath'],
+    gravity_folderpath        = paths['gravity_folderpath'],
     jpl_horizons_folderpath   = paths['jpl_horizons_folderpath'],
     tles_folderpath           = paths['tles_folderpath'],
     state_vectors_folderpath  = paths['state_vectors_folderpath'],
@@ -455,6 +481,9 @@ def setup_paths_and_files() -> dict:
   spice_kernels_folderpath = data_folderpath / 'spice_kernels'
   lsk_filepath             = spice_kernels_folderpath / 'naif0012.tls'
   
+  # Gravity coefficients path
+  gravity_folderpath = data_folderpath / 'gravity_models'
+
   # TLEs folderpath
   tles_folderpath = data_folderpath / 'tles'
 
@@ -483,6 +512,7 @@ def setup_paths_and_files() -> dict:
     'files_folderpath'         : files_folderpath,
     'log_filepath'             : log_filepath,
     'spice_kernels_folderpath' : spice_kernels_folderpath,
+    'gravity_folderpath'       : gravity_folderpath,
     'jpl_horizons_folderpath'  : jpl_horizons_folderpath,
     'tles_folderpath'          : tles_folderpath,
     'state_vectors_folderpath' : state_vectors_folderpath,

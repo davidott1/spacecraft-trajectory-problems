@@ -83,6 +83,22 @@ def parse_command_line_arguments(
     help    = 'Gravity harmonics to include (e.g., J2 J3 J4 C22 S22). Default: none.',
   )
   parser.add_argument(
+    '--gravity-harmonics-degree-order',
+    dest    = 'gravity_harmonics_degree_order',
+    type    = int,
+    nargs   = 2,
+    metavar = ('DEGREE', 'ORDER'),
+    default = None,
+    help    = 'Maximum degree and order for spherical harmonics (e.g. 10 10).',
+  )
+  parser.add_argument(
+    '--gravity-harmonics-file',
+    dest    = 'gravity_harmonics_file',
+    type    = str,
+    default = None,
+    help    = 'Filename of the gravity field coefficient file (e.g. EGM2008.gfc).',
+  )
+  parser.add_argument(
     '--include-drag',
     '--drag',
     dest    = 'include_drag',

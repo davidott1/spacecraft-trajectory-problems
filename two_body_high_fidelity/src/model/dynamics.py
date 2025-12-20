@@ -112,6 +112,12 @@ from src.model.constants       import SOLARSYSTEMCONSTANTS, CONVERTER, NAIFIDS
 from src.model.frame_converter import FrameConverter
 
 
+# Type hint for gravity model (avoid circular import)
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+  from src.model.gravity_field import SphericalHarmonicsGravity
+
+
 # =============================================================================
 # Gravity Components (bottom of hierarchy)
 # =============================================================================
@@ -910,6 +916,9 @@ class Gravity:
     Computes gravity as:
         gravity = two_body_point_mass + two_body_oblate + third_body_point_mass + 
                   third_body_oblate (future) + relativity (future)
+    
+    If a spherical harmonics gravity model is provided, it replaces the 
+    two-body point mass and oblateness terms.
     """
     
     def __init__(
@@ -933,6 +942,7 @@ class Gravity:
       pos_ref                 : float = 0.0,
       enable_third_body       : bool  = False,
       third_body_bodies       : list  = None,
+      gravity_model           : Optional['SphericalHarmonicsGravity'] = None,
     ):
       """
       Initialize gravity acceleration components.
@@ -977,12 +987,18 @@ class Gravity:
           Enable Sun/Moon gravitational perturbations.
         third_body_bodies : list
           Which bodies to include (default: ['sun', 'moon']).
+        gravity_model : SphericalHarmonicsGravity, optional
+          Spherical harmonics gravity model. If provided, replaces 
+          two-body point mass and oblateness terms.
               
       Output:
       -------
         None
       """
-      # Two-body gravity
+      # Spherical harmonics gravity model (if provided, replaces two-body terms)
+      self.gravity_model = gravity_model
+      
+      # Two-body gravity (used if no spherical harmonics model provided)
       self.two_body = TwoBodyGravity(
         gp      = gp,
         j2      = j2,
@@ -1035,26 +1051,32 @@ class Gravity:
       # Initialize acceleration vector
       acc_vec = np.zeros(3)
       
-      # Two-body point mass
-      acc_vec += self.two_body.point_mass(pos_vec)
+      # Use spherical harmonics model if available
+      if self.gravity_model is not None:
+        # Spherical harmonics includes point mass and all harmonic terms
+        acc_vec += self.gravity_model.compute(time, pos_vec)
+      else:
+        # Fall back to analytical two-body terms
+        # Two-body point mass
+        acc_vec += self.two_body.point_mass(pos_vec)
+        
+        # Two-body oblateness (J2, J3, J4, J5, J6)
+        acc_vec += self.two_body.oblate_j2(time, pos_vec)
+        acc_vec += self.two_body.oblate_j3(time, pos_vec)
+        acc_vec += self.two_body.oblate_j4(time, pos_vec)
+        acc_vec += self.two_body.oblate_j5(time, pos_vec)
+        acc_vec += self.two_body.oblate_j6(time, pos_vec)
+        
+        # Two-body tesseral (C21, S21, C22, S22)
+        acc_vec += self.two_body.tesseral_21(time, pos_vec)
+        acc_vec += self.two_body.tesseral_22(time, pos_vec)
+        
+        # Two-body tesseral (C31, S31, C32, S32, C33, S33)
+        acc_vec += self.two_body.tesseral_31(time, pos_vec)
+        acc_vec += self.two_body.tesseral_32(time, pos_vec)
+        acc_vec += self.two_body.tesseral_33(time, pos_vec)
       
-      # Two-body oblateness (J2, J3, J4, J5, J6)
-      acc_vec += self.two_body.oblate_j2(time, pos_vec)
-      acc_vec += self.two_body.oblate_j3(time, pos_vec)
-      acc_vec += self.two_body.oblate_j4(time, pos_vec)
-      acc_vec += self.two_body.oblate_j5(time, pos_vec)
-      acc_vec += self.two_body.oblate_j6(time, pos_vec)
-      
-      # Two-body tesseral (C21, S21, C22, S22)
-      acc_vec += self.two_body.tesseral_21(time, pos_vec)
-      acc_vec += self.two_body.tesseral_22(time, pos_vec)
-      
-      # Two-body tesseral (C31, S31, C32, S32, C33, S33)
-      acc_vec += self.two_body.tesseral_31(time, pos_vec)
-      acc_vec += self.two_body.tesseral_32(time, pos_vec)
-      acc_vec += self.two_body.tesseral_33(time, pos_vec)
-      
-      # Third-body contributions
+      # Third-body contributions (always added if enabled)
       if self.enable_third_body and self.third_body is not None:
         acc_vec += self.third_body.point_mass(time, pos_vec)
       
@@ -1356,6 +1378,9 @@ class Acceleration:
     where:
       gravity = two_body_point_mass + third_body_point_mass + 
                 two_body_oblate (J2, J3, J4, J5, J6) + relativity (future)
+    
+    Or if a spherical harmonics gravity model is provided:
+      gravity = spherical_harmonics_model + third_body_point_mass
     """
     
     def __init__(
@@ -1386,6 +1411,7 @@ class Acceleration:
       enable_srp              : bool  = False,
       cr                      : float = 0.0,
       area_srp                : float = 0.0,
+      gravity_model           : Optional['SphericalHarmonicsGravity'] = None,
     ):
       """
       Initialize acceleration coordinator
@@ -1444,6 +1470,9 @@ class Acceleration:
           Radiation pressure coefficient
         area_srp : float
           Cross-sectional area for SRP [m²]
+        gravity_model : SphericalHarmonicsGravity, optional
+          Spherical harmonics gravity model. If provided, replaces 
+          two-body point mass and oblateness terms.
               
       Output:
       -------
@@ -1470,6 +1499,7 @@ class Acceleration:
         pos_ref                 = pos_ref,
         enable_third_body       = enable_third_body,
         third_body_bodies       = third_body_bodies,
+        gravity_model           = gravity_model,
       )
       
       self.enable_drag = enable_drag
