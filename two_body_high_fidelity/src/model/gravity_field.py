@@ -14,10 +14,11 @@ References:
 """
 
 import numpy as np
-from pathlib import Path
-from typing import Optional, Tuple
 
-from src.model.constants import SOLARSYSTEMCONSTANTS
+from pathlib import Path
+from typing  import Optional, Tuple
+
+from src.model.constants       import SOLARSYSTEMCONSTANTS
 from src.model.frame_converter import FrameConverter
 
 
@@ -30,7 +31,7 @@ class GravityFieldCoefficients:
     self,
     max_degree : int,
     max_order  : int,
-    gm         : float,
+    gp         : float,
     radius     : float,
   ):
     """
@@ -42,14 +43,14 @@ class GravityFieldCoefficients:
         Maximum degree of expansion.
       max_order : int
         Maximum order of expansion.
-      gm : float
+      gp : float
         Gravitational parameter [m³/s²].
       radius : float
         Reference radius [m].
     """
     self.max_degree = max_degree
     self.max_order  = min(max_order, max_degree)
-    self.gm         = gm
+    self.gp         = gp
     self.radius     = radius
     
     # Allocate coefficient arrays (n x m)
@@ -84,11 +85,11 @@ def load_icgem_file(
   Load gravity field coefficients from ICGEM format file.
   """
   # Default values (will be overwritten from file header)
-  gm     = SOLARSYSTEMCONSTANTS.EARTH.GP
+  gp     = SOLARSYSTEMCONSTANTS.EARTH.GP
   radius = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
   
-  # First pass: read header for GM and radius
   with open(filepath, 'r') as f:
+    # Read Header
     for line in f:
       line = line.strip()
       if not line:
@@ -98,27 +99,20 @@ def load_icgem_file(
         parts = line.split()
         # Handle 'D' exponents in header values if present
         val_str = parts[1].replace('D', 'E').replace('d', 'e')
-        gm = float(val_str)
+        gp = float(val_str)
       elif line.startswith('radius'):
         parts = line.split()
         val_str = parts[1].replace('D', 'E').replace('d', 'e')
         radius = float(val_str)
       elif line.startswith('end_of_head'):
         break
-  
-  # Initialize coefficients
-  coeffs = GravityFieldCoefficients(max_degree, max_order, gm, radius)
-  
-  # Second pass: read coefficients
-  with open(filepath, 'r') as f:
-    in_header = True
+    
+    # Initialize coefficients container
+    coeffs = GravityFieldCoefficients(max_degree, max_order, gp, radius)
+    
+    # Read Coefficients (continue reading from current file position)
     for line in f:
       line = line.strip()
-      
-      if in_header:
-        if line.startswith('end_of_head'):
-          in_header = False
-        continue
       
       if not line or line.startswith('#'):
         continue
@@ -236,11 +230,11 @@ class SphericalHarmonicsGravity:
     x, y, z = pos_vec
     r = np.linalg.norm(pos_vec)
     
-    gm = self.coeffs.gm
+    gp = self.coeffs.gp
     Re = self.coeffs.radius
     
     # Start with point mass
-    acc = -gm * pos_vec / r**3
+    acc = -gp * pos_vec / r**3
     
     # J2 term (degree 2, order 0)
     if self.max_degree >= 2:
@@ -249,7 +243,7 @@ class SphericalHarmonicsGravity:
       
       r2 = r * r
       z2 = z * z
-      factor = 1.5 * J2 * gm * Re**2 / (r2 * r2 * r)
+      factor = 1.5 * J2 * gp * Re**2 / (r2 * r2 * r)
       
       acc[0] += factor * x * (5.0 * z2 / r2 - 1.0)
       acc[1] += factor * y * (5.0 * z2 / r2 - 1.0)
@@ -276,7 +270,7 @@ class SphericalHarmonicsGravity:
     u = z / r  # sin(lat)
     
     Re = self.coeffs.radius
-    gm = self.coeffs.gm
+    gp = self.coeffs.gp
     
     n_max = self.max_degree
     m_max = self.max_order
@@ -366,12 +360,12 @@ class SphericalHarmonicsGravity:
           az -= fac3 * (Cnm * V[n+1, m] + Snm * W[n+1, m]) * norm_fix
     
     # Scale by GM/Re^2 (Pines formulation scaling)
-    scale = gm / (Re * Re)
+    scale = gp / (Re * Re)
     acc_vec = scale * np.array([ax, ay, az])
     
     # Add Two-Body Point Mass term explicitly (n=0)
     # This avoids issues with normalization factors for the monopole term
-    acc_vec += -gm * pos_vec / r**3
+    acc_vec += -gp * pos_vec / r**3
     
     return acc_vec
 

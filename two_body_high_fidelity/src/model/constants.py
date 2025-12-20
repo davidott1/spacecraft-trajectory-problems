@@ -1,3 +1,6 @@
+class PRINTFORMATTER:
+  SCIENTIFIC_NOTATION = ">19.12e"          # scientific notation format
+
 class CONVERTER:
   # Unity Values
   ONE_AU  = 1.0                            # [astronomical unit]
@@ -82,11 +85,13 @@ class NAIFIDS:
 class SOLARSYSTEMCONSTANTS:
   """
   Class to hold physical constants.
-  Some constants are from "OrbitalMotion", created by Hanspeter Schaub on 6/19/05.
+
+  Notes:
+    - Default value
+    - Values could be overwritten by loading the values from an external file.
+    - Some constants are from "OrbitalMotion", created by Hanspeter Schaub on 6/19/05.
+    - 
   """
-  
-  # G_SC      = 1361.0   # solar constant [W/m²] at 1 AU
-  # P_SRP_1AU = G_SC / PHYSICALCONSTANTS.speed_of_light  # solar radiation pressure at 1 AU [N/m²]. approx 4.56e-6 N/m².
 
   class SUN:
     class RADIUS:
@@ -127,10 +132,6 @@ class SOLARSYSTEMCONSTANTS:
     INC = 0.00005    * CONVERTER.DEG_PER_RAD  # Inclination [rad]
 
     # SGP4 uses WGS-72 constants (not WGS-84)
-    # Standard WGS-84 values:
-    # J2 = 1.08263e-3
-    # J3 = -2.532153e-6
-    # J4 = -1.61962159137e-6
     
     # SGP4/WGS-72 values for better agreement:
     J2_WGS84 =  1.08263e-3                  # WGS-84 J2 coefficient

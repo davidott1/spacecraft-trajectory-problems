@@ -15,10 +15,13 @@ from sgp4.api          import jday
 
 from src.model.dynamics        import GeneralStateEquationsOfMotion, Acceleration
 from src.model.orbit_converter import OrbitConverter
-from src.model.constants       import SOLARSYSTEMCONSTANTS
+from src.model.constants       import PRINTFORMATTER, SOLARSYSTEMCONSTANTS
 from src.model.time_converter  import utc_to_et
 from src.model.frame_converter import VectorConverter
 from src.utility.tle_helper    import modify_tle_bstar, get_tle_satellite_and_tle_epoch
+
+
+FORMAT_NUMBER = ">19.12e"
 
 
 def _get_harmonic_coefficients(
@@ -489,8 +492,8 @@ def run_high_fidelity_propagation(
   print("\nHigh-Fidelity Model")
 
   # Calculate Ephemeris Times (ET) for integration
-  time_et_o = utc_to_et(time_o_utc_dt)
-  time_et_f = utc_to_et(time_f_utc_dt)
+  time_et_o    = utc_to_et(time_o_utc_dt)
+  time_et_f    = utc_to_et(time_f_utc_dt)
   delta_time_s = (time_f_utc_dt - time_o_utc_dt).total_seconds()
 
   # Configure gravity harmonics using helper function
@@ -512,11 +515,11 @@ def run_high_fidelity_propagation(
   
   # Display gravity model info
   if gravity_model is not None:
-    print(f"          Spherical Harmonics (Pines Algorithm)")
+    print(f"          Spherical Harmonics")
     print(f"            Degree : {gravity_model.max_degree}")
     print(f"            Order  : {gravity_model.max_order}")
-    print(f"            GM     : {gravity_model.coeffs.gm:.6e} m³/s²")
-    print(f"            Radius : {gravity_model.coeffs.radius:.3f} m")
+    print(f"            GP     : {gravity_model.coeffs.gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
+    print(f"            Radius : {gravity_model.coeffs.radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
   elif include_gravity_harmonics:
     print(f"          Two-Body Point Mass")
     # Separate zonal and tesseral for display
@@ -540,12 +543,12 @@ def run_high_fidelity_propagation(
   if include_drag:
     print(f"      Atmospheric Drag")
     print(f"        Model      : Exponential Atmosphere")
-    print(f"        Parameters : Cd={cd}, Area_Drag={area_drag} m², Mass={mass} kg")
+    print(f"        Parameters : Cd={cd:{PRINTFORMATTER.SCIENTIFIC_NOTATION}}, Area_Drag={area_drag:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m², Mass={mass:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} kg")
   
   if include_srp:
     print(f"      Solar Radiation Pressure")
     print(f"        Model      : Cylindrical Shadow (Spherical Earth)")
-    print(f"        Parameters : Cr={cr}, Area_SRP={area_srp} m²")
+    print(f"        Parameters : Cr={cr:{PRINTFORMATTER.SCIENTIFIC_NOTATION}}, Area_SRP={area_srp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m²")
 
   # Initialize acceleration model
   acceleration = Acceleration(
@@ -609,7 +612,7 @@ def run_high_fidelity_propagation(
 
   print("    Numerical Integration")
   print(f"      Method     : DOP853")
-  print(f"      Tolerances : rtol=1e-12, atol=1e-15")  # Updated display
+  print(f"      Tolerances : rtol=1.0e-12, atol=1.0e-15")  # Updated display
   print(f"      Grid       : {len(t_eval_grid)} points (equal-spaced)")
 
   print("\n  Compute")
@@ -832,7 +835,6 @@ def run_propagations(
   include_gravity_harmonics     : bool,
   gravity_harmonics_list        : list,
   include_srp                   : bool,
-  spice_kernels_folderpath      : Path,
   result_jpl_horizons_ephemeris : Optional[dict],
   tle_line_1                    : Optional[str],
   tle_line_2                    : Optional[str],

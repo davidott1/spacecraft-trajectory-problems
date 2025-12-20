@@ -200,10 +200,14 @@ def main(
   print_configuration(config)
 
   # Load files (SPICE is always required)
-  load_files(
-    True,
-    config.spice_kernels_folderpath,
-    config.lsk_filepath,
+  gravity_model = load_files(
+    use_spice                = True,
+    spice_kernels_folderpath = config.spice_kernels_folderpath,
+    lsk_filepath             = config.lsk_filepath,
+    gravity_folderpath       = config.gravity_folderpath,
+    gravity_file             = config.gravity_harmonics_file,
+    gravity_degree           = config.gravity_harmonics_degree,
+    gravity_order            = config.gravity_harmonics_order,
   )
 
   # Get Horizons ephemeris (only if needed for initial state or comparison)
@@ -259,7 +263,7 @@ def main(
       stop_logging(logger)
       return error
 
-  # Determine initial state (from Horizons, TLE, or Custom SV)
+  # Determine initial state: JPL Horizons, TLE, or Custom State Vector
   if config.initial_state_source == 'custom_state_vector':
     print(f"  Initial State")
     print(f"    Source : Custom State Vector File")
@@ -273,17 +277,6 @@ def main(
       result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
       initial_state_source          = config.initial_state_source,
       to_j2000                      = True,
-    )
-
-  # Load gravity field model if degree/order specified
-  gravity_model = None
-  if config.gravity_harmonics_degree is not None and config.gravity_harmonics_file is not None:
-    from src.input.loader import load_gravity_field_model
-    gravity_model = load_gravity_field_model(
-      gravity_folderpath = config.gravity_folderpath,
-      gravity_file       = config.gravity_harmonics_file,
-      max_degree         = config.gravity_harmonics_degree,
-      max_order          = config.gravity_harmonics_order,
     )
 
   # Run propagations: high-fidelity and SGP4
@@ -304,7 +297,6 @@ def main(
     include_gravity_harmonics     = config.include_gravity_harmonics,
     gravity_harmonics_list        = config.gravity_harmonics_list,
     include_srp                   = config.include_srp,
-    spice_kernels_folderpath      = config.spice_kernels_folderpath,
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     tle_line_1                    = config.tle_line_1,
     tle_line_2                    = config.tle_line_2,
