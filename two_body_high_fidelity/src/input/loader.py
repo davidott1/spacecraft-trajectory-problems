@@ -40,9 +40,9 @@ def load_supported_objects() -> dict:
 
 def load_gravity_field_model(
   gravity_folderpath : Path,
-  gravity_file       : str,
-  max_degree         : int,
-  max_order          : int,
+  gravity_filename   : str,
+  max_gravity_degree : int,
+  max_gravity_order  : int,
 ):
   """
   Load gravity field model from coefficient file.
@@ -51,11 +51,11 @@ def load_gravity_field_model(
   ------
     gravity_folderpath : Path
       Path to the folder containing gravity coefficient files.
-    gravity_file : str
+    gravity_filename : str
       Filename of the gravity coefficient file (e.g., 'EGM2008.gfc').
-    max_degree : int
+    max_gravity_degree : int
       Maximum degree for spherical harmonics expansion.
-    max_order : int
+    max_gravity_order : int
       Maximum order for spherical harmonics expansion.
       
   Output:
@@ -63,35 +63,36 @@ def load_gravity_field_model(
     gravity_model : SphericalHarmonicsGravity | None
       Loaded gravity model, or None if loading failed.
   """
+  # Import
   from src.model.gravity_field import load_gravity_field
   
   # Display gravity field info
   try:
-    rel_folderpath = gravity_folderpath.relative_to(Path.cwd())
-    display_path   = f"<project_folderpath>/{rel_folderpath}"
+    rel_folderpath     = gravity_folderpath.relative_to(Path.cwd())
+    display_folderpath = f"<project_folderpath>/{rel_folderpath}"
   except ValueError:
-    display_path = gravity_folderpath
+    display_folderpath = gravity_folderpath
 
   print("  Gravity Field Model")
-  print(f"    Folderpath : {display_path}")
+  print(f"    Folderpath : {display_folderpath}")
   
   # Build full path to gravity file
-  gravity_filepath = gravity_folderpath / gravity_file
+  gravity_filepath = gravity_folderpath / gravity_filename
   
   if not gravity_filepath.exists():
-    print(f"    Filepath   : {gravity_file} (NOT FOUND)")
+    print(f"    Filepath   : {gravity_filename} (NOT FOUND)")
     print(f"    Status     : Failed - file not found")
     return None
   
-  print(f"    Filepath   : {gravity_file}")
-  print(f"    Degree     : {max_degree}")
-  print(f"    Order      : {max_order}")
+  print(f"    Filepath   : {gravity_filename}")
+  print(f"    Degree     : {max_gravity_degree}")
+  print(f"    Order      : {max_gravity_order}")
   
   try:
     gravity_model = load_gravity_field(
-      filepath   = gravity_filepath,
-      max_degree = max_degree,
-      max_order  = max_order,
+      filepath           = gravity_filepath,
+      max_gravity_degree = max_gravity_degree,
+      max_gravity_order  = max_gravity_order,
     )
     print(f"    Status     : Loaded successfully")
     print(f"    GP         : {gravity_model.coeffs.gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
@@ -107,7 +108,7 @@ def load_files(
   spice_kernels_folderpath : Path,
   lsk_filepath             : Path,
   gravity_folderpath       : Optional[Path] = None,
-  gravity_file             : Optional[str]  = None,
+  gravity_filename         : Optional[str]  = None,
   gravity_degree           : Optional[int]  = None,
   gravity_order            : Optional[int]  = None,
 ) -> Optional[object]:
@@ -124,7 +125,7 @@ def load_files(
       Path to the leap seconds kernel file.
     gravity_folderpath : Path, optional
       Path to gravity models folder.
-    gravity_file : str, optional
+    gravity_filename : str, optional
       Gravity model filename.
     gravity_degree : int, optional
       Maximum degree.
@@ -144,14 +145,12 @@ def load_files(
 
   # Load gravity model if requested
   gravity_model = None
-  if gravity_file is not None and gravity_degree is not None and gravity_folderpath is not None:
-    # Default order to degree if not specified
-    order = gravity_order if gravity_order is not None else gravity_degree
+  if gravity_filename is not None and gravity_degree is not None and gravity_folderpath is not None:
     gravity_model = load_gravity_field_model(
-      gravity_folderpath, 
-      gravity_file, 
-      gravity_degree, 
-      order
+      gravity_folderpath,
+      gravity_filename,
+      max_gravity_degree = gravity_degree,
+      max_gravity_order  = gravity_order,
     )
     
   return gravity_model
