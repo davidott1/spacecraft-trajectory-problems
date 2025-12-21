@@ -178,7 +178,7 @@ class SphericalHarmonicsGravity:
     """
     self.coeffs     = coefficients
     self.max_degree = use_degree if use_degree else coefficients.max_degree
-    self.max_order  = use_order if use_order else coefficients.max_order
+    self.max_order  = use_order  if use_order  else coefficients.max_order
     self.max_order  = min(self.max_order, self.max_degree)
     
     # Precompute normalization factors
