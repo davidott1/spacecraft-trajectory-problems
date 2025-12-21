@@ -17,6 +17,8 @@ def get_initial_state(
   time_o_dt                     : datetime,
   result_jpl_horizons_ephemeris : Optional[dict],
   initial_state_source          : str = 'jpl_horizons',
+  custom_state_vector           : Optional[np.ndarray] = None,
+  initial_state_filename        : Optional[str] = None,
   to_j2000                      : bool = True,
 ) -> np.ndarray:
   """
@@ -33,7 +35,11 @@ def get_initial_state(
     result_jpl_horizons_ephemeris : dict | None
       JPL Horizons ephemeris result.
     initial_state_source : str
-      Source for initial state ('jpl_horizons' or 'tle').
+      Source for initial state ('jpl_horizons', 'tle', or 'custom_state_vector').
+    custom_state_vector : np.ndarray | None
+      Custom state vector if source is 'custom_state_vector'.
+    initial_state_filename : str | None
+      Filename of custom state vector file.
     to_j2000 : bool
       Convert to J2000 frame.
       
@@ -44,6 +50,44 @@ def get_initial_state(
   """
   print("\nInitial State")
   
+  # Custom State Vector
+  if initial_state_source == 'custom_state_vector':
+    if custom_state_vector is None:
+      raise ValueError("Custom state vector source selected but no vector provided.")
+
+    # Get ET for display
+    try:
+      epoch_et = utc_to_et(time_o_dt)
+      et_str   = f" / {epoch_et:.6f} ET"
+    except Exception:
+      et_str = ""
+
+    # Convert position, velocity to classical orbital elements for display
+    coe = OrbitConverter.pv_to_coe(
+      pos_vec = custom_state_vector[0:3],
+      vel_vec = custom_state_vector[3:6],
+      gp      = SOLARSYSTEMCONSTANTS.EARTH.GP,
+    )
+
+    print(f"  Source : Custom State Vector File")
+    print(f"  File   : {initial_state_filename}")
+    print(f"  Epoch  : {time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC{et_str}")
+    print(f"  Frame  : J2000 (Assumed)")
+    print(f"  Cartesian State")
+    print(f"    Position :  {custom_state_vector[0]:>19.12e}  {custom_state_vector[1]:>19.12e}  {custom_state_vector[2]:>19.12e} m")
+    print(f"    Velocity :  {custom_state_vector[3]:>19.12e}  {custom_state_vector[4]:>19.12e}  {custom_state_vector[5]:>19.12e} m/s")
+    print(f"  Classical Orbital Elements")
+    print(f"    SMA  :  {coe['sma' ]:19.12e} m")
+    print(f"    ECC  :  {coe['ecc' ]:19.12e} -")
+    print(f"    INC  :  {coe['inc' ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"    RAAN :  {coe['raan']*CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"    AOP  :  {coe['aop' ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"    TA   :  {coe['ta'  ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"    EA   :  {coe['ea'  ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"    MA   :  {coe['ma'  ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
+    
+    return custom_state_vector
+
   # Determine if we should use Horizons
   use_jpl_horizons = 'jpl_horizons' in initial_state_source.lower()
 

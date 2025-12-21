@@ -88,6 +88,7 @@ def load_icgem_file(
   gp     = SOLARSYSTEMCONSTANTS.EARTH.GP
   radius = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
   
+  # Open file
   with open(filepath, 'r') as f:
     # Read Header
     for line in f:
@@ -101,9 +102,9 @@ def load_icgem_file(
         val_str = parts[1].replace('D', 'E').replace('d', 'e')
         gp = float(val_str)
       elif line.startswith('radius'):
-        parts = line.split()
+        parts   = line.split()
         val_str = parts[1].replace('D', 'E').replace('d', 'e')
-        radius = float(val_str)
+        radius  = float(val_str)
       elif line.startswith('end_of_head'):
         break
     
@@ -123,15 +124,14 @@ def load_icgem_file(
       
       if parts[0] in ['gfc', 'gcf']:
         try:
-          n   = int(parts[1])
-          m   = int(parts[2])
-          # Handle 'D' exponents in coefficients (e.g. 1.0D-06)
+          n = int(parts[1])
+          m = int(parts[2])
+          # Handle 'D' or 'E' exponents (e.g. 1.0D-06)
           cnm_str = parts[3].replace('D', 'E').replace('d', 'e')
-          Cnm = float(cnm_str)
-          
+          Cnm     = float(cnm_str)
           if len(parts) > 4:
             snm_str = parts[4].replace('D', 'E').replace('d', 'e')
-            Snm = float(snm_str)
+            Snm     = float(snm_str)
           else:
             Snm = 0.0
           
@@ -371,9 +371,9 @@ class SphericalHarmonicsGravity:
 
 
 def load_gravity_field(
-  filepath   : Path,
-  max_degree : int,
-  max_order  : int,
+  filepath           : Path,
+  max_gravity_degree : int,
+  max_gravity_order  : int,
 ) -> SphericalHarmonicsGravity:
   """
   Convenience function to load gravity field and create model.
@@ -382,9 +382,9 @@ def load_gravity_field(
   ------
     filepath : Path
       Path to coefficient file.
-    max_degree : int
+    max_gravity_degree : int
       Maximum degree.
-    max_order : int
+    max_gravity_order : int
       Maximum order.
   
   Output:
@@ -392,5 +392,5 @@ def load_gravity_field(
     model : SphericalHarmonicsGravity
       Ready-to-use gravity model.
   """
-  coeffs = load_icgem_file(filepath, max_degree, max_order)
-  return SphericalHarmonicsGravity(coeffs, max_degree, max_order)
+  coeffs = load_icgem_file(filepath, max_gravity_degree, max_gravity_order)
+  return SphericalHarmonicsGravity(coeffs, max_gravity_degree, max_gravity_order)

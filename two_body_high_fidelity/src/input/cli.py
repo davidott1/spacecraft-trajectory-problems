@@ -92,8 +92,8 @@ def parse_command_line_arguments(
     help    = 'Maximum degree and order for spherical harmonics (e.g. 10 10).',
   )
   parser.add_argument(
-    '--gravity-harmonics-file',
-    dest    = 'gravity_harmonics_file',
+    '--gravity-harmonics-filename',
+    dest    = 'gravity_harmonics_filename',
     type    = str,
     default = None,
     help    = 'Filename of the gravity field coefficient file (e.g. EGM2008.gfc).',

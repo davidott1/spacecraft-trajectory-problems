@@ -199,13 +199,13 @@ def main(
   # Print input configuration and paths
   print_configuration(config)
 
-  # Load files (SPICE is always required)
+  # Load files: SPICE, spherical harmonics coefficients
   gravity_model = load_files(
     use_spice                = True,
     spice_kernels_folderpath = config.spice_kernels_folderpath,
     lsk_filepath             = config.lsk_filepath,
     gravity_folderpath       = config.gravity_folderpath,
-    gravity_file             = config.gravity_harmonics_file,
+    gravity_filename         = config.gravity_harmonics_filename,
     gravity_degree           = config.gravity_harmonics_degree,
     gravity_order            = config.gravity_harmonics_order,
   )
@@ -239,9 +239,9 @@ def main(
   result_celestrak_tle = None
   if config.initial_state_source == 'tle' or config.compare_tle:
     result_celestrak_tle = get_celestrak_tle(
-      norad_id        = config.initial_state_norad_id,
-      object_name     = config.object_name,
-      tles_folderpath = config.tles_folderpath,
+      norad_id          = config.initial_state_norad_id,
+      object_name       = config.object_name,
+      tles_folderpath   = config.tles_folderpath,
       desired_time_o_dt = config.time_o_dt,
       desired_time_f_dt = config.time_f_dt,
     )
@@ -264,20 +264,16 @@ def main(
       return error
 
   # Determine initial state: JPL Horizons, TLE, or Custom State Vector
-  if config.initial_state_source == 'custom_state_vector':
-    print(f"  Initial State")
-    print(f"    Source : Custom State Vector File")
-    print(f"    File   : {config.initial_state_filename}")
-    initial_state = config.custom_state_vector
-  else:
-    initial_state = get_initial_state(
-      tle_line_1                    = config.tle_line_1,
-      tle_line_2                    = config.tle_line_2,
-      time_o_dt                     = config.time_o_dt,
-      result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
-      initial_state_source          = config.initial_state_source,
-      to_j2000                      = True,
-    )
+  initial_state = get_initial_state(
+    tle_line_1                    = config.tle_line_1,
+    tle_line_2                    = config.tle_line_2,
+    time_o_dt                     = config.time_o_dt,
+    result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
+    initial_state_source          = config.initial_state_source,
+    custom_state_vector           = config.custom_state_vector,
+    initial_state_filename        = config.initial_state_filename,
+    to_j2000                      = True,
+  )
 
   # Run propagations: high-fidelity and SGP4
   result_high_fidelity_propagation, result_sgp4_propagation = run_propagations(
@@ -347,5 +343,5 @@ if __name__ == "__main__":
     args.include_srp,
     args.initial_state_source,
     args.gravity_harmonics_degree_order,
-    args.gravity_harmonics_file,
+    args.gravity_harmonics_filename,
   )
