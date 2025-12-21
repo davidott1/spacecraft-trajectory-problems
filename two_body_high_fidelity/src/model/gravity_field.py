@@ -63,17 +63,28 @@ class GravityFieldCoefficients:
   
   def set_coefficient(
     self,
-    n   : int,
-    m   : int,
-    Cnm : float,
-    Snm : float,
+    degree : int,
+    order  : int,
+    Cnm    : float,
+    Snm    : float,
   ) -> None:
     """
     Set a single coefficient pair.
+    
+    Input:
+    ------
+      degree : int
+        Degree (n)
+      order : int
+        Order (m)
+      Cnm : float
+        C coefficient
+      Snm : float
+        S coefficient
     """
-    if n <= self.max_degree and m <= self.max_order:
-      self.C[n, m] = Cnm
-      self.S[n, m] = Snm
+    if degree <= self.max_degree and order <= self.max_order:
+      self.C[degree, order] = Cnm
+      self.S[degree, order] = Snm
 
 
 def load_icgem_file(
@@ -124,8 +135,9 @@ def load_icgem_file(
       
       if parts[0] in ['gfc', 'gcf']:
         try:
-          n = int(parts[1])
-          m = int(parts[2])
+          degree = int(parts[1]) # n
+          order  = int(parts[2]) # m
+          
           # Handle 'D' or 'E' exponents (e.g. 1.0D-06)
           cnm_str = parts[3].replace('D', 'E').replace('d', 'e')
           Cnm     = float(cnm_str)
@@ -135,8 +147,8 @@ def load_icgem_file(
           else:
             Snm = 0.0
           
-          if n <= max_degree and m <= max_order:
-            coeffs.set_coefficient(n, m, Cnm, Snm)
+          if degree <= max_degree and order <= max_order:
+            coeffs.set_coefficient(degree, order, Cnm, Snm)
         except (ValueError, IndexError):
           continue
   
@@ -146,6 +158,10 @@ def load_icgem_file(
 class SphericalHarmonicsGravity:
   """
   Compute gravitational acceleration using spherical harmonics expansion.
+  
+  Notation:
+    n : degree (zonal index)
+    m : order (sectorial index)
   
   Uses Pines' algorithm as described in Montenbruck & Gill for stable computation.
   Coefficients are assumed to be fully normalized.
@@ -174,25 +190,31 @@ class SphericalHarmonicsGravity:
     These convert between normalized and unnormalized associated Legendre functions.
     """
     n_max = self.max_degree + 2  # Need extra for derivatives
-    m_max = self.max_order + 2
+    m_max = self.max_order  + 2
     
     # Anm factors for vertical recursion: P(n,m) from P(n-1,m) and P(n-2,m)
     self.anm = np.zeros((n_max, m_max))
     self.bnm = np.zeros((n_max, m_max))
     
-    for n in range(2, n_max):
-      for m in range(min(n, m_max)):
-        self.anm[n, m] = np.sqrt((4*n*n - 1) / (n*n - m*m))
-        self.bnm[n, m] = np.sqrt((2*n + 1) * (n - 1 - m) * (n - 1 + m) / 
-                                  ((2*n - 3) * (n*n - m*m)))
+    for n_degree in range(2, n_max):
+      for m_order in range(min(n_degree, m_max)):
+        self.anm[n_degree, m_order] = np.sqrt((4*n_degree*n_degree - 1) / (n_degree*n_degree - m_order*m_order))
+        self.bnm[n_degree, m_order] = np.sqrt((2*n_degree + 1) * (n_degree - 1 - m_order) * (n_degree - 1 + m_order) / 
+                                  ((2*n_degree - 3) * (n_degree*n_degree - m_order*m_order)))
     
     # Diagonal recursion factors
     self.dnm = np.zeros(n_max)
-    for m in range(1, n_max):
-      if m == 1:
-        self.dnm[m] = np.sqrt(3.0)
+    for m_order in range(1, n_max):
+      if m_order == 1:
+        # Special case for m=1 due to Kronecker delta in normalization definition.
+        # The normalization factor has k=1 for m=0 and k=2 for m>0.
+        # The transition from m=0 to m=1 introduces an extra sqrt(2) factor.
+        # General formula gives sqrt(1.5); correct value is sqrt(1.5 * 2) = sqrt(3).
+        self.dnm[m_order] = np.sqrt(3.0)
       else:
-        self.dnm[m] = np.sqrt((2.0 * m + 1.0) / (2.0 * m))
+        # General case for m >= 2
+        # Derived from fully normalized recursion: P_mm = sqrt((2m+1)/2m) * sin(theta) * P_{m-1,m-1}
+        self.dnm[m_order] = np.sqrt((2.0 * m_order + 1.0) / (2.0 * m_order))
   
   def compute(
     self,
@@ -288,26 +310,26 @@ class SphericalHarmonicsGravity:
     # First compute along m=0 (zonal)
     V[1, 0] = u * np.sqrt(3.0) * rho * V[0, 0]
     
-    for n in range(2, n_max + 2):
-      V[n, 0] = (self.anm[n, 0] * u * V[n-1, 0]) * rho - (self.bnm[n, 0] * V[n-2, 0]) * rho * rho
+    for n_degree in range(2, n_max + 2):
+      V[n_degree, 0] = (self.anm[n_degree, 0] * u * V[n_degree-1, 0]) * rho - (self.bnm[n_degree, 0] * V[n_degree-2, 0]) * rho * rho
     
     # Now compute sectorial (m=n) and tesseral (m<n) 
-    for m in range(1, m_max + 2):
+    for m_order in range(1, m_max + 2):
       # Sectorial: n=m
-      if m <= n_max + 1:
-        V[m, m] = self.dnm[m] * (s * V[m-1, m-1] - t * W[m-1, m-1]) * rho
-        W[m, m] = self.dnm[m] * (s * W[m-1, m-1] + t * V[m-1, m-1]) * rho
+      if m_order <= n_max + 1:
+        V[m_order, m_order] = self.dnm[m_order] * (s * V[m_order-1, m_order-1] - t * W[m_order-1, m_order-1]) * rho
+        W[m_order, m_order] = self.dnm[m_order] * (s * W[m_order-1, m_order-1] + t * V[m_order-1, m_order-1]) * rho
       
       # First tesseral: n=m+1
-      if m + 1 <= n_max + 1:
-        fac = np.sqrt(2*m + 3)
-        V[m+1, m] = fac * u * V[m, m] * rho
-        W[m+1, m] = fac * u * W[m, m] * rho
+      if m_order + 1 <= n_max + 1:
+        fac = np.sqrt(2*m_order + 3)
+        V[m_order+1, m_order] = fac * u * V[m_order, m_order] * rho
+        W[m_order+1, m_order] = fac * u * W[m_order, m_order] * rho
       
       # Remaining tesseral for this m
-      for n in range(m + 2, n_max + 2):
-        V[n, m] = (self.anm[n, m] * u * V[n-1, m]) * rho - (self.bnm[n, m] * V[n-2, m]) * rho * rho
-        W[n, m] = (self.anm[n, m] * u * W[n-1, m]) * rho - (self.bnm[n, m] * W[n-2, m]) * rho * rho
+      for n_degree in range(m_order + 2, n_max + 2):
+        V[n_degree, m_order] = (self.anm[n_degree, m_order] * u * V[n_degree-1, m_order]) * rho - (self.bnm[n_degree, m_order] * V[n_degree-2, m_order]) * rho * rho
+        W[n_degree, m_order] = (self.anm[n_degree, m_order] * u * W[n_degree-1, m_order]) * rho - (self.bnm[n_degree, m_order] * W[n_degree-2, m_order]) * rho * rho
     
     # Compute acceleration partials
     ax = 0.0
@@ -316,48 +338,48 @@ class SphericalHarmonicsGravity:
     
     # Sum contributions from degree 2 onwards
     # Note: n=0 is point mass (handled separately), n=1 usually zero for Earth-centered
-    for n in range(2, n_max + 1):
+    for n_degree in range(2, n_max + 1):
       # Normalization correction factor for derivative terms
       # This factor sqrt((2n+1)/(2n+3)) is needed because the derivative of a normalized
       # Legendre function of degree n involves normalized functions of degree n+1.
-      norm_fix = np.sqrt((2.0 * n + 1.0) / (2.0 * n + 3.0))
+      norm_fix = np.sqrt((2.0 * n_degree + 1.0) / (2.0 * n_degree + 3.0))
 
-      for m in range(0, min(n + 1, m_max + 1)):
-        Cnm = self.coeffs.C[n, m]
-        Snm = self.coeffs.S[n, m]
+      for m_order in range(0, min(n_degree + 1, m_max + 1)):
+        Cnm = self.coeffs.C[n_degree, m_order]
+        Snm = self.coeffs.S[n_degree, m_order]
         
         # Factors for derivative computation
-        if m == 0:
+        if m_order == 0:
           # m = 0 case (zonal terms)
           # Following Montenbruck & Gill eq. 3.33
-          fac1 = np.sqrt((n + 1) * (n + 2) / 2.0)
-          fac2 = (n + 1)
+          fac1 = np.sqrt((n_degree + 1) * (n_degree + 2) / 2.0)
+          fac2 = (n_degree + 1)
           
-          ax -= Cnm * fac1 * V[n+1, 1] * norm_fix
-          ay -= Cnm * fac1 * W[n+1, 1] * norm_fix
-          az -= Cnm * fac2 * V[n+1, 0] * norm_fix
+          ax -= Cnm * fac1 * V[n_degree+1, 1] * norm_fix
+          ay -= Cnm * fac1 * W[n_degree+1, 1] * norm_fix
+          az -= Cnm * fac2 * V[n_degree+1, 0] * norm_fix
         else:
           # m > 0 case (tesseral and sectorial terms)
           # Factor for m-1 term
-          fac1 = np.sqrt((n - m + 1) * (n - m + 2))
+          fac1 = np.sqrt((n_degree - m_order + 1) * (n_degree - m_order + 2))
           # Factor for m+1 term  
-          fac2 = np.sqrt((n + m + 1) * (n + m + 2))
+          fac2 = np.sqrt((n_degree + m_order + 1) * (n_degree + m_order + 2))
           # Factor for z derivative
-          fac3 = np.sqrt((n - m + 1) * (n + m + 1))
+          fac3 = np.sqrt((n_degree - m_order + 1) * (n_degree + m_order + 1))
           
           # Special case for m=1: different kronecker delta
-          if m == 1:
-            fac1 = np.sqrt((n) * (n + 1))
+          if m_order == 1:
+            fac1 = np.sqrt((n_degree) * (n_degree + 1))
           
           ax += 0.5 * (
-            -fac2 * (Cnm * V[n+1, m+1] + Snm * W[n+1, m+1])
-            + fac1 * (Cnm * V[n+1, m-1] + Snm * W[n+1, m-1])
+            -fac2 * (Cnm * V[n_degree+1, m_order+1] + Snm * W[n_degree+1, m_order+1])
+            + fac1 * (Cnm * V[n_degree+1, m_order-1] + Snm * W[n_degree+1, m_order-1])
           ) * norm_fix
           ay += 0.5 * (
-            -fac2 * (Cnm * W[n+1, m+1] - Snm * V[n+1, m+1])
-            - fac1 * (Cnm * W[n+1, m-1] - Snm * V[n+1, m-1])
+            -fac2 * (Cnm * W[n_degree+1, m_order+1] - Snm * V[n_degree+1, m_order+1])
+            - fac1 * (Cnm * W[n_degree+1, m_order-1] - Snm * V[n_degree+1, m_order-1])
           ) * norm_fix
-          az -= fac3 * (Cnm * V[n+1, m] + Snm * W[n+1, m]) * norm_fix
+          az -= fac3 * (Cnm * V[n_degree+1, m_order] + Snm * W[n_degree+1, m_order]) * norm_fix
     
     # Scale by GM/Re^2 (Pines formulation scaling)
     scale = gp / (Re * Re)
