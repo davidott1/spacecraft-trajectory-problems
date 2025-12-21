@@ -438,6 +438,7 @@ def build_config(
     gravity_harmonics_degree   = gravity_harmonics_degree,
     gravity_harmonics_order    = gravity_harmonics_order,
     gravity_harmonics_filename = paths['gravity_harmonics_filename'],
+    gravity_model              = None,
     include_srp                = include_srp,
     initial_state_source       = initial_state_source,
     output_folderpath          = paths['output_folderpath'],

@@ -200,7 +200,7 @@ def main(
   print_configuration(config)
 
   # Load files: SPICE, spherical harmonics coefficients
-  gravity_model = load_files(
+  config.gravity_model = load_files(
     use_spice                = True,
     spice_kernels_folderpath = config.spice_kernels_folderpath,
     lsk_filepath             = config.lsk_filepath,
@@ -296,7 +296,7 @@ def main(
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     tle_line_1                    = config.tle_line_1,
     tle_line_2                    = config.tle_line_2,
-    gravity_model                 = gravity_model,
+    gravity_model                 = config.gravity_model,
   )
   
   # Display results and create plots
