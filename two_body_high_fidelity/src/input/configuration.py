@@ -237,7 +237,7 @@ def build_config(
   include_srp                    : bool           = False,
   initial_state_source           : str            = 'jpl_horizons',
   gravity_harmonics_degree_order : Optional[list] = None,
-  gravity_harmonics_filename     : Optional[str]  = None,
+  gravity_model_filename         : Optional[str]  = None,
 ) -> SimpleNamespace:
   """
   Parse, validate, and set up input parameters for orbit propagation.
@@ -305,9 +305,9 @@ def build_config(
   
   # Set up foldernames, folderpaths, filenames, and filepaths
   paths = setup_paths(
-    initial_state_source       = initial_state_source,
-    initial_state_filename     = initial_state_filename,
-    gravity_harmonics_filename = gravity_harmonics_filename,
+    initial_state_source   = initial_state_source,
+    initial_state_filename = initial_state_filename,
+    gravity_model_filename = gravity_model_filename,
   )
 
   # Initialize variables
@@ -413,7 +413,7 @@ def build_config(
     degree       = gravity_harmonics_degree,
     order        = gravity_harmonics_order,
     folderpath   = paths['gravity_model_folderpath'],
-    filename     = paths['gravity_harmonics_filename'],
+    filename     = paths['gravity_model_filename'],
     coefficients = None,
   )
 
@@ -464,9 +464,9 @@ def build_config(
 
 
 def setup_paths(
-  initial_state_source       : Optional[str] = None,
-  initial_state_filename     : Optional[str] = None,
-  gravity_harmonics_filename : Optional[str] = None,
+  initial_state_source   : Optional[str] = None,
+  initial_state_filename : Optional[str] = None,
+  gravity_model_filename : Optional[str] = None,
 ) -> dict:
   """
   Set up all required folder paths and file names for the propagation.
@@ -477,7 +477,7 @@ def setup_paths(
       Source of initial state. Used to validate custom state vector file.
     initial_state_filename : str | None
       Filename of custom state vector.
-    gravity_harmonics_filename : str | None
+    gravity_model_filename : str | None
       Filename of gravity model. If None, defaults to EGM2008.gfc.
       
   Output:
@@ -505,8 +505,8 @@ def setup_paths(
   # Gravity coefficients path
   gravity_model_folderpath = data_folderpath / 'gravity_models'
   
-  if gravity_harmonics_filename is None:
-    gravity_harmonics_filename = 'EGM2008.gfc'
+  if gravity_model_filename is None:
+    gravity_model_filename = 'EGM2008.gfc'
 
   # TLEs folderpath
   tles_folderpath = data_folderpath / 'tles'
@@ -546,7 +546,7 @@ def setup_paths(
     'log_filepath'                 : log_filepath,
     'spice_kernels_folderpath'     : spice_kernels_folderpath,
     'gravity_model_folderpath'     : gravity_model_folderpath,
-    'gravity_harmonics_filename'   : gravity_harmonics_filename,
+    'gravity_model_filename'       : gravity_model_filename,
     'jpl_horizons_folderpath'      : jpl_horizons_folderpath,
     'tles_folderpath'              : tles_folderpath,
     'state_vectors_folderpath'     : state_vectors_folderpath,

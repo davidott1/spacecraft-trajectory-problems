@@ -133,7 +133,7 @@ def main(
   include_srp            : bool           = False,
   initial_state_source   : str            = 'jpl_horizons',
   gravity_harmonics_degree_order : Optional[list] = None,
-  gravity_harmonics_file         : Optional[str]  = None,
+  gravity_model_filename         : Optional[str]  = None,
 ) -> dict:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -166,7 +166,7 @@ def main(
       Source for the initial state vector ('jpl_horizons' or 'tle').
     gravity_harmonics_degree_order : list | None
       Degree and order for gravity harmonics (e.g., [4, 4]). None means disabled.
-    gravity_harmonics_file : str | None
+    gravity_model_filename : str | None
       Filename for custom gravity harmonics file. None means disabled.
   
   Output:
@@ -188,7 +188,7 @@ def main(
     include_srp,
     initial_state_source,
     gravity_harmonics_degree_order,
-    gravity_harmonics_file,
+    gravity_model_filename,
   )
 
   # Start logging to file
@@ -343,5 +343,5 @@ if __name__ == "__main__":
     args.include_srp,
     args.initial_state_source,
     args.gravity_harmonics_degree_order,
-    args.gravity_harmonics_filename,
+    args.gravity_model_filename,
   )
