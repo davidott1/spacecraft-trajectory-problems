@@ -521,12 +521,12 @@ def run_high_fidelity_propagation(
   print(f"        Earth")
   
   # Display gravity model info
-  if gravity_model_coeffs is not None:
+  if gravity_model is not None and gravity_model.coefficients is not None:
     print(f"          Spherical Harmonics")
-    print(f"            Degree : {gravity_model_coeffs.max_degree}")
-    print(f"            Order  : {gravity_model_coeffs.max_order}")
-    print(f"            GP     : {gravity_model_coeffs.coeffs.gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
-    print(f"            Radius : {gravity_model_coeffs.coeffs.radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
+    print(f"            Degree : {gravity_model.degree}")
+    print(f"            Order  : {gravity_model.order}")
+    print(f"            GP     : {gravity_model.gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
+    print(f"            Radius : {gravity_model.radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
   elif include_gravity_harmonics:
     print(f"          Two-Body Point Mass")
     # Separate zonal and tesseral for display
@@ -585,7 +585,7 @@ def run_high_fidelity_propagation(
     enable_srp              = include_srp,
     cr                      = cr,
     area_srp                = area_srp,
-    gravity_model           = gravity_model_coeffs,
+    gravity_model_coefficients = gravity_model.coefficients if gravity_model is not None else None,
   )
   
   # Get orbital period for grid density

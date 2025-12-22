@@ -200,7 +200,7 @@ def main(
   print_configuration(config)
 
   # Load files: SPICE, spherical harmonics coefficients
-  config.gravity_model.coefficients = load_files(
+  gravity_result = load_files(
     spice_kernels_folderpath = config.spice_kernels_folderpath,
     lsk_filepath             = config.lsk_filepath,
     gravity_model_folderpath = config.gravity_model.folderpath,
@@ -208,6 +208,11 @@ def main(
     gravity_model_degree     = config.gravity_model.degree,
     gravity_model_order      = config.gravity_model.order,
   )
+  
+  # Update gravity_model namespace with loaded values
+  config.gravity_model.coefficients = gravity_result['coefficients']
+  config.gravity_model.gp           = gravity_result['gp']
+  config.gravity_model.radius       = gravity_result['radius']
 
   # Get Horizons ephemeris (only if needed for initial state or comparison)
   result_jpl_horizons_ephemeris = None
