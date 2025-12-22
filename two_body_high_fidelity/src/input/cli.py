@@ -93,7 +93,7 @@ def parse_command_line_arguments(
   )
   parser.add_argument(
     '--gravity-harmonics-filename',
-    dest    = 'gravity_harmonics_filename',
+    dest    = 'gravity_model_filename',
     type    = str,
     default = None,
     help    = 'Filename of the gravity field coefficient file (e.g. EGM2008.gfc).',
