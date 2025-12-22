@@ -201,7 +201,6 @@ def main(
 
   # Load files: SPICE, spherical harmonics coefficients
   config.gravity_model.coefficients = load_files(
-    use_spice                = True,
     spice_kernels_folderpath = config.spice_kernels_folderpath,
     lsk_filepath             = config.lsk_filepath,
     gravity_model_folderpath = config.gravity_model.folderpath,
@@ -231,7 +230,7 @@ def main(
       comparison_flag     = "--compare-jpl-horizons",
     )
     if error:
-      unload_files(True)
+      unload_files()
       stop_logging(logger)
       return error
 
@@ -259,7 +258,7 @@ def main(
       comparison_flag     = "--compare-tle",
     )
     if error:
-      unload_files(True)
+      unload_files()
       stop_logging(logger)
       return error
 
@@ -317,7 +316,7 @@ def main(
   )
   
   # Unload all files (SPICE kernels)
-  unload_files(True)
+  unload_files()
   
   # Stop logging
   stop_logging(logger)
