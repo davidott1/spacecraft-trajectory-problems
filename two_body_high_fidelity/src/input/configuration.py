@@ -151,7 +151,7 @@ def print_paths(
   print(f"  Data Folderpath            : {data_folderpath}")
   print(f"    SPICE Kernels Folderpath : <data_folderpath>/{config.spice_kernels_folderpath.relative_to(data_folderpath)}")
   print(f"    LSK Filepath             : <data_folderpath>/{config.lsk_filepath.relative_to(data_folderpath)}")
-  print(f"    Gravity Folderpath       : <data_folderpath>/{config.gravity_folderpath.relative_to(data_folderpath)}")
+  print(f"    Gravity Folderpath       : <data_folderpath>/{config.gravity_model.folderpath.relative_to(data_folderpath)}")
   print(f"    JPL Horizons Folderpath  : <data_folderpath>/{config.jpl_horizons_folderpath.relative_to(data_folderpath)}")
   print(f"    TLEs Folderpath          : <data_folderpath>/{config.tles_folderpath.relative_to(data_folderpath)}")
   print(f"    State Vectors Folderpath : <data_folderpath>/{config.state_vectors_folderpath.relative_to(data_folderpath)}")
@@ -412,6 +412,7 @@ def build_config(
   gravity_model = SimpleNamespace(
     degree       = gravity_harmonics_degree,
     order        = gravity_harmonics_order,
+    folderpath   = paths['gravity_model_folderpath'],
     filename     = paths['gravity_harmonics_filename'],
     coefficients = None,
   )
@@ -450,7 +451,6 @@ def build_config(
     files_folderpath           = paths['files_folderpath'],
     log_filepath               = paths['log_filepath'],
     spice_kernels_folderpath   = paths['spice_kernels_folderpath'],
-    gravity_folderpath         = paths['gravity_folderpath'],
     jpl_horizons_folderpath    = paths['jpl_horizons_folderpath'],
     tles_folderpath            = paths['tles_folderpath'],
     state_vectors_folderpath   = paths['state_vectors_folderpath'],
@@ -503,7 +503,7 @@ def setup_paths(
   lsk_filepath             = spice_kernels_folderpath / 'naif0012.tls'
   
   # Gravity coefficients path
-  gravity_folderpath = data_folderpath / 'gravity_models'
+  gravity_model_folderpath = data_folderpath / 'gravity_models'
   
   if gravity_harmonics_filename is None:
     gravity_harmonics_filename = 'EGM2008.gfc'
@@ -545,7 +545,7 @@ def setup_paths(
     'files_folderpath'             : files_folderpath,
     'log_filepath'                 : log_filepath,
     'spice_kernels_folderpath'     : spice_kernels_folderpath,
-    'gravity_folderpath'           : gravity_folderpath,
+    'gravity_model_folderpath'     : gravity_model_folderpath,
     'gravity_harmonics_filename'   : gravity_harmonics_filename,
     'jpl_horizons_folderpath'      : jpl_horizons_folderpath,
     'tles_folderpath'              : tles_folderpath,
