@@ -148,8 +148,8 @@ def load_files(
     result : dict
       Dictionary containing:
       - coefficients : SphericalHarmonicsGravity | None - Loaded gravity model
-      - gp : float | None - Gravitational parameter from model
-      - radius : float | None - Reference radius from model
+      - gp           : float | None - Gravitational parameter from model
+      - radius       : float | None - Reference radius from model
       
   Raises:
   -------
