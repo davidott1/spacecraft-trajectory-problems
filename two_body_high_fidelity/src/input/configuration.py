@@ -21,9 +21,7 @@ def print_input_configuration(
   compare_jpl_horizons       : bool,
   third_bodies_list          : list,
   gravity_harmonics_list     : list,
-  gravity_harmonics_degree   : Optional[int],
-  gravity_harmonics_order    : Optional[int],
-  gravity_harmonics_filename : Optional[str],
+  gravity_model              : SimpleNamespace,
   include_srp                : bool,
 ) -> None:
   """
@@ -47,6 +45,8 @@ def print_input_configuration(
       List of third bodies to include. Empty list if disabled.
     gravity_harmonics_list : list
       List of gravity harmonics to include. Empty list if disabled.
+    gravity_model : SimpleNamespace
+      Nested namespace containing gravity model configuration.
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
       
@@ -74,7 +74,7 @@ def print_input_configuration(
   # Format values for display
   timespan_str     = f"{desired_timespan[0]} {desired_timespan[1]}" if desired_timespan else "None"
   harmonics_str    = ' '.join(gravity_harmonics_list) if gravity_harmonics_list else "None"
-  gh_deg_order_str = f"{gravity_harmonics_degree} {gravity_harmonics_order}" if gravity_harmonics_degree is not None else "None"
+  gh_deg_order_str = f"{gravity_model.degree} {gravity_model.order}" if gravity_model.degree is not None else "None"
   third_str        = ' '.join(third_bodies_list) if third_bodies_list else "None"
   
   # Build configuration entries: (name, value, default, user_set)
@@ -84,8 +84,8 @@ def print_input_configuration(
     ('initial_state_filename', initial_state_filename,     defaults['initial_state_filename'],     initial_state_filename     is not None),
     ('timespan',               timespan_str,               defaults['timespan'],                   desired_timespan           is not None),
     ('gravity_harmonics',      harmonics_str,              defaults['gravity_harmonics'],          gravity_harmonics_list     is not None and len(gravity_harmonics_list) > 0),
-    ('gravity_degree_order',   gh_deg_order_str,           "None",                                 gravity_harmonics_degree   is not None),
-    ('gravity_file',           gravity_harmonics_filename, defaults['gravity_harmonics_filename'], gravity_harmonics_filename != defaults['gravity_harmonics_filename']),
+    ('gravity_degree_order',   gh_deg_order_str,           "None",                                 gravity_model.degree       is not None),
+    ('gravity_file',           gravity_model.filename,     defaults['gravity_harmonics_filename'], gravity_model.filename     != defaults['gravity_harmonics_filename']),
     ('third_bodies',           third_str,                  defaults['third_bodies'],               third_bodies_list          is not None and len(third_bodies_list) > 0),
     ('include_drag',           include_drag,               defaults['include_drag'],               include_drag               != defaults['include_drag']),
     ('include_srp',            include_srp,                defaults['include_srp'],                include_srp                != defaults['include_srp']),
@@ -182,9 +182,7 @@ def print_configuration(
     compare_jpl_horizons       = config.compare_jpl_horizons,
     third_bodies_list          = config.third_bodies_list,
     gravity_harmonics_list     = config.gravity_harmonics_list,
-    gravity_harmonics_degree   = config.gravity_harmonics_degree,
-    gravity_harmonics_order    = config.gravity_harmonics_order,
-    gravity_harmonics_filename = config.gravity_harmonics_filename,
+    gravity_model              = config.gravity_model,
     include_srp                = config.include_srp,
   )
   
@@ -410,6 +408,14 @@ def build_config(
     # Update paths with correct name
     paths = setup_paths()
   
+  # Create nested gravity_model namespace
+  gravity_model = SimpleNamespace(
+    degree       = gravity_harmonics_degree,
+    order        = gravity_harmonics_order,
+    filename     = paths['gravity_harmonics_filename'],
+    coefficients = None,
+  )
+
   return SimpleNamespace(
     # Store original input values for print_configuration
     initial_state_norad_id = initial_state_norad_id,
@@ -435,10 +441,7 @@ def build_config(
     third_bodies_list          = third_bodies_list,
     include_gravity_harmonics  = include_gravity_harmonics,
     gravity_harmonics_list     = gravity_harmonics_list,
-    gravity_harmonics_degree   = gravity_harmonics_degree,
-    gravity_harmonics_order    = gravity_harmonics_order,
-    gravity_harmonics_filename = paths['gravity_harmonics_filename'],
-    gravity_model              = None,
+    gravity_model              = gravity_model,
     include_srp                = include_srp,
     initial_state_source       = initial_state_source,
     output_folderpath          = paths['output_folderpath'],
