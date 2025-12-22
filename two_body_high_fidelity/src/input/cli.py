@@ -76,11 +76,13 @@ def parse_command_line_arguments(
     help     = 'Enable third-body gravity perturbations. Options: SUN, MOON, MERCURY, VENUS, MARS, JUPITER, SATURN, URANUS, NEPTUNE, PLUTO',
   )
   parser.add_argument(
-    '--gravity-harmonics',
+    '--gravity-harmonics-coefficients',
+    '--gravity-harmonics-coeffs',
+    dest    = 'gravity_harmonics_coefficients',
     type    = str,
     nargs   = '*',
     default = [],
-    help    = 'Gravity harmonics to include (e.g., J2 J3 J4 C22 S22). Default: none.',
+    help    = 'Specific gravity harmonic coefficients to include (e.g., J2 J3 J4 C22 S22). Default: none.',
   )
   parser.add_argument(
     '--gravity-harmonics-degree-order',

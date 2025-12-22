@@ -281,6 +281,16 @@ def build_config(
     gravity_harmonics,
   )
   
+  # Validate: cannot use both gravity harmonics options
+  has_coefficients = gravity_harmonics_list is not None and len(gravity_harmonics_list) > 0
+  has_degree_order = gravity_harmonics_degree_order is not None
+  
+  if has_coefficients and has_degree_order:
+    raise ValueError(
+      "Cannot use both --gravity-harmonics-coefficients and --gravity-harmonics-degree-order. "
+      "Please use only one method to specify gravity harmonics."
+    )
+  
   # Handle gravity harmonics logic
   include_gravity_harmonics = len(gravity_harmonics_list) > 0
 
