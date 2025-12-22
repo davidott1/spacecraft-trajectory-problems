@@ -108,9 +108,9 @@ def load_gravity_field_model(
     print(f"    Radius     : {radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
     
     return {
-      'model'  : gravity_model,
-      'gp'     : gp,
-      'radius' : radius,
+      'spherical_harmonics_model' : gravity_model,
+      'gp'                        : gp,
+      'radius'                    : radius,
     }
   except Exception as e:
     print(f"    Status     : Failed - {e}")
@@ -147,9 +147,9 @@ def load_files(
   -------
     result : dict
       Dictionary containing:
-      - coefficients : SphericalHarmonicsGravity | None - Loaded gravity model
-      - gp           : float | None - Gravitational parameter from model
-      - radius       : float | None - Reference radius from model
+      - spherical_harmonics_model : SphericalHarmonicsGravity | None - Loaded gravity model
+      - gp                        : float | None - Gravitational parameter from model
+      - radius                    : float | None - Reference radius from model
       
   Raises:
   -------
@@ -187,15 +187,15 @@ def load_files(
   # Extract values from result
   if gravity_model_result is not None:
     return {
-      'coefficients' : gravity_model_result['model'],
-      'gp'           : gravity_model_result['gp'],
-      'radius'       : gravity_model_result['radius'],
+      'spherical_harmonics_model' : gravity_model_result['spherical_harmonics_model'],
+      'gp'                        : gravity_model_result['gp'],
+      'radius'                    : gravity_model_result['radius'],
     }
   else:
     return {
-      'coefficients' : None,
-      'gp'           : None,
-      'radius'       : None,
+      'spherical_harmonics_model' : None,
+      'gp'                        : None,
+      'radius'                    : None,
     }
 
 
@@ -520,7 +520,6 @@ def get_horizons_ephemeris(
       'success' : False,
       'message' : 'No JPL Horizons ephemeris file available',
     }
-
   # Display the file being loaded
   try:
     rel_path = compatible_file.relative_to(Path.cwd())

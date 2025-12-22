@@ -200,7 +200,7 @@ class SphericalHarmonicsGravity:
       for m_order in range(min(n_degree, m_max)):
         self.anm[n_degree, m_order] = np.sqrt((4*n_degree*n_degree - 1) / (n_degree*n_degree - m_order*m_order))
         self.bnm[n_degree, m_order] = np.sqrt((2*n_degree + 1) * (n_degree - 1 - m_order) * (n_degree - 1 + m_order) / 
-                                  ((2*n_degree - 3) * (n_degree*n_degree - m_order*m_order)))
+                                      ((2*n_degree - 3) * (n_degree*n_degree - m_order*m_order)))
     
     # Diagonal recursion factors
     self.dnm = np.zeros(n_max)
@@ -239,39 +239,6 @@ class SphericalHarmonicsGravity:
     j2000_acc = rot_mat.T @ bf_acc
     
     return j2000_acc
-  
-  def _compute_acceleration_direct(
-    self,
-    pos_vec : np.ndarray,
-  ) -> np.ndarray:
-    """
-    Compute acceleration using direct analytical formulas.
-    
-    More accurate for low-degree terms (J2, J3, etc.)
-    """
-    x, y, z = pos_vec
-    r = np.linalg.norm(pos_vec)
-    
-    gp = self.coeffs.gp
-    Re = self.coeffs.radius
-    
-    # Start with point mass
-    acc = -gp * pos_vec / r**3
-    
-    # J2 term (degree 2, order 0)
-    if self.max_degree >= 2:
-      # J2 = -sqrt(5) * C20 for fully normalized coefficients
-      J2 = -np.sqrt(5.0) * self.coeffs.C[2, 0]
-      
-      r2 = r * r
-      z2 = z * z
-      factor = 1.5 * J2 * gp * Re**2 / (r2 * r2 * r)
-      
-      acc[0] += factor * x * (5.0 * z2 / r2 - 1.0)
-      acc[1] += factor * y * (5.0 * z2 / r2 - 1.0)
-      acc[2] += factor * z * (5.0 * z2 / r2 - 3.0)
-    
-    return acc
 
   def _compute_acceleration_pines(
     self,

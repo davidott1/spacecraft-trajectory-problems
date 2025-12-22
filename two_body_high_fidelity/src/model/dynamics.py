@@ -996,7 +996,7 @@ class Gravity:
         None
       """
       # Spherical harmonics gravity model (if provided, replaces two-body terms)
-      self.gravity_model = gravity_model_coefficients
+      self.spherical_harmonics_model = gravity_model_coefficients
       
       # Two-body gravity (used if no spherical harmonics model provided)
       self.two_body = TwoBodyGravity(
@@ -1052,9 +1052,9 @@ class Gravity:
       acc_vec = np.zeros(3)
       
       # Use spherical harmonics model if available
-      if self.gravity_model is not None:
+      if self.spherical_harmonics_model is not None:
         # Spherical harmonics includes point mass and all harmonic terms
-        acc_vec += self.gravity_model.compute(time, pos_vec)
+        acc_vec += self.spherical_harmonics_model.compute(time, pos_vec)
       else:
         # Fall back to analytical two-body terms
         # Two-body point mass
@@ -1076,7 +1076,7 @@ class Gravity:
         acc_vec += self.two_body.tesseral_32(time, pos_vec)
         acc_vec += self.two_body.tesseral_33(time, pos_vec)
       
-      # Third-body contributions (always added if enabled)
+      # Third-body contributions
       if self.enable_third_body and self.third_body is not None:
         acc_vec += self.third_body.point_mass(time, pos_vec)
       
