@@ -204,10 +204,10 @@ def main(
     use_spice                = True,
     spice_kernels_folderpath = config.spice_kernels_folderpath,
     lsk_filepath             = config.lsk_filepath,
-    gravity_folderpath       = config.gravity_folderpath,
-    gravity_filename         = config.gravity_model.filename,
-    gravity_degree           = config.gravity_model.degree,
-    gravity_order            = config.gravity_model.order,
+    gravity_model_folderpath = config.gravity_model.folderpath,
+    gravity_model_filename   = config.gravity_model.filename,
+    gravity_model_degree     = config.gravity_model.degree,
+    gravity_model_order      = config.gravity_model.order,
   )
 
   # Get Horizons ephemeris (only if needed for initial state or comparison)
