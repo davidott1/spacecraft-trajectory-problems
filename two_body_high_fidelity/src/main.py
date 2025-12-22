@@ -203,16 +203,16 @@ def main(
   gravity_result = load_files(
     spice_kernels_folderpath = config.spice_kernels_folderpath,
     lsk_filepath             = config.lsk_filepath,
-    gravity_model_folderpath = config.gravity_model.folderpath,
-    gravity_model_filename   = config.gravity_model.filename,
-    gravity_model_degree     = config.gravity_model.degree,
-    gravity_model_order      = config.gravity_model.order,
+    gravity_model_folderpath = config.two_body_gravity_model.folderpath,
+    gravity_model_filename   = config.two_body_gravity_model.filename,
+    gravity_model_degree     = config.two_body_gravity_model.spherical_harmonics.degree,
+    gravity_model_order      = config.two_body_gravity_model.spherical_harmonics.order,
   )
   
-  # Update gravity_model namespace with loaded values
-  config.gravity_model.spherical_harmonics_model = gravity_result['spherical_harmonics_model']
-  config.gravity_model.gp                        = gravity_result['gp']
-  config.gravity_model.radius                    = gravity_result['radius']
+  # Update two_body_gravity_model namespace with loaded values
+  config.two_body_gravity_model.spherical_harmonics.model  = gravity_result['spherical_harmonics_model']
+  config.two_body_gravity_model.spherical_harmonics.gp     = gravity_result['gp']
+  config.two_body_gravity_model.spherical_harmonics.radius = gravity_result['radius']
 
   # Get Horizons ephemeris (only if needed for initial state or comparison)
   result_jpl_horizons_ephemeris = None
@@ -300,7 +300,7 @@ def main(
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     tle_line_1                    = config.tle_line_1,
     tle_line_2                    = config.tle_line_2,
-    gravity_model                 = config.gravity_model,
+    two_body_gravity_model        = config.two_body_gravity_model,
   )
   
   # Display results and create plots

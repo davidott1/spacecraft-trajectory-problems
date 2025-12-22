@@ -21,7 +21,7 @@ def print_input_configuration(
   compare_jpl_horizons       : bool,
   third_bodies_list          : list,
   gravity_harmonics_list     : list,
-  gravity_model              : SimpleNamespace,
+  two_body_gravity_model     : SimpleNamespace,
   include_srp                : bool,
 ) -> None:
   """
@@ -45,7 +45,7 @@ def print_input_configuration(
       List of third bodies to include. Empty list if disabled.
     gravity_harmonics_list : list
       List of gravity harmonics to include. Empty list if disabled.
-    gravity_model : SimpleNamespace
+    two_body_gravity_model : SimpleNamespace
       Nested namespace containing gravity model configuration.
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
@@ -74,7 +74,7 @@ def print_input_configuration(
   # Format values for display
   timespan_str     = f"{desired_timespan[0]} {desired_timespan[1]}" if desired_timespan else "None"
   harmonics_str    = ' '.join(gravity_harmonics_list) if gravity_harmonics_list else "None"
-  gh_deg_order_str = f"{gravity_model.degree} {gravity_model.order}" if gravity_model.degree is not None else "None"
+  gh_deg_order_str = f"{two_body_gravity_model.spherical_harmonics.degree} {two_body_gravity_model.spherical_harmonics.order}" if two_body_gravity_model.spherical_harmonics.degree is not None else "None"
   third_str        = ' '.join(third_bodies_list) if third_bodies_list else "None"
   
   # Build configuration entries: (name, value, default, user_set)
@@ -84,8 +84,8 @@ def print_input_configuration(
     ('initial_state_filename', initial_state_filename,     defaults['initial_state_filename'],     initial_state_filename     is not None),
     ('timespan',               timespan_str,               defaults['timespan'],                   desired_timespan           is not None),
     ('gravity_harmonics',      harmonics_str,              defaults['gravity_harmonics'],          gravity_harmonics_list     is not None and len(gravity_harmonics_list) > 0),
-    ('gravity_degree_order',   gh_deg_order_str,           "None",                                 gravity_model.degree       is not None),
-    ('gravity_file',           gravity_model.filename,     defaults['gravity_harmonics_filename'], gravity_model.filename     != defaults['gravity_harmonics_filename']),
+    ('gravity_degree_order',   gh_deg_order_str,           "None",                                 two_body_gravity_model.spherical_harmonics.degree is not None),
+    ('gravity_file',           two_body_gravity_model.filename, defaults['gravity_harmonics_filename'], two_body_gravity_model.filename != defaults['gravity_harmonics_filename']),
     ('third_bodies',           third_str,                  defaults['third_bodies'],               third_bodies_list          is not None and len(third_bodies_list) > 0),
     ('include_drag',           include_drag,               defaults['include_drag'],               include_drag               != defaults['include_drag']),
     ('include_srp',            include_srp,                defaults['include_srp'],                include_srp                != defaults['include_srp']),
@@ -151,7 +151,7 @@ def print_paths(
   print(f"  Data Folderpath            : {data_folderpath}")
   print(f"    SPICE Kernels Folderpath : <data_folderpath>/{config.spice_kernels_folderpath.relative_to(data_folderpath)}")
   print(f"    LSK Filepath             : <data_folderpath>/{config.lsk_filepath.relative_to(data_folderpath)}")
-  print(f"    Gravity Folderpath       : <data_folderpath>/{config.gravity_model.folderpath.relative_to(data_folderpath)}")
+  print(f"    Gravity Folderpath       : <data_folderpath>/{config.two_body_gravity_model.folderpath.relative_to(data_folderpath)}")
   print(f"    JPL Horizons Folderpath  : <data_folderpath>/{config.jpl_horizons_folderpath.relative_to(data_folderpath)}")
   print(f"    TLEs Folderpath          : <data_folderpath>/{config.tles_folderpath.relative_to(data_folderpath)}")
   print(f"    State Vectors Folderpath : <data_folderpath>/{config.state_vectors_folderpath.relative_to(data_folderpath)}")
@@ -182,7 +182,7 @@ def print_configuration(
     compare_jpl_horizons       = config.compare_jpl_horizons,
     third_bodies_list          = config.third_bodies_list,
     gravity_harmonics_list     = config.gravity_harmonics_list,
-    gravity_model              = config.gravity_model,
+    two_body_gravity_model     = config.two_body_gravity_model,
     include_srp                = config.include_srp,
   )
   
@@ -417,15 +417,17 @@ def build_config(
     # Update paths with correct name
     paths = setup_paths()
   
-  # Create nested gravity_model namespace
-  gravity_model = SimpleNamespace(
-    folderpath               = paths['gravity_model_folderpath'],
-    filename                 = paths['gravity_model_filename'],
-    gp                       = None,  # Set after loading
-    radius                   = None,  # Set after loading
-    degree                   = gravity_harmonics_degree,
-    order                    = gravity_harmonics_order,
-    spherical_harmonics_model = None,  # Loaded later by load_files
+  # Create nested two_body_gravity_model namespace
+  two_body_gravity_model = SimpleNamespace(
+    folderpath          = paths['gravity_model_folderpath'],
+    filename            = paths['gravity_model_filename'],
+    spherical_harmonics = SimpleNamespace(
+      gp     = None,  # Set after loading
+      radius = None,  # Set after loading
+      degree = gravity_harmonics_degree,
+      order  = gravity_harmonics_order,
+      model  = None,  # Loaded later by load_files
+    ),
   )
 
   return SimpleNamespace(
@@ -452,7 +454,7 @@ def build_config(
     third_bodies_list          = third_bodies_list,
     include_gravity_harmonics  = include_gravity_harmonics,
     gravity_harmonics_list     = gravity_harmonics_list,
-    gravity_model              = gravity_model,
+    two_body_gravity_model     = two_body_gravity_model,
     include_srp                = include_srp,
     initial_state_source       = initial_state_source,
     output_folderpath          = paths['output_folderpath'],
