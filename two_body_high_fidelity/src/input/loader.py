@@ -43,7 +43,7 @@ def load_gravity_field_model(
   gravity_model_filename   : str,
   gravity_model_degree     : int,
   gravity_model_order      : int,
-):
+) -> Optional[dict]:
   """
   Load gravity field model from coefficient file.
   
@@ -60,8 +60,12 @@ def load_gravity_field_model(
       
   Output:
   -------
-    gravity_model : SphericalHarmonicsGravity | None
-      Loaded gravity model, or None if loading failed.
+    result : dict | None
+      Dictionary containing:
+      - model : SphericalHarmonicsGravity - Loaded gravity model object
+      - gp : float - Gravitational parameter from model
+      - radius : float - Reference radius from model
+      Returns None if loading failed.
   """
   # Import
   from src.model.gravity_field import load_gravity_field
@@ -94,10 +98,20 @@ def load_gravity_field_model(
       max_gravity_degree = gravity_model_degree,
       max_gravity_order  = gravity_model_order,
     )
+    
+    # Extract gp and radius from the loaded model
+    gp     = gravity_model.coeffs.gp
+    radius = gravity_model.coeffs.radius
+    
     print(f"    Status     : Loaded successfully")
-    print(f"    GP         : {gravity_model.coeffs.gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
-    print(f"    Radius     : {gravity_model.coeffs.radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
-    return gravity_model
+    print(f"    GP         : {gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
+    print(f"    Radius     : {radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
+    
+    return {
+      'model'  : gravity_model,
+      'gp'     : gp,
+      'radius' : radius,
+    }
   except Exception as e:
     print(f"    Status     : Failed - {e}")
     return None
@@ -110,7 +124,7 @@ def load_files(
   gravity_model_filename   : Optional[str]  = None,
   gravity_model_degree     : Optional[int]  = None,
   gravity_model_order      : Optional[int]  = None,
-) -> Optional[object]:
+) -> dict:
   """
   Load necessary files for the simulation, including SPICE kernels and gravity model.
   
@@ -131,8 +145,11 @@ def load_files(
       
   Output:
   -------
-    gravity_model : SphericalHarmonicsGravity | None
-      Loaded gravity model if requested, otherwise None.
+    result : dict
+      Dictionary containing:
+      - coefficients : SphericalHarmonicsGravity | None - Loaded gravity model
+      - gp : float | None - Gravitational parameter from model
+      - radius : float | None - Reference radius from model
       
   Raises:
   -------
@@ -146,14 +163,14 @@ def load_files(
   load_spice_files(spice_kernels_folderpath, lsk_filepath)
 
   # Load gravity model if requested
-  gravity_model = None
+  gravity_model_result = None
   gravity_model_requested = gravity_model_degree is not None
   
   if (gravity_model_filename is not None and 
       gravity_model_degree is not None and 
       gravity_model_order is not None and
       gravity_model_folderpath is not None):
-    gravity_model = load_gravity_field_model(
+    gravity_model_result = load_gravity_field_model(
       gravity_model_folderpath = gravity_model_folderpath,
       gravity_model_filename   = gravity_model_filename,
       gravity_model_degree     = gravity_model_degree,
@@ -161,13 +178,25 @@ def load_files(
     )
   
   # Validate: if gravity model was requested, it must have loaded successfully
-  if gravity_model_requested and gravity_model is None:
+  if gravity_model_requested and gravity_model_result is None:
     raise ValueError(
       "--gravity-harmonics-degree-order was specified but gravity model failed to load. "
       "Please check the gravity model file exists and is valid."
     )
-    
-  return gravity_model
+  
+  # Extract values from result
+  if gravity_model_result is not None:
+    return {
+      'coefficients' : gravity_model_result['model'],
+      'gp'           : gravity_model_result['gp'],
+      'radius'       : gravity_model_result['radius'],
+    }
+  else:
+    return {
+      'coefficients' : None,
+      'gp'           : None,
+      'radius'       : None,
+    }
 
 
 def unload_files() -> None:
