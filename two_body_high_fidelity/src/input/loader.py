@@ -136,6 +136,11 @@ def load_files(
   -------
     gravity_model : SphericalHarmonicsGravity | None
       Loaded gravity model if requested, otherwise None.
+      
+  Raises:
+  -------
+    ValueError
+      If gravity model was requested (degree/order specified) but failed to load.
   """
   print("\nLoad Files")
   print(f"  Project Folderpath : {Path.cwd()}")
@@ -145,12 +150,24 @@ def load_files(
 
   # Load gravity model if requested
   gravity_model = None
-  if gravity_model_filename is not None and gravity_model_degree is not None and gravity_model_folderpath is not None:
+  gravity_model_requested = gravity_model_degree is not None
+  
+  if (gravity_model_filename is not None and 
+      gravity_model_degree is not None and 
+      gravity_model_order is not None and
+      gravity_model_folderpath is not None):
     gravity_model = load_gravity_field_model(
       gravity_model_folderpath = gravity_model_folderpath,
       gravity_model_filename   = gravity_model_filename,
       gravity_model_degree     = gravity_model_degree,
       gravity_model_order      = gravity_model_order,
+    )
+  
+  # Validate: if gravity model was requested, it must have loaded successfully
+  if gravity_model_requested and gravity_model is None:
+    raise ValueError(
+      "--gravity-harmonics-degree-order was specified but gravity model failed to load. "
+      "Please check the gravity model file exists and is valid."
     )
     
   return gravity_model

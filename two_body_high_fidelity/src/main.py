@@ -339,7 +339,7 @@ if __name__ == "__main__":
     args.compare_tle,
     args.compare_jpl_horizons,
     args.third_bodies,
-    args.gravity_harmonics,
+    args.gravity_harmonics_coefficients,
     args.include_srp,
     args.initial_state_source,
     args.gravity_harmonics_degree_order,
