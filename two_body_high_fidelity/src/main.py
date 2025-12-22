@@ -295,7 +295,7 @@ def main(
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     tle_line_1                    = config.tle_line_1,
     tle_line_2                    = config.tle_line_2,
-    gravity_model                 = config.gravity_model.coefficients,
+    gravity_model                 = config.gravity_model,
   )
   
   # Display results and create plots
