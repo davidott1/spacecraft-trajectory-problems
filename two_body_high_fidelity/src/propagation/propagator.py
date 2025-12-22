@@ -585,7 +585,7 @@ def run_high_fidelity_propagation(
     enable_srp              = include_srp,
     cr                      = cr,
     area_srp                = area_srp,
-    gravity_model_coefficients = spherical_harmonics_model,
+    spherical_harmonics_model = spherical_harmonics_model,
   )
   
   # Get orbital period for grid density
