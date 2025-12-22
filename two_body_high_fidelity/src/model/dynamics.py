@@ -923,26 +923,26 @@ class Gravity:
     
     def __init__(
       self,
-      gp                         : float,
-      j2                         : float = 0.0,
-      j3                         : float = 0.0,
-      j4                         : float = 0.0,
-      j5                         : float = 0.0,
-      j6                         : float = 0.0,
-      c21                        : float = 0.0,
-      s21                        : float = 0.0,
-      c22                        : float = 0.0,
-      s22                        : float = 0.0,
-      c31                        : float = 0.0,
-      s31                        : float = 0.0,
-      c32                        : float = 0.0,
-      s32                        : float = 0.0,
-      c33                        : float = 0.0,
-      s33                        : float = 0.0,
-      pos_ref                    : float = 0.0,
-      enable_third_body          : bool  = False,
-      third_body_bodies          : list  = None,
-      gravity_model_coefficients : Optional['SphericalHarmonicsGravity'] = None,
+      gp                        : float,
+      j2                        : float = 0.0,
+      j3                        : float = 0.0,
+      j4                        : float = 0.0,
+      j5                        : float = 0.0,
+      j6                        : float = 0.0,
+      c21                       : float = 0.0,
+      s21                       : float = 0.0,
+      c22                       : float = 0.0,
+      s22                       : float = 0.0,
+      c31                       : float = 0.0,
+      s31                       : float = 0.0,
+      c32                       : float = 0.0,
+      s32                       : float = 0.0,
+      c33                       : float = 0.0,
+      s33                       : float = 0.0,
+      pos_ref                   : float = 0.0,
+      enable_third_body         : bool  = False,
+      third_body_bodies         : list  = None,
+      spherical_harmonics_model : Optional['SphericalHarmonicsGravity'] = None,
     ):
       """
       Initialize gravity acceleration components.
@@ -987,7 +987,7 @@ class Gravity:
           Enable Sun/Moon gravitational perturbations.
         third_body_bodies : list
           Which bodies to include (default: ['sun', 'moon']).
-        gravity_model_coefficients : SphericalHarmonicsGravity, optional
+        spherical_harmonics_model : SphericalHarmonicsGravity, optional
           Spherical harmonics gravity model. If provided, replaces 
           two-body point mass and oblateness terms.
               
@@ -996,7 +996,7 @@ class Gravity:
         None
       """
       # Spherical harmonics gravity model (if provided, replaces two-body terms)
-      self.spherical_harmonics_model = gravity_model_coefficients
+      self.spherical_harmonics_model = spherical_harmonics_model
       
       # Two-body gravity (used if no spherical harmonics model provided)
       self.two_body = TwoBodyGravity(
@@ -1385,33 +1385,33 @@ class Acceleration:
     
     def __init__(
       self,
-      gp                         : float,
-      j2                         : float = 0.0,
-      j3                         : float = 0.0,
-      j4                         : float = 0.0,
-      j5                         : float = 0.0,
-      j6                         : float = 0.0,
-      c21                        : float = 0.0,
-      s21                        : float = 0.0,
-      c22                        : float = 0.0,
-      s22                        : float = 0.0,
-      c31                        : float = 0.0,
-      s31                        : float = 0.0,
-      c32                        : float = 0.0,
-      s32                        : float = 0.0,
-      c33                        : float = 0.0,
-      s33                        : float = 0.0,
-      pos_ref                    : float = 0.0,
-      mass                       : float = 1.0,
-      enable_drag                : bool  = False,
-      cd                         : float = 0.0,
-      area_drag                  : float = 0.0,
-      enable_third_body          : bool  = False,
-      third_body_bodies          : list  = None,
-      enable_srp                 : bool  = False,
-      cr                         : float = 0.0,
-      area_srp                   : float = 0.0,
-      gravity_model_coefficients : Optional['SphericalHarmonicsGravity'] = None,
+      gp                        : float,
+      j2                        : float = 0.0,
+      j3                        : float = 0.0,
+      j4                        : float = 0.0,
+      j5                        : float = 0.0,
+      j6                        : float = 0.0,
+      c21                       : float = 0.0,
+      s21                       : float = 0.0,
+      c22                       : float = 0.0,
+      s22                       : float = 0.0,
+      c31                       : float = 0.0,
+      s31                       : float = 0.0,
+      c32                       : float = 0.0,
+      s32                       : float = 0.0,
+      c33                       : float = 0.0,
+      s33                       : float = 0.0,
+      pos_ref                   : float = 0.0,
+      mass                      : float = 1.0,
+      enable_drag               : bool  = False,
+      cd                        : float = 0.0,
+      area_drag                 : float = 0.0,
+      enable_third_body         : bool  = False,
+      third_body_bodies         : list  = None,
+      enable_srp                : bool  = False,
+      cr                        : float = 0.0,
+      area_srp                  : float = 0.0,
+      spherical_harmonics_model : Optional['SphericalHarmonicsGravity'] = None,
     ):
       """
       Initialize acceleration coordinator
@@ -1470,7 +1470,7 @@ class Acceleration:
           Radiation pressure coefficient
         area_srp : float
           Cross-sectional area for SRP [m²]
-        gravity_model_coefficients : SphericalHarmonicsGravity, optional
+        spherical_harmonics_model : SphericalHarmonicsGravity, optional
           Spherical harmonics gravity model. If provided, replaces 
           two-body point mass and oblateness terms.
               
@@ -1480,26 +1480,26 @@ class Acceleration:
       """
       # Create acceleration component instances
       self.gravity = Gravity(
-        gp                      = gp,
-        j2                      = j2,
-        j3                      = j3,
-        j4                      = j4,
-        j5                      = j5,
-        j6                      = j6,
-        c21                     = c21,
-        s21                     = s21,
-        c22                     = c22,
-        s22                     = s22,
-        c31                     = c31,
-        s31                     = s31,
-        c32                     = c32,
-        s32                     = s32,
-        c33                     = c33,
-        s33                     = s33,
-        pos_ref                 = pos_ref,
-        enable_third_body       = enable_third_body,
-        third_body_bodies       = third_body_bodies,
-        gravity_model_coefficients = gravity_model_coefficients,
+        gp                        = gp,
+        j2                        = j2,
+        j3                        = j3,
+        j4                        = j4,
+        j5                        = j5,
+        j6                        = j6,
+        c21                       = c21,
+        s21                       = s21,
+        c22                       = c22,
+        s22                       = s22,
+        c31                       = c31,
+        s31                       = s31,
+        c32                       = c32,
+        s32                       = s32,
+        c33                       = c33,
+        s33                       = s33,
+        pos_ref                   = pos_ref,
+        enable_third_body         = enable_third_body,
+        third_body_bodies         = third_body_bodies,
+        spherical_harmonics_model = spherical_harmonics_model,
       )
       
       self.enable_drag = enable_drag
