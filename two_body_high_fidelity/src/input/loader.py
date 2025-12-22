@@ -142,7 +142,7 @@ def load_files(
   print("\nLoad Files")
   print(f"  Project Folderpath : {Path.cwd()}")
 
-  # Load SPICE files (always required)
+  # Load SPICE files
   load_spice_files(spice_kernels_folderpath, lsk_filepath)
 
   # Load gravity model if requested
