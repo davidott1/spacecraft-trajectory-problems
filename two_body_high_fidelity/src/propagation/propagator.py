@@ -498,14 +498,14 @@ def run_high_fidelity_propagation(
   time_et_f    = utc_to_et(time_f_utc_dt)
   delta_time_s = (time_f_utc_dt - time_o_utc_dt).total_seconds()
 
-  # Extract the actual gravity model coefficients from the namespace
-  gravity_model_coeffs = None
-  if gravity_model is not None and gravity_model.coefficients is not None:
-    gravity_model_coeffs = gravity_model.coefficients
+  # Extract the actual gravity model from the namespace
+  gravity_model_obj = None
+  if gravity_model is not None and gravity_model.spherical_harmonics_model is not None:
+    gravity_model_obj = gravity_model.spherical_harmonics_model
 
   # Configure gravity harmonics using helper function
-  # Only use analytical harmonics if no gravity_model coefficients are provided
-  if gravity_model_coeffs is None and include_gravity_harmonics and gravity_harmonics_list:
+  # Only use analytical harmonics if no gravity_model is provided
+  if gravity_model_obj is None and include_gravity_harmonics and gravity_harmonics_list:
     harmonic_coeffs = _get_harmonic_coefficients(gravity_harmonics_list)
   else:
     harmonic_coeffs = _get_harmonic_coefficients([])  # All zeros
@@ -521,7 +521,7 @@ def run_high_fidelity_propagation(
   print(f"        Earth")
   
   # Display gravity model info
-  if gravity_model is not None and gravity_model.coefficients is not None:
+  if gravity_model is not None and gravity_model.spherical_harmonics_model is not None:
     print(f"          Spherical Harmonics")
     print(f"            Degree : {gravity_model.degree}")
     print(f"            Order  : {gravity_model.order}")
@@ -585,7 +585,7 @@ def run_high_fidelity_propagation(
     enable_srp              = include_srp,
     cr                      = cr,
     area_srp                = area_srp,
-    gravity_model_coefficients = gravity_model.coefficients if gravity_model is not None else None,
+    gravity_model_coefficients = gravity_model.spherical_harmonics_model if gravity_model is not None else None,
   )
   
   # Get orbital period for grid density

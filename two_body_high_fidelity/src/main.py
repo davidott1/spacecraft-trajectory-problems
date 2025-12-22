@@ -210,9 +210,9 @@ def main(
   )
   
   # Update gravity_model namespace with loaded values
-  config.gravity_model.coefficients = gravity_result['coefficients']
-  config.gravity_model.gp           = gravity_result['gp']
-  config.gravity_model.radius       = gravity_result['radius']
+  config.gravity_model.spherical_harmonics_model = gravity_result['spherical_harmonics_model']
+  config.gravity_model.gp                        = gravity_result['gp']
+  config.gravity_model.radius                    = gravity_result['radius']
 
   # Get Horizons ephemeris (only if needed for initial state or comparison)
   result_jpl_horizons_ephemeris = None

@@ -419,13 +419,13 @@ def build_config(
   
   # Create nested gravity_model namespace
   gravity_model = SimpleNamespace(
-    folderpath   = paths['gravity_model_folderpath'],
-    filename     = paths['gravity_model_filename'],
-    gp           = None,  # Set after loading
-    radius       = None,  # Set after loading
-    degree       = gravity_harmonics_degree,
-    order        = gravity_harmonics_order,
-    coefficients = None,  # Loaded later by load_files
+    folderpath               = paths['gravity_model_folderpath'],
+    filename                 = paths['gravity_model_filename'],
+    gp                       = None,  # Set after loading
+    radius                   = None,  # Set after loading
+    degree                   = gravity_harmonics_degree,
+    order                    = gravity_harmonics_order,
+    spherical_harmonics_model = None,  # Loaded later by load_files
   )
 
   return SimpleNamespace(
