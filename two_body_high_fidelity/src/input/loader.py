@@ -104,7 +104,6 @@ def load_gravity_field_model(
 
 
 def load_files(
-  use_spice                : bool,
   spice_kernels_folderpath : Path,
   lsk_filepath             : Path,
   gravity_model_folderpath : Optional[Path] = None,
@@ -117,8 +116,6 @@ def load_files(
   
   Input:
   ------
-    use_spice : bool
-      Flag to enable/disable SPICE usage.
     spice_kernels_folderpath : Path
       Path to the SPICE kernels folder.
     lsk_filepath : Path
@@ -145,8 +142,8 @@ def load_files(
   print("\nLoad Files")
   print(f"  Project Folderpath : {Path.cwd()}")
 
-  # Load spice files if SPICE is enabled
-  load_spice_files(use_spice, spice_kernels_folderpath, lsk_filepath)
+  # Load SPICE files (always required)
+  load_spice_files(spice_kernels_folderpath, lsk_filepath)
 
   # Load gravity model if requested
   gravity_model = None
@@ -173,37 +170,30 @@ def load_files(
   return gravity_model
 
 
-def unload_files(
-  use_spice: bool,
-) -> None:
+def unload_files() -> None:
   """
-  Unload files that were loaded for the simulation, including SPICE kernels if enabled.
+  Unload files that were loaded for the simulation, including SPICE kernels.
   
   Input:
   ------
-    use_spice : bool
-      Flag to enable/disable SPICE usage.
+    None
       
   Output:
   -------
     None
   """
-  # Unload SPICE files if SPICE was enabled
-  unload_spice_files(use_spice)
+  unload_spice_files()
 
 
 def load_spice_files(
-  use_spice                : bool,
   spice_kernels_folderpath : Path,
   lsk_filepath             : Path,
 ) -> None:
   """
-  Load required data files, e.g., SPICE kernels.
+  Load required SPICE kernels.
   
   Input:
   ------
-    use_spice : bool
-      Flag to enable/disable SPICE usage.
     spice_kernels_folderpath : Path
       Path to the SPICE kernels folder.
     lsk_filepath : Path
@@ -212,62 +202,62 @@ def load_spice_files(
   Output:
   -------
     None
-  """
-  if use_spice:
-    if not spice_kernels_folderpath.exists():
-      raise FileNotFoundError(f"SPICE kernels folder not found: {spice_kernels_folderpath}")
-    if not lsk_filepath.exists():
-      raise FileNotFoundError(f"SPICE leap seconds kernel not found: {lsk_filepath}")
-
-    try:
-      rel_path = spice_kernels_folderpath.relative_to(Path.cwd())
-      display_path = f"<project_folderpath>/{rel_path}"
-    except ValueError:
-      display_path = spice_kernels_folderpath
-
-    print(f"  Spice Kernels")
-    print(f"    Folderpath : {display_path}")
     
-    # Load leap seconds kernel first (minimal kernel set for time conversion)
-    spice.furnsh(str(lsk_filepath))
-
-    # Load planetary ephemeris (SPK)
-    # Sort to ensure deterministic behavior. SPICE uses the last loaded kernel for precedence.
-    spk_files = sorted(list(spice_kernels_folderpath.glob('de*.bsp')))
-    if spk_files:
-      for spk_file in spk_files:
-        spice.furnsh(str(spk_file))
-        print(f"    Loaded SPK : {spk_file.name}")
-    else:
-      raise FileNotFoundError(f"No SPK files (de*.bsp) found in {spice_kernels_folderpath}")
-
-    # Load planetary constants (PCK)
-    pck_files = sorted(list(spice_kernels_folderpath.glob('pck*.tpc')))
-    if pck_files:
-      for pck_file in pck_files:
-        spice.furnsh(str(pck_file))
-        print(f"    Loaded PCK : {pck_file.name}")
-    else:
-      raise FileNotFoundError(f"No PCK files (pck*.tpc) found in {spice_kernels_folderpath}")
-
-
-def unload_spice_files(
-  use_spice : bool,
-) -> None:
+  Raises:
+  -------
+    FileNotFoundError
+      If SPICE kernels folder or required kernel files are not found.
   """
-  Unload all SPICE kernels if they were loaded.
+  if not spice_kernels_folderpath.exists():
+    raise FileNotFoundError(f"SPICE kernels folder not found: {spice_kernels_folderpath}")
+  if not lsk_filepath.exists():
+    raise FileNotFoundError(f"SPICE leap seconds kernel not found: {lsk_filepath}")
+
+  try:
+    rel_path = spice_kernels_folderpath.relative_to(Path.cwd())
+    display_path = f"<project_folderpath>/{rel_path}"
+  except ValueError:
+    display_path = spice_kernels_folderpath
+
+  print(f"  Spice Kernels")
+  print(f"    Folderpath : {display_path}")
+  
+  # Load leap seconds kernel first (minimal kernel set for time conversion)
+  spice.furnsh(str(lsk_filepath))
+
+  # Load planetary ephemeris (SPK)
+  # Sort to ensure deterministic behavior. SPICE uses the last loaded kernel for precedence.
+  spk_files = sorted(list(spice_kernels_folderpath.glob('de*.bsp')))
+  if spk_files:
+    for spk_file in spk_files:
+      spice.furnsh(str(spk_file))
+      print(f"    Loaded SPK : {spk_file.name}")
+  else:
+    raise FileNotFoundError(f"No SPK files (de*.bsp) found in {spice_kernels_folderpath}")
+
+  # Load planetary constants (PCK)
+  pck_files = sorted(list(spice_kernels_folderpath.glob('pck*.tpc')))
+  if pck_files:
+    for pck_file in pck_files:
+      spice.furnsh(str(pck_file))
+      print(f"    Loaded PCK : {pck_file.name}")
+  else:
+    raise FileNotFoundError(f"No PCK files (pck*.tpc) found in {spice_kernels_folderpath}")
+
+
+def unload_spice_files() -> None:
+  """
+  Unload all SPICE kernels.
   
   Input:
   ------
-    use_spice : bool
-      Flag to enable/disable SPICE usage.
+    None
       
   Output:
   -------
     None
   """
-  if use_spice:
-    spice.kclear()
+  spice.kclear()
 
 
 def load_horizons_ephemeris(

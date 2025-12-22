@@ -443,7 +443,6 @@ def build_config(
     area_drag                  = obj_props['drag']['area__m2'],
     cr                         = obj_props['srp']['coeff'],
     area_srp                   = obj_props['srp']['area__m2'],
-    include_spice              = True,
     include_drag               = include_drag,
     compare_tle                = compare_tle,
     compare_jpl_horizons       = compare_jpl_horizons,
