@@ -130,7 +130,6 @@ def parse_command_line_arguments(
     help    = "Enable Solar Radiation Pressure (disabled by default).",
   )
   
-  
   # Parse arguments
   args = parser.parse_args()
   

@@ -147,10 +147,10 @@ def load_files(
   gravity_model = None
   if gravity_model_filename is not None and gravity_model_degree is not None and gravity_model_folderpath is not None:
     gravity_model = load_gravity_field_model(
-      gravity_model_folderpath,
-      gravity_model_filename,
-      gravity_model_degree = gravity_model_degree,
-      gravity_model_order  = gravity_model_order,
+      gravity_model_folderpath = gravity_model_folderpath,
+      gravity_model_filename   = gravity_model_filename,
+      gravity_model_degree     = gravity_model_degree,
+      gravity_model_order      = gravity_model_order,
     )
     
   return gravity_model
