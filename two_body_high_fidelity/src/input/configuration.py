@@ -284,12 +284,11 @@ def build_config(
   # Handle gravity harmonics logic
   include_gravity_harmonics = len(gravity_harmonics_list) > 0
 
-  if gravity_harmonics_degree_order:
+  if gravity_harmonics_degree_order is not None:
+    if len(gravity_harmonics_degree_order) != 2:
+      raise ValueError("--gravity-harmonics-degree-order requires exactly 2 values: DEGREE ORDER")
     gravity_harmonics_degree = gravity_harmonics_degree_order[0]
-    if len(gravity_harmonics_degree_order) > 1:
-      gravity_harmonics_order = gravity_harmonics_degree_order[1]
-    else:
-      gravity_harmonics_order = gravity_harmonics_degree
+    gravity_harmonics_order  = gravity_harmonics_degree_order[1]
   else:
     gravity_harmonics_degree = None
     gravity_harmonics_order  = None
