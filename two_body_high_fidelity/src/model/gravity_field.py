@@ -31,8 +31,6 @@ class GravityFieldCoefficients:
     self,
     max_degree : int,
     max_order  : int,
-    gp         : float,
-    radius     : float,
   ):
     """
     Initialize coefficient arrays.
@@ -43,18 +41,12 @@ class GravityFieldCoefficients:
         Maximum degree of expansion.
       max_order : int
         Maximum order of expansion.
-      gp : float
-        Gravitational parameter [m³/s²].
-      radius : float
-        Reference radius [m].
     """
     self.max_degree = max_degree
     self.max_order  = min(max_order, max_degree)
-    self.gp         = gp
-    self.radius     = radius
     
     # Allocate coefficient arrays (n x m)
-    # C[n,m] and S[n,m] where n=degree, m=order
+    #   - C[n,m] and S[n,m] where n=degree, m=order
     self.C = np.zeros((max_degree + 1, max_order + 1))
     self.S = np.zeros((max_degree + 1, max_order + 1))
     
@@ -91,9 +83,18 @@ def load_icgem_file(
   filepath : Path,
   degree   : int,
   order    : int,
-) -> GravityFieldCoefficients:
+) -> tuple:
   """
   Load gravity field coefficients from ICGEM format file.
+  
+  Output:
+  -------
+    coeffs : GravityFieldCoefficients
+      Loaded coefficients.
+    gp : float
+      Gravitational parameter [m³/s²].
+    radius : float
+      Reference radius [m].
   """
   # Default values (will be overwritten from file header)
   gp     = SOLARSYSTEMCONSTANTS.EARTH.GP
@@ -108,10 +109,9 @@ def load_icgem_file(
         continue
         
       if line.startswith('earth_gravity_constant'):
-        parts = line.split()
-        # Handle 'D' exponents in header values if present
+        parts   = line.split()
         val_str = parts[1].replace('D', 'E').replace('d', 'e')
-        gp = float(val_str)
+        gp      = float(val_str)
       elif line.startswith('radius'):
         parts   = line.split()
         val_str = parts[1].replace('D', 'E').replace('d', 'e')
@@ -120,7 +120,7 @@ def load_icgem_file(
         break
     
     # Initialize coefficients container
-    coeffs = GravityFieldCoefficients(degree, order, gp, radius)
+    coeffs = GravityFieldCoefficients(degree, order)
     
     # Read Coefficients (continue reading from current file position)
     for line in f:
@@ -152,7 +152,7 @@ def load_icgem_file(
         except (ValueError, IndexError):
           continue
   
-  return coeffs
+  return coeffs, gp, radius
 
 
 class SphericalHarmonicsGravity:
@@ -384,11 +384,11 @@ def load_gravity_field(
     model : SphericalHarmonicsGravity
       Ready-to-use gravity model.
   """
-  coefficients = load_icgem_file(filepath, degree, order)
+  coefficients, gp, radius = load_icgem_file(filepath, degree, order)
   return SphericalHarmonicsGravity(
     coefficients = coefficients,
     degree       = degree,
     order        = order,
-    radius       = coefficients.radius,
-    gp           = coefficients.gp,
+    radius       = radius,
+    gp           = gp,
   )
