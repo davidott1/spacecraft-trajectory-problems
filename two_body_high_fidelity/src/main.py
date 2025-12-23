@@ -122,16 +122,16 @@ def check_data_availability(
 
 
 def main(
-  initial_state_norad_id : Optional[str],
-  initial_state_filename : Optional[str],
-  timespan               : list[datetime],
-  include_drag           : bool           = False,
-  compare_tle            : bool           = False,
-  compare_jpl_horizons   : bool           = False,
-  third_bodies           : Optional[list] = None,
-  gravity_harmonics      : Optional[list] = None,
-  include_srp            : bool           = False,
-  initial_state_source   : str            = 'jpl_horizons',
+  initial_state_norad_id         : Optional[str],
+  initial_state_filename         : Optional[str],
+  timespan                       : list[datetime],
+  include_drag                   : bool           = False,
+  compare_tle                    : bool           = False,
+  compare_jpl_horizons           : bool           = False,
+  third_bodies                   : Optional[list] = None,
+  gravity_harmonics              : Optional[list] = None,
+  include_srp                    : bool           = False,
+  initial_state_source           : str            = 'jpl_horizons',
   gravity_harmonics_degree_order : Optional[list] = None,
   gravity_model_filename         : Optional[str]  = None,
 ) -> dict:
@@ -210,9 +210,9 @@ def main(
   )
   
   # Update two_body_gravity_model namespace with loaded values
-  config.two_body_gravity_model.spherical_harmonics.model  = spherical_harmonics_model.model
-  config.two_body_gravity_model.spherical_harmonics.gp     = spherical_harmonics_model.coefficients.gp
-  config.two_body_gravity_model.spherical_harmonics.radius = spherical_harmonics_model.coefficients.radius
+  config.two_body_gravity_model.spherical_harmonics.model  = spherical_harmonics_model
+  config.two_body_gravity_model.spherical_harmonics.gp     = spherical_harmonics_model.gp
+  config.two_body_gravity_model.spherical_harmonics.radius = spherical_harmonics_model.radius
 
   # Get Horizons ephemeris (only if needed for initial state or comparison)
   result_jpl_horizons_ephemeris = None
