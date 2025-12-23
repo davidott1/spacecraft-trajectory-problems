@@ -277,7 +277,6 @@ def main(
     initial_state_source          = config.initial_state_source,
     custom_state_vector           = config.custom_state_vector,
     initial_state_filename        = config.initial_state_filename,
-    to_j2000                      = True,
   )
 
   # Run propagations: high-fidelity and SGP4

@@ -19,7 +19,6 @@ def get_initial_state(
   initial_state_source          : str = 'jpl_horizons',
   custom_state_vector           : Optional[np.ndarray] = None,
   initial_state_filename        : Optional[str] = None,
-  to_j2000                      : bool = True,
 ) -> np.ndarray:
   """
   Get initial state vector from specified source.
@@ -40,8 +39,6 @@ def get_initial_state(
       Custom state vector if source is 'custom_state_vector'.
     initial_state_filename : str | None
       Filename of custom state vector file.
-    to_j2000 : bool
-      Convert to J2000 frame.
       
   Output:
   -------
@@ -130,6 +127,10 @@ def get_initial_state(
     return horizons_initial_state
 
   # Fallback to TLE
+  
+  # Validate TLE lines are available
+  if tle_line_1 is None or tle_line_2 is None:
+    raise ValueError("TLE source selected but TLE lines are not available.")
 
   # Calculate integ_time_o (seconds from TLE epoch)
   satellite = Satrec.twoline2rv(tle_line_1, tle_line_2)
@@ -149,7 +150,7 @@ def get_initial_state(
     time_o     = integ_time_o,
     time_f     = integ_time_o,
     num_points = 1,
-    to_j2000   = to_j2000,
+    to_j2000   = True,
   )
   if not result_tle_initial['success']:
     raise RuntimeError(f"Failed to get initial state from TLE: {result_tle_initial['message']}")
