@@ -81,9 +81,9 @@ def load_gravity_field_model(
   print(f"    Folderpath : {display_folderpath}")
   
   # Build full path to gravity file
-  gravity_filepath = gravity_model_folderpath / gravity_model_filename
+  gravity_model_filepath = gravity_model_folderpath / gravity_model_filename
   
-  if not gravity_filepath.exists():
+  if not gravity_model_filepath.exists():
     print(f"    Filepath   : {gravity_model_filename} (NOT FOUND)")
     print(f"    Status     : Failed - file not found")
     return None
@@ -93,22 +93,22 @@ def load_gravity_field_model(
   print(f"    Order      : {gravity_model_order}")
   
   try:
-    gravity_model = load_gravity_field(
-      filepath           = gravity_filepath,
-      max_gravity_degree = gravity_model_degree,
-      max_gravity_order  = gravity_model_order,
+    spherical_harmonics_model = load_gravity_field(
+      filepath = gravity_model_filepath,
+      degree   = gravity_model_degree,
+      order    = gravity_model_order,
     )
     
     # Extract gp and radius from the loaded model
-    gp     = gravity_model.coeffs.gp
-    radius = gravity_model.coeffs.radius
+    gp     = spherical_harmonics_model.coefficients.gp
+    radius = spherical_harmonics_model.coefficients.radius
     
     print(f"    Status     : Loaded successfully")
     print(f"    GP         : {gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
     print(f"    Radius     : {radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
     
     return {
-      'spherical_harmonics_model' : gravity_model,
+      'spherical_harmonics_model' : spherical_harmonics_model,
       'gp'                        : gp,
       'radius'                    : radius,
     }
