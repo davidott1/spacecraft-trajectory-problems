@@ -88,9 +88,9 @@ class GravityFieldCoefficients:
 
 
 def load_icgem_file(
-  filepath   : Path,
-  max_degree : int,
-  max_order  : int,
+  filepath : Path,
+  degree   : int,
+  order    : int,
 ) -> GravityFieldCoefficients:
   """
   Load gravity field coefficients from ICGEM format file.
@@ -120,7 +120,7 @@ def load_icgem_file(
         break
     
     # Initialize coefficients container
-    coeffs = GravityFieldCoefficients(max_degree, max_order, gp, radius)
+    coeffs = GravityFieldCoefficients(degree, order, gp, radius)
     
     # Read Coefficients (continue reading from current file position)
     for line in f:
@@ -135,8 +135,8 @@ def load_icgem_file(
       
       if parts[0] in ['gfc', 'gcf']:
         try:
-          degree = int(parts[1]) # n
-          order  = int(parts[2]) # m
+          n_degree = int(parts[1]) # n
+          m_order  = int(parts[2]) # m
           
           # Handle 'D' or 'E' exponents (e.g. 1.0D-06)
           cnm_str = parts[3].replace('D', 'E').replace('d', 'e')
@@ -147,8 +147,8 @@ def load_icgem_file(
           else:
             Snm = 0.0
           
-          if degree <= max_degree and order <= max_order:
-            coeffs.set_coefficient(degree, order, Cnm, Snm)
+          if n_degree <= degree and m_order <= order:
+            coeffs.set_coefficient(n_degree, m_order, Cnm, Snm)
         except (ValueError, IndexError):
           continue
   
@@ -170,16 +170,15 @@ class SphericalHarmonicsGravity:
   def __init__(
     self,
     coefficients : GravityFieldCoefficients,
-    use_degree   : Optional[int] = None,
-    use_order    : Optional[int] = None,
+    degree       : Optional[int] = None,
+    order        : Optional[int] = None,
   ):
     """
     Initialize spherical harmonics gravity model.
     """
-    self.coeffs     = coefficients
-    self.max_degree = use_degree if use_degree else coefficients.max_degree
-    self.max_order  = use_order  if use_order  else coefficients.max_order
-    self.max_order  = min(self.max_order, self.max_degree)
+    self.coefficients = coefficients
+    self.degree       = degree
+    self.order        = order
     
     # Precompute normalization factors
     self._precompute_normalization()
@@ -189,8 +188,8 @@ class SphericalHarmonicsGravity:
     Precompute normalization factors for Legendre recursion.
     These convert between normalized and unnormalized associated Legendre functions.
     """
-    n_max = self.max_degree + 2  # Need extra for derivatives
-    m_max = self.max_order  + 2
+    n_max = self.degree + 2  # Need extra for derivatives
+    m_max = self.order  + 2
     
     # Anm factors for vertical recursion: P(n,m) from P(n-1,m) and P(n-2,m)
     self.anm = np.zeros((n_max, m_max))
@@ -258,11 +257,11 @@ class SphericalHarmonicsGravity:
     t = y / r  # sin(lon) * cos(lat)
     u = z / r  # sin(lat)
     
-    Re = self.coeffs.radius
-    gp = self.coeffs.gp
+    Re = self.coefficients.radius
+    gp = self.coefficients.gp
     
-    n_max = self.max_degree
-    m_max = self.max_order
+    n_max = self.degree
+    m_max = self.order
     
     # Initialize Legendre functions (fully normalized)
     # V(n,m) and W(n,m) are related to normalized ALFs
@@ -312,8 +311,8 @@ class SphericalHarmonicsGravity:
       norm_fix = np.sqrt((2.0 * n_degree + 1.0) / (2.0 * n_degree + 3.0))
 
       for m_order in range(0, min(n_degree + 1, m_max + 1)):
-        Cnm = self.coeffs.C[n_degree, m_order]
-        Snm = self.coeffs.S[n_degree, m_order]
+        Cnm = self.coefficients.C[n_degree, m_order]
+        Snm = self.coefficients.S[n_degree, m_order]
         
         # Factors for derivative computation
         if m_order == 0:
@@ -360,9 +359,9 @@ class SphericalHarmonicsGravity:
 
 
 def load_gravity_field(
-  filepath           : Path,
-  max_gravity_degree : int,
-  max_gravity_order  : int,
+  filepath : Path,
+  degree   : int,
+  order    : int,
 ) -> SphericalHarmonicsGravity:
   """
   Convenience function to load gravity field and create model.
@@ -371,9 +370,9 @@ def load_gravity_field(
   ------
     filepath : Path
       Path to coefficient file.
-    max_gravity_degree : int
+    degree : int
       Maximum degree.
-    max_gravity_order : int
+    order : int
       Maximum order.
   
   Output:
@@ -381,5 +380,5 @@ def load_gravity_field(
     model : SphericalHarmonicsGravity
       Ready-to-use gravity model.
   """
-  coeffs = load_icgem_file(filepath, max_gravity_degree, max_gravity_order)
-  return SphericalHarmonicsGravity(coeffs, max_gravity_degree, max_gravity_order)
+  coefficients = load_icgem_file(filepath, degree, order)
+  return SphericalHarmonicsGravity(coefficients, degree, order)
