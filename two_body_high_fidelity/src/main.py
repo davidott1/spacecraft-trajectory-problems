@@ -210,9 +210,10 @@ def main(
   )
   
   # Update two_body_gravity_model namespace with loaded values
-  config.two_body_gravity_model.spherical_harmonics.model  = spherical_harmonics_model
-  config.two_body_gravity_model.spherical_harmonics.gp     = spherical_harmonics_model.gp
-  config.two_body_gravity_model.spherical_harmonics.radius = spherical_harmonics_model.radius
+  if spherical_harmonics_model is not None:
+    config.two_body_gravity_model.spherical_harmonics.model  = spherical_harmonics_model
+    config.two_body_gravity_model.spherical_harmonics.gp     = spherical_harmonics_model.gp
+    config.two_body_gravity_model.spherical_harmonics.radius = spherical_harmonics_model.radius
 
   # Get Horizons ephemeris (only if needed for initial state or comparison)
   result_jpl_horizons_ephemeris = None
