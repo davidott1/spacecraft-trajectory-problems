@@ -172,6 +172,8 @@ class SphericalHarmonicsGravity:
     coefficients : GravityFieldCoefficients,
     degree       : Optional[int] = None,
     order        : Optional[int] = None,
+    radius       : Optional[float] = None,
+    gp           : Optional[float] = None,
   ):
     """
     Initialize spherical harmonics gravity model.
@@ -179,6 +181,8 @@ class SphericalHarmonicsGravity:
     self.coefficients = coefficients
     self.degree       = degree
     self.order        = order
+    self.radius       = radius
+    self.gp           = gp
     
     # Precompute normalization factors
     self._precompute_normalization()
@@ -257,8 +261,8 @@ class SphericalHarmonicsGravity:
     t = y / r  # sin(lon) * cos(lat)
     u = z / r  # sin(lat)
     
-    Re = self.coefficients.radius
-    gp = self.coefficients.gp
+    Re = self.radius
+    gp = self.gp
     
     n_max = self.degree
     m_max = self.order
@@ -381,4 +385,10 @@ def load_gravity_field(
       Ready-to-use gravity model.
   """
   coefficients = load_icgem_file(filepath, degree, order)
-  return SphericalHarmonicsGravity(coefficients, degree, order)
+  return SphericalHarmonicsGravity(
+    coefficients = coefficients,
+    degree       = degree,
+    order        = order,
+    radius       = coefficients.radius,
+    gp           = coefficients.gp,
+  )

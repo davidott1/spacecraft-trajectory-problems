@@ -100,8 +100,8 @@ def load_gravity_field_model(
     )
     
     # Extract gp and radius from the loaded model
-    gp     = spherical_harmonics_model.coefficients.gp
-    radius = spherical_harmonics_model.coefficients.radius
+    gp     = spherical_harmonics_model.gp
+    radius = spherical_harmonics_model.radius
     
     print(f"    Status     : Loaded successfully")
     print(f"    GP         : {gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
@@ -159,7 +159,7 @@ def load_files(
   load_spice_files(spice_kernels_folderpath, lsk_filepath)
 
   # Load gravity model if requested
-  gravity_model_result = None
+  spherical_harmonics_model = None
   gravity_model_requested = gravity_model_degree is not None
   
   if (gravity_model_filename is not None and 
@@ -174,17 +174,14 @@ def load_files(
     )
   
   # Validate: if gravity model was requested, it must have loaded successfully
-  if gravity_model_requested and gravity_model_result is None:
+  if gravity_model_requested and spherical_harmonics_model is None:
     raise ValueError(
       "--gravity-harmonics-degree-order was specified but gravity model failed to load. "
       "Please check the gravity model file exists and is valid."
     )
   
-  # Extract values from result
-  if spherical_harmonics_model is not None:
-      return spherical_harmonics_model
-  else:
-    return None
+  # Return loaded model (or None if not requested)
+  return spherical_harmonics_model
 
 
 def unload_files() -> None:
