@@ -113,13 +113,69 @@ def load_gravity_field_model(
     return None
 
 
-def load_files(
-  spice_kernels_folderpath : Path,
-  lsk_filepath             : Path,
+def load_gravity_model_from_coefficients(
+  coefficient_names        : list,
   gravity_model_folderpath : Optional[Path] = None,
-  gravity_model_filename   : Optional[str]  = None,
-  gravity_model_degree     : Optional[int]  = None,
-  gravity_model_order      : Optional[int]  = None,
+  gravity_model_filename   : str = 'EGM2008.gfc',
+):
+  """
+  Load gravity model using only specific named coefficients.
+  
+  Input:
+  ------
+    coefficient_names : list
+      List of coefficient names (e.g., ['J2', 'J3', 'C22', 'S22']).
+    gravity_model_folderpath : Path, optional
+      Path to folder containing gravity model files.
+    gravity_model_filename : str
+      Filename of gravity model to use for coefficient values.
+      
+  Output:
+  -------
+    model : SphericalHarmonicsGravity | None
+      Gravity model with only the specified coefficients, or None if failed.
+  """
+  from src.model.gravity_field import create_gravity_model_from_coefficients
+  
+  print("  Gravity Field Model (Explicit Coefficients)")
+  print(f"    Coefficients : {', '.join(coefficient_names)}")
+  
+  # Build gravity file path if folder is provided
+  gravity_file_path = None
+  if gravity_model_folderpath is not None:
+    gravity_file_path = gravity_model_folderpath / gravity_model_filename
+    if gravity_file_path.exists():
+      print(f"    Source File  : {gravity_model_filename}")
+    else:
+      print(f"    Source File  : {gravity_model_filename} (NOT FOUND - using defaults)")
+      gravity_file_path = None
+  else:
+    print(f"    Source File  : None (using hardcoded defaults)")
+  
+  try:
+    model = create_gravity_model_from_coefficients(
+      coefficient_names = coefficient_names,
+      gravity_file_path = gravity_file_path,
+    )
+    print(f"    Status       : Created successfully")
+    print(f"    GP           : {model.gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
+    print(f"    Radius       : {model.radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
+    print(f"    Max Degree   : {model.degree}")
+    print(f"    Max Order    : {model.order}")
+    return model
+  except Exception as e:
+    print(f"    Status       : Failed - {e}")
+    return None
+
+
+def load_files(
+  spice_kernels_folderpath  : Path,
+  lsk_filepath              : Path,
+  gravity_model_folderpath  : Optional[Path] = None,
+  gravity_model_filename    : Optional[str]  = None,
+  gravity_model_degree      : Optional[int]  = None,
+  gravity_model_order       : Optional[int]  = None,
+  gravity_coefficient_names : Optional[list] = None,
 ):
   """
   Load necessary files for the simulation, including SPICE kernels and gravity model.
@@ -138,19 +194,19 @@ def load_files(
       Maximum degree.
     gravity_model_order : int, optional
       Maximum order.
+    gravity_coefficient_names : list, optional
+      List of explicit coefficient names (e.g., ['J2', 'J3', 'C22']).
+      If provided, creates a model with only these coefficients.
       
   Output:
   -------
-    result : dict
-      Dictionary containing:
-      - spherical_harmonics_model : SphericalHarmonicsGravity | None - Loaded gravity model
-      - gp                        : float | None - Gravitational parameter from model
-      - radius                    : float | None - Reference radius from model
+    result : SphericalHarmonicsGravity | None
+      Loaded gravity model or None if not requested/failed.
       
   Raises:
   -------
     ValueError
-      If gravity model was requested (degree/order specified) but failed to load.
+      If gravity model was requested but failed to load.
   """
   print("\nLoad Files")
   print(f"  Project Folderpath : {Path.cwd()}")
@@ -158,27 +214,37 @@ def load_files(
   # Load SPICE files
   load_spice_files(spice_kernels_folderpath, lsk_filepath)
 
-  # Load gravity model if requested
+  # Load gravity model
   spherical_harmonics_model = None
-  gravity_model_requested = gravity_model_degree is not None
   
-  if (gravity_model_filename is not None and 
-      gravity_model_degree is not None and 
-      gravity_model_order is not None and
-      gravity_model_folderpath is not None):
+  # Option 1: Explicit coefficient names (e.g., ['J2', 'J3', 'C22', 'S22'])
+  if gravity_coefficient_names is not None and len(gravity_coefficient_names) > 0:
+    spherical_harmonics_model = load_gravity_model_from_coefficients(
+      coefficient_names        = gravity_coefficient_names,
+      gravity_model_folderpath = gravity_model_folderpath,
+      gravity_model_filename   = gravity_model_filename if gravity_model_filename else 'EGM2008.gfc',
+    )
+    if spherical_harmonics_model is None:
+      raise ValueError(
+        "--gravity-harmonics-coefficients was specified but model creation failed."
+      )
+  
+  # Option 2: Full spherical harmonics file with degree/order
+  elif (gravity_model_filename is not None and 
+        gravity_model_degree is not None and 
+        gravity_model_order is not None and
+        gravity_model_folderpath is not None):
     spherical_harmonics_model = load_gravity_field_model(
       gravity_model_folderpath = gravity_model_folderpath,
       gravity_model_filename   = gravity_model_filename,
       gravity_model_degree     = gravity_model_degree,
       gravity_model_order      = gravity_model_order,
     )
-  
-  # Validate: if gravity model was requested, it must have loaded successfully
-  if gravity_model_requested and spherical_harmonics_model is None:
-    raise ValueError(
-      "--gravity-harmonics-degree-order was specified but gravity model failed to load. "
-      "Please check the gravity model file exists and is valid."
-    )
+    if spherical_harmonics_model is None:
+      raise ValueError(
+        "--gravity-harmonics-degree-order was specified but gravity model failed to load. "
+        "Please check the gravity model file exists and is valid."
+      )
   
   # Return loaded model (or None if not requested)
   return spherical_harmonics_model

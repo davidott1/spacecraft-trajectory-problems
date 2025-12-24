@@ -292,7 +292,8 @@ def build_config(
     )
   
   # Handle gravity harmonics logic
-  include_gravity_harmonics = len(gravity_harmonics_list) > 0
+  # include_gravity_harmonics is True if EITHER explicit coefficients OR degree/order is specified
+  include_gravity_harmonics = has_coefficients or has_degree_order
 
   if gravity_harmonics_degree_order is not None:
     if len(gravity_harmonics_degree_order) != 2:

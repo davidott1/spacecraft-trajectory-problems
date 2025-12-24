@@ -201,12 +201,13 @@ def main(
 
   # Load files: SPICE, spherical harmonics coefficients
   spherical_harmonics_model = load_files(
-    spice_kernels_folderpath = config.spice_kernels_folderpath,
-    lsk_filepath             = config.lsk_filepath,
-    gravity_model_folderpath = config.two_body_gravity_model.folderpath,
-    gravity_model_filename   = config.two_body_gravity_model.filename,
-    gravity_model_degree     = config.two_body_gravity_model.spherical_harmonics.degree,
-    gravity_model_order      = config.two_body_gravity_model.spherical_harmonics.order,
+    spice_kernels_folderpath  = config.spice_kernels_folderpath,
+    lsk_filepath              = config.lsk_filepath,
+    gravity_model_folderpath  = config.two_body_gravity_model.folderpath,
+    gravity_model_filename    = config.two_body_gravity_model.filename,
+    gravity_model_degree      = config.two_body_gravity_model.spherical_harmonics.degree,
+    gravity_model_order       = config.two_body_gravity_model.spherical_harmonics.order,
+    gravity_coefficient_names = config.gravity_harmonics_list if config.include_gravity_harmonics else None,
   )
   
   # Update two_body_gravity_model namespace with loaded values
