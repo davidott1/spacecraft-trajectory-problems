@@ -16,7 +16,7 @@ References:
 import numpy as np
 
 from pathlib import Path
-from typing  import Optional, Tuple
+from typing  import Optional, Tuple, Set
 
 from src.model.constants       import SOLARSYSTEMCONSTANTS
 from src.model.frame_converter import FrameConverter
@@ -155,6 +155,98 @@ def load_icgem_file(
   return coeffs, gp, radius
 
 
+def _parse_coefficient_name(name: str) -> Optional[tuple]:
+  """
+  Parse a coefficient name like 'J2', 'C22', 'S22' into (degree, order, type).
+  
+  Only supports single-digit degree (2-9) and order (0-9).
+  
+  Input:
+  ------
+    name : str
+      Coefficient name (e.g., 'J2', 'J3', 'C21', 'S22', 'C33').
+      
+  Output:
+  -------
+    result : tuple | None
+      (degree, order, coeff_type) where coeff_type is 'J', 'C', or 'S'.
+      Returns None if parsing fails.
+  """
+  # Normalize name: uppercase and strip whitespace
+  name = name.upper().strip()
+  
+  # Parse based on prefix
+  if name.startswith('J'):
+    # Zonal harmonic: J2, J3, ..., J9
+    # Zonal harmonics always have order = 0
+    # Only support single-digit degree (J2-J9)
+    nums = name[1:]
+    if len(nums) != 1:
+      return None
+    try:
+      degree = int(nums)
+      order  = 0
+      return (degree, order, 'J')
+    except ValueError:
+      return None
+  elif name.startswith('C'):
+    # Tesseral/sectorial C coefficient: C21, C22, C31, ..., C99
+    # Only support 2-digit format (single-digit degree and order)
+    nums = name[1:]
+    if len(nums) != 2:
+      return None
+    try:
+      degree = int(nums[0])
+      order  = int(nums[1])
+      return (degree, order, 'C')
+    except ValueError:
+      return None
+  elif name.startswith('S'):
+    # Tesseral/sectorial S coefficient: S21, S22, S31, ..., S99
+    # Only support 2-digit format (single-digit degree and order)
+    nums = name[1:]
+    if len(nums) != 2:
+      return None
+    try:
+      degree = int(nums[0])
+      order  = int(nums[1])
+      return (degree, order, 'S')
+    except ValueError:
+      return None
+  
+  return None
+
+
+def _get_required_degrees_orders(coefficient_names: list) -> tuple:
+  """
+  Determine the maximum degree and order needed for the given coefficient list.
+  
+  Input:
+  ------
+    coefficient_names : list
+      List of coefficient names (e.g., ['J2', 'J3', 'C22', 'S22']).
+      
+  Output:
+  -------
+    result : tuple
+      (max_degree, max_order, parsed_coefficients)
+      where parsed_coefficients is a list of (degree, order, type) tuples.
+  """
+  max_degree = 0
+  max_order = 0
+  parsed = []
+  
+  for name in coefficient_names:
+    result = _parse_coefficient_name(name)
+    if result is not None:
+      degree, order, coeff_type = result
+      max_degree = max(max_degree, degree)
+      max_order = max(max_order, order)
+      parsed.append(result)
+  
+  return max_degree, max_order, parsed
+
+
 class SphericalHarmonicsGravity:
   """
   Compute gravitational acceleration using spherical harmonics expansion.
@@ -169,23 +261,71 @@ class SphericalHarmonicsGravity:
   
   def __init__(
     self,
-    coefficients : GravityFieldCoefficients,
-    degree       : Optional[int] = None,
-    order        : Optional[int] = None,
-    radius       : Optional[float] = None,
-    gp           : Optional[float] = None,
+    coefficients        : GravityFieldCoefficients,
+    degree              : Optional[int] = None,
+    order               : Optional[int] = None,
+    radius              : Optional[float] = None,
+    gp                  : Optional[float] = None,
+    active_coefficients : Optional[Set[tuple]] = None,
   ):
     """
     Initialize spherical harmonics gravity model.
+    
+    Input:
+    ------
+      coefficients : GravityFieldCoefficients
+        Container with C and S coefficient arrays.
+      degree : int, optional
+        Maximum degree to use (defaults to coefficients.max_degree).
+      order : int, optional
+        Maximum order to use (defaults to coefficients.max_order).
+      radius : float, optional
+        Reference radius [m].
+      gp : float, optional
+        Gravitational parameter [m³/s²].
+      active_coefficients : Set[tuple], optional
+        Set of (degree, order, type) tuples specifying which coefficients
+        are active. If None, all coefficients up to degree/order are used.
+        Type is 'J' for zonal, 'C' for cosine tesseral, 'S' for sine tesseral.
     """
-    self.coefficients = coefficients
-    self.degree       = degree
-    self.order        = order
-    self.radius       = radius
-    self.gp           = gp
+    self.coefficients        = coefficients
+    self.degree              = degree if degree is not None else coefficients.max_degree
+    self.order               = order  if order  is not None else coefficients.max_order
+    self.radius              = radius
+    self.gp                  = gp
+    self.active_coefficients = active_coefficients
+    
+    # If active_coefficients is specified, create a mask
+    if active_coefficients is not None:
+      self._create_coefficient_mask()
+    else:
+      self._C_mask = None
+      self._S_mask = None
     
     # Precompute normalization factors
     self._precompute_normalization()
+  
+  def _create_coefficient_mask(self) -> None:
+    """
+    Create masks for C and S coefficients based on active_coefficients set.
+    Only coefficients in the active set will be used in computation.
+    """
+
+    # Initialize masks assuming all False or not used
+    self._C_mask = np.zeros((self.degree + 1, self.order + 1), dtype=bool)
+    self._S_mask = np.zeros((self.degree + 1, self.order + 1), dtype=bool)
+    
+    # Set True for active coefficients
+    for degree, order, coeff_type in self.active_coefficients:
+      if degree <= self.degree and order <= self.order:
+        if coeff_type == 'J':
+          order = 0
+          self._C_mask[degree, order] = True
+          # self._S_mask[degree, order] = False  # S not used for zonal
+        elif coeff_type == 'C':
+          self._C_mask[degree, order] = True
+        elif coeff_type == 'S':
+          self._S_mask[degree, order] = True
   
   def _precompute_normalization(self) -> None:
     """
@@ -209,14 +349,8 @@ class SphericalHarmonicsGravity:
     self.dnm = np.zeros(n_max)
     for m_order in range(1, n_max):
       if m_order == 1:
-        # Special case for m=1 due to Kronecker delta in normalization definition.
-        # The normalization factor has k=1 for m=0 and k=2 for m>0.
-        # The transition from m=0 to m=1 introduces an extra sqrt(2) factor.
-        # General formula gives sqrt(1.5); correct value is sqrt(1.5 * 2) = sqrt(3).
         self.dnm[m_order] = np.sqrt(3.0)
       else:
-        # General case for m >= 2
-        # Derived from fully normalized recursion: P_mm = sqrt((2m+1)/2m) * sin(theta) * P_{m-1,m-1}
         self.dnm[m_order] = np.sqrt((2.0 * m_order + 1.0) / (2.0 * m_order))
   
   def compute(
@@ -268,7 +402,6 @@ class SphericalHarmonicsGravity:
     m_max = self.order
     
     # Initialize Legendre functions (fully normalized)
-    # V(n,m) and W(n,m) are related to normalized ALFs
     V = np.zeros((n_max + 3, m_max + 3))
     W = np.zeros((n_max + 3, m_max + 3))
     
@@ -307,16 +440,25 @@ class SphericalHarmonicsGravity:
     az = 0.0
     
     # Sum contributions from degree 2 onwards
-    # Note: n=0 is point mass (handled separately), n=1 usually zero for Earth-centered
     for n_degree in range(2, n_max + 1):
-      # Normalization correction factor for derivative terms
-      # This factor sqrt((2n+1)/(2n+3)) is needed because the derivative of a normalized
-      # Legendre function of degree n involves normalized functions of degree n+1.
       norm_fix = np.sqrt((2.0 * n_degree + 1.0) / (2.0 * n_degree + 3.0))
 
       for m_order in range(0, min(n_degree + 1, m_max + 1)):
+        # Get coefficients, applying mask if set
         Cnm = self.coefficients.C[n_degree, m_order]
         Snm = self.coefficients.S[n_degree, m_order]
+        
+        # Apply coefficient mask if active_coefficients was specified
+        if self._C_mask is not None:
+          if not self._C_mask[n_degree, m_order]:
+            Cnm = 0.0
+        if self._S_mask is not None:
+          if not self._S_mask[n_degree, m_order]:
+            Snm = 0.0
+        
+        # Skip if both coefficients are zero
+        if Cnm == 0.0 and Snm == 0.0:
+          continue
         
         # Factors for derivative computation
         if m_order == 0:
@@ -337,7 +479,6 @@ class SphericalHarmonicsGravity:
           # Factor for z derivative
           fac3 = np.sqrt((n_degree - m_order + 1) * (n_degree + m_order + 1))
           
-          # Special case for m=1: different kronecker delta
           if m_order == 1:
             fac1 = np.sqrt((n_degree) * (n_degree + 1))
           
@@ -356,7 +497,6 @@ class SphericalHarmonicsGravity:
     acc_vec = scale * np.array([ax, ay, az])
     
     # Add Two-Body Point Mass term explicitly (n=0)
-    # This avoids issues with normalization factors for the monopole term
     acc_vec += -gp * pos_vec / r**3
     
     return acc_vec
@@ -391,4 +531,120 @@ def load_gravity_field(
     order        = order,
     radius       = radius,
     gp           = gp,
+  )
+
+
+def create_gravity_model_from_coefficients(
+  coefficient_names : list,
+  gp                : Optional[float] = None,
+  radius            : Optional[float] = None,
+  gravity_file_path : Optional[Path]  = None,
+) -> SphericalHarmonicsGravity:
+  """
+  Create a gravity model using only specific named coefficients (e.g., 'J2', 'C22', 'S22').
+  
+  If a gravity file path is provided, coefficient values are read from that file.
+  Otherwise, falls back to hardcoded Earth constants from SOLARSYSTEMCONSTANTS.
+  
+  Input:
+  ------
+    coefficient_names : list
+      List of coefficient names (e.g., ['J2', 'J3', 'C22', 'S22']).
+    gp : float, optional
+      Gravitational parameter [m³/s²]. Defaults to value from file or Earth's GP.
+    radius : float, optional
+      Reference radius [m]. Defaults to value from file or Earth's equatorial radius.
+    gravity_file_path : Path, optional
+      Path to gravity coefficient file (e.g., EGM2008.gfc). If provided, 
+      coefficients are read from this file.
+  
+  Output:
+  -------
+    model : SphericalHarmonicsGravity
+      Gravity model with only the specified coefficients active.
+  """
+  # Parse coefficient names and determine required degree/order
+  max_degree, max_order, parsed_coefficients = _get_required_degrees_orders(coefficient_names)
+  
+  if max_degree < 2:
+    max_degree = 2  # Minimum for harmonics
+  
+  # Load from file if provided
+  if gravity_file_path is not None and gravity_file_path.exists():
+    # Load coefficients from file
+    file_coeffs, file_gp, file_radius = load_icgem_file(gravity_file_path, max_degree, max_order)
+    
+    # Use file values if not explicitly provided
+    if gp is None:
+      gp = file_gp
+    if radius is None:
+      radius = file_radius
+    
+    # Create coefficient container with values from file
+    coeffs = file_coeffs
+    
+  else:
+    # Fall back to hardcoded constants
+    if gp is None:
+      gp = SOLARSYSTEMCONSTANTS.EARTH.GP
+    if radius is None:
+      radius = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
+    
+    # Create coefficient container
+    coeffs = GravityFieldCoefficients(max_degree, max_order)
+    
+    # Map coefficient names to values from constants (fallback)
+    coefficient_values = {
+      ('J', 2): SOLARSYSTEMCONSTANTS.EARTH.J2,
+      ('J', 3): SOLARSYSTEMCONSTANTS.EARTH.J3,
+      ('J', 4): SOLARSYSTEMCONSTANTS.EARTH.J4,
+      ('J', 5): SOLARSYSTEMCONSTANTS.EARTH.J5,
+      ('J', 6): SOLARSYSTEMCONSTANTS.EARTH.J6,
+      ('C', 2, 1): SOLARSYSTEMCONSTANTS.EARTH.C21,
+      ('S', 2, 1): SOLARSYSTEMCONSTANTS.EARTH.S21,
+      ('C', 2, 2): SOLARSYSTEMCONSTANTS.EARTH.C22,
+      ('S', 2, 2): SOLARSYSTEMCONSTANTS.EARTH.S22,
+      ('C', 3, 1): SOLARSYSTEMCONSTANTS.EARTH.C31,
+      ('S', 3, 1): SOLARSYSTEMCONSTANTS.EARTH.S31,
+      ('C', 3, 2): SOLARSYSTEMCONSTANTS.EARTH.C32,
+      ('S', 3, 2): SOLARSYSTEMCONSTANTS.EARTH.S32,
+      ('C', 3, 3): SOLARSYSTEMCONSTANTS.EARTH.C33,
+      ('S', 3, 3): SOLARSYSTEMCONSTANTS.EARTH.S33,
+    }
+    
+    # Set coefficients from hardcoded values
+    for degree, order, coeff_type in parsed_coefficients:
+      if coeff_type == 'J':
+        key = ('J', degree)
+        if key in coefficient_values:
+          Cn0 = -coefficient_values[key]
+          coeffs.set_coefficient(degree, 0, Cn0, 0.0)
+      elif coeff_type == 'C':
+        key = ('C', degree, order)
+        if key in coefficient_values:
+          current_S = coeffs.S[degree, order] if degree <= max_degree and order <= max_order else 0.0
+          coeffs.set_coefficient(degree, order, coefficient_values[key], current_S)
+      elif coeff_type == 'S':
+        key = ('S', degree, order)
+        if key in coefficient_values:
+          current_C = coeffs.C[degree, order] if degree <= max_degree and order <= max_order else 0.0
+          coeffs.set_coefficient(degree, order, current_C, coefficient_values[key])
+  
+  # Build active set (same logic for both file and fallback)
+  active_coefficients = set()
+  for degree, order, coeff_type in parsed_coefficients:
+    if coeff_type == 'J':
+      active_coefficients.add((degree, 0, 'J'))
+    elif coeff_type == 'C':
+      active_coefficients.add((degree, order, 'C'))
+    elif coeff_type == 'S':
+      active_coefficients.add((degree, order, 'S'))
+  
+  return SphericalHarmonicsGravity(
+    coefficients        = coeffs,
+    degree              = max_degree,
+    order               = max_order,
+    radius              = radius,
+    gp                  = gp,
+    active_coefficients = active_coefficients,
   )

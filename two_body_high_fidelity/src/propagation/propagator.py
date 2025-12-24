@@ -503,12 +503,10 @@ def run_high_fidelity_propagation(
   if two_body_gravity_model is not None and two_body_gravity_model.spherical_harmonics.model is not None:
     spherical_harmonics_model = two_body_gravity_model.spherical_harmonics.model
 
-  # Configure gravity harmonics using helper function
-  # Only use analytical harmonics if no spherical_harmonics_model is provided
-  if spherical_harmonics_model is None and include_gravity_harmonics and gravity_harmonics_list:
-    harmonic_coeffs = _get_harmonic_coefficients(gravity_harmonics_list)
-  else:
-    harmonic_coeffs = _get_harmonic_coefficients([])  # All zeros
+  # Configure gravity harmonics
+  # If spherical_harmonics_model is provided (from file or explicit coefficients),
+  # we don't use the analytical TwoBodyGravity harmonics
+  harmonic_coeffs = _get_harmonic_coefficients([])  # All zeros - let spherical_harmonics_model handle it
 
   # Print configuration
   print(f"  Configuration")
@@ -521,12 +519,28 @@ def run_high_fidelity_propagation(
   print(f"        Earth")
   
   # Display gravity model info
-  if two_body_gravity_model is not None and two_body_gravity_model.spherical_harmonics.model is not None:
-    print(f"          Spherical Harmonics")
-    print(f"            Degree : {two_body_gravity_model.spherical_harmonics.degree}")
-    print(f"            Order  : {two_body_gravity_model.spherical_harmonics.order}")
-    print(f"            GP     : {two_body_gravity_model.spherical_harmonics.gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
-    print(f"            Radius : {two_body_gravity_model.spherical_harmonics.radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
+  if spherical_harmonics_model is not None:
+    # Check if this is an explicit coefficients model (has active_coefficients set)
+    if hasattr(spherical_harmonics_model, 'active_coefficients') and spherical_harmonics_model.active_coefficients is not None:
+      print(f"          Spherical Harmonics (Explicit Coefficients)")
+      # Show which coefficients are active
+      active_names = []
+      for deg, ord, ctype in sorted(spherical_harmonics_model.active_coefficients):
+        if ctype == 'J':
+          active_names.append(f"J{deg}")
+        elif ctype == 'C':
+          active_names.append(f"C{deg}{ord}")
+        elif ctype == 'S':
+          active_names.append(f"S{deg}{ord}")
+      print(f"            Active   : {', '.join(active_names)}")
+      print(f"            GP       : {spherical_harmonics_model.gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
+      print(f"            Radius   : {spherical_harmonics_model.radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
+    else:
+      print(f"          Spherical Harmonics")
+      print(f"            Degree : {two_body_gravity_model.spherical_harmonics.degree}")
+      print(f"            Order  : {two_body_gravity_model.spherical_harmonics.order}")
+      print(f"            GP     : {two_body_gravity_model.spherical_harmonics.gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
+      print(f"            Radius : {two_body_gravity_model.spherical_harmonics.radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
   elif include_gravity_harmonics:
     print(f"          Two-Body Point Mass")
     # Separate zonal and tesseral for display
@@ -559,32 +573,32 @@ def run_high_fidelity_propagation(
 
   # Initialize acceleration model
   acceleration = Acceleration(
-    gp                      = SOLARSYSTEMCONSTANTS.EARTH.GP,
-    j2                      = harmonic_coeffs['j2'],
-    j3                      = harmonic_coeffs['j3'],
-    j4                      = harmonic_coeffs['j4'],
-    j5                      = harmonic_coeffs['j5'],
-    j6                      = harmonic_coeffs['j6'],
-    c21                     = harmonic_coeffs['c21'],
-    s21                     = harmonic_coeffs['s21'],
-    c22                     = harmonic_coeffs['c22'],
-    s22                     = harmonic_coeffs['s22'],
-    c31                     = harmonic_coeffs['c31'],
-    s31                     = harmonic_coeffs['s31'],
-    c32                     = harmonic_coeffs['c32'],
-    s32                     = harmonic_coeffs['s32'],
-    c33                     = harmonic_coeffs['c33'],
-    s33                     = harmonic_coeffs['s33'],
-    pos_ref                 = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR,
-    mass                    = mass,
-    enable_drag             = include_drag,
-    cd                      = cd,
-    area_drag               = area_drag,
-    enable_third_body       = include_third_body,
-    third_body_bodies       = third_bodies_list,
-    enable_srp              = include_srp,
-    cr                      = cr,
-    area_srp                = area_srp,
+    gp                        = SOLARSYSTEMCONSTANTS.EARTH.GP,
+    j2                        = harmonic_coeffs['j2'],
+    j3                        = harmonic_coeffs['j3'],
+    j4                        = harmonic_coeffs['j4'],
+    j5                        = harmonic_coeffs['j5'],
+    j6                        = harmonic_coeffs['j6'],
+    c21                       = harmonic_coeffs['c21'],
+    s21                       = harmonic_coeffs['s21'],
+    c22                       = harmonic_coeffs['c22'],
+    s22                       = harmonic_coeffs['s22'],
+    c31                       = harmonic_coeffs['c31'],
+    s31                       = harmonic_coeffs['s31'],
+    c32                       = harmonic_coeffs['c32'],
+    s32                       = harmonic_coeffs['s32'],
+    c33                       = harmonic_coeffs['c33'],
+    s33                       = harmonic_coeffs['s33'],
+    pos_ref                   = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR,
+    mass                      = mass,
+    enable_drag               = include_drag,
+    cd                        = cd,
+    area_drag                 = area_drag,
+    enable_third_body         = include_third_body,
+    third_body_bodies         = third_bodies_list,
+    enable_srp                = include_srp,
+    cr                        = cr,
+    area_srp                  = area_srp,
     spherical_harmonics_model = spherical_harmonics_model,
   )
   
