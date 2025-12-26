@@ -11,6 +11,7 @@ from matplotlib.lines  import Line2D
 from src.plot.utility          import get_equal_limits, add_utc_time_axis
 from src.model.constants       import CONVERTER, SOLARSYSTEMCONSTANTS
 from src.model.frame_converter import FrameConverter
+from src.model.time_converter  import utc_to_et
 
 
 def plot_3d_trajectories(
@@ -531,6 +532,198 @@ def plot_time_series_error(
   return fig
 
 
+def plot_3d_trajectories_earth_fixed(
+  result       : dict,
+  epoch_dt_utc : Optional[datetime.datetime] = None,
+) -> Figure:
+  """
+  Plot 3D position trajectory in Earth-fixed (IAU_EARTH) frame.
+  
+  Input:
+  ------
+    result : dict
+      Propagation result dictionary containing 'state' (6xN array) and 'plot_time_s'.
+    epoch_dt_utc : datetime, optional
+      Reference epoch (start time) for time conversion to ET.
+      
+  Output:
+  -------
+    fig : matplotlib.figure.Figure
+      Figure object containing the 3D plot.
+  """
+  fig = plt.figure(figsize=(12, 10))
+  
+  # Extract J2000 state vectors
+  j2000_state   = result['state']
+  j2000_pos_vec = j2000_state[0:3, :]
+  time_s        = result['plot_time_s']
+  n_points      = j2000_state.shape[1]
+  
+  # Convert epoch to ET
+  if epoch_dt_utc is not None:
+    epoch_et = utc_to_et(epoch_dt_utc)
+  else:
+    epoch_et = 0.0
+  
+  # Transform each position to Earth-fixed frame
+  iau_earth_pos_vec = np.zeros((3, n_points))
+  for i in range(n_points):
+    epoch_et_i = epoch_et + time_s[i]
+    rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(epoch_et_i)
+    iau_earth_pos_vec[:, i] = rot_mat_j2000_to_iau_earth @ j2000_pos_vec[:, i]
+  
+  pos_x, pos_y, pos_z = iau_earth_pos_vec[0, :], iau_earth_pos_vec[1, :], iau_earth_pos_vec[2, :]
+  
+  # Build info string
+  info_text = "Frame: IAU_EARTH (Earth-Fixed)"
+  if epoch_dt_utc is not None:
+    start_time_iso_utc = epoch_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
+    end_time_dt_utc    = epoch_dt_utc + timedelta(seconds=time_s[-1])
+    end_time_iso_utc   = end_time_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
+    info_text += f"  |  Initial: {start_time_iso_utc}  |  Final: {end_time_iso_utc}"
+  
+  # Plot 3D position trajectory
+  ax = fig.add_subplot(111, projection='3d')
+  
+  # Add Earth wireframe ellipsoid
+  u       = np.linspace(0, 2 * np.pi, 24)
+  v       = np.linspace(0, np.pi, 12)
+  r_eq    = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
+  r_pol   = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.POLAR
+  x_earth = r_eq * np.outer(np.cos(u), np.sin(v))
+  y_earth = r_eq * np.outer(np.sin(u), np.sin(v))
+  z_earth = r_pol * np.outer(np.ones(np.size(u)), np.cos(v))
+  ax.plot_wireframe(x_earth, y_earth, z_earth, color='black', linewidth=0.5, alpha=1.0)
+  
+  ax.plot(pos_x, pos_y, pos_z, 'b-', linewidth=1)
+  ax.scatter([pos_x[0]], [pos_y[0]], [pos_z[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2)
+  ax.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2)
+  ax.set_xlabel('X (IAU_EARTH) [m]')
+  ax.set_ylabel('Y (IAU_EARTH) [m]')
+  ax.set_zlabel('Z (IAU_EARTH) [m]')
+  ax.grid(True)
+  ax.set_box_aspect([1,1,1])
+  min_limit, max_limit = get_equal_limits(ax, buffer_fraction=0.25)
+  
+  ax.set_xlim([min_limit, max_limit])
+  ax.set_ylim([min_limit, max_limit])
+  ax.set_zlim([min_limit, max_limit])
+
+  # Add shadows
+  shadow_color = 'gray'
+  shadow_alpha = 0.3
+  shadow_lw    = 0.5
+  ax.plot(pos_x, pos_y, np.full_like(pos_z, min_limit), color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  ax.plot(pos_x, np.full_like(pos_y, max_limit), pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  ax.plot(np.full_like(pos_x, min_limit), pos_y, pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+
+  # Legend
+  legend_handles = [
+    Line2D([0], [0], marker='>', color='w', markerfacecolor='white', markeredgecolor='black', 
+           markersize=10, markeredgewidth=2, linestyle='None', label='Start'),
+    Line2D([0], [0], marker='s', color='w', markerfacecolor='white', markeredgecolor='black', 
+           markersize=10, markeredgewidth=2, linestyle='None', label='End'),
+  ]
+  fig.legend(handles=legend_handles, loc='upper right', fontsize=11, framealpha=0.9)
+
+  # Info text
+  fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=11, color='black',
+           bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', alpha=0.9))
+
+  plt.tight_layout(rect=(0.0, 0.06, 1.0, 0.95))
+  return fig
+
+
+def plot_ground_track(
+  result       : dict,
+  epoch_dt_utc : Optional[datetime.datetime] = None,
+) -> Figure:
+  """
+  Plot ground track (latitude vs longitude) on a 2D map projection.
+  
+  Input:
+  ------
+    result : dict
+      Propagation result dictionary containing 'state' (6xN array) and 'plot_time_s'.
+    epoch_dt_utc : datetime, optional
+      Reference epoch (start time) for time conversion to ET.
+      
+  Output:
+  -------
+    fig : matplotlib.figure.Figure
+      Figure object containing the ground track plot.
+  """
+  fig, ax = plt.subplots(figsize=(14, 8))
+  
+  # Extract J2000 state vectors
+  j2000_state   = result['state']
+  j2000_pos_vec = j2000_state[0:3, :]
+  time_s        = result['plot_time_s']
+  n_points      = j2000_state.shape[1]
+  
+  # Convert epoch to ET
+  if epoch_dt_utc is not None:
+    epoch_et = utc_to_et(epoch_dt_utc)
+  else:
+    epoch_et = 0.0
+  
+  # Transform each position to Earth-fixed and compute lat/lon
+  lat = np.zeros(n_points)
+  lon = np.zeros(n_points)
+  
+  for i in range(n_points):
+    epoch_et_i                 = epoch_et + time_s[i]
+    rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(epoch_et_i)
+    iau_earth_pos_vec          = rot_mat_j2000_to_iau_earth @ j2000_pos_vec[:, i]
+    
+    iau_earth_pos_mag = np.linalg.norm(iau_earth_pos_vec)
+    lat[i] = np.arcsin (iau_earth_pos_vec[2] / iau_earth_pos_mag   ) * CONVERTER.DEG_PER_RAD
+    lon[i] = np.arctan2(iau_earth_pos_vec[1] , iau_earth_pos_vec[0]) * CONVERTER.DEG_PER_RAD
+  
+  # Handle longitude wrapping for plotting
+  # Split trajectory at discontinuities (where lon jumps by more than 180 deg)
+  lon_diff = np.abs(np.diff(lon))
+  split_indices = np.where(lon_diff > 180)[0] + 1
+  
+  # Split into segments
+  lat_segments = np.split(lat, split_indices)
+  lon_segments = np.split(lon, split_indices)
+  
+  # Plot each segment
+  for lat_seg, lon_seg in zip(lat_segments, lon_segments):
+    ax.plot(lon_seg, lat_seg, 'b-', linewidth=1.5)
+  
+  # Mark start and end points
+  ax.scatter([lon[0]], [lat[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Start')
+  ax.scatter([lon[-1]], [lat[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='End')
+  
+  # Set axis limits and labels
+  ax.set_xlim([-180, 180])
+  ax.set_ylim([-90, 90])
+  ax.set_xlabel('Longitude [deg]')
+  ax.set_ylabel('Latitude [deg]')
+  ax.set_aspect('equal')
+  ax.grid(True, alpha=0.5)
+  ax.legend(loc='upper right')
+  
+  # Add equator and prime meridian lines
+  ax.axhline(y=0, color='gray', linestyle='--', linewidth=0.5, alpha=0.7)
+  ax.axvline(x=0, color='gray', linestyle='--', linewidth=0.5, alpha=0.7)
+  
+  # Info text
+  info_text = "Ground Track (Spherical Earth Approximation)"
+  if epoch_dt_utc is not None:
+    start_utc  = epoch_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
+    end_time   = epoch_dt_utc + timedelta(seconds=time_s[-1])
+    end_utc    = end_time.strftime('%Y-%m-%d %H:%M:%S UTC')
+    info_text += f"  |  {start_utc} to {end_utc}"
+  
+  ax.set_title(info_text, fontsize=12)
+  
+  plt.tight_layout()
+  return fig
+
+
 def generate_error_plots(
   result_jpl_horizons_ephemeris    : Optional[dict],
   result_high_fidelity_propagation : dict,
@@ -698,6 +891,20 @@ def generate_3d_and_time_series_plots(
     fig4.suptitle(f'{object_name} Orbit - High-Fidelity Model - Time Series', fontsize=16)
     fig4.savefig(figures_folderpath / f'timeseries_{name_lower}_high_fidelity.png', dpi=300, bbox_inches='tight')
     print(f"      Time Series : <figures_folderpath>/timeseries_{name_lower}_high_fidelity.png")
+    
+    # Earth-fixed 3D plot
+    fig_ef = plot_3d_trajectories_earth_fixed(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt)
+    fig_ef.suptitle(f'{object_name} Orbit - High-Fidelity Model - Earth-Fixed 3D', fontsize=16)
+    fig_ef.savefig(figures_folderpath / f'3d_{name_lower}_high_fidelity_earth_fixed.png', dpi=300, bbox_inches='tight')
+    print(f"      3D (EF)     : <figures_folderpath>/3d_{name_lower}_high_fidelity_earth_fixed.png")
+    plt.close(fig_ef)
+    
+    # Ground track plot
+    fig_gt = plot_ground_track(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt)
+    fig_gt.suptitle(f'{object_name} - Ground Track', fontsize=16)
+    fig_gt.savefig(figures_folderpath / f'groundtrack_{name_lower}_high_fidelity.png', dpi=300, bbox_inches='tight')
+    print(f"      Ground Track: <figures_folderpath>/groundtrack_{name_lower}_high_fidelity.png")
+    plt.close(fig_gt)
   
   # SGP4 at Horizons time points plots
   if compare_tle and result_sgp4_propagation and result_sgp4_propagation.get('success'):
