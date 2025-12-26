@@ -563,13 +563,17 @@ def run_high_fidelity_propagation(
   
   if include_drag:
     print(f"      Atmospheric Drag")
-    print(f"        Model      : Exponential Atmosphere")
-    print(f"        Parameters : Cd={cd:{PRINTFORMATTER.SCIENTIFIC_NOTATION}}, Area_Drag={area_drag:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m², Mass={mass:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} kg")
+    print(f"        Model : Exponential Atmosphere")
+    print(f"        Coeff : {cd:{PRINTFORMATTER.SCIENTIFIC_NOTATION}}")
+    print(f"        Area  : {area_drag:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m²")
+    print(f"        Mass  : {mass:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} kg")
   
   if include_srp:
     print(f"      Solar Radiation Pressure")
-    print(f"        Model      : Cylindrical Shadow (Spherical Earth)")
-    print(f"        Parameters : Cr={cr:{PRINTFORMATTER.SCIENTIFIC_NOTATION}}, Area_SRP={area_srp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m²")
+    print(f"        Model : Cylindrical Shadow (Spherical Earth)")
+    print(f"        Coeff : {cr:{PRINTFORMATTER.SCIENTIFIC_NOTATION}}")
+    print(f"        Area  : {area_srp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m²")
+    print(f"        Mass  : {mass:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} kg")
 
   # Initialize acceleration model
   acceleration = Acceleration(

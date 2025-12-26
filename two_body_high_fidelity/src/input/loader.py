@@ -116,7 +116,7 @@ def load_gravity_field_model(
 def load_gravity_model_from_coefficients(
   coefficient_names        : list,
   gravity_model_folderpath : Optional[Path] = None,
-  gravity_model_filename   : str = 'EGM2008.gfc',
+  gravity_model_filename   : Optional[str]  = 'EGM2008.gfc',
 ):
   """
   Load gravity model using only specific named coefficients.
@@ -157,7 +157,6 @@ def load_gravity_model_from_coefficients(
       coefficient_names = coefficient_names,
       gravity_file_path = gravity_file_path,
     )
-    print(f"    Status       : Created successfully")
     print(f"    GP           : {model.gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
     print(f"    Radius       : {model.radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
     print(f"    Max Degree   : {model.degree}")
@@ -222,7 +221,7 @@ def load_files(
     spherical_harmonics_model = load_gravity_model_from_coefficients(
       coefficient_names        = gravity_coefficient_names,
       gravity_model_folderpath = gravity_model_folderpath,
-      gravity_model_filename   = gravity_model_filename if gravity_model_filename else 'EGM2008.gfc',
+      gravity_model_filename   = gravity_model_filename,
     )
     if spherical_harmonics_model is None:
       raise ValueError(
