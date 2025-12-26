@@ -1,5 +1,6 @@
 import warnings
 import numpy as np
+import spiceypy as spice
 
 from src.model.constants import SOLARSYSTEMCONSTANTS
 
@@ -881,3 +882,326 @@ class OrbitConverter:
       raise ValueError(f"mha_to_ha() requires ecc > 1, received ecc = {ecc}")
 
     return ha
+
+
+class GeographicCoordinateConverter:
+  """
+  Conversion between Cartesian position vectors and geographic coordinates.
+  
+  Supports both geocentric (spherical) and geodetic (ellipsoidal) representations.
+  All methods assume the body-fixed reference frame.
+  
+  Coordinate Systems:
+  -------------------
+  - Geocentric: Latitude is angle from equatorial plane along position vector.
+                Simple spherical geometry, ignores Earth's oblateness.
+                
+  - Geodetic:   Latitude is angle from equatorial plane along ellipsoid surface normal.
+                Uses WGS84 ellipsoid parameters. This is what GPS and maps use.
+  
+  WGS84 Parameters:
+  -----------------
+  - Equatorial radius: 6378.137 km
+  - Flattening: 1/298.257223563
+  """
+  
+  # WGS84 ellipsoid parameters
+  WGS84_RE = 6378.137          # Equatorial radius [km]
+  WGS84_F  = 1/298.257223563   # Flattening
+  
+  # ----------------------------
+  # Geocentric (Spherical)
+  # ----------------------------
+  
+  @staticmethod
+  def pos_to_geocentric(
+    pos_vec : np.ndarray,
+  ) -> dict:
+    """
+    Convert Cartesian position to geocentric (spherical) coordinates.
+    
+    Input:
+    ------
+      pos_vec : np.ndarray
+        Position vector in body-fixed frame [m].
+        
+    Output:
+    -------
+      coords : dict
+        Dictionary containing:
+        - latitude        : float - Geocentric latitude [rad]
+        - longitude       : float - Longitude [rad]
+        - altitude        : float - Altitude above spherical Earth [m]
+    """
+    pos_vec = np.asarray(pos_vec).flatten()
+    pos_x, pos_y, pos_z = pos_vec[0], pos_vec[1], pos_vec[2]
+    
+    pos_mag   = np.linalg.norm(pos_vec)
+    latitude  = np.arcsin(pos_z / pos_mag)
+    longitude = np.arctan2(pos_y, pos_x)
+    altitude  = pos_mag - SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
+    
+    return {
+      'latitude'  : latitude,
+      'longitude' : longitude,
+      'altitude'  : altitude,
+    }
+  
+  @staticmethod
+  def geocentric_to_pos(
+    latitude  : float,
+    longitude : float,
+    altitude  : float,
+  ) -> np.ndarray:
+    """
+    Convert geocentric (spherical) coordinates to Cartesian position.
+    
+    Input:
+    ------
+      latitude : float
+        Geocentric latitude [rad].
+      longitude : float
+        Longitude [rad].
+      altitude : float
+        Altitude above spherical Earth [m].
+        
+    Output:
+    -------
+      pos_vec : np.ndarray
+        Position vector in body-fixed frame [m].
+    """
+    pos_mag = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR + altitude
+    
+    pos_x = pos_mag * np.cos(latitude) * np.cos(longitude)
+    pos_y = pos_mag * np.cos(latitude) * np.sin(longitude)
+    pos_z = pos_mag * np.sin(latitude)
+    
+    return np.array([pos_x, pos_y, pos_z])
+  
+  # ----------------------------
+  # Geodetic (Ellipsoidal)
+  # ----------------------------
+  
+  @staticmethod
+  def pos_to_geodetic(
+    pos_vec : np.ndarray,
+  ) -> dict:
+    """
+    Convert Cartesian position to geodetic (ellipsoidal) coordinates.
+    
+    Uses SPICE's recgeo function with WGS84 ellipsoid parameters.
+    
+    Input:
+    ------
+      pos_vec : np.ndarray
+        Position vector in IAU_EARTH frame [m].
+        
+    Output:
+    -------
+      coords : dict
+        Dictionary containing:
+        - latitude  : float - Geodetic latitude [rad]
+        - longitude : float - Longitude [rad]
+        - altitude  : float - Altitude above WGS84 ellipsoid [m]
+    """
+    pos_vec = np.asarray(pos_vec).flatten()
+    
+    # Convert m to km for SPICE
+    pos_vec__km = pos_vec / 1000.0
+    
+    # SPICE recgeo returns (lon, lat, alt) in (rad, rad, km)
+    longitude, latitude, altitude__km = spice.recgeo(
+      pos_vec__km,
+      GeographicCoordinateConverter.WGS84_RE,
+      GeographicCoordinateConverter.WGS84_F,
+    )
+    
+    # Convert alt back to m
+    altitude = altitude__km * 1000.0
+    
+    return {
+      'latitude'  : latitude,
+      'longitude' : longitude,
+      'altitude'  : altitude,
+    }
+  
+  @staticmethod
+  def geodetic_to_pos(
+    latitude  : float,
+    longitude : float,
+    altitude  : float,
+  ) -> np.ndarray:
+    """
+    Convert geodetic (ellipsoidal) coordinates to Cartesian position.
+    
+    Uses SPICE's georec function with WGS84 ellipsoid parameters.
+    
+    Input:
+    ------
+      latitude : float
+        Geodetic latitude [rad].
+      longitude : float
+        Longitude [rad].
+      altitude : float
+        Altitude above WGS84 ellipsoid [m].
+        
+    Output:
+    -------
+      pos_vec : np.ndarray
+        Position vector in body-fixed frame [m].
+    """
+    # Convert m to km for SPICE
+    altitude__km = altitude / 1000.0
+    
+    # SPICE georec expects (lon, lat, alt) in (rad, rad, km)
+    pos_vec__km = spice.georec(
+      longitude,
+      latitude,
+      altitude__km,
+      GeographicCoordinateConverter.WGS84_RE,
+      GeographicCoordinateConverter.WGS84_F,
+    )
+    
+    # Convert km to m
+    pos_vec = np.array(pos_vec__km) * 1000.0
+    
+    return pos_vec
+  
+  # ----------------------------
+  # Vectorized versions
+  # ----------------------------
+  
+  @staticmethod
+  def pos_to_geocentric_array(
+    pos_vec_array : np.ndarray,
+  ) -> dict:
+    """
+    Convert array of Cartesian positions to geocentric coordinates.
+    
+    Input:
+    ------
+      pos_vec_array : np.ndarray
+        Position vectors in body-fixed frame [m]. Shape (3, N).
+        
+    Output:
+    -------
+      coords : dict
+        Dictionary containing arrays:
+        - latitude  : np.ndarray - Geocentric latitudes [rad]
+        - longitude : np.ndarray - Longitudes [rad]
+        - altitude  : np.ndarray - Altitudes above spherical Earth [m]
+    """
+    pos_x = pos_vec_array[0, :]
+    pos_y = pos_vec_array[1, :]
+    pos_z = pos_vec_array[2, :]
+    
+    pos_mag   = np.linalg.norm(pos_vec_array, axis=0)
+    latitude  = np.arcsin(pos_z / pos_mag)
+    longitude = np.arctan2(pos_y, pos_x)
+    altitude  = pos_mag - SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
+    
+    return {
+      'latitude'  : latitude,
+      'longitude' : longitude,
+      'altitude'  : altitude,
+    }
+  
+  @staticmethod
+  def pos_to_geodetic_array(
+    pos_vec_array : np.ndarray,
+  ) -> dict:
+    """
+    Convert array of Cartesian positions to geodetic coordinates.
+    
+    Input:
+    ------
+      pos_vec_array : np.ndarray
+        Position vectors in body-fixed frame [m]. Shape (3, N).
+        
+    Output:
+    -------
+      coords : dict
+        Dictionary containing arrays:
+        - latitude  : np.ndarray - Geodetic latitudes [rad]
+        - longitude : np.ndarray - Longitudes [rad]
+        - altitude  : np.ndarray - Altitudes above WGS84 ellipsoid [m]
+    """
+    n_points = pos_vec_array.shape[1]
+    
+    latitude  = np.zeros(n_points)
+    longitude = np.zeros(n_points)
+    altitude  = np.zeros(n_points)
+    
+    for i in range(n_points):
+      coords = GeographicCoordinateConverter.pos_to_geodetic(pos_vec_array[:, i])
+      latitude[i]  = coords['latitude']
+      longitude[i] = coords['longitude']
+      altitude[i]  = coords['altitude']
+    
+    return {
+      'latitude'  : latitude,
+      'longitude' : longitude,
+      'altitude' : altitude,
+    }
+  
+  # ----------------------------
+  # Conversion between systems
+  # ----------------------------
+  
+  @staticmethod
+  def geocentric_to_geodetic(
+    latitude_geocentric : float,
+    longitude           : float,
+    altitude_geocentric : float,
+  ) -> dict:
+    """
+    Convert geocentric coordinates to geodetic coordinates.
+    
+    Input:
+    ------
+      latitude_geocentric : float
+        Geocentric latitude [rad].
+      longitude : float
+        Longitude [rad] (same for both systems).
+      altitude_geocentric : float
+        Altitude above spherical Earth [m].
+        
+    Output:
+    -------
+      coords : dict
+        Dictionary containing:
+        - latitude : float - Geodetic latitude [rad]
+        - longitude : float - Longitude [rad]
+        - altitude  : float - Altitude above WGS84 ellipsoid [m]
+    """
+    pos_vec = GeographicCoordinateConverter.geocentric_to_pos(latitude_geocentric, longitude, altitude_geocentric)
+    return GeographicCoordinateConverter.pos_to_geodetic(pos_vec)
+  
+  @staticmethod
+  def geodetic_to_geocentric(
+    latitude_geodetic : float,
+    longitude         : float,
+    altitude_geodetic : float,
+  ) -> dict:
+    """
+    Convert geodetic coordinates to geocentric coordinates.
+    
+    Input:
+    ------
+      latitude_geodetic : float
+        Geodetic latitude [rad].
+      longitude : float
+        Longitude [rad] (same for both systems).
+      altitude_geodetic : float
+        Altitude above WGS84 ellipsoid [m].
+        
+    Output:
+    -------
+      coords : dict
+        Dictionary containing:
+        - latitude  : float - Geocentric latitude [rad]
+        - longitude : float - Longitude [rad]
+        - altitude  : float - Altitude above spherical Earth [m]
+    """
+    pos_vec = GeographicCoordinateConverter.geodetic_to_pos(latitude_geodetic, longitude, altitude_geodetic)
+    return GeographicCoordinateConverter.pos_to_geocentric(pos_vec)
