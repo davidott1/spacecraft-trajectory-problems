@@ -116,7 +116,7 @@ def load_gravity_field_model(
 def load_gravity_model_from_coefficients(
   coefficient_names        : list,
   gravity_model_folderpath : Optional[Path] = None,
-  gravity_model_filename   : Optional[str]  = 'EGM2008.gfc',
+  gravity_model_filename   : Optional[str]  = None,
 ):
   """
   Load gravity model using only specific named coefficients.
@@ -142,7 +142,7 @@ def load_gravity_model_from_coefficients(
   
   # Build gravity file path if folder is provided
   gravity_file_path = None
-  if gravity_model_folderpath is not None:
+  if gravity_model_folderpath is not None and gravity_model_filename is not None:
     gravity_file_path = gravity_model_folderpath / gravity_model_filename
     if gravity_file_path.exists():
       print(f"    Source File  : {gravity_model_filename}")
