@@ -2,6 +2,7 @@
 '25544'      :                                                                          # norad id as top-level key
   name       : "ISS"                                                                    # object name
   norad_id   : 25544                                                                    # norad id
+  naif_id    : null                                                                     # No definitive NAIF ID (uses TLE)
   mass__kg   : 420000.0                                                                 # mass [kg]
   drag       :                                                                          # drag parameters
     coeff    : 2.2                                                                      # drag coefficient, typically c_d [-]
@@ -12,6 +13,7 @@
 '25994'      :                                                                          # norad id as top-level key
   name       : "TERRA"                                                                  # object name
   norad_id   : 25994                                                                    # norad id
+  naif_id    : null
   mass__kg   : 4860.0                                                                   # mass [kg]
   drag       :                                                                          # drag parameters
     coeff    : 2.2                                                                      # drag coefficient, typically c_d [-]
@@ -22,6 +24,7 @@
 '27424'      :                                                                          # norad id as top-level key
   name       : "AQUA"                                                                   # object name
   norad_id   : 27424                                                                    # norad id
+  naif_id    : null
   mass__kg   : 2850.0                                                                   # mass [kg]
   drag       :                                                                          # drag parameters
     coeff    : 2.2                                                                      # drag coefficient, typically c_d [-]
@@ -34,6 +37,7 @@
 '26407'      :                                                                          # norad id as top-level key
   name       : "GPS BIIRM-5 (PRN 31) - NAVSTAR-48"                                      # object name
   norad_id   : 26407                                                                    # norad id
+  naif_id    : null
   mass__kg   : 2032.0                                                                   # mass [kg]
   drag       :                                                                          # drag parameters
     coeff    : 2.2                                                                      # drag coefficient, typically c_d [-]
@@ -44,6 +48,7 @@
 '38833'      :                                                                          # norad id as top-level key
   name       : "GPS-IIF-2 - NAVSTAR-67"                                                 # object name
   norad_id   : 38833                                                                    # norad id
+  naif_id    : null
   mass__kg   : 2032.0                                                                   # mass [kg]
   drag       :                                                                          # drag parameters
     coeff    : 2.2                                                                      # drag coefficient, typically c_d [-]
@@ -54,6 +59,7 @@
 '39166'      :                                                                          # norad id as top-level key
   name       : "GPS-IIF-3 - NAVSTAR-68"                                                 # object name
   norad_id   : 39166                                                                    # norad id
+  naif_id    : null
   mass__kg   : 2032.0                                                                   # mass [kg]
   drag       :                                                                          # drag parameters
     coeff    : 2.2                                                                      # drag coefficient, typically c_d [-]
@@ -66,6 +72,7 @@
 '41866'      :                                                                          # norad id as top-level key
   name       : "GOES-16 - GOES-R"                                                       # object name
   norad_id   : 41866                                                                    # norad id
+  naif_id    : null
   mass__kg   : 2227.0                                                                   # mass [kg]
   drag       :                                                                          # drag parameters
     coeff    : 2.0                                                                      # drag coefficient, typically c_d [-]
@@ -76,6 +83,7 @@
 '43226'      :                                                                          # norad id as top-level key
   name       : "GOES-17 - GOES-S"                                                       # object name
   norad_id   : 43226                                                                    # norad id
+  naif_id    : null
   mass__kg   : 2227.0                                                                   # mass [kg]
   drag       :                                                                          # drag parameters
     coeff    : 2.0                                                                      # drag coefficient, typically c_d [-]
@@ -86,6 +94,7 @@
 '51850'      :                                                                          # norad id as top-level key
   name       : "GOES-18 - GOES-T"                                                       # object name
   norad_id   : 51850                                                                    # norad id
+  naif_id    : null
   mass__kg   : 2227.0                                                                   # mass [kg]
   drag       :                                                                          # drag parameters
     coeff    : 2.0                                                                      # drag coefficient, typically c_d [-]
@@ -93,3 +102,77 @@
   srp        :                                                                          # solar radiation pressure parameters
     coeff    : 1.3                                                                      # solar radiation pressure coefficient, typically c_r [-]
     area__m2 : 10.0                                                                     # srp cross-sectional area [m²]
+
+# Other Science Missions
+'20580'      :
+  name       : "HST - Hubble Space Telescope"
+  norad_id   : 20580
+  naif_id    : -48
+  mass__kg   : 11110.0
+  drag       :
+    coeff    : 2.2
+    area__m2 : 54.0
+  srp        :
+    coeff    : 1.2
+    area__m2 : 54.0
+'43435'      :
+  name       : "TESS"
+  norad_id   : 43435
+  naif_id    : -95
+  mass__kg   : 362.0
+  drag       :
+    coeff    : 2.2
+    area__m2 : 1.5
+  srp        :
+    coeff    : 1.3
+    area__m2 : 1.5
+'48852'      :
+  name       : "JWST - James Webb Space Telescope"
+  norad_id   : 48852
+  naif_id    : -170
+  mass__kg   : 6161.0
+  drag       :
+    coeff    : 2.0
+    area__m2 : 25.0
+  srp        :
+    coeff    : 1.2
+    area__m2 : 25.0
+
+# Geodetic Satellites (Stable orbits for gravity field analysis)
+'8820'       :
+  name       : "LAGEOS-1"
+  norad_id   : 8820
+  naif_id    : -115
+  mass__kg   : 407.0
+  drag       :
+    coeff    : 2.2
+    area__m2 : 0.28
+  srp        :
+    coeff    : 1.13
+    area__m2 : 0.28
+
+# Inactive / Debris Objects
+'27386'      :
+  name       : "ENVISAT"
+  norad_id   : 27386
+  naif_id    : null
+  mass__kg   : 8211.0
+  drag       :
+    coeff    : 2.2
+    area__m2 : 100.0
+  srp        :
+    coeff    : 1.3
+    area__m2 : 100.0
+
+# High Earth Orbit (HEO) Missions
+'25867'      :
+  name       : "CHANDRA - CXO"
+  norad_id   : 25867
+  naif_id    : -151
+  mass__kg   : 4790.0
+  drag       :
+    coeff    : 2.2
+    area__m2 : 20.0
+  srp        :
+    coeff    : 1.3
+    area__m2 : 20.0
