@@ -294,10 +294,22 @@ def download_horizons_ephemeris(
   print(f"Time range: {start_time} to {end_time}")
   print(f"Time step: {step}")
   
-  # Query HORIZONS using NORAD catalog number (negative ID format)
-  sat_id = -(100000 + norad_id)
+  # Determine Horizons ID
+  # Check if we have a specific NAIF ID in supported_objects
+  supported_objects = load_supported_objects()
+  norad_id_str = str(norad_id)
+  
+  # Default to TLE-based ID for Horizons (negative 100000 + norad)
+  sat_id = f"-{100000 + norad_id}"
+  
+  if norad_id_str in supported_objects:
+    obj_props = supported_objects[norad_id_str]
+    if 'naif_id' in obj_props and obj_props['naif_id'] is not None:
+      sat_id = str(obj_props['naif_id'])
+      print(f"Using mapped NAIF ID {sat_id} for Horizons query")
+
   obj = Horizons(
-    id       = f"{sat_id}",
+    id       = sat_id,
     location = '@399',  # Earth center (geocentric)
     epochs   = {'start' : start_time.strftime('%Y-%m-%d %H:%M'),
                 'stop'  : end_time.strftime('%Y-%m-%d %H:%M'),
