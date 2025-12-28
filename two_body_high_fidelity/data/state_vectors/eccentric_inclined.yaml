@@ -1,6 +1,7 @@
 # Orbit: a = 14000 km, e = 0.5, i = 45 deg, at periapsis (TA = 0)
 # Periapsis radius: r_p = a(1-e) = 7000 km
 # Periapsis velocity: v_p = sqrt(mu*(2/r_p - 1/a)) = 8724 m/s
+name              : eccentric_inclined                                                       # name of the object
 frame             : J2000                                                                    # reference frame of the state vector
 epoch             : 2025-10-01T00:00:00Z                                                     # epoch of the state vector in ISO format
 coordinate_system : cartesian                                                                # coordinate system of the state vector
