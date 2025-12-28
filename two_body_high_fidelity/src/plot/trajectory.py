@@ -73,15 +73,10 @@ def plot_3d_trajectories(
   ax1.grid(True)
   ax1.set_box_aspect([1,1,1]) # type: ignore
 
-  # Set pane edge colors to black
-  ax1.xaxis.pane.set_edgecolor('black')
-  ax1.yaxis.pane.set_edgecolor('black')
-  ax1.zaxis.pane.set_edgecolor('black')
-
-  # Set axis line colors to black
-  ax1.xaxis.line.set_color('black')
-  ax1.yaxis.line.set_color('black')
-  ax1.zaxis.line.set_color('black')
+  # Set pane colors to white
+  ax1.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax1.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax1.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
 
   min_limit, max_limit = get_equal_limits(ax1, buffer_fraction=0.25)
   
@@ -128,15 +123,10 @@ def plot_3d_trajectories(
   ax2.grid(True)
   ax2.set_box_aspect([1,1,1]) # type: ignore
 
-  # Set pane edge colors to black
-  ax2.xaxis.pane.set_edgecolor('black')
-  ax2.yaxis.pane.set_edgecolor('black')
-  ax2.zaxis.pane.set_edgecolor('black')
-
-  # Set axis line colors to black
-  ax2.xaxis.line.set_color('black')
-  ax2.yaxis.line.set_color('black')
-  ax2.zaxis.line.set_color('black')
+  # Set pane colors to white
+  ax2.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax2.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax2.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
 
   min_limit_vel, max_limit_vel = get_equal_limits(ax2, buffer_fraction=0.25)
   
@@ -155,11 +145,12 @@ def plot_3d_trajectories(
   # Create custom legend handles with black edges
   legend_handles = [
     Line2D([0], [0], marker='>', color='w', markerfacecolor='white', markeredgecolor='black', 
-           markersize=10, markeredgewidth=2, linestyle='None', label='Start'),
+           markersize=10, markeredgewidth=2, linestyle='None', label='Initial'),
     Line2D([0], [0], marker='s', color='w', markerfacecolor='white', markeredgecolor='black', 
-           markersize=10, markeredgewidth=2, linestyle='None', label='End'),
+           markersize=10, markeredgewidth=2, linestyle='None', label='Final'),
   ]
-  fig.legend(handles=legend_handles, loc='upper right', fontsize=11, framealpha=0.9)
+  leg = fig.legend(handles=legend_handles, loc='upper right', fontsize=11, framealpha=0.9)
+  leg.get_frame().set_edgecolor('black')
 
   # Add info text as figure text
   fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=11, color='black',
@@ -344,29 +335,31 @@ def plot_3d_error(
   ax1 = fig.add_subplot(121, projection='3d')
   ax1.plot(pos_error[0, :], pos_error[1, :], pos_error[2, :], 'b-', linewidth=1)
   ax1.scatter([pos_error[0, 0]], [pos_error[1, 0]], [pos_error[2, 0]], 
-              s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, label='Start') # type: ignore
+              s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, label='Initial') # type: ignore
   ax1.scatter([pos_error[0, -1]], [pos_error[1, -1]], [pos_error[2, -1]], 
-              s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, label='End') # type: ignore
+              s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, label='Final') # type: ignore
   ax1.set_xlabel('Error X [m]')
   ax1.set_ylabel('Error Y [m]')
   ax1.set_zlabel('Error Z [m]') # type: ignore
   ax1.set_title('Position Error')
   ax1.grid(True)
-  ax1.legend()
+  leg1 = ax1.legend()
+  leg1.get_frame().set_edgecolor('black')
   
   # Plot 3D velocity error
   ax2 = fig.add_subplot(122, projection='3d')
   ax2.plot(vel_error[0, :], vel_error[1, :], vel_error[2, :], 'r-', linewidth=1)
   ax2.scatter([vel_error[0, 0]], [vel_error[1, 0]], [vel_error[2, 0]], 
-              s=100, marker='>', facecolors='white', edgecolors='r', linewidths=2, label='Start') # type: ignore
+              s=100, marker='>', facecolors='white', edgecolors='r', linewidths=2, label='Initial') # type: ignore
   ax2.scatter([vel_error[0, -1]], [vel_error[1, -1]], [vel_error[2, -1]], 
-              s=100, marker='s', facecolors='white', edgecolors='r', linewidths=2, label='End') # type: ignore
+              s=100, marker='s', facecolors='white', edgecolors='r', linewidths=2, label='Final') # type: ignore
   ax2.set_xlabel('Error Vx [m/s]')
   ax2.set_ylabel('Error Vy [m/s]')
   ax2.set_zlabel('Error Vz [m/s]') # type: ignore
   ax2.set_title('Velocity Error')
   ax2.grid(True)
-  ax2.legend()
+  leg2 = ax2.legend()
+  leg2.get_frame().set_edgecolor('black')
   
   fig.suptitle(title, fontsize=16)
   plt.tight_layout()
@@ -643,15 +636,10 @@ def plot_3d_trajectories_earth_fixed(
   ax.grid(True)
   ax.set_box_aspect([1,1,1])
 
-  # Set pane edge colors to black
-  ax.xaxis.pane.set_edgecolor('black')
-  ax.yaxis.pane.set_edgecolor('black')
-  ax.zaxis.pane.set_edgecolor('black')
-
-  # Set axis line colors to black
-  ax.xaxis.line.set_color('black')
-  ax.yaxis.line.set_color('black')
-  ax.zaxis.line.set_color('black')
+  # Set pane colors to white
+  ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
 
   min_limit, max_limit = get_equal_limits(ax, buffer_fraction=0.25)
   
@@ -687,11 +675,12 @@ def plot_3d_trajectories_earth_fixed(
   # Legend
   legend_handles = [
     Line2D([0], [0], marker='>', color='w', markerfacecolor='white', markeredgecolor='black', 
-           markersize=10, markeredgewidth=2, linestyle='None', label='Start'),
+           markersize=10, markeredgewidth=2, linestyle='None', label='Initial'),
     Line2D([0], [0], marker='s', color='w', markerfacecolor='white', markeredgecolor='black', 
-           markersize=10, markeredgewidth=2, linestyle='None', label='End'),
+           markersize=10, markeredgewidth=2, linestyle='None', label='Final'),
   ]
-  fig.legend(handles=legend_handles, loc='upper right', fontsize=11, framealpha=0.9)
+  leg = fig.legend(handles=legend_handles, loc='upper right', fontsize=11, framealpha=0.9)
+  leg.get_frame().set_edgecolor('black')
 
   # Info text
   fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=11, color='black',
@@ -761,8 +750,8 @@ def plot_ground_track(
     ax.plot(lon_seg, lat_seg, 'b-', linewidth=1.5)
   
   # Mark start and end points
-  ax.scatter([lon[0]], [lat[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Start')
-  ax.scatter([lon[-1]], [lat[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='End')
+  ax.scatter([lon[0]], [lat[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Initial')
+  ax.scatter([lon[-1]], [lat[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Final')
   
   # Set axis limits and labels
   ax.set_xlim([-180, 180])
@@ -771,7 +760,8 @@ def plot_ground_track(
   ax.set_ylabel('Latitude [deg]')
   ax.set_aspect('equal')
   ax.grid(True, alpha=0.5)
-  ax.legend(loc='upper right')
+  leg = ax.legend(loc='upper right')
+  leg.get_frame().set_edgecolor('black')
   
   # Add equator and prime meridian lines
   ax.axhline(y=0, color='gray', linestyle='--', linewidth=0.5, alpha=0.7)
