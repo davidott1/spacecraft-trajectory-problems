@@ -15,6 +15,7 @@ from src.plot.utility          import get_equal_limits, add_utc_time_axis
 from src.model.constants       import CONVERTER, SOLARSYSTEMCONSTANTS
 from src.model.frame_converter import FrameConverter
 from src.model.time_converter  import utc_to_et
+from src.model.orbit_converter import GeographicCoordinateConverter
 
 
 def plot_3d_trajectories(
@@ -696,6 +697,7 @@ def plot_3d_trajectories_earth_fixed(
 def plot_ground_track(
   result       : dict,
   epoch_dt_utc : Optional[datetime.datetime] = None,
+  title_text   : str = "Ground Track",
 ) -> Figure:
   """
   Plot ground track (latitude vs longitude) on a 2D map projection.
@@ -706,6 +708,8 @@ def plot_ground_track(
       Propagation result dictionary containing 'state' (6xN array) and 'plot_time_s'.
     epoch_dt_utc : datetime, optional
       Reference epoch (start time) for time conversion to ET.
+    title_text : str
+      Base title for the plot.
       
   Output:
   -------
@@ -733,18 +737,17 @@ def plot_ground_track(
   else:
     epoch_et = 0.0
   
-  # Transform each position to Earth-fixed and compute lat/lon
-  lat = np.zeros(n_points)
-  lon = np.zeros(n_points)
-  
+  # Transform each position to Earth-fixed frame
+  iau_earth_pos_vec = np.zeros((3, n_points))
   for i in range(n_points):
     epoch_et_i                 = epoch_et + time_s[i]
     rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(epoch_et_i)
-    iau_earth_pos_vec          = rot_mat_j2000_to_iau_earth @ j2000_pos_vec[:, i]
+    iau_earth_pos_vec[:, i]    = rot_mat_j2000_to_iau_earth @ j2000_pos_vec[:, i]
     
-    iau_earth_pos_mag = np.linalg.norm(iau_earth_pos_vec)
-    lat[i] = np.arcsin (iau_earth_pos_vec[2] / iau_earth_pos_mag   ) * CONVERTER.DEG_PER_RAD
-    lon[i] = np.arctan2(iau_earth_pos_vec[1] , iau_earth_pos_vec[0]) * CONVERTER.DEG_PER_RAD
+  # Compute geodetic coordinates
+  geo_coords = GeographicCoordinateConverter.pos_to_geodetic_array(iau_earth_pos_vec)
+  lat = geo_coords['latitude']  * CONVERTER.DEG_PER_RAD
+  lon = geo_coords['longitude'] * CONVERTER.DEG_PER_RAD
   
   # Handle longitude wrapping for plotting
   # Split trajectory at discontinuities (where lon jumps by more than 180 deg)
@@ -770,7 +773,7 @@ def plot_ground_track(
   leg.get_frame().set_edgecolor('black')
   
   # Info text
-  info_text = "Ground Track (Spherical Earth Approximation)"
+  info_text = title_text
   if epoch_dt_utc is not None:
     start_utc  = epoch_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
     end_time   = epoch_dt_utc + timedelta(seconds=time_s[-1])
@@ -950,8 +953,8 @@ def generate_3d_and_time_series_plots(
     plt.close(fig_ef)
     
     # Ground track plot for Horizons
-    fig_gt = plot_ground_track(result_jpl_horizons_ephemeris, epoch_dt_utc=time_o_dt)
-    fig_gt.suptitle(f'{object_name} - Ground Track (JPL Horizons)', fontsize=16)
+    gt_title = f'{object_name} - JPL Horizons - Ground Track'
+    fig_gt = plot_ground_track(result_jpl_horizons_ephemeris, epoch_dt_utc=time_o_dt, title_text=gt_title)
     filename = f'groundtrack_jpl_horizons_{name_lower}.png'
     fig_gt.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      Ground Track   : <figures_folderpath>/{filename}")
@@ -984,8 +987,8 @@ def generate_3d_and_time_series_plots(
     plt.close(fig_ef)
     
     # Ground track plot
-    fig_gt = plot_ground_track(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt)
-    fig_gt.suptitle(f'{object_name} - Ground Track', fontsize=16)
+    gt_title = f'{object_name} - High-Fidelity Model - Ground Track'
+    fig_gt = plot_ground_track(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt, title_text=gt_title)
     filename = f'groundtrack_high_fidelity_{name_lower}.png'
     fig_gt.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      Ground Track   : <figures_folderpath>/{filename}")
