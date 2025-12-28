@@ -1,6 +1,9 @@
+import datetime
+
 import matplotlib.pyplot as plt
 import numpy             as np
-import datetime
+import cartopy.crs       as ccrs
+import cartopy.feature   as cfeature
 
 from datetime          import timedelta
 from pathlib           import Path
@@ -709,7 +712,14 @@ def plot_ground_track(
     fig : matplotlib.figure.Figure
       Figure object containing the ground track plot.
   """
-  fig, ax = plt.subplots(figsize=(14, 8))
+  fig = plt.figure(figsize=(14, 8))
+  ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
+  ax.set_extent([-180, 180, -90, 90], crs=ccrs.PlateCarree())
+  ax.add_feature(cfeature.COASTLINE)
+  ax.add_feature(cfeature.BORDERS, linestyle=':', alpha=0.5)
+  gl = ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False, alpha=0.5, linestyle='--')
+  gl.top_labels = False
+  gl.right_labels = False
   
   # Extract J2000 state vectors
   j2000_state   = result['state']
@@ -746,26 +756,18 @@ def plot_ground_track(
   lon_segments = np.split(lon, split_indices)
   
   # Plot each segment
+  plot_kwargs = {'transform': ccrs.PlateCarree()}
+
   for lat_seg, lon_seg in zip(lat_segments, lon_segments):
-    ax.plot(lon_seg, lat_seg, 'b-', linewidth=1.5)
+    ax.plot(lon_seg, lat_seg, 'b-', linewidth=1.5, **plot_kwargs)
   
   # Mark start and end points
-  ax.scatter([lon[0]], [lat[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Initial')
-  ax.scatter([lon[-1]], [lat[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Final')
+  ax.scatter([lon[0]], [lat[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Initial', **plot_kwargs)
+  ax.scatter([lon[-1]], [lat[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Final', **plot_kwargs)
   
-  # Set axis limits and labels
-  ax.set_xlim([-180, 180])
-  ax.set_ylim([-90, 90])
-  ax.set_xlabel('Longitude [deg]')
-  ax.set_ylabel('Latitude [deg]')
-  ax.set_aspect('equal')
-  ax.grid(True, alpha=0.5)
+  # Legend
   leg = ax.legend(loc='upper right')
   leg.get_frame().set_edgecolor('black')
-  
-  # Add equator and prime meridian lines
-  ax.axhline(y=0, color='gray', linestyle='--', linewidth=0.5, alpha=0.7)
-  ax.axvline(x=0, color='gray', linestyle='--', linewidth=0.5, alpha=0.7)
   
   # Info text
   info_text = "Ground Track (Spherical Earth Approximation)"
