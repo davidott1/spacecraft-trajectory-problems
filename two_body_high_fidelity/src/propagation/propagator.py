@@ -570,7 +570,7 @@ def run_high_fidelity_propagation(
   
   if include_srp:
     print(f"      Solar Radiation Pressure")
-    print(f"        Model : Cylindrical Shadow (Spherical Earth)")
+    print(f"        Model : Spherical Earth & Cylindrical Shadow")
     print(f"        Coeff : {cr:{PRINTFORMATTER.SCIENTIFIC_NOTATION}}")
     print(f"        Area  : {area_srp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m²")
     print(f"        Mass  : {mass:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} kg")
