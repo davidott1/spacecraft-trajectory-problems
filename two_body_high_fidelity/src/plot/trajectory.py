@@ -64,7 +64,7 @@ def plot_3d_trajectories(
   z_earth = r_pol * np.outer(np.ones(np.size(u)), np.cos(v))
   ax1.plot_wireframe(x_earth, y_earth, z_earth, color='black', linewidth=0.5, alpha=1.0) # type: ignore
   
-  ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=1)
+  ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=2.0)
   ax1.scatter([pos_x[0]], [pos_y[0]], [pos_z[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2) # type: ignore
   ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2) # type: ignore
   ax1.set_xlabel('Pos-X [m]')
@@ -72,6 +72,17 @@ def plot_3d_trajectories(
   ax1.set_zlabel('Pos-Z [m]') # type: ignore
   ax1.grid(True)
   ax1.set_box_aspect([1,1,1]) # type: ignore
+
+  # Set pane edge colors to black
+  ax1.xaxis.pane.set_edgecolor('black')
+  ax1.yaxis.pane.set_edgecolor('black')
+  ax1.zaxis.pane.set_edgecolor('black')
+
+  # Set axis line colors to black
+  ax1.xaxis.line.set_color('black')
+  ax1.yaxis.line.set_color('black')
+  ax1.zaxis.line.set_color('black')
+
   min_limit, max_limit = get_equal_limits(ax1, buffer_fraction=0.25)
   
   ax1.set_xlim([min_limit, max_limit]) # type: ignore
@@ -80,7 +91,7 @@ def plot_3d_trajectories(
 
   # Add position trajectory shadows (projections onto planes)
   shadow_color = 'gray'
-  shadow_alpha = 0.3
+  shadow_alpha = 0.75
   shadow_lw    = 0.5
   # XY plane shadow (z = min_limit)
   ax1.plot(pos_x, pos_y, np.full_like(pos_z, min_limit), color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
@@ -89,9 +100,26 @@ def plot_3d_trajectories(
   # YZ plane shadow (x = min_limit)
   ax1.plot(np.full_like(pos_x, min_limit), pos_y, pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
 
+  # Add Earth projection shadows (filled circles on planes)
+  r_disk = np.linspace(0, r_eq, 2)
+  t_disk = np.linspace(0, 2*np.pi, 60)
+  R_disk, T_disk = np.meshgrid(r_disk, t_disk)
+  U_disk = R_disk * np.cos(T_disk)
+  V_disk = R_disk * np.sin(T_disk)
+  earth_shadow_alpha = 0.1
+
+  # XY plane (z = min_limit)
+  ax1.plot_surface(U_disk, V_disk, np.full_like(U_disk, min_limit), color='black', alpha=earth_shadow_alpha, shade=False)
+
+  # XZ plane (y = max_limit)
+  ax1.plot_surface(U_disk, np.full_like(U_disk, max_limit), V_disk, color='black', alpha=earth_shadow_alpha, shade=False)
+
+  # YZ plane (x = min_limit)
+  ax1.plot_surface(np.full_like(U_disk, min_limit), U_disk, V_disk, color='black', alpha=earth_shadow_alpha, shade=False)
+
   # Plot 3D velocity trajectory
   ax2 = fig.add_subplot(122, projection='3d')
-  ax2.plot(vel_x, vel_y, vel_z, 'r-', linewidth=1)
+  ax2.plot(vel_x, vel_y, vel_z, 'r-', linewidth=2.0)
   ax2.scatter([vel_x[0]], [vel_y[0]], [vel_z[0]], s=100, marker='>', facecolors='white', edgecolors='r', linewidths=2) # type: ignore
   ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], s=100, marker='s', facecolors='white', edgecolors='r', linewidths=2) # type: ignore
   ax2.set_xlabel('Vel-X [m/s]')
@@ -99,6 +127,17 @@ def plot_3d_trajectories(
   ax2.set_zlabel('Vel-Z [m/s]') # type: ignore
   ax2.grid(True)
   ax2.set_box_aspect([1,1,1]) # type: ignore
+
+  # Set pane edge colors to black
+  ax2.xaxis.pane.set_edgecolor('black')
+  ax2.yaxis.pane.set_edgecolor('black')
+  ax2.zaxis.pane.set_edgecolor('black')
+
+  # Set axis line colors to black
+  ax2.xaxis.line.set_color('black')
+  ax2.yaxis.line.set_color('black')
+  ax2.zaxis.line.set_color('black')
+
   min_limit_vel, max_limit_vel = get_equal_limits(ax2, buffer_fraction=0.25)
   
   ax2.set_xlim([min_limit_vel, max_limit_vel]) # type: ignore
@@ -595,7 +634,7 @@ def plot_3d_trajectories_earth_fixed(
   z_earth = r_pol * np.outer(np.ones(np.size(u)), np.cos(v))
   ax.plot_wireframe(x_earth, y_earth, z_earth, color='black', linewidth=0.5, alpha=1.0)
   
-  ax.plot(pos_x, pos_y, pos_z, 'b-', linewidth=1)
+  ax.plot(pos_x, pos_y, pos_z, 'b-', linewidth=2.0)
   ax.scatter([pos_x[0]], [pos_y[0]], [pos_z[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2)
   ax.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2)
   ax.set_xlabel('X (IAU_EARTH) [m]')
@@ -603,6 +642,17 @@ def plot_3d_trajectories_earth_fixed(
   ax.set_zlabel('Z (IAU_EARTH) [m]')
   ax.grid(True)
   ax.set_box_aspect([1,1,1])
+
+  # Set pane edge colors to black
+  ax.xaxis.pane.set_edgecolor('black')
+  ax.yaxis.pane.set_edgecolor('black')
+  ax.zaxis.pane.set_edgecolor('black')
+
+  # Set axis line colors to black
+  ax.xaxis.line.set_color('black')
+  ax.yaxis.line.set_color('black')
+  ax.zaxis.line.set_color('black')
+
   min_limit, max_limit = get_equal_limits(ax, buffer_fraction=0.25)
   
   ax.set_xlim([min_limit, max_limit])
@@ -611,11 +661,28 @@ def plot_3d_trajectories_earth_fixed(
 
   # Add shadows
   shadow_color = 'gray'
-  shadow_alpha = 0.3
+  shadow_alpha = 0.75
   shadow_lw    = 0.5
   ax.plot(pos_x, pos_y, np.full_like(pos_z, min_limit), color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
   ax.plot(pos_x, np.full_like(pos_y, max_limit), pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
   ax.plot(np.full_like(pos_x, min_limit), pos_y, pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+
+  # Add Earth projection shadows (filled circles on planes)
+  r_disk = np.linspace(0, r_eq, 2)
+  t_disk = np.linspace(0, 2*np.pi, 60)
+  R_disk, T_disk = np.meshgrid(r_disk, t_disk)
+  U_disk = R_disk * np.cos(T_disk)
+  V_disk = R_disk * np.sin(T_disk)
+  earth_shadow_alpha = 0.1
+
+  # XY plane (z = min_limit)
+  ax.plot_surface(U_disk, V_disk, np.full_like(U_disk, min_limit), color='black', alpha=earth_shadow_alpha, shade=False)
+
+  # XZ plane (y = max_limit)
+  ax.plot_surface(U_disk, np.full_like(U_disk, max_limit), V_disk, color='black', alpha=earth_shadow_alpha, shade=False)
+
+  # YZ plane (x = min_limit)
+  ax.plot_surface(np.full_like(U_disk, min_limit), U_disk, V_disk, color='black', alpha=earth_shadow_alpha, shade=False)
 
   # Legend
   legend_handles = [
@@ -774,7 +841,7 @@ def generate_error_plots(
     )
     title = f'{object_name}: RIC Position/Velocity Errors: High-Fidelity Relative To JPL Horizons'
     fig_err_ts.suptitle(title, fontsize=14)
-    filename = f'error_timeseries_{name_lower}_high_fidelity_relative_to_jpl_horizons.png'
+    filename = f'error_timeseries_high_fidelity_rel_jpl_horizons_{name_lower}.png'
     fig_err_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      Time-Series Error : <figures_folderpath>/{filename}")
     plt.close(fig_err_ts)
@@ -792,7 +859,7 @@ def generate_error_plots(
     )
     title = f'{object_name}: RIC Position/Velocity Errors: High-Fidelity Relative To SGP4'
     fig_err_ts.suptitle(title, fontsize=14)
-    filename = f'error_timeseries_{name_lower}_high_fidelity_relative_to_sgp4.png'
+    filename = f'error_timeseries_high_fidelity_rel_sgp4_{name_lower}.png'
     fig_err_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      Time-Series Error : <figures_folderpath>/{filename}")
     plt.close(fig_err_ts)
@@ -816,7 +883,7 @@ def generate_error_plots(
     )
     title = f'{object_name}: RIC Position/Velocity Errors: SGP4 Relative To JPL Horizons'
     fig_err_ts.suptitle(title, fontsize=14)
-    filename = f'error_timeseries_{name_lower}_sgp4_relative_to_jpl_horizons.png'
+    filename = f'error_timeseries_sgp4_rel_jpl_horizons_{name_lower}.png'
     fig_err_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      Time-Series Error : <figures_folderpath>/{filename}")
     plt.close(fig_err_ts)
@@ -870,13 +937,33 @@ def generate_3d_and_time_series_plots(
 
     fig1 = plot_3d_trajectories(result_jpl_horizons_ephemeris, epoch=time_o_dt, frame="J2000")
     fig1.suptitle(f'{object_name} Orbit - JPL Horizons - 3D', fontsize=16)
-    fig1.savefig(figures_folderpath / f'3d_{name_lower}_jpl_horizons.png', dpi=300, bbox_inches='tight')
-    print(f"      3D          : <figures_folderpath>/3d_{name_lower}_jpl_horizons.png")
+    filename = f'3d_j2000_jpl_horizons_{name_lower}.png'
+    fig1.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+    print(f"      3D Inertial    : <figures_folderpath>/{filename}")
+    plt.close(fig1)
     
     fig2 = plot_time_series(result_jpl_horizons_ephemeris, epoch=time_o_dt)
     fig2.suptitle(f'{object_name} Orbit - JPL Horizons - Time Series', fontsize=16)
-    fig2.savefig(figures_folderpath / f'timeseries_{name_lower}_jpl_horizons.png', dpi=300, bbox_inches='tight')
-    print(f"      Time Series : <figures_folderpath>/timeseries_{name_lower}_jpl_horizons.png")
+    filename = f'timeseries_jpl_horizons_{name_lower}.png'
+    fig2.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+    print(f"      Time Series    : <figures_folderpath>/{filename}")
+    plt.close(fig2)
+    
+    # Earth-fixed 3D plot for Horizons
+    fig_ef = plot_3d_trajectories_earth_fixed(result_jpl_horizons_ephemeris, epoch_dt_utc=time_o_dt)
+    fig_ef.suptitle(f'{object_name} Orbit - JPL Horizons - Earth-Fixed 3D', fontsize=16)
+    filename = f'3d_iau_earth_jpl_horizons_{name_lower}.png'
+    fig_ef.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+    print(f"      3D Earth-Fixed : <figures_folderpath>/{filename}")
+    plt.close(fig_ef)
+    
+    # Ground track plot for Horizons
+    fig_gt = plot_ground_track(result_jpl_horizons_ephemeris, epoch_dt_utc=time_o_dt)
+    fig_gt.suptitle(f'{object_name} - Ground Track (JPL Horizons)', fontsize=16)
+    filename = f'groundtrack_jpl_horizons_{name_lower}.png'
+    fig_gt.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+    print(f"      Ground Track   : <figures_folderpath>/{filename}")
+    plt.close(fig_gt)
   
   # High-fidelity plots
   if result_high_fidelity_propagation.get('success'):
@@ -884,44 +971,53 @@ def generate_3d_and_time_series_plots(
 
     fig3 = plot_3d_trajectories(result_high_fidelity_propagation, epoch=time_o_dt, frame="J2000")
     fig3.suptitle(f'{object_name} Orbit - High-Fidelity Model - 3D', fontsize=16)
-    fig3.savefig(figures_folderpath / f'3d_{name_lower}_high_fidelity.png', dpi=300, bbox_inches='tight')
-    print(f"      3D          : <figures_folderpath>/3d_{name_lower}_high_fidelity.png")
+    filename = f'3d_j2000_high_fidelity_{name_lower}.png'
+    fig3.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+    print(f"      3D Inertial    : <figures_folderpath>/{filename}")
+    plt.close(fig3)
     
     fig4 = plot_time_series(result_high_fidelity_propagation, epoch=time_o_dt)
     fig4.suptitle(f'{object_name} Orbit - High-Fidelity Model - Time Series', fontsize=16)
-    fig4.savefig(figures_folderpath / f'timeseries_{name_lower}_high_fidelity.png', dpi=300, bbox_inches='tight')
-    print(f"      Time Series : <figures_folderpath>/timeseries_{name_lower}_high_fidelity.png")
+    filename = f'timeseries_high_fidelity_{name_lower}.png'
+    fig4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+    print(f"      Time Series    : <figures_folderpath>/{filename}")
+    plt.close(fig4)
     
     # Earth-fixed 3D plot
     fig_ef = plot_3d_trajectories_earth_fixed(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt)
     fig_ef.suptitle(f'{object_name} Orbit - High-Fidelity Model - Earth-Fixed 3D', fontsize=16)
-    fig_ef.savefig(figures_folderpath / f'3d_{name_lower}_high_fidelity_earth_fixed.png', dpi=300, bbox_inches='tight')
-    print(f"      3D (EF)     : <figures_folderpath>/3d_{name_lower}_high_fidelity_earth_fixed.png")
+    filename = f'3d_iau_earth_high_fidelity_{name_lower}.png'
+    fig_ef.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+    print(f"      3D Earth-Fixed : <figures_folderpath>/{filename}")
     plt.close(fig_ef)
     
     # Ground track plot
     fig_gt = plot_ground_track(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt)
     fig_gt.suptitle(f'{object_name} - Ground Track', fontsize=16)
-    fig_gt.savefig(figures_folderpath / f'groundtrack_{name_lower}_high_fidelity.png', dpi=300, bbox_inches='tight')
-    print(f"      Ground Track: <figures_folderpath>/groundtrack_{name_lower}_high_fidelity.png")
+    filename = f'groundtrack_high_fidelity_{name_lower}.png'
+    fig_gt.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+    print(f"      Ground Track   : <figures_folderpath>/{filename}")
     plt.close(fig_gt)
   
-  # SGP4 at Horizons time points plots
+  # SGP4 plots
   if compare_tle and result_sgp4_propagation and result_sgp4_propagation.get('success'):
     print("    SGP4-Model Plots")
     
     # 3D trajectory plot
-    fig_sgp4_hz_3d = plot_3d_trajectories(result_sgp4_propagation, epoch=time_o_dt, frame="J2000")
-    fig_sgp4_hz_3d.suptitle(f'{object_name} Orbit - SGP4 Model - 3D', fontsize=16)
-    fig_sgp4_hz_3d.savefig(figures_folderpath / f'3d_{name_lower}_sgp4.png', dpi=300, bbox_inches='tight')
-    print(f"      3D          : <figures_folderpath>/3d_{name_lower}_sgp4.png")
+    fig_sgp4_3d = plot_3d_trajectories(result_sgp4_propagation, epoch=time_o_dt, frame="J2000")
+    fig_sgp4_3d.suptitle(f'{object_name} Orbit - SGP4 Model - 3D', fontsize=16)
+    filename = f'3d_j2000_sgp4_{name_lower}.png'
+    fig_sgp4_3d.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+    print(f"      3D          : <figures_folderpath>/{filename}")
+    plt.close(fig_sgp4_3d)
     
     # Time series plot
-    fig_sgp4_hz_ts = plot_time_series(result_sgp4_propagation, epoch=time_o_dt)
-    fig_sgp4_hz_ts.suptitle(f'{object_name} Orbit - SGP4 Model - Time Series', fontsize=16)
-    fig_sgp4_hz_ts.savefig(figures_folderpath / f'timeseries_{name_lower}_sgp4.png', dpi=300, bbox_inches='tight')
-    print(f"      Time Series : <figures_folderpath>/timeseries_{name_lower}_sgp4.png")
-
+    fig_sgp4_ts = plot_time_series(result_sgp4_propagation, epoch=time_o_dt)
+    fig_sgp4_ts.suptitle(f'{object_name} Orbit - SGP4 Model - Time Series', fontsize=16)
+    filename = f'timeseries_sgp4_{name_lower}.png'
+    fig_sgp4_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+    print(f"      Time Series : <figures_folderpath>/{filename}")
+    plt.close(fig_sgp4_ts)
 
 def generate_plots(
   result_jpl_horizons_ephemeris    : Optional[dict],
