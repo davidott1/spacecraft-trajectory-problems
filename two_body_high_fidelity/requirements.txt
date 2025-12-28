@@ -6,6 +6,7 @@ scipy>=1.7.0
 
 # Plotting and visualization
 matplotlib>=3.5.0
+cartopy>=0.20.0
 
 # SPICE ephemeris interface
 spiceypy>=5.0.0
