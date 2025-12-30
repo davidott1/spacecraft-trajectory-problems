@@ -16,7 +16,7 @@ from src.plot.utility          import get_equal_limits, add_utc_time_axis
 from src.model.constants       import CONVERTER, SOLARSYSTEMCONSTANTS
 from src.model.frame_converter import FrameConverter
 from src.model.time_converter  import utc_to_et
-from src.model.orbit_converter import GeographicCoordinateConverter
+from src.model.orbit_converter import GeographicCoordinateConverter, OrbitConverter
 
 
 def plot_3d_trajectories(
@@ -657,64 +657,46 @@ def plot_time_series_error(
   return fig
 
 
-def plot_3d_trajectories_earth_fixed(
-  result       : dict,
-  epoch_dt_utc : Optional[datetime.datetime] = None,
+def plot_3d_trajectory_with_moon(
+  result : dict,
+  epoch  : Optional[datetime.datetime] = None,
 ) -> Figure:
   """
-  Plot 3D position and velocity trajectories in Earth-fixed (IAU_EARTH) frame.
+  Plot 3D position trajectory with Moon trajectory in J2000 Earth-centered frame.
   
   Input:
   ------
     result : dict
       Propagation result dictionary containing 'state' (6xN array) and 'plot_time_s'.
-    epoch_dt_utc : datetime, optional
-      Reference epoch (start time) for time conversion to ET.
+    epoch : datetime, optional
+      Reference epoch (start time) for labeling and Moon position computation.
       
   Output:
   -------
     fig : matplotlib.figure.Figure
-      Figure object containing the 3D plots.
+      Figure object containing the 3D plot.
   """
-  fig = plt.figure(figsize=(18, 10))
+  fig = plt.figure(figsize=(20, 10))
   
-  # Extract J2000 state vectors
-  j2000_state   = result['state']
-  j2000_pos_vec = j2000_state[0:3, :]
-  j2000_vel_vec = j2000_state[3:6, :]
-  time_s        = result['plot_time_s']
-  n_points      = j2000_state.shape[1]
-  
-  # Convert epoch to ET
-  if epoch_dt_utc is not None:
-    epoch_et = utc_to_et(epoch_dt_utc)
-  else:
-    epoch_et = 0.0
-  
-  # Transform each position and velocity to Earth-fixed frame
-  iau_earth_pos_vec = np.zeros((3, n_points))
-  iau_earth_vel_vec = np.zeros((3, n_points))
-  for i in range(n_points):
-    epoch_et_i = epoch_et + time_s[i]
-    rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(epoch_et_i)
-    iau_earth_pos_vec[:, i] = rot_mat_j2000_to_iau_earth @ j2000_pos_vec[:, i]
-    iau_earth_vel_vec[:, i] = rot_mat_j2000_to_iau_earth @ j2000_vel_vec[:, i]
-  
-  pos_x, pos_y, pos_z = iau_earth_pos_vec[0, :], iau_earth_pos_vec[1, :], iau_earth_pos_vec[2, :]
-  vel_x, vel_y, vel_z = iau_earth_vel_vec[0, :], iau_earth_vel_vec[1, :], iau_earth_vel_vec[2, :]
+  # Extract state vectors
+  posvel_vec = result['state']
+  pos_x, pos_y, pos_z = posvel_vec[0, :], posvel_vec[1, :], posvel_vec[2, :]
+  time_s = result['plot_time_s']
   
   # Build info string
-  info_text = "Frame: IAU_EARTH (Earth-Fixed)"
-  if epoch_dt_utc is not None:
-    start_time_iso_utc = epoch_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
-    end_time_dt_utc    = epoch_dt_utc + timedelta(seconds=time_s[-1])
-    end_time_iso_utc   = end_time_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
-    info_text += f"  |  Initial: {start_time_iso_utc}  |  Final: {end_time_iso_utc}"
+  info_text = "Frame: J2000 (Earth-Centered)"
+  if epoch is not None and 'plot_time_s' in result:
+    start_utc = epoch.strftime('%Y-%m-%d %H:%M:%S UTC')
+    end_time  = epoch + timedelta(seconds=result['plot_time_s'][-1])
+    end_utc   = end_time.strftime('%Y-%m-%d %H:%M:%S UTC')
+    info_text += f"  |  Initial: {start_utc}  |  Final: {end_utc}"
   
-  # Plot 3D position trajectory
+  # Create subplots
   ax1 = fig.add_subplot(121, projection='3d')
+  ax2 = fig.add_subplot(122, projection='3d')
+  axes = [ax1, ax2]
   
-  # Add Earth wireframe ellipsoid
+  # Pre-calculate Earth wireframe ellipsoid
   u       = np.linspace(0, 2 * np.pi, 24)
   v       = np.linspace(0, np.pi, 12)
   r_eq    = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
@@ -722,187 +704,256 @@ def plot_3d_trajectories_earth_fixed(
   x_earth = r_eq * np.outer(np.cos(u), np.sin(v))
   y_earth = r_eq * np.outer(np.sin(u), np.sin(v))
   z_earth = r_pol * np.outer(np.ones(np.size(u)), np.cos(v))
-  ax1.plot_wireframe(x_earth, y_earth, z_earth, color='black', linewidth=0.5, alpha=1.0)
   
-  ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=2.0)
-  ax1.scatter([pos_x[0]], [pos_y[0]], [pos_z[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2)
-  ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2)
-  ax1.set_xlabel('Pos-X [m]')
-  ax1.set_ylabel('Pos-Y [m]')
-  ax1.set_zlabel('Pos-Z [m]') # type: ignore
-  ax1.grid(True)
-  ax1.set_box_aspect([1,1,1]) # type: ignore
-
-  # Set pane colors to white
-  ax1.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax1.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax1.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-
-  min_limit, max_limit = get_equal_limits(ax1, buffer_fraction=0.25)
+  # Pre-calculate Moon and Sun data if epoch is available
+  moon_pos = None
+  n_moon_points = 0
+  moon_orbit_full = None
+  x_moon_sphere, y_moon_sphere, z_moon_sphere = None, None, None
   
-  ax1.set_xlim([min_limit, max_limit])
-  ax1.set_ylim([min_limit, max_limit])
-  ax1.set_zlim([min_limit, max_limit])
-
-  # Add position trajectory shadows
-  shadow_color = 'gray'
-  shadow_alpha = 0.75
-  shadow_lw    = 0.5
-  ax1.plot(pos_x, pos_y, np.full_like(pos_z, min_limit), color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
-  ax1.plot(pos_x, np.full_like(pos_y, max_limit), pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
-  ax1.plot(np.full_like(pos_x, min_limit), pos_y, pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
-
-  # Add Earth projection shadows (filled circles on planes)
-  r_disk = np.linspace(0, r_eq, 2)
-  t_disk = np.linspace(0, 2*np.pi, 60)
-  R_disk, T_disk = np.meshgrid(r_disk, t_disk)
-  U_disk = R_disk * np.cos(T_disk)
-  V_disk = R_disk * np.sin(T_disk)
-  earth_shadow_alpha = 0.1
-
-  ax1.plot_surface(U_disk, V_disk, np.full_like(U_disk, min_limit), color='black', alpha=earth_shadow_alpha, shade=False)
-  ax1.plot_surface(U_disk, np.full_like(U_disk, max_limit), V_disk, color='black', alpha=earth_shadow_alpha, shade=False)
-  ax1.plot_surface(np.full_like(U_disk, min_limit), U_disk, V_disk, color='black', alpha=earth_shadow_alpha, shade=False)
-
-  # Plot 3D velocity trajectory
-  ax2 = fig.add_subplot(122, projection='3d')
-  ax2.plot(vel_x, vel_y, vel_z, 'r-', linewidth=2.0)
-  ax2.scatter([vel_x[0]], [vel_y[0]], [vel_z[0]], s=100, marker='>', facecolors='white', edgecolors='r', linewidths=2)
-  ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], s=100, marker='s', facecolors='white', edgecolors='r', linewidths=2)
-  ax2.set_xlabel('Vel-X [m/s]')
-  ax2.set_ylabel('Vel-Y [m/s]')
-  ax2.set_zlabel('Vel-Z [m/s]') # type: ignore
-  ax2.grid(True)
-  ax2.set_box_aspect([1,1,1]) # type: ignore
-
-  # Set pane colors to white
-  ax2.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax2.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax2.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0)) # type: ignore
-
-  min_limit_vel, max_limit_vel = get_equal_limits(ax2, buffer_fraction=0.25)
+  sun_pos = None
+  n_sun_points = 0
+  sun_orbit_full = None
   
-  ax2.set_xlim((min_limit_vel, max_limit_vel))
-  ax2.set_ylim((min_limit_vel, max_limit_vel))
-  ax2.set_zlim((min_limit_vel, max_limit_vel)) # type: ignore
+  if epoch is not None:
+    try:
+      epoch_et_start = utc_to_et(epoch)
+      
+      # --- MOON ---
+      # 1. Moon trajectory during simulation
+      n_moon_points = min(len(time_s), 500)  # Limit Moon points for performance
+      moon_time_indices = np.linspace(0, len(time_s) - 1, n_moon_points, dtype=int)
+      
+      moon_pos = np.zeros((3, n_moon_points))
+      for i, idx in enumerate(moon_time_indices):
+        epoch_et_i = epoch_et_start + time_s[idx]
+        # Get Moon position relative to Earth in J2000 (returns in km)
+        moon_pos_km, _ = spice.spkpos('MOON', epoch_et_i, 'J2000', 'NONE', 'EARTH')
+        moon_pos[:, i] = np.array(moon_pos_km) * 1000.0  # Convert to meters
+      
+      # Moon sphere at final position
+      moon_radius = 1.7374e6  # Moon radius in meters
+      u_moon = np.linspace(0, 2 * np.pi, 12)
+      v_moon = np.linspace(0, np.pi, 8)
+      x_moon_sphere = moon_radius * np.outer(np.cos(u_moon), np.sin(v_moon)) + moon_pos[0, -1]
+      y_moon_sphere = moon_radius * np.outer(np.sin(u_moon), np.sin(v_moon)) + moon_pos[1, -1]
+      z_moon_sphere = moon_radius * np.outer(np.ones(np.size(u_moon)), np.cos(v_moon)) + moon_pos[2, -1]
 
-  # Add velocity trajectory shadows
-  ax2.plot(vel_x, vel_y, np.full_like(vel_z, min_limit_vel), color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
-  ax2.plot(vel_x, np.full_like(vel_y, max_limit_vel), vel_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
-  ax2.plot(np.full_like(vel_x, min_limit_vel), vel_y, vel_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+      # 2. Full approximate Moon orbit (Keplerian ellipse based on initial state)
+      # Get initial state of Moon (km, km/s)
+      moon_state_km, _ = spice.spkezr('MOON', epoch_et_start, 'J2000', 'NONE', 'EARTH')
+      moon_pos_init = moon_state_km[0:3] * 1000.0 # m
+      moon_vel_init = moon_state_km[3:6] * 1000.0 # m/s
+      
+      # Convert to orbital elements
+      moon_coe = OrbitConverter.pv_to_coe(moon_pos_init, moon_vel_init, SOLARSYSTEMCONSTANTS.EARTH.GP)
+      
+      # Generate full orbit points
+      n_orbit_points = 200
+      ta_vals = np.linspace(0, 2*np.pi, n_orbit_points)
+      moon_orbit_full = np.zeros((3, n_orbit_points))
+      
+      for i, ta in enumerate(ta_vals):
+        # Update TA in COE
+        moon_coe['ta'] = ta
+        # Convert back to PV
+        r_vec, _ = OrbitConverter.coe_to_pv(moon_coe, SOLARSYSTEMCONSTANTS.EARTH.GP)
+        moon_orbit_full[:, i] = r_vec
 
-  # Legend
-  legend_handles = [
-    Line2D([0], [0], marker='>', color='w', markerfacecolor='white', markeredgecolor='black', 
-           markersize=10, markeredgewidth=2, linestyle='None', label='Initial'),
-    Line2D([0], [0], marker='s', color='w', markerfacecolor='white', markeredgecolor='black', 
-           markersize=10, markeredgewidth=2, linestyle='None', label='Final'),
-  ]
-  leg = fig.legend(handles=legend_handles, loc='upper right', fontsize=11, framealpha=0.9)
-  leg.get_frame().set_edgecolor('black')
+      # --- SUN ---
+      # 1. Sun trajectory during simulation
+      n_sun_points = min(len(time_s), 500)
+      sun_time_indices = np.linspace(0, len(time_s) - 1, n_sun_points, dtype=int)
+      
+      sun_pos = np.zeros((3, n_sun_points))
+      for i, idx in enumerate(sun_time_indices):
+        epoch_et_i = epoch_et_start + time_s[idx]
+        sun_pos_km, _ = spice.spkpos('SUN', epoch_et_i, 'J2000', 'NONE', 'EARTH')
+        sun_pos[:, i] = np.array(sun_pos_km) * 1000.0
+        
+      # 2. Full approximate Sun orbit
+      # Use Sun's GP for relative motion (mu_sun + mu_earth approx mu_sun)
+      try:
+          mu_sun = SOLARSYSTEMCONSTANTS.SUN.GP
+      except AttributeError:
+          mu_sun = 1.32712440018e20 # m^3/s^2 fallback
+          
+      sun_state_km, _ = spice.spkezr('SUN', epoch_et_start, 'J2000', 'NONE', 'EARTH')
+      sun_pos_init = sun_state_km[0:3] * 1000.0
+      sun_vel_init = sun_state_km[3:6] * 1000.0
+      
+      sun_coe = OrbitConverter.pv_to_coe(sun_pos_init, sun_vel_init, mu_sun)
+      
+      sun_orbit_full = np.zeros((3, n_orbit_points))
+      for i, ta in enumerate(ta_vals):
+        sun_coe['ta'] = ta
+        r_vec, _ = OrbitConverter.coe_to_pv(sun_coe, mu_sun)
+        sun_orbit_full[:, i] = r_vec
+      
+    except Exception:
+      # If SPICE kernels aren't loaded or other error, skip Moon/Sun trajectory
+      pass
 
-  # Add info text as figure text
-  fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=11, color='black',
+  # Plot on both axes
+  for ax in axes:
+    # Add Earth wireframe ellipsoid
+    ax.plot_wireframe(x_earth, y_earth, z_earth, color='blue', linewidth=0.5, alpha=0.6)
+    
+    # Plot spacecraft trajectory
+    ax.plot(pos_x, pos_y, pos_z, 'b-', linewidth=2.0, label='Spacecraft')
+    ax.scatter([pos_x[0]], [pos_y[0]], [pos_z[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, zorder=5)
+    ax.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, zorder=5)
+    
+    if moon_pos is not None:
+      # Plot Moon trajectory segment
+      ax.plot(moon_pos[0, :], moon_pos[1, :], moon_pos[2, :], 
+              color='gray', linewidth=2.0, alpha=0.8, label='Moon (Sim)')
+      
+      # Add Moon position markers (initial and final)
+      ax.scatter([moon_pos[0, 0]], [moon_pos[1, 0]], [moon_pos[2, 0]], 
+                 s=100, marker='>', facecolors='white', edgecolors='gray', linewidths=2, zorder=5)
+      ax.scatter([moon_pos[0, -1]], [moon_pos[1, -1]], [moon_pos[2, -1]], 
+                 s=100, marker='s', facecolors='white', edgecolors='gray', linewidths=2, zorder=5)
+      
+      # Add Moon sphere at final position
+      if x_moon_sphere is not None:
+        ax.plot_wireframe(x_moon_sphere, y_moon_sphere, z_moon_sphere, color='gray', linewidth=0.3, alpha=0.5)
+      
+      # Plot full orbit as a thin dashed line
+      if moon_orbit_full is not None:
+        ax.plot(moon_orbit_full[0, :], moon_orbit_full[1, :], moon_orbit_full[2, :],
+                color='gray', linewidth=1.0, linestyle='--', alpha=0.5, label='Moon Orbit (Approx)')
+    
+    # Plot Sun only on left subplot (ax1)
+    if ax == ax1 and sun_pos is not None:
+      ax.plot(sun_pos[0, :], sun_pos[1, :], sun_pos[2, :], 
+              color='orange', linewidth=2.0, alpha=0.8, label='Sun (Sim)')
+      
+      # Add Sun position markers
+      ax.scatter([sun_pos[0, 0]], [sun_pos[1, 0]], [sun_pos[2, 0]], 
+                 s=100, marker='>', facecolors='white', edgecolors='orange', linewidths=2, zorder=5)
+      ax.scatter([sun_pos[0, -1]], [sun_pos[1, -1]], [sun_pos[2, -1]], 
+                 s=100, marker='s', facecolors='white', edgecolors='orange', linewidths=2, zorder=5)
+      
+      # Plot full Sun orbit
+      if sun_orbit_full is not None:
+        ax.plot(sun_orbit_full[0, :], sun_orbit_full[1, :], sun_orbit_full[2, :],
+                color='orange', linewidth=1.0, linestyle='--', alpha=0.5, label='Sun Orbit (Approx)')
+    
+    ax.set_xlabel('Pos-X [m]')
+    ax.set_ylabel('Pos-Y [m]')
+    ax.set_zlabel('Pos-Z [m]')  # type: ignore
+    ax.grid(True)
+
+    # Set pane colors to white
+    ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+    ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+    ax.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+
+    # Configure limits and aspect ratio
+    z_bottom = 0.0
+    
+    if ax == ax1:
+      # Left subplot: Independent limits but equal scale (non-cubic box)
+      # Collect all data points to determine limits
+      xs = [x_earth.flatten(), pos_x]
+      ys = [y_earth.flatten(), pos_y]
+      zs = [z_earth.flatten(), pos_z]
+      
+      if moon_pos is not None:
+        xs.append(moon_pos[0, :])
+        ys.append(moon_pos[1, :])
+        zs.append(moon_pos[2, :])
+        if moon_orbit_full is not None:
+          xs.append(moon_orbit_full[0, :])
+          ys.append(moon_orbit_full[1, :])
+          zs.append(moon_orbit_full[2, :])
+          
+      if sun_pos is not None:
+        xs.append(sun_pos[0, :])
+        ys.append(sun_pos[1, :])
+        zs.append(sun_pos[2, :])
+        if sun_orbit_full is not None:
+          xs.append(sun_orbit_full[0, :])
+          ys.append(sun_orbit_full[1, :])
+          zs.append(sun_orbit_full[2, :])
+      
+      all_x = np.concatenate(xs)
+      all_y = np.concatenate(ys)
+      all_z = np.concatenate(zs)
+      
+      x_min, x_max = np.min(all_x), np.max(all_x)
+      y_min, y_max = np.min(all_y), np.max(all_y)
+      z_min, z_max = np.min(all_z), np.max(all_z)
+      
+      # Add buffer
+      buffer = 0.1
+      dx = x_max - x_min
+      dy = y_max - y_min
+      dz = z_max - z_min
+      
+      # Avoid zero range
+      if dx == 0: dx = 1.0
+      if dy == 0: dy = 1.0
+      if dz == 0: dz = 1.0
+      
+      ax.set_xlim([x_min - buffer*dx, x_max + buffer*dx])
+      ax.set_ylim([y_min - buffer*dy, y_max + buffer*dy])
+      ax.set_zlim([z_min - buffer*dz, z_max + buffer*dz])
+      
+      # Set box aspect to match data range ratios (maintains equal scale)
+      ax.set_box_aspect((dx, dy, dz)) # type: ignore
+      
+      z_bottom = z_min - buffer*dz
+      
+    else:
+      # Right subplot: Equal limits (Cubic box)
+      ax.set_box_aspect([1, 1, 1]) # type: ignore
+      min_limit, max_limit = get_equal_limits(ax, buffer_fraction=0.1)
+      ax.set_xlim([min_limit, max_limit])
+      ax.set_ylim([min_limit, max_limit])
+      ax.set_zlim([min_limit, max_limit])
+      z_bottom = min_limit
+
+    # Add trajectory shadow on XY plane
+    shadow_alpha = 0.4
+    shadow_lw    = 0.5
+    ax.plot(pos_x, pos_y, np.full_like(pos_z, z_bottom), color='lightblue', alpha=shadow_alpha, linewidth=shadow_lw)
+    
+    # Moon trajectory shadow
+    if moon_pos is not None:
+      ax.plot(moon_pos[0, :], moon_pos[1, :], np.full(n_moon_points, z_bottom), 
+              color='lightgray', alpha=shadow_alpha, linewidth=shadow_lw)
+    
+    # Sun trajectory shadow (only ax1)
+    if ax == ax1 and sun_pos is not None:
+      ax.plot(sun_pos[0, :], sun_pos[1, :], np.full(n_sun_points, z_bottom), 
+              color='orange', alpha=shadow_alpha, linewidth=shadow_lw)
+
+    # Create custom legend
+    legend_handles = [
+      Line2D([0], [0], color='b', linewidth=2, label='Spacecraft'),
+      Line2D([0], [0], color='gray', linewidth=2, label='Moon (Sim)'),
+      Line2D([0], [0], color='gray', linewidth=1, linestyle='--', label='Moon Orbit (Approx)'),
+      Line2D([0], [0], marker='>', color='w', markerfacecolor='white', markeredgecolor='black', 
+             markersize=10, markeredgewidth=2, linestyle='None', label='Initial'),
+      Line2D([0], [0], marker='s', color='w', markerfacecolor='white', markeredgecolor='black', 
+             markersize=10, markeredgewidth=2, linestyle='None', label='Final'),
+    ]
+    
+    # Add Sun to legend for ax1
+    if ax == ax1 and sun_pos is not None:
+      legend_handles.insert(1, Line2D([0], [0], color='orange', linewidth=2, label='Sun (Sim)'))
+      legend_handles.insert(2, Line2D([0], [0], color='orange', linewidth=1, linestyle='--', label='Sun Orbit (Approx)'))
+      
+    leg = ax.legend(handles=legend_handles, loc='upper left', fontsize=10, framealpha=0.9)
+    leg.get_frame().set_edgecolor('black')
+
+  # Add info text
+  fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=10, color='black',
            bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', alpha=0.9))
 
   plt.tight_layout(rect=(0.0, 0.06, 1.0, 0.95))
-  return fig
-
-
-def plot_ground_track(
-  result       : dict,
-  epoch_dt_utc : Optional[datetime.datetime] = None,
-  title_text   : str = "Ground Track",
-) -> Figure:
-  """
-  Plot ground track (latitude vs longitude) on a 2D map projection.
-  
-  Input:
-  ------
-    result : dict
-      Propagation result dictionary containing 'state' (6xN array) and 'plot_time_s'.
-    epoch_dt_utc : datetime, optional
-      Reference epoch (start time) for time conversion to ET.
-    title_text : str
-      Base title for the plot.
-      
-  Output:
-  -------
-    fig : matplotlib.figure.Figure
-      Figure object containing the ground track plot.
-  """
-  fig = plt.figure(figsize=(14, 8))
-  ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
-  ax.set_extent([-180, 180, -90, 90], crs=ccrs.PlateCarree())
-  ax.add_feature(cfeature.COASTLINE)
-  ax.add_feature(cfeature.BORDERS, linestyle=':', alpha=0.5)
-  gl = ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False, alpha=0.5, linestyle='--')
-  gl.top_labels = False
-  gl.right_labels = False
-  
-  # Extract J2000 state vectors
-  j2000_state   = result['state']
-  j2000_pos_vec = j2000_state[0:3, :]
-  time_s        = result['plot_time_s']
-  n_points      = j2000_state.shape[1]
-  
-  # Convert epoch to ET
-  if epoch_dt_utc is not None:
-    epoch_et = utc_to_et(epoch_dt_utc)
-  else:
-    epoch_et = 0.0
-  
-  # Transform each position to Earth-fixed frame
-  iau_earth_pos_vec = np.zeros((3, n_points))
-  for i in range(n_points):
-    epoch_et_i                 = epoch_et + time_s[i]
-    rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(epoch_et_i)
-    iau_earth_pos_vec[:, i]    = rot_mat_j2000_to_iau_earth @ j2000_pos_vec[:, i]
-    
-  # Compute geodetic coordinates
-  geo_coords = GeographicCoordinateConverter.pos_to_geodetic_array(iau_earth_pos_vec)
-  lat = geo_coords['latitude']  * CONVERTER.DEG_PER_RAD
-  lon = geo_coords['longitude'] * CONVERTER.DEG_PER_RAD
-  
-  # Handle longitude wrapping for plotting
-  # Split trajectory at discontinuities (where lon jumps by more than 180 deg)
-  lon_diff = np.abs(np.diff(lon))
-  split_indices = np.where(lon_diff > 180)[0] + 1
-  
-  # Split into segments
-  lat_segments = np.split(lat, split_indices)
-  lon_segments = np.split(lon, split_indices)
-  
-  # Plot each segment
-  plot_kwargs = {'transform': ccrs.PlateCarree()}
-
-  for lat_seg, lon_seg in zip(lat_segments, lon_segments):
-    ax.plot(lon_seg, lat_seg, 'b-', linewidth=1.5, **plot_kwargs)
-  
-  # Mark start and end points
-  ax.scatter([lon[0]], [lat[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Initial', **plot_kwargs)
-  ax.scatter([lon[-1]], [lat[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Final', **plot_kwargs)
-  
-  # Legend
-  leg = ax.legend(loc='upper right')
-  leg.get_frame().set_edgecolor('black')
-  
-  # Build info text for bottom of figure (consistent with 3D plots)
-  info_text = "Frame: IAU_EARTH (Earth-Fixed)"
-  if epoch_dt_utc is not None:
-    start_utc = epoch_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
-    end_time  = epoch_dt_utc + timedelta(seconds=time_s[-1])
-    end_utc   = end_time.strftime('%Y-%m-%d %H:%M:%S UTC')
-    info_text += f"  |  Initial: {start_utc}  |  Final: {end_utc}"
-  
-  # Add info text as figure text at bottom (consistent with 3D plots)
-  fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=11, color='black',
-           bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', alpha=0.9))
-  
-  # Set title using suptitle (will be overwritten by caller, but provides default)
-  fig.suptitle(title_text, fontsize=16)
-  
-  plt.tight_layout(rect=(0.0, 0.06, 1.0, 0.95))  # Leave space at bottom for info text and top for title
   return fig
 
 
@@ -1117,6 +1168,14 @@ def generate_3d_and_time_series_plots(
     fig_gt.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      Ground Track   : <figures_folderpath>/{filename}")
     plt.close(fig_gt)
+    
+    # 3D plot with Moon trajectory
+    fig_moon = plot_3d_trajectory_with_moon(result_high_fidelity_propagation, epoch=time_o_dt)
+    fig_moon.suptitle(f'3D with Moon - {object_name_display} - High-Fidelity', fontsize=16)
+    filename = f'3d_j2000_with_moon_high_fidelity_{name_lower}.png'
+    fig_moon.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+    print(f"      3D with Moon   : <figures_folderpath>/{filename}")
+    plt.close(fig_moon)
   
   # SGP4 plots
   if compare_tle and result_sgp4_propagation and result_sgp4_propagation.get('success'):
