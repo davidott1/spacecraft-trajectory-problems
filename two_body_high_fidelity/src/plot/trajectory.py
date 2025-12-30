@@ -573,7 +573,7 @@ def plot_3d_trajectories_earth_fixed(
   epoch_dt_utc : Optional[datetime.datetime] = None,
 ) -> Figure:
   """
-  Plot 3D position trajectory in Earth-fixed (IAU_EARTH) frame.
+  Plot 3D position and velocity trajectories in Earth-fixed (IAU_EARTH) frame.
   
   Input:
   ------
@@ -585,13 +585,14 @@ def plot_3d_trajectories_earth_fixed(
   Output:
   -------
     fig : matplotlib.figure.Figure
-      Figure object containing the 3D plot.
+      Figure object containing the 3D plots.
   """
-  fig = plt.figure(figsize=(12, 10))
+  fig = plt.figure(figsize=(18, 10))
   
   # Extract J2000 state vectors
   j2000_state   = result['state']
   j2000_pos_vec = j2000_state[0:3, :]
+  j2000_vel_vec = j2000_state[3:6, :]
   time_s        = result['plot_time_s']
   n_points      = j2000_state.shape[1]
   
@@ -601,14 +602,17 @@ def plot_3d_trajectories_earth_fixed(
   else:
     epoch_et = 0.0
   
-  # Transform each position to Earth-fixed frame
+  # Transform each position and velocity to Earth-fixed frame
   iau_earth_pos_vec = np.zeros((3, n_points))
+  iau_earth_vel_vec = np.zeros((3, n_points))
   for i in range(n_points):
     epoch_et_i = epoch_et + time_s[i]
     rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(epoch_et_i)
     iau_earth_pos_vec[:, i] = rot_mat_j2000_to_iau_earth @ j2000_pos_vec[:, i]
+    iau_earth_vel_vec[:, i] = rot_mat_j2000_to_iau_earth @ j2000_vel_vec[:, i]
   
   pos_x, pos_y, pos_z = iau_earth_pos_vec[0, :], iau_earth_pos_vec[1, :], iau_earth_pos_vec[2, :]
+  vel_x, vel_y, vel_z = iau_earth_vel_vec[0, :], iau_earth_vel_vec[1, :], iau_earth_vel_vec[2, :]
   
   # Build info string
   info_text = "Frame: IAU_EARTH (Earth-Fixed)"
@@ -619,7 +623,7 @@ def plot_3d_trajectories_earth_fixed(
     info_text += f"  |  Initial: {start_time_iso_utc}  |  Final: {end_time_iso_utc}"
   
   # Plot 3D position trajectory
-  ax = fig.add_subplot(111, projection='3d')
+  ax1 = fig.add_subplot(121, projection='3d')
   
   # Add Earth wireframe ellipsoid
   u       = np.linspace(0, 2 * np.pi, 24)
@@ -629,35 +633,35 @@ def plot_3d_trajectories_earth_fixed(
   x_earth = r_eq * np.outer(np.cos(u), np.sin(v))
   y_earth = r_eq * np.outer(np.sin(u), np.sin(v))
   z_earth = r_pol * np.outer(np.ones(np.size(u)), np.cos(v))
-  ax.plot_wireframe(x_earth, y_earth, z_earth, color='black', linewidth=0.5, alpha=1.0)
+  ax1.plot_wireframe(x_earth, y_earth, z_earth, color='black', linewidth=0.5, alpha=1.0)
   
-  ax.plot(pos_x, pos_y, pos_z, 'b-', linewidth=2.0)
-  ax.scatter([pos_x[0]], [pos_y[0]], [pos_z[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2)
-  ax.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2)
-  ax.set_xlabel('X (IAU_EARTH) [m]')
-  ax.set_ylabel('Y (IAU_EARTH) [m]')
-  ax.set_zlabel('Z (IAU_EARTH) [m]')
-  ax.grid(True)
-  ax.set_box_aspect([1,1,1])
+  ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=2.0)
+  ax1.scatter([pos_x[0]], [pos_y[0]], [pos_z[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2)
+  ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2)
+  ax1.set_xlabel('Pos-X [m]')
+  ax1.set_ylabel('Pos-Y [m]')
+  ax1.set_zlabel('Pos-Z [m]') # type: ignore
+  ax1.grid(True)
+  ax1.set_box_aspect([1,1,1]) # type: ignore
 
   # Set pane colors to white
-  ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax1.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax1.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax1.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
 
-  min_limit, max_limit = get_equal_limits(ax, buffer_fraction=0.25)
+  min_limit, max_limit = get_equal_limits(ax1, buffer_fraction=0.25)
   
-  ax.set_xlim([min_limit, max_limit])
-  ax.set_ylim([min_limit, max_limit])
-  ax.set_zlim([min_limit, max_limit])
+  ax1.set_xlim([min_limit, max_limit])
+  ax1.set_ylim([min_limit, max_limit])
+  ax1.set_zlim([min_limit, max_limit])
 
-  # Add shadows
+  # Add position trajectory shadows
   shadow_color = 'gray'
   shadow_alpha = 0.75
   shadow_lw    = 0.5
-  ax.plot(pos_x, pos_y, np.full_like(pos_z, min_limit), color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
-  ax.plot(pos_x, np.full_like(pos_y, max_limit), pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
-  ax.plot(np.full_like(pos_x, min_limit), pos_y, pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  ax1.plot(pos_x, pos_y, np.full_like(pos_z, min_limit), color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  ax1.plot(pos_x, np.full_like(pos_y, max_limit), pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  ax1.plot(np.full_like(pos_x, min_limit), pos_y, pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
 
   # Add Earth projection shadows (filled circles on planes)
   r_disk = np.linspace(0, r_eq, 2)
@@ -667,14 +671,36 @@ def plot_3d_trajectories_earth_fixed(
   V_disk = R_disk * np.sin(T_disk)
   earth_shadow_alpha = 0.1
 
-  # XY plane (z = min_limit)
-  ax.plot_surface(U_disk, V_disk, np.full_like(U_disk, min_limit), color='black', alpha=earth_shadow_alpha, shade=False)
+  ax1.plot_surface(U_disk, V_disk, np.full_like(U_disk, min_limit), color='black', alpha=earth_shadow_alpha, shade=False)
+  ax1.plot_surface(U_disk, np.full_like(U_disk, max_limit), V_disk, color='black', alpha=earth_shadow_alpha, shade=False)
+  ax1.plot_surface(np.full_like(U_disk, min_limit), U_disk, V_disk, color='black', alpha=earth_shadow_alpha, shade=False)
 
-  # XZ plane (y = max_limit)
-  ax.plot_surface(U_disk, np.full_like(U_disk, max_limit), V_disk, color='black', alpha=earth_shadow_alpha, shade=False)
+  # Plot 3D velocity trajectory
+  ax2 = fig.add_subplot(122, projection='3d')
+  ax2.plot(vel_x, vel_y, vel_z, 'r-', linewidth=2.0)
+  ax2.scatter([vel_x[0]], [vel_y[0]], [vel_z[0]], s=100, marker='>', facecolors='white', edgecolors='r', linewidths=2)
+  ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], s=100, marker='s', facecolors='white', edgecolors='r', linewidths=2)
+  ax2.set_xlabel('Vel-X [m/s]')
+  ax2.set_ylabel('Vel-Y [m/s]')
+  ax2.set_zlabel('Vel-Z [m/s]')
+  ax2.grid(True)
+  ax2.set_box_aspect([1,1,1]) # type: ignore
 
-  # YZ plane (x = min_limit)
-  ax.plot_surface(np.full_like(U_disk, min_limit), U_disk, V_disk, color='black', alpha=earth_shadow_alpha, shade=False)
+  # Set pane colors to white
+  ax2.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax2.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax2.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+
+  min_limit_vel, max_limit_vel = get_equal_limits(ax2, buffer_fraction=0.25)
+  
+  ax2.set_xlim([min_limit_vel, max_limit_vel])
+  ax2.set_ylim([min_limit_vel, max_limit_vel])
+  ax2.set_zlim([min_limit_vel, max_limit_vel])
+
+  # Add velocity trajectory shadows
+  ax2.plot(vel_x, vel_y, np.full_like(vel_z, min_limit_vel), color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  ax2.plot(vel_x, np.full_like(vel_y, max_limit_vel), vel_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  ax2.plot(np.full_like(vel_x, min_limit_vel), vel_y, vel_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
 
   # Legend
   legend_handles = [
