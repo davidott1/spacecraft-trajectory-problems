@@ -7,8 +7,9 @@ from datetime import datetime
 from types    import SimpleNamespace
 from typing   import Optional
 
-from src.input.loader        import load_supported_objects
-from src.utility.time_helper import parse_time
+from src.input.loader           import load_supported_objects
+from src.utility.time_helper    import parse_time
+from src.utility.string_helper  import sanitize_filename
 
 
 def print_input_configuration(
@@ -23,6 +24,7 @@ def print_input_configuration(
   gravity_harmonics_list     : list,
   two_body_gravity_model     : SimpleNamespace,
   include_srp                : bool,
+  auto_download              : bool,
 ) -> None:
   """
   Print the input configuration in a formatted table.
@@ -69,6 +71,7 @@ def print_input_configuration(
     'include_srp'                : False,
     'compare_jpl_horizons'       : False,
     'compare_tle'                : False,
+    'auto_download'              : False,
   }
   
   # Format values for display
@@ -91,6 +94,7 @@ def print_input_configuration(
     ('include_srp',            include_srp,                defaults['include_srp'],                include_srp                != defaults['include_srp']),
     ('compare_jpl_horizons',   compare_jpl_horizons,       defaults['compare_jpl_horizons'],       compare_jpl_horizons       != defaults['compare_jpl_horizons']),
     ('compare_tle',            compare_tle,                defaults['compare_tle'],                compare_tle                != defaults['compare_tle']),
+    ('auto_download',          auto_download,              defaults['auto_download'],              auto_download              != defaults['auto_download']),
   ]
   
   # Convert entries to strings for width calculation
@@ -184,6 +188,7 @@ def print_configuration(
     gravity_harmonics_list     = config.gravity_harmonics_list,
     two_body_gravity_model     = config.two_body_gravity_model,
     include_srp                = config.include_srp,
+    auto_download              = config.auto_download,
   )
   
   print_paths(config)
@@ -235,6 +240,7 @@ def build_config(
   third_bodies                   : Optional[list] = None,
   gravity_harmonics              : Optional[list] = None,
   include_srp                    : bool           = False,
+  auto_download                  : bool           = False,
   initial_state_source           : str            = 'jpl_horizons',
   gravity_harmonics_degree_order : Optional[list] = None,
   gravity_model_filename         : Optional[str]  = None,
@@ -342,7 +348,10 @@ def build_config(
       sv_data = yaml.safe_load(f)
       
     # Extract properties
-    object_name = sv_data.get('name', 'CustomObject')
+    object_name_display = sv_data.get('name', 'CustomObject')
+    
+    # Sanitize object name for filenames
+    object_name = sanitize_filename(object_name_display)
     
     # Ensure defaults for mass, drag, srp if not present
     if 'mass__kg' not in sv_data:
@@ -412,8 +421,9 @@ def build_config(
     # Get object properties
     obj_props = supported_objects[initial_state_norad_id]
 
-    # Get object name
-    object_name = obj_props.get('name', 'object_name')
+    # Get object name (original for display, sanitized for filenames)
+    object_name_display = obj_props.get('name', 'object_name')
+    object_name = sanitize_filename(object_name_display)
     
     # Update paths with correct name
     paths = setup_paths()
@@ -439,6 +449,7 @@ def build_config(
     # Parsed and calculated values
     obj_props                  = obj_props,
     object_name                = object_name,
+    object_name_display        = object_name_display,
     custom_state_vector        = custom_state_vector,
     time_o_dt                  = time_o_dt,
     time_f_dt                  = time_f_dt,
@@ -457,6 +468,7 @@ def build_config(
     gravity_harmonics_list     = gravity_harmonics_list,
     two_body_gravity_model     = two_body_gravity_model,
     include_srp                = include_srp,
+    auto_download              = auto_download,
     initial_state_source       = initial_state_source,
     output_folderpath          = paths['output_folderpath'],
     timestamp_folderpath       = paths['timestamp_folderpath'],

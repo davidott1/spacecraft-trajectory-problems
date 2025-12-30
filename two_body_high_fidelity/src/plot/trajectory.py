@@ -772,17 +772,22 @@ def plot_ground_track(
   leg = ax.legend(loc='upper right')
   leg.get_frame().set_edgecolor('black')
   
-  # Info text
-  info_text = title_text
+  # Build info text for bottom of figure (consistent with 3D plots)
+  info_text = "Frame: IAU_EARTH (Earth-Fixed)"
   if epoch_dt_utc is not None:
-    start_utc  = epoch_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
-    end_time   = epoch_dt_utc + timedelta(seconds=time_s[-1])
-    end_utc    = end_time.strftime('%Y-%m-%d %H:%M:%S UTC')
-    info_text += f"  |  {start_utc} to {end_utc}"
+    start_utc = epoch_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
+    end_time  = epoch_dt_utc + timedelta(seconds=time_s[-1])
+    end_utc   = end_time.strftime('%Y-%m-%d %H:%M:%S UTC')
+    info_text += f"  |  Initial: {start_utc}  |  Final: {end_utc}"
   
-  ax.set_title(info_text, fontsize=12)
+  # Add info text as figure text at bottom (consistent with 3D plots)
+  fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=11, color='black',
+           bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', alpha=0.9))
   
-  plt.tight_layout()
+  # Set title using suptitle (will be overwritten by caller, but provides default)
+  fig.suptitle(title_text, fontsize=16)
+  
+  plt.tight_layout(rect=(0.0, 0.06, 1.0, 0.95))  # Leave space at bottom for info text and top for title
   return fig
 
 
@@ -795,6 +800,7 @@ def generate_error_plots(
   compare_jpl_horizons             : bool,
   compare_tle                      : bool,
   object_name                      : str = "object",
+  object_name_display              : str = "Object",
 ) -> None:
   """
   Generate and save error comparison plots.
@@ -834,7 +840,7 @@ def generate_error_plots(
       epoch       = time_o_dt,
       use_ric     = True,
     )
-    title = f'{object_name}: RIC Position/Velocity Errors: High-Fidelity Relative To JPL Horizons'
+    title = f'RIC Errors: High-Fidelity vs JPL Horizons - {object_name_display}'
     fig_err_ts.suptitle(title, fontsize=14)
     filename = f'error_timeseries_high_fidelity_rel_jpl_horizons_{name_lower}.png'
     fig_err_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
@@ -852,7 +858,7 @@ def generate_error_plots(
       epoch       = time_o_dt,
       use_ric     = True,
     )
-    title = f'{object_name}: RIC Position/Velocity Errors: High-Fidelity Relative To SGP4'
+    title = f'RIC Errors: High-Fidelity vs SGP4 - {object_name_display}'
     fig_err_ts.suptitle(title, fontsize=14)
     filename = f'error_timeseries_high_fidelity_rel_sgp4_{name_lower}.png'
     fig_err_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
@@ -876,7 +882,7 @@ def generate_error_plots(
       epoch       = time_o_dt,
       use_ric     = True,
     )
-    title = f'{object_name}: RIC Position/Velocity Errors: SGP4 Relative To JPL Horizons'
+    title = f'RIC Errors: SGP4 vs JPL Horizons - {object_name_display}'
     fig_err_ts.suptitle(title, fontsize=14)
     filename = f'error_timeseries_sgp4_rel_jpl_horizons_{name_lower}.png'
     fig_err_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
@@ -894,6 +900,7 @@ def generate_3d_and_time_series_plots(
   compare_jpl_horizons             : bool,
   compare_tle                      : bool,
   object_name                      : str = "object",
+  object_name_display              : str = "Object",
 ) -> None:
   """
   Generate and save 3D trajectory and time series plots.
@@ -915,7 +922,9 @@ def generate_3d_and_time_series_plots(
     compare_tle : bool
       Flag to enable comparison with TLE/SGP4.
     object_name : str
-      Name of the object for plot titles and filenames.
+      Sanitized name of the object for filenames.
+    object_name_display : str
+      Original name of the object for plot titles.
       
   Output:
   -------
@@ -931,14 +940,14 @@ def generate_3d_and_time_series_plots(
     print("    JPL-Horizons-Ephemeris Plots")
 
     fig1 = plot_3d_trajectories(result_jpl_horizons_ephemeris, epoch=time_o_dt, frame="J2000")
-    fig1.suptitle(f'{object_name} Orbit - JPL Horizons - 3D', fontsize=16)
+    fig1.suptitle(f'3D Inertial - {object_name_display} - JPL Horizons', fontsize=16)
     filename = f'3d_j2000_jpl_horizons_{name_lower}.png'
     fig1.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      3D Inertial    : <figures_folderpath>/{filename}")
     plt.close(fig1)
     
     fig2 = plot_time_series(result_jpl_horizons_ephemeris, epoch=time_o_dt)
-    fig2.suptitle(f'{object_name} Orbit - JPL Horizons - Time Series', fontsize=16)
+    fig2.suptitle(f'Time Series - {object_name_display} - JPL Horizons', fontsize=16)
     filename = f'timeseries_jpl_horizons_{name_lower}.png'
     fig2.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      Time Series    : <figures_folderpath>/{filename}")
@@ -946,14 +955,14 @@ def generate_3d_and_time_series_plots(
     
     # Earth-fixed 3D plot for Horizons
     fig_ef = plot_3d_trajectories_earth_fixed(result_jpl_horizons_ephemeris, epoch_dt_utc=time_o_dt)
-    fig_ef.suptitle(f'{object_name} Orbit - JPL Horizons - Earth-Fixed 3D', fontsize=16)
+    fig_ef.suptitle(f'3D Earth-Fixed - {object_name_display} - JPL Horizons', fontsize=16)
     filename = f'3d_iau_earth_jpl_horizons_{name_lower}.png'
     fig_ef.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      3D Earth-Fixed : <figures_folderpath>/{filename}")
     plt.close(fig_ef)
     
     # Ground track plot for Horizons
-    gt_title = f'{object_name} - JPL Horizons - Ground Track'
+    gt_title = f'Ground Track - {object_name_display} - JPL Horizons'
     fig_gt = plot_ground_track(result_jpl_horizons_ephemeris, epoch_dt_utc=time_o_dt, title_text=gt_title)
     filename = f'groundtrack_jpl_horizons_{name_lower}.png'
     fig_gt.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
@@ -965,14 +974,14 @@ def generate_3d_and_time_series_plots(
     print("    High-Fidelity-Model Plots")
 
     fig3 = plot_3d_trajectories(result_high_fidelity_propagation, epoch=time_o_dt, frame="J2000")
-    fig3.suptitle(f'{object_name} Orbit - High-Fidelity Model - 3D', fontsize=16)
+    fig3.suptitle(f'3D Inertial - {object_name_display} - High-Fidelity', fontsize=16)
     filename = f'3d_j2000_high_fidelity_{name_lower}.png'
     fig3.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      3D Inertial    : <figures_folderpath>/{filename}")
     plt.close(fig3)
     
     fig4 = plot_time_series(result_high_fidelity_propagation, epoch=time_o_dt)
-    fig4.suptitle(f'{object_name} Orbit - High-Fidelity Model - Time Series', fontsize=16)
+    fig4.suptitle(f'Time Series - {object_name_display} - High-Fidelity', fontsize=16)
     filename = f'timeseries_high_fidelity_{name_lower}.png'
     fig4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      Time Series    : <figures_folderpath>/{filename}")
@@ -980,14 +989,14 @@ def generate_3d_and_time_series_plots(
     
     # Earth-fixed 3D plot
     fig_ef = plot_3d_trajectories_earth_fixed(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt)
-    fig_ef.suptitle(f'{object_name} Orbit - High-Fidelity Model - Earth-Fixed 3D', fontsize=16)
+    fig_ef.suptitle(f'3D Earth-Fixed - {object_name_display} - High-Fidelity', fontsize=16)
     filename = f'3d_iau_earth_high_fidelity_{name_lower}.png'
     fig_ef.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      3D Earth-Fixed : <figures_folderpath>/{filename}")
     plt.close(fig_ef)
     
     # Ground track plot
-    gt_title = f'{object_name} - High-Fidelity Model - Ground Track'
+    gt_title = f'Ground Track - {object_name_display} - High-Fidelity'
     fig_gt = plot_ground_track(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt, title_text=gt_title)
     filename = f'groundtrack_high_fidelity_{name_lower}.png'
     fig_gt.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
@@ -1000,7 +1009,7 @@ def generate_3d_and_time_series_plots(
     
     # 3D trajectory plot
     fig_sgp4_3d = plot_3d_trajectories(result_sgp4_propagation, epoch=time_o_dt, frame="J2000")
-    fig_sgp4_3d.suptitle(f'{object_name} Orbit - SGP4 Model - 3D', fontsize=16)
+    fig_sgp4_3d.suptitle(f'3D Inertial - {object_name_display} - SGP4', fontsize=16)
     filename = f'3d_j2000_sgp4_{name_lower}.png'
     fig_sgp4_3d.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      3D          : <figures_folderpath>/{filename}")
@@ -1008,7 +1017,7 @@ def generate_3d_and_time_series_plots(
     
     # Time series plot
     fig_sgp4_ts = plot_time_series(result_sgp4_propagation, epoch=time_o_dt)
-    fig_sgp4_ts.suptitle(f'{object_name} Orbit - SGP4 Model - Time Series', fontsize=16)
+    fig_sgp4_ts.suptitle(f'Time Series - {object_name_display} - SGP4', fontsize=16)
     filename = f'timeseries_sgp4_{name_lower}.png'
     fig_sgp4_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      Time Series : <figures_folderpath>/{filename}")
@@ -1023,6 +1032,7 @@ def generate_plots(
   compare_jpl_horizons             : bool = False,
   compare_tle                      : bool = False,
   object_name                      : str  = "object",
+  object_name_display              : str  = "Object",
 ) -> None:
   """
   Generate and save all simulation plots.
@@ -1044,7 +1054,9 @@ def generate_plots(
     compare_tle : bool
       Flag to enable comparison with TLE/SGP4.
     object_name : str
-      Name of the object for plot titles and filenames.
+      Sanitized name of the object for filenames.
+    object_name_display : str
+      Original name of the object for plot titles.
       
   Output:
   -------
@@ -1063,6 +1075,7 @@ def generate_plots(
     compare_jpl_horizons             = compare_jpl_horizons,
     compare_tle                      = compare_tle,
     object_name                      = object_name,
+    object_name_display              = object_name_display,
   )
     
   # Generate error plots only if a comparison was requested
@@ -1076,4 +1089,5 @@ def generate_plots(
       compare_jpl_horizons             = compare_jpl_horizons,
       compare_tle                      = compare_tle,
       object_name                      = object_name,
+      object_name_display              = object_name_display,
     )

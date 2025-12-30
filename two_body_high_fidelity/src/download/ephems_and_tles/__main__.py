@@ -28,44 +28,13 @@ from typing                 import List, Dict, Tuple, Optional, Union
 #   /local_absolute_path/two_body_high_fidelity/
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent  #
 
-from src.model.constants import CONVERTER
-from src.input.cli       import parse_time
-from src.input.loader    import load_supported_objects
+from src.model.constants       import CONVERTER
+from src.input.cli             import parse_time
+from src.input.loader          import load_supported_objects
+from src.utility.string_helper import sanitize_filename
 
 EPHEM_OUTPUT_DIR = PROJECT_ROOT / 'data' / 'ephems'
 TLE_OUTPUT_DIR   = PROJECT_ROOT / 'data' / 'tles'
-
-
-def sanitize_filename(
-  name : str,
-) -> str:
-  """
-  Sanitize a string for use in filenames.
-  Converts to lowercase, replaces spaces and special characters with underscores.
-  
-  Example: "GOES-17 - GOES-S" -> "goes_17_goes_s"
-  
-  Input:
-  ------
-  name : str
-    Original name string.
-  
-  Output:
-  -------
-  str:
-    Sanitized filename-safe string.
-  """
-  # Convert to lowercase
-  result = name.lower()
-  # Replace common special characters with underscores
-  for char in [' ', '-', '(', ')', '[', ']', '/', '\\', '.', ',', "'", '"']:
-    result = result.replace(char, '_')
-  # Remove consecutive underscores
-  while '__' in result:
-    result = result.replace('__', '_')
-  # Remove leading/trailing underscores
-  result = result.strip('_')
-  return result
 
 
 def get_satellite_name(
@@ -294,30 +263,127 @@ def download_horizons_ephemeris(
   print(f"Time range: {start_time} to {end_time}")
   print(f"Time step: {step}")
   
-  # Determine Horizons ID
-  # Check if we have a specific NAIF ID in supported_objects
+  # Load supported objects config
   supported_objects = load_supported_objects()
   norad_id_str = str(norad_id)
   
+  # Get object properties if available
+  obj_props = supported_objects.get(norad_id_str, {})
+  naif_id = obj_props.get('naif_id', None)
+  obj_name = obj_props.get('name', None)
+  
   # Default to TLE-based ID for Horizons (negative 100000 + norad)
-  sat_id = f"-{100000 + norad_id}"
+  default_sat_id = f"-{100000 + norad_id}"
   
-  if norad_id_str in supported_objects:
-    obj_props = supported_objects[norad_id_str]
-    if 'naif_id' in obj_props and obj_props['naif_id'] is not None:
-      sat_id = str(obj_props['naif_id'])
-      print(f"Using mapped NAIF ID {sat_id} for Horizons query")
-
-  obj = Horizons(
-    id       = sat_id,
-    location = '@399',  # Earth center (geocentric)
-    epochs   = {'start' : start_time.strftime('%Y-%m-%d %H:%M'),
-                'stop'  : end_time.strftime('%Y-%m-%d %H:%M'),
-                'step'  : step}
-  )
+  # Build epochs dict for Horizons query
+  epochs_dict = {
+    'start' : start_time.strftime('%Y-%m-%d %H:%M'),
+    'stop'  : end_time.strftime('%Y-%m-%d %H:%M'),
+    'step'  : step
+  }
   
-  # Get vectors in ICRF/J2000 equatorial frame
-  vectors = obj.vectors(refplane='earth', cache=False)
+  vectors = None
+  
+  # Strategy 1: Try NAIF ID first (if available)
+  if naif_id is not None:
+    sat_id = str(naif_id)
+    print(f"Trying NAIF ID '{sat_id}' for Horizons query...")
+    try:
+      obj = Horizons(
+        id       = sat_id,
+        location = '@399',
+        epochs   = epochs_dict
+      )
+      vectors = obj.vectors(refplane='earth', cache=False)
+      print(f"  Success: Using NAIF ID {sat_id}")
+    except ValueError as e:
+      error_msg = str(e)
+      print(f"  Failed with NAIF ID: {error_msg[:100]}...")
+      
+      # Check if it's an ambiguous target error
+      if 'Ambiguous target name' in error_msg:
+        # Try to extract the correct ID from the error message
+        # Look for our naif_id in the list
+        lines = error_msg.split('\n')
+        for line in lines:
+          # Lines with IDs look like: "      -64  OSIRIS-REx (spacecraft)..."
+          line_stripped = line.strip()
+          if line_stripped.startswith(str(naif_id)) or line_stripped.startswith(f"-{abs(int(naif_id))}"):
+            # Found our ID, extract the full name
+            parts = line_stripped.split()
+            if len(parts) >= 2:
+              # Try querying with the exact ID
+              exact_id = parts[0]
+              print(f"  Retrying with exact ID '{exact_id}' from disambiguation list...")
+              try:
+                obj = Horizons(
+                  id       = exact_id,
+                  location = '@399',
+                  epochs   = epochs_dict
+                )
+                vectors = obj.vectors(refplane='earth', cache=False)
+                print(f"  Success: Using exact ID {exact_id}")
+              except Exception as e2:
+                print(f"  Failed with exact ID: {e2}")
+            break
+  
+  # Strategy 2: Try object name (if NAIF ID failed or unavailable)
+  if vectors is None and obj_name is not None:
+    print(f"Trying object name '{obj_name}' for Horizons query...")
+    try:
+      obj = Horizons(
+        id       = obj_name,
+        location = '@399',
+        epochs   = epochs_dict
+      )
+      vectors = obj.vectors(refplane='earth', cache=False)
+      print(f"  Success: Using name '{obj_name}'")
+    except ValueError as e:
+      error_msg = str(e)
+      print(f"  Failed with name: {error_msg[:100]}...")
+      
+      # Check if it's an ambiguous target error and we have a NAIF ID to disambiguate
+      if 'Ambiguous target name' in error_msg and naif_id is not None:
+        # Parse the error to find the ID matching our naif_id
+        lines = error_msg.split('\n')
+        for line in lines:
+          line_stripped = line.strip()
+          # Check if this line contains our NAIF ID
+          if line_stripped.startswith(str(naif_id)) or line_stripped.startswith(f"{naif_id} "):
+            parts = line_stripped.split()
+            if len(parts) >= 1:
+              exact_id = parts[0]
+              print(f"  Found matching ID '{exact_id}' in disambiguation list, retrying...")
+              try:
+                obj = Horizons(
+                  id       = exact_id,
+                  location = '@399',
+                  epochs   = epochs_dict
+                )
+                vectors = obj.vectors(refplane='earth', cache=False)
+                print(f"  Success: Using disambiguated ID {exact_id}")
+              except Exception as e2:
+                print(f"  Failed with disambiguated ID: {e2}")
+            break
+  
+  # Strategy 3: Fall back to default TLE-based ID
+  if vectors is None:
+    print(f"Trying default TLE-based ID '{default_sat_id}' for Horizons query...")
+    try:
+      obj = Horizons(
+        id       = default_sat_id,
+        location = '@399',
+        epochs   = epochs_dict
+      )
+      vectors = obj.vectors(refplane='earth', cache=False)
+      print(f"  Success: Using default ID {default_sat_id}")
+    except Exception as e:
+      # All strategies failed
+      raise RuntimeError(
+        f"All Horizons query strategies failed for NORAD {norad_id}. "
+        f"Tried NAIF ID: {naif_id}, Name: {obj_name}, Default: {default_sat_id}. "
+        f"Last error: {e}"
+      )
   
   # Add UTC time columns manually (TDB to UTC conversion)
   tdb_times = Time(vectors['datetime_jd'], format='jd', scale='tdb')

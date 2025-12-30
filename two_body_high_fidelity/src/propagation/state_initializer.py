@@ -122,7 +122,7 @@ def get_initial_state(
     print(f"    RAAN :  {coe['raan']*CONVERTER.DEG_PER_RAD:19.12e} deg")
     print(f"    AOP  :  {coe['aop' ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
     print(f"    TA   :  {coe['ta'  ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    EA   :  {coe['ea'  ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
+    # print(f"    EA   :  {coe['ea'  ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
     print(f"    MA   :  {coe['ma'  ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
     return horizons_initial_state
 
