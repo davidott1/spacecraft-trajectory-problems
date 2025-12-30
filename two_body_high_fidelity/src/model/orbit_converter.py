@@ -1170,7 +1170,7 @@ class GeographicCoordinateConverter:
     -------
       coords : dict
         Dictionary containing:
-        - latitude : float - Geodetic latitude [rad]
+        - latitude  : float - Geodetic latitude [rad]
         - longitude : float - Longitude [rad]
         - altitude  : float - Altitude above WGS84 ellipsoid [m]
     """
