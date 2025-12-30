@@ -644,9 +644,14 @@ def plot_time_series_error(
   ax_ta.grid(True)
   ax_ta.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
 
-  # Add UTC time axis if epoch is not None
+  # Add UTC time axis if epoch is provided
   if epoch is not None:
-    add_utc_time_axis(ax_pos, epoch, time_ref[-1])
+    # Only add UTC time to top row axes
+    top_row_axes = [ax_pos, ax_sma]
+    max_time = time[-1]
+    
+    for ax in top_row_axes:
+      add_utc_time_axis(ax, epoch, max_time)
 
   # Align y-axis labels
   fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_aop, ax_ta])
@@ -942,9 +947,8 @@ def plot_3d_trajectory_with_moon(
   
   # Create subplots
   ax_sun = fig.add_subplot(131, projection='3d')
-  ax1 = fig.add_subplot(132, projection='3d')
-  ax2 = fig.add_subplot(133, projection='3d')
-  axes = [ax1, ax2]
+  ax_sun_dup = fig.add_subplot(132, projection='3d')
+  ax_earth = fig.add_subplot(133, projection='3d')
   
   # Pre-calculate Earth wireframe ellipsoid
   u       = np.linspace(0, 2 * np.pi, 24)
@@ -1102,207 +1106,98 @@ def plot_3d_trajectory_with_moon(
       # If SPICE kernels aren't loaded or other error, skip Moon/Sun trajectory
       pass
 
-  # Plot Heliocentric view (ax_sun)
-  ax_sun.set_title("Heliocentric J2000 (Sun-Centered)")
-  
-  # Plot Sun
-  ax_sun.scatter([0], [0], [0], s=300, color='orange', edgecolors='orange', label='Sun')
-  
-  if earth_orbit_helio is not None:
-      # Plot Orbit
-      ax_sun.plot(earth_orbit_helio[0, :], earth_orbit_helio[1, :], earth_orbit_helio[2, :],
-                  color='black', linestyle='--', linewidth=1, alpha=0.6, label='Earth Orbit')
+  # Plot Heliocentric view (ax_sun and ax_sun_dup)
+  for ax in [ax_sun, ax_sun_dup]:
+      ax.set_title("Heliocentric J2000 (Sun-Centered)")
       
-      # Plot Earth Initial
-      ax_sun.scatter([earth_pos_helio_init[0]], [earth_pos_helio_init[1]], [earth_pos_helio_init[2]],
-                     color='black', s=100, marker='>', label='Earth (Initial)')
-                     
-      # Plot Earth Final
-      if earth_pos_helio_final is not None:
-          ax_sun.scatter([earth_pos_helio_final[0]], [earth_pos_helio_final[1]], [earth_pos_helio_final[2]],
-                         color='black', s=100, marker='s', label='Earth (Final)')
-  
-  if moon_pos_helio is not None:
-      # Plot Moon Trajectory
-      ax_sun.plot(moon_pos_helio[0, :], moon_pos_helio[1, :], moon_pos_helio[2, :],
-                  color='gray', linewidth=1.0, alpha=0.8, label='Moon')
-
-  if sc_pos_helio is not None:
-      # Plot Spacecraft Trajectory
-      ax_sun.plot(sc_pos_helio[0, :], sc_pos_helio[1, :], sc_pos_helio[2, :],
-                  color='b', linewidth=1.5, label='Spacecraft')
+      # Plot Sun
+      ax.scatter([0], [0], [0], s=300, color='orange', edgecolors='orange', label='Sun')
       
-      # Plot Spacecraft Initial
-      ax_sun.scatter([sc_pos_helio[0, 0]], [sc_pos_helio[1, 0]], [sc_pos_helio[2, 0]],
-                     s=80, marker='>', facecolors='white', edgecolors='b', zorder=10)
-      
-      # Plot Spacecraft Final
-      ax_sun.scatter([sc_pos_helio[0, -1]], [sc_pos_helio[1, -1]], [sc_pos_helio[2, -1]],
-                     s=80, marker='s', facecolors='white', edgecolors='b', zorder=10)
-  
-  ax_sun.set_xlabel('X [m]')
-  ax_sun.set_ylabel('Y [m]')
-  ax_sun.set_zlabel('Z [m]') # type: ignore
-  ax_sun.grid(True)
-  
-  # Custom Legend for ax_sun
-  legend_handles_sun = [
-      Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markeredgecolor='orange', markersize=10, linestyle='None', label='Sun'),
-      Line2D([0], [0], color='black', linestyle='--', linewidth=1, label='Earth Orbit'),
-      Line2D([0], [0], color='gray', linewidth=1, label='Moon'),
-      Line2D([0], [0], color='b', linewidth=1.5, label='Spacecraft'),
-      Line2D([0], [0], marker='>', color='w', markerfacecolor='white', markeredgecolor='black', 
-             markersize=10, markeredgewidth=2, linestyle='None', label='Initial'),
-      Line2D([0], [0], marker='s', color='w', markerfacecolor='white', markeredgecolor='black', 
-             markersize=10, markeredgewidth=2, linestyle='None', label='Final'),
-  ]
-  leg_sun = ax_sun.legend(handles=legend_handles_sun, loc='upper right', fontsize=10, framealpha=0.9)
-  leg_sun.get_frame().set_edgecolor('black')
-  
-  # Set pane colors to white
-  ax_sun.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax_sun.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax_sun.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  
-  # Set limits for heliocentric plot (Variable limits with equal scaling)
-  # Collect all data points
-  xs_sun = [0.0] # Sun at origin
-  ys_sun = [0.0]
-  zs_sun = [0.0]
-  
-  if earth_orbit_helio is not None:
-      xs_sun.extend(earth_orbit_helio[0, :])
-      ys_sun.extend(earth_orbit_helio[1, :])
-      zs_sun.extend(earth_orbit_helio[2, :])
-      
-  if sc_pos_helio is not None:
-      xs_sun.extend(sc_pos_helio[0, :])
-      ys_sun.extend(sc_pos_helio[1, :])
-      zs_sun.extend(sc_pos_helio[2, :])
-
-  if moon_pos_helio is not None:
-      xs_sun.extend(moon_pos_helio[0, :])
-      ys_sun.extend(moon_pos_helio[1, :])
-      zs_sun.extend(moon_pos_helio[2, :])
-
-  # Convert to numpy arrays for min/max
-  all_x_sun = np.array(xs_sun)
-  all_y_sun = np.array(ys_sun)
-  all_z_sun = np.array(zs_sun)
-  
-  x_min, x_max = np.min(all_x_sun), np.max(all_x_sun)
-  y_min, y_max = np.min(all_y_sun), np.max(all_y_sun)
-  z_min, z_max = np.min(all_z_sun), np.max(all_z_sun)
-  
-  # Add buffer
-  buffer = 0.1
-  dx = x_max - x_min
-  dy = y_max - y_min
-  dz = z_max - z_min
-  
-  # Avoid zero range
-  if dx == 0: dx = 1.0
-  if dy == 0: dy = 1.0
-  if dz == 0: dz = 1.0
-  
-  ax_sun.set_xlim([x_min - buffer*dx, x_max + buffer*dx])
-  ax_sun.set_ylim([y_min - buffer*dy, y_max + buffer*dy])
-  ax_sun.set_zlim([z_min - buffer*dz, z_max + buffer*dz]) # type: ignore
-  
-  # Set box aspect to match data range ratios (maintains equal scale)
-  ax_sun.set_box_aspect((float(dx), float(dy), float(dz))) # type: ignore
-
-  # Plot on both axes
-  for ax in axes:
-    # Add Earth wireframe ellipsoid
-    ax.plot_wireframe(x_earth, y_earth, z_earth, color='blue', linewidth=0.5, alpha=0.6)
-    
-    # Plot spacecraft trajectory
-    ax.plot(pos_x, pos_y, pos_z, 'b-', linewidth=2.0, label='Spacecraft')
-    ax.scatter([pos_x[0]], [pos_y[0]], [pos_z[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, zorder=5)
-    ax.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, zorder=5)
-    
-    if moon_pos is not None:
-      # Plot Moon trajectory segment
-      ax.plot(moon_pos[0, :], moon_pos[1, :], moon_pos[2, :], 
-              color='gray', linewidth=2.0, alpha=0.8, label='Moon (Sim)')
-      
-      # Add Moon position markers (initial and final)
-      ax.scatter([moon_pos[0, 0]], [moon_pos[1, 0]], [moon_pos[2, 0]], 
-                 s=100, marker='>', facecolors='white', edgecolors='gray', linewidths=2, zorder=5)
-      ax.scatter([moon_pos[0, -1]], [moon_pos[1, -1]], [moon_pos[2, -1]], 
-                 s=100, marker='s', facecolors='white', edgecolors='gray', linewidths=2, zorder=5)
-      
-      # Add Moon sphere at final position
-      if x_moon_sphere is not None:
-        ax.plot_wireframe(x_moon_sphere, y_moon_sphere, z_moon_sphere, color='gray', linewidth=0.3, alpha=0.5)
-      
-      # Plot full orbit as a thin dashed line
-      if moon_orbit_full is not None:
-        ax.plot(moon_orbit_full[0, :], moon_orbit_full[1, :], moon_orbit_full[2, :],
-                color='gray', linewidth=1.0, linestyle='--', alpha=0.5, label='Moon Orbit (Approx)')
-    
-    # Plot Sun only on left subplot (ax1)
-    if ax == ax1 and sun_pos is not None:
-      ax.plot(sun_pos[0, :], sun_pos[1, :], sun_pos[2, :], 
-              color='orange', linewidth=2.0, alpha=0.8, label='Sun (Sim)')
-      
-      # Add Sun position markers
-      ax.scatter([sun_pos[0, 0]], [sun_pos[1, 0]], [sun_pos[2, 0]], 
-                 s=100, marker='>', facecolors='white', edgecolors='orange', linewidths=2, zorder=5)
-      ax.scatter([sun_pos[0, -1]], [sun_pos[1, -1]], [sun_pos[2, -1]], 
-                 s=100, marker='s', facecolors='white', edgecolors='orange', linewidths=2, zorder=5)
-      
-      # Plot full Sun orbit
-      if sun_orbit_full is not None:
-        ax.plot(sun_orbit_full[0, :], sun_orbit_full[1, :], sun_orbit_full[2, :],
-                color='orange', linewidth=1.0, linestyle='--', alpha=0.5, label='Sun Orbit (Approx)')
-    
-    ax.set_xlabel('Pos-X [m]')
-    ax.set_ylabel('Pos-Y [m]')
-    ax.set_zlabel('Pos-Z [m]')  # type: ignore
-    ax.grid(True)
-
-    # Set pane colors to white
-    ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-    ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-    ax.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-
-       # Configure limits and aspect ratio
-    z_bottom = 0.0
-    
-    if ax == ax1:
-      # Left subplot: Independent limits but equal scale (non-cubic box)
-      # Collect all data points to determine limits
-      xs = [x_earth.flatten(), pos_x]
-      ys = [y_earth.flatten(), pos_y]
-      zs = [z_earth.flatten(), pos_z]
-      
-      if moon_pos is not None:
-        xs.append(moon_pos[0, :])
-        ys.append(moon_pos[1, :])
-        zs.append(moon_pos[2, :])
-        if moon_orbit_full is not None:
-          xs.append(moon_orbit_full[0, :])
-          ys.append(moon_orbit_full[1, :])
-          zs.append(moon_orbit_full[2, :])
+      if earth_orbit_helio is not None:
+          # Plot Orbit
+          ax.plot(earth_orbit_helio[0, :], earth_orbit_helio[1, :], earth_orbit_helio[2, :],
+                      color='black', linestyle='--', linewidth=1, alpha=0.6, label='Earth Orbit')
           
-      if sun_pos is not None:
-        xs.append(sun_pos[0, :])
-        ys.append(sun_pos[1, :])
-        zs.append(sun_pos[2, :])
-        if sun_orbit_full is not None:
-          xs.append(sun_orbit_full[0, :])
-          ys.append(sun_orbit_full[1, :])
-          zs.append(sun_orbit_full[2, :])
+          # Plot Earth Initial
+          ax.scatter([earth_pos_helio_init[0]], [earth_pos_helio_init[1]], [earth_pos_helio_init[2]],
+                        color='black', s=100, marker='>', label='Earth (Initial)')
+                        
+          # Plot Earth Final
+          if earth_pos_helio_final is not None:
+              ax.scatter([earth_pos_helio_final[0]], [earth_pos_helio_final[1]], [earth_pos_helio_final[2]],
+                            color='black', s=100, marker='s', label='Earth (Final)')
       
-      all_x = np.concatenate(xs)
-      all_y = np.concatenate(ys)
-      all_z = np.concatenate(zs)
+      if moon_pos_helio is not None:
+          # Plot Moon Trajectory
+          ax.plot(moon_pos_helio[0, :], moon_pos_helio[1, :], moon_pos_helio[2, :],
+                      color='gray', linewidth=1.0, alpha=0.8, label='Moon')
+
+      if sc_pos_helio is not None:
+          # Plot Spacecraft Trajectory
+          ax.plot(sc_pos_helio[0, :], sc_pos_helio[1, :], sc_pos_helio[2, :],
+                      color='b', linewidth=1.5, label='Spacecraft')
+          
+          # Plot Spacecraft Initial
+          ax.scatter([sc_pos_helio[0, 0]], [sc_pos_helio[1, 0]], [sc_pos_helio[2, 0]],
+                        s=80, marker='>', facecolors='white', edgecolors='b', zorder=10)
+          
+          # Plot Spacecraft Final
+          ax.scatter([sc_pos_helio[0, -1]], [sc_pos_helio[1, -1]], [sc_pos_helio[2, -1]],
+                        s=80, marker='s', facecolors='white', edgecolors='b', zorder=10)
       
-      x_min, x_max = np.min(all_x), np.max(all_x)
-      y_min, y_max = np.min(all_y), np.max(all_y)
-      z_min, z_max = np.min(all_z), np.max(all_z)
+      ax.set_xlabel('X [m]')
+      ax.set_ylabel('Y [m]')
+      ax.set_zlabel('Z [m]') # type: ignore
+      ax.grid(True)
+      
+      # Custom Legend
+      legend_handles_sun = [
+          Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markeredgecolor='orange', markersize=10, linestyle='None', label='Sun'),
+          Line2D([0], [0], color='black', linestyle='--', linewidth=1, label='Earth Orbit'),
+          Line2D([0], [0], color='gray', linewidth=1, label='Moon'),
+          Line2D([0], [0], color='b', linewidth=1.5, label='Spacecraft'),
+          Line2D([0], [0], marker='>', color='w', markerfacecolor='white', markeredgecolor='black', 
+                markersize=10, markeredgewidth=2, linestyle='None', label='Initial'),
+          Line2D([0], [0], marker='s', color='w', markerfacecolor='white', markeredgecolor='black', 
+                markersize=10, markeredgewidth=2, linestyle='None', label='Final'),
+      ]
+      leg_sun = ax.legend(handles=legend_handles_sun, loc='upper right', fontsize=10, framealpha=0.9)
+      leg_sun.get_frame().set_edgecolor('black')
+      
+      # Set pane colors to white
+      ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+      ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+      ax.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+      
+      # Set limits for heliocentric plot (Variable limits with equal scaling)
+      # Collect all data points
+      xs_sun = [0.0] # Sun at origin
+      ys_sun = [0.0]
+      zs_sun = [0.0]
+      
+      if earth_orbit_helio is not None:
+          xs_sun.extend(earth_orbit_helio[0, :])
+          ys_sun.extend(earth_orbit_helio[1, :])
+          zs_sun.extend(earth_orbit_helio[2, :])
+          
+      if sc_pos_helio is not None:
+          xs_sun.extend(sc_pos_helio[0, :])
+          ys_sun.extend(sc_pos_helio[1, :])
+          zs_sun.extend(sc_pos_helio[2, :])
+
+      if moon_pos_helio is not None:
+          xs_sun.extend(moon_pos_helio[0, :])
+          ys_sun.extend(moon_pos_helio[1, :])
+          zs_sun.extend(moon_pos_helio[2, :])
+
+      # Convert to numpy arrays for min/max
+      all_x_sun = np.array(xs_sun)
+      all_y_sun = np.array(ys_sun)
+      all_z_sun = np.array(zs_sun)
+      
+      x_min, x_max = np.min(all_x_sun), np.max(all_x_sun)
+      y_min, y_max = np.min(all_y_sun), np.max(all_y_sun)
+      z_min, z_max = np.min(all_z_sun), np.max(all_z_sun)
       
       # Add buffer
       buffer = 0.1
@@ -1317,55 +1212,84 @@ def plot_3d_trajectory_with_moon(
       
       ax.set_xlim([x_min - buffer*dx, x_max + buffer*dx])
       ax.set_ylim([y_min - buffer*dy, y_max + buffer*dy])
-      ax.set_zlim([z_min - buffer*dz, z_max + buffer*dz])
+      ax.set_zlim([z_min - buffer*dz, z_max + buffer*dz]) # type: ignore
       
       # Set box aspect to match data range ratios (maintains equal scale)
-      ax.set_box_aspect((dx, dy, dz)) # type: ignore
-      
-      z_bottom = z_min - buffer*dz
-      
-    else:
-      # Right subplot: Equal limits (Cubic box)
-      ax.set_box_aspect([1, 1, 1]) # type: ignore
-      min_limit, max_limit = get_equal_limits(ax, buffer_fraction=0.1)
-      ax.set_xlim([min_limit, max_limit])
-      ax.set_ylim([min_limit, max_limit])
-      ax.set_zlim([min_limit, max_limit])
-      z_bottom = min_limit
+      ax.set_box_aspect((float(dx), float(dy), float(dz))) # type: ignore
 
-    # Add trajectory shadow on XY plane
-    shadow_alpha = 0.4
-    shadow_lw    = 0.5
-    ax.plot(pos_x, pos_y, np.full_like(pos_z, z_bottom), color='lightblue', alpha=shadow_alpha, linewidth=shadow_lw)
+  # Plot on right axis (Earth-Centered)
+  ax = ax_earth
+  
+  # Add Earth wireframe ellipsoid
+  ax.plot_wireframe(x_earth, y_earth, z_earth, color='blue', linewidth=0.5, alpha=0.6)
+  
+  # Plot spacecraft trajectory
+  ax.plot(pos_x, pos_y, pos_z, 'b-', linewidth=2.0, label='Spacecraft')
+  ax.scatter([pos_x[0]], [pos_y[0]], [pos_z[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, zorder=5)
+  ax.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, zorder=5)
+  
+  if moon_pos is not None:
+    # Plot Moon trajectory segment
+    ax.plot(moon_pos[0, :], moon_pos[1, :], moon_pos[2, :], 
+            color='gray', linewidth=2.0, alpha=0.8, label='Moon (Sim)')
     
-    # Moon trajectory shadow
-    if moon_pos is not None:
-      ax.plot(moon_pos[0, :], moon_pos[1, :], np.full(n_moon_points, z_bottom), 
-              color='lightgray', alpha=shadow_alpha, linewidth=shadow_lw)
+    # Add Moon position markers (initial and final)
+    ax.scatter([moon_pos[0, 0]], [moon_pos[1, 0]], [moon_pos[2, 0]], 
+                s=100, marker='>', facecolors='white', edgecolors='gray', linewidths=2, zorder=5)
+    ax.scatter([moon_pos[0, -1]], [moon_pos[1, -1]], [moon_pos[2, -1]], 
+                s=100, marker='s', facecolors='white', edgecolors='gray', linewidths=2, zorder=5)
     
-    # Sun trajectory shadow (only ax1)
-    if ax == ax1 and sun_pos is not None:
-      ax.plot(sun_pos[0, :], sun_pos[1, :], np.full(n_sun_points, z_bottom), 
-              color='orange', alpha=shadow_alpha, linewidth=shadow_lw)
+    # Add Moon sphere at final position
+    if x_moon_sphere is not None:
+      ax.plot_wireframe(x_moon_sphere, y_moon_sphere, z_moon_sphere, color='gray', linewidth=0.3, alpha=0.5)
+    
+    # Plot full orbit as a thin dashed line
+    if moon_orbit_full is not None:
+      ax.plot(moon_orbit_full[0, :], moon_orbit_full[1, :], moon_orbit_full[2, :],
+              color='gray', linewidth=1.0, linestyle='--', alpha=0.5, label='Moon Orbit (Approx)')
+  
+  ax.set_xlabel('Pos-X [m]')
+  ax.set_ylabel('Pos-Y [m]')
+  ax.set_zlabel('Pos-Z [m]')  # type: ignore
+  ax.grid(True)
 
-    # Create custom legend
-    legend_handles = [
-      Line2D([0], [0], color='b', linewidth=2, label='Spacecraft'),
-      Line2D([0], [0], color='gray', linewidth=2, label='Moon (Sim)'),
-      Line2D([0], [0], color='gray', linewidth=1, linestyle='--', label='Moon Orbit (Approx)'),
-      Line2D([0], [0], marker='>', color='w', markerfacecolor='white', markeredgecolor='black', 
-             markersize=10, markeredgewidth=2, linestyle='None', label='Initial'),
-      Line2D([0], [0], marker='s', color='w', markerfacecolor='white', markeredgecolor='black', 
-             markersize=10, markeredgewidth=2, linestyle='None', label='Final'),
-    ]
-    
-    # Add Sun to legend for ax1
-    if ax == ax1 and sun_pos is not None:
-      legend_handles.insert(1, Line2D([0], [0], color='orange', linewidth=2, label='Sun (Sim)'))
-      legend_handles.insert(2, Line2D([0], [0], color='orange', linewidth=1, linestyle='--', label='Sun Orbit (Approx)'))
-      
-    leg = ax.legend(handles=legend_handles, loc='upper left', fontsize=10, framealpha=0.9)
-    leg.get_frame().set_edgecolor('black')
+  # Set pane colors to white
+  ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+
+  # Configure limits and aspect ratio
+  # Right subplot: Equal limits (Cubic box)
+  ax.set_box_aspect([1, 1, 1]) # type: ignore
+  min_limit, max_limit = get_equal_limits(ax, buffer_fraction=0.1)
+  ax.set_xlim([min_limit, max_limit])
+  ax.set_ylim([min_limit, max_limit])
+  ax.set_zlim([min_limit, max_limit])
+  z_bottom = min_limit
+
+  # Add trajectory shadow on XY plane
+  shadow_alpha = 0.4
+  shadow_lw    = 0.5
+  ax.plot(pos_x, pos_y, np.full_like(pos_z, z_bottom), color='lightblue', alpha=shadow_alpha, linewidth=shadow_lw)
+  
+  # Moon trajectory shadow
+  if moon_pos is not None:
+    ax.plot(moon_pos[0, :], moon_pos[1, :], np.full(n_moon_points, z_bottom), 
+            color='lightgray', alpha=shadow_alpha, linewidth=shadow_lw)
+  
+  # Create custom legend
+  legend_handles = [
+    Line2D([0], [0], color='b', linewidth=2, label='Spacecraft'),
+    Line2D([0], [0], color='gray', linewidth=2, label='Moon (Sim)'),
+    Line2D([0], [0], color='gray', linewidth=1, linestyle='--', label='Moon Orbit (Approx)'),
+    Line2D([0], [0], marker='>', color='w', markerfacecolor='white', markeredgecolor='black', 
+            markersize=10, markeredgewidth=2, linestyle='None', label='Initial'),
+    Line2D([0], [0], marker='s', color='w', markerfacecolor='white', markeredgecolor='black', 
+            markersize=10, markeredgewidth=2, linestyle='None', label='Final'),
+  ]
+  
+  leg = ax.legend(handles=legend_handles, loc='upper left', fontsize=10, framealpha=0.9)
+  leg.get_frame().set_edgecolor('black')
 
   # Add info text
   fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=10, color='black',
