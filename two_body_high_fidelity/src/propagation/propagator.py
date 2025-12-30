@@ -615,22 +615,22 @@ def run_high_fidelity_propagation(
   
   if np.isfinite(period):
     # Elliptical orbit
-    # Determine number of points (100 points per period)
-    points_per_period = 100
+    # Determine number of points
+    points_per_period = 1000
     num_periods       = abs(delta_time_s) / period
     num_grid_points   = int(num_periods * points_per_period)
     
     # Ensure reasonable limits
-    if num_grid_points < 100:
-      num_grid_points = 100
+    if num_grid_points < 1000:
+      num_grid_points = 1000
     # Cap at reasonable max to prevent memory issues for long propagations
-    if num_grid_points > 100000:
-      num_grid_points = 100000
+    if num_grid_points > 1000000:
+      num_grid_points = 1000000
       print(f"    [WARNING] Grid points capped at {num_grid_points}")
       
   else:
     # Hyperbolic or parabolic - fallback to fixed number
-    num_grid_points = 1000
+    num_grid_points = 10000
 
   # Create equal-spaced time grid (in ET)
   t_eval_grid = np.linspace(time_et_o, time_et_f, num_grid_points)
