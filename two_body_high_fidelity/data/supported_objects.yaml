@@ -126,60 +126,10 @@
   srp        :
     coeff    : 1.3
     area__m2 : 1.5
-'48852'      :
-  name       : "JWST - James Webb Space Telescope"
-  norad_id   : 48852
-  naif_id    : -170
-  mass__kg   : 6161.0
-  drag       :
-    coeff    : 2.0
-    area__m2 : 25.0
-  srp        :
-    coeff    : 1.2
-    area__m2 : 25.0
-
-# Deep Space Telescopes
-'57209'      :
-  name       : "Euclid"
-  norad_id   : 57209
-  naif_id    : -156
-  mass__kg   : 950.0
-  drag       :
-    coeff    : 2.0
-    area__m2 : 4.0
-  srp        :
-    coeff    : 1.2
-    area__m2 : 4.0
-
-
-'41757'      :
-  name       : "OSIRIS-REX"
-  norad_id   : 41757
-  naif_id    : -64
-  mass__kg   : 800.0
-  drag       :
-    coeff    : 2.0
-    area__m2 : 3.0
-  srp        :
-    coeff    : 1.2
-    area__m2 : 3.0
-
-# Inactive / Debris Objects
-'27386'      :
-  name       : "ENVISAT"
-  norad_id   : 27386
-  naif_id    : null
-  mass__kg   : 8211.0
-  drag       :
-    coeff    : 2.2
-    area__m2 : 100.0
-  srp        :
-    coeff    : 1.3
-    area__m2 : 100.0
 
 # High Earth Orbit (HEO) Missions
 '25867'      :
-  name       : "CHANDRA - CXO"
+  name       : "CHANDRA"
   norad_id   : 25867
   naif_id    : -151
   mass__kg   : 4790.0
