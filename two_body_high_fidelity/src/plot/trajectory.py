@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy             as np
 import cartopy.crs       as ccrs
 import cartopy.feature   as cfeature
+import spiceypy          as spice
 
 from datetime          import timedelta
 from pathlib           import Path
@@ -115,6 +116,94 @@ def plot_3d_trajectories(
 
   # YZ plane (x = min_limit)
   ax1.plot_surface(np.full_like(U_disk, min_limit), U_disk, V_disk, color='black', alpha=earth_shadow_alpha, shade=False)
+
+  # Add sun direction arrows (only if we have epoch and are in J2000 frame)
+  if epoch is not None and frame == "J2000" and 'plot_time_s' in result:
+    try:
+      # Get start and end times
+      epoch_et_start = utc_to_et(epoch)
+      epoch_et_end = epoch_et_start + result['plot_time_s'][-1]
+      
+      # Get sun position at start time (returns in km)
+      sun_pos_start_km, _ = spice.spkpos('SUN', epoch_et_start, 'J2000', 'NONE', 'EARTH')
+      sun_dir_start = sun_pos_start_km / np.linalg.norm(sun_pos_start_km)
+      
+      # Get sun position at end time (returns in km)
+      sun_pos_end_km, _ = spice.spkpos('SUN', epoch_et_end, 'J2000', 'NONE', 'EARTH')
+      sun_dir_end = sun_pos_end_km / np.linalg.norm(sun_pos_end_km)
+      
+      # Scale arrows to be visible in the plot (30% of axis range)
+      arrow_length = 0.3 * (max_limit - min_limit)
+      origin = np.array([0, 0, 0])  # Earth center
+      
+      # Line start points (half length from origin) and end points (full length)
+      line_start_initial = origin + 0.5 * arrow_length * sun_dir_start
+      line_end_initial = origin + arrow_length * sun_dir_start
+      
+      line_start_final = origin + 0.5 * arrow_length * sun_dir_end
+      line_end_final = origin + arrow_length * sun_dir_end
+      
+      # Draw 3D line for initial sun direction (gold color)
+      ax1.plot([line_start_initial[0], line_end_initial[0]], 
+               [line_start_initial[1], line_end_initial[1]], 
+               [line_start_initial[2], line_end_initial[2]],
+               color='gold', linewidth=2.5, alpha=0.9)
+      
+      # Draw line for final sun direction (orange color)
+      ax1.plot([line_start_final[0], line_end_final[0]], 
+               [line_start_final[1], line_end_final[1]], 
+               [line_start_final[2], line_end_final[2]],
+               color='orange', linewidth=2.5, alpha=0.9)
+      
+      # Add triangle marker at initial sun direction tip
+      ax1.scatter([line_end_initial[0]], [line_end_initial[1]], [line_end_initial[2]], 
+                  s=150, marker='>', color='gold', edgecolors='gold', linewidths=1.5, 
+                  zorder=10, label='Sun (Initial)')
+      
+      # Add square marker at final sun direction tip
+      ax1.scatter([line_end_final[0]], [line_end_final[1]], [line_end_final[2]], 
+                  s=150, marker='s', color='orange', edgecolors='orange', linewidths=1.5, 
+                  zorder=10, label='Sun (Final)')
+      
+      # Project sun vectors onto planes (like trajectory shadows)
+      sun_shadow_alpha = 0.6
+      sun_shadow_lw = 1.5
+      sun_shadow_color_initial = 'darkgray'   # Lighter gray for initial
+      sun_shadow_color_final   = 'dimgray'    # Darker gray for final
+      
+      # XY plane shadows (z = min_limit)
+      ax1.plot([line_start_initial[0], line_end_initial[0]], 
+               [line_start_initial[1], line_end_initial[1]], 
+               [min_limit, min_limit],
+               color=sun_shadow_color_initial, linewidth=sun_shadow_lw, alpha=sun_shadow_alpha)
+      ax1.plot([line_start_final[0], line_end_final[0]], 
+               [line_start_final[1], line_end_final[1]], 
+               [min_limit, min_limit],
+               color=sun_shadow_color_final, linewidth=sun_shadow_lw, alpha=sun_shadow_alpha)
+      
+      # XZ plane shadows (y = max_limit)
+      ax1.plot([line_start_initial[0], line_end_initial[0]], 
+               [max_limit, max_limit], 
+               [line_start_initial[2], line_end_initial[2]],
+               color=sun_shadow_color_initial, linewidth=sun_shadow_lw, alpha=sun_shadow_alpha)
+      ax1.plot([line_start_final[0], line_end_final[0]], 
+               [max_limit, max_limit], 
+               [line_start_final[2], line_end_final[2]],
+               color=sun_shadow_color_final, linewidth=sun_shadow_lw, alpha=sun_shadow_alpha)
+      
+      # YZ plane shadows (x = min_limit)
+      ax1.plot([min_limit, min_limit], 
+               [line_start_initial[1], line_end_initial[1]], 
+               [line_start_initial[2], line_end_initial[2]],
+               color=sun_shadow_color_initial, linewidth=sun_shadow_lw, alpha=sun_shadow_alpha)
+      ax1.plot([min_limit, min_limit], 
+               [line_start_final[1], line_end_final[1]], 
+               [line_start_final[2], line_end_final[2]],
+               color=sun_shadow_color_final, linewidth=sun_shadow_lw, alpha=sun_shadow_alpha)
+      
+    except Exception as e:
+      # If SPICE kernels aren't loaded or other error, silently skip sun arrow
+      pass
 
   # Plot 3D velocity trajectory
   ax2 = fig.add_subplot(122, projection='3d')
@@ -682,20 +771,20 @@ def plot_3d_trajectories_earth_fixed(
   ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], s=100, marker='s', facecolors='white', edgecolors='r', linewidths=2)
   ax2.set_xlabel('Vel-X [m/s]')
   ax2.set_ylabel('Vel-Y [m/s]')
-  ax2.set_zlabel('Vel-Z [m/s]')
+  ax2.set_zlabel('Vel-Z [m/s]') # type: ignore
   ax2.grid(True)
   ax2.set_box_aspect([1,1,1]) # type: ignore
 
   # Set pane colors to white
   ax2.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
   ax2.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax2.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax2.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0)) # type: ignore
 
   min_limit_vel, max_limit_vel = get_equal_limits(ax2, buffer_fraction=0.25)
   
-  ax2.set_xlim([min_limit_vel, max_limit_vel])
-  ax2.set_ylim([min_limit_vel, max_limit_vel])
-  ax2.set_zlim([min_limit_vel, max_limit_vel])
+  ax2.set_xlim((min_limit_vel, max_limit_vel))
+  ax2.set_ylim((min_limit_vel, max_limit_vel))
+  ax2.set_zlim((min_limit_vel, max_limit_vel)) # type: ignore
 
   # Add velocity trajectory shadows
   ax2.plot(vel_x, vel_y, np.full_like(vel_z, min_limit_vel), color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
@@ -712,7 +801,7 @@ def plot_3d_trajectories_earth_fixed(
   leg = fig.legend(handles=legend_handles, loc='upper right', fontsize=11, framealpha=0.9)
   leg.get_frame().set_edgecolor('black')
 
-  # Info text
+  # Add info text as figure text
   fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=11, color='black',
            bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', alpha=0.9))
 
