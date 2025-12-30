@@ -83,7 +83,7 @@ def plot_3d_trajectories(
   ax1.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
   ax1.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
 
-  min_limit, max_limit = get_equal_limits(ax1, buffer_fraction=0.25)
+  min_limit, max_limit = get_equal_limits(ax1, buffer_fraction=0.45)
   
   ax1.set_xlim([min_limit, max_limit]) # type: ignore
   ax1.set_ylim([min_limit, max_limit]) # type: ignore
@@ -132,16 +132,33 @@ def plot_3d_trajectories(
       sun_pos_end_km, _ = spice.spkpos('SUN', epoch_et_end, 'J2000', 'NONE', 'EARTH')
       sun_dir_end = sun_pos_end_km / np.linalg.norm(sun_pos_end_km)
       
-      # Scale arrows to be visible in the plot (30% of axis range)
-      arrow_length = 0.3 * (max_limit - min_limit)
+      # Get moon position at start time (returns in km)
+      moon_pos_start_km, _ = spice.spkpos('MOON', epoch_et_start, 'J2000', 'NONE', 'EARTH')
+      moon_dir_start = moon_pos_start_km / np.linalg.norm(moon_pos_start_km)
+      
+      # Get moon position at end time (returns in km)
+      moon_pos_end_km, _ = spice.spkpos('MOON', epoch_et_end, 'J2000', 'NONE', 'EARTH')
+      moon_dir_end = moon_pos_end_km / np.linalg.norm(moon_pos_end_km)
+      
+      # Scale arrows to be visible in the plot based on axis limits
+      axis_range = max_limit - min_limit
       origin = np.array([0, 0, 0])  # Earth center
       
-      # Line start points (half length from origin) and end points (full length)
-      line_start_initial = origin + 0.5 * arrow_length * sun_dir_start
-      line_end_initial = origin + arrow_length * sun_dir_start
+      # Sun arrow limits (further out)
+      dist_start_sun = 0.6 * axis_range
+      dist_end_sun   = 0.7 * axis_range
       
-      line_start_final = origin + 0.5 * arrow_length * sun_dir_end
-      line_end_final = origin + arrow_length * sun_dir_end
+      # Moon arrow limits (closer, using previous sun limits)
+      dist_start_moon = 0.35 * axis_range
+      dist_end_moon   = 0.45 * axis_range
+      
+      # --- SUN ARROWS ---
+      # Line start points and end points
+      line_start_initial = origin + dist_start_sun * sun_dir_start
+      line_end_initial   = origin + dist_end_sun   * sun_dir_start
+      
+      line_start_final   = origin + dist_start_sun * sun_dir_end
+      line_end_final     = origin + dist_end_sun   * sun_dir_end
       
       # Draw 3D line for initial sun direction (gold color)
       ax1.plot([line_start_initial[0], line_end_initial[0]], 
@@ -157,12 +174,12 @@ def plot_3d_trajectories(
       
       # Add triangle marker at initial sun direction tip
       ax1.scatter([line_end_initial[0]], [line_end_initial[1]], [line_end_initial[2]], 
-                  s=150, marker='>', color='gold', edgecolors='gold', linewidths=1.5, 
+                  s=40, marker='>', color='gold', edgecolors='gold', linewidths=1.5, 
                   zorder=10, label='Sun (Initial)')
       
       # Add square marker at final sun direction tip
       ax1.scatter([line_end_final[0]], [line_end_final[1]], [line_end_final[2]], 
-                  s=150, marker='s', color='orange', edgecolors='orange', linewidths=1.5, 
+                  s=40, marker='s', color='orange', edgecolors='orange', linewidths=1.5, 
                   zorder=10, label='Sun (Final)')
       
       # Project sun vectors onto planes (like trajectory shadows)
@@ -200,6 +217,72 @@ def plot_3d_trajectories(
                [line_start_final[1], line_end_final[1]], 
                [line_start_final[2], line_end_final[2]],
                color=sun_shadow_color_final, linewidth=sun_shadow_lw, alpha=sun_shadow_alpha)
+
+      # --- MOON ARROWS ---
+      # Line start points and end points
+      line_start_initial_moon = origin + dist_start_moon * moon_dir_start
+      line_end_initial_moon   = origin + dist_end_moon   * moon_dir_start
+      
+      line_start_final_moon   = origin + dist_start_moon * moon_dir_end
+      line_end_final_moon     = origin + dist_end_moon   * moon_dir_end
+      
+      # Draw 3D line for initial moon direction (silver color)
+      ax1.plot([line_start_initial_moon[0], line_end_initial_moon[0]], 
+               [line_start_initial_moon[1], line_end_initial_moon[1]], 
+               [line_start_initial_moon[2], line_end_initial_moon[2]],
+               color='silver', linewidth=2.5, alpha=0.9)
+      
+      # Draw line for final moon direction (gray color)
+      ax1.plot([line_start_final_moon[0], line_end_final_moon[0]], 
+               [line_start_final_moon[1], line_end_final_moon[1]], 
+               [line_start_final_moon[2], line_end_final_moon[2]],
+               color='gray', linewidth=2.5, alpha=0.9)
+      
+      # Add triangle marker at initial moon direction tip
+      ax1.scatter([line_end_initial_moon[0]], [line_end_initial_moon[1]], [line_end_initial_moon[2]], 
+                  s=40, marker='>', color='silver', edgecolors='silver', linewidths=1.5, 
+                  zorder=10, label='Moon (Initial)')
+      
+      # Add square marker at final moon direction tip
+      ax1.scatter([line_end_final_moon[0]], [line_end_final_moon[1]], [line_end_final_moon[2]], 
+                  s=40, marker='s', color='gray', edgecolors='gray', linewidths=1.5, 
+                  zorder=10, label='Moon (Final)')
+      
+      # Project moon vectors onto planes (like trajectory shadows)
+      moon_shadow_alpha = 0.6
+      moon_shadow_lw = 1.5
+      moon_shadow_color_initial = 'lightgray'
+      moon_shadow_color_final   = 'darkgray'
+      
+      # XY plane shadows (z = min_limit)
+      ax1.plot([line_start_initial_moon[0], line_end_initial_moon[0]], 
+               [line_start_initial_moon[1], line_end_initial_moon[1]], 
+               [min_limit, min_limit],
+               color=moon_shadow_color_initial, linewidth=moon_shadow_lw, alpha=moon_shadow_alpha)
+      ax1.plot([line_start_final_moon[0], line_end_final_moon[0]], 
+               [line_start_final_moon[1], line_end_final_moon[1]], 
+               [min_limit, min_limit],
+               color=moon_shadow_color_final, linewidth=moon_shadow_lw, alpha=moon_shadow_alpha)
+      
+      # XZ plane shadows (y = max_limit)
+      ax1.plot([line_start_initial_moon[0], line_end_initial_moon[0]], 
+               [max_limit, max_limit], 
+               [line_start_initial_moon[2], line_end_initial_moon[2]],
+               color=moon_shadow_color_initial, linewidth=moon_shadow_lw, alpha=moon_shadow_alpha)
+      ax1.plot([line_start_final_moon[0], line_end_final_moon[0]], 
+               [max_limit, max_limit], 
+               [line_start_final_moon[2], line_end_final_moon[2]],
+               color=moon_shadow_color_final, linewidth=moon_shadow_lw, alpha=moon_shadow_alpha)
+      
+      # YZ plane shadows (x = min_limit)
+      ax1.plot([min_limit, min_limit], 
+               [line_start_initial_moon[1], line_end_initial_moon[1]], 
+               [line_start_initial_moon[2], line_end_initial_moon[2]],
+               color=moon_shadow_color_initial, linewidth=moon_shadow_lw, alpha=moon_shadow_alpha)
+      ax1.plot([min_limit, min_limit], 
+               [line_start_final_moon[1], line_end_final_moon[1]], 
+               [line_start_final_moon[2], line_end_final_moon[2]],
+               color=moon_shadow_color_final, linewidth=moon_shadow_lw, alpha=moon_shadow_alpha)
       
     except Exception as e:
       # If SPICE kernels aren't loaded or other error, silently skip sun arrow
@@ -221,7 +304,7 @@ def plot_3d_trajectories(
   ax2.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
   ax2.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
 
-  min_limit_vel, max_limit_vel = get_equal_limits(ax2, buffer_fraction=0.25)
+  min_limit_vel, max_limit_vel = get_equal_limits(ax2, buffer_fraction=0.45)
   
   ax2.set_xlim([min_limit_vel, max_limit_vel]) # type: ignore
   ax2.set_ylim([min_limit_vel, max_limit_vel]) # type: ignore
@@ -743,7 +826,7 @@ def plot_3d_trajectories_earth_fixed(
   ax1.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
   ax1.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
 
-  min_limit, max_limit = get_equal_limits(ax1, buffer_fraction=0.25)
+  min_limit, max_limit = get_equal_limits(ax1, buffer_fraction=0.45)
   
   ax1.set_xlim([min_limit, max_limit])
   ax1.set_ylim([min_limit, max_limit])
@@ -785,7 +868,7 @@ def plot_3d_trajectories_earth_fixed(
   ax2.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
   ax2.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0)) # type: ignore
 
-  min_limit_vel, max_limit_vel = get_equal_limits(ax2, buffer_fraction=0.25)
+  min_limit_vel, max_limit_vel = get_equal_limits(ax2, buffer_fraction=0.45)
   
   ax2.set_xlim((min_limit_vel, max_limit_vel))
   ax2.set_ylim((min_limit_vel, max_limit_vel))
@@ -1167,6 +1250,9 @@ def plot_3d_trajectory_with_moon(
           legend_handles_sun.append(Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markeredgecolor='orange', markersize=10, linestyle='None', label='Sun'))
           legend_handles_sun.append(Line2D([0], [0], color='black', linestyle='--', linewidth=1, label='Earth Orbit'))
       
+           
+      
+           
       legend_handles_sun.append(Line2D([0], [0], color='black', linewidth=2.0, label='Earth'))
           
       legend_handles_sun.extend([
