@@ -973,6 +973,7 @@ def plot_3d_trajectory_with_moon(
   earth_orbit_helio = None
   earth_pos_helio_init = None
   earth_pos_helio_final = None
+  earth_pos_helio = None
   sc_pos_helio = None
   moon_pos_helio = None
   
@@ -1015,6 +1016,7 @@ def plot_3d_trajectory_with_moon(
       indices = range(0, len(time_s), stride)
       sc_pos_helio = np.zeros((3, len(indices)))
       moon_pos_helio = np.zeros((3, len(indices)))
+      earth_pos_helio = np.zeros((3, len(indices)))
       
       for i, idx in enumerate(indices):
           t = time_s[idx]
@@ -1022,6 +1024,7 @@ def plot_3d_trajectory_with_moon(
           # Earth relative to Sun
           pos_earth_sun_km, _ = spice.spkpos('EARTH', et, 'J2000', 'NONE', 'SUN')
           pos_earth_sun_m = np.array(pos_earth_sun_km) * 1000.0
+          earth_pos_helio[:, i] = pos_earth_sun_m
           
           # SC relative to Earth (from result)
           pos_sc_earth_m = posvel_vec[0:3, idx]
@@ -1110,13 +1113,20 @@ def plot_3d_trajectory_with_moon(
   for ax in [ax_sun, ax_sun_dup]:
       ax.set_title("Heliocentric J2000 (Sun-Centered)")
       
-      # Plot Sun
-      ax.scatter([0], [0], [0], s=300, color='orange', edgecolors='orange', label='Sun')
+      # Plot Sun (Only on middle plot)
+      if ax == ax_sun_dup:
+          ax.scatter([0], [0], [0], s=300, color='orange', edgecolors='orange', label='Sun')
       
       if earth_orbit_helio is not None:
-          # Plot Orbit
-          ax.plot(earth_orbit_helio[0, :], earth_orbit_helio[1, :], earth_orbit_helio[2, :],
-                      color='black', linestyle='--', linewidth=1, alpha=0.6, label='Earth Orbit')
+          # Plot Orbit (Only on middle plot)
+          if ax == ax_sun_dup:
+              ax.plot(earth_orbit_helio[0, :], earth_orbit_helio[1, :], earth_orbit_helio[2, :],
+                          color='black', linestyle='--', linewidth=1, alpha=0.6, label='Earth Orbit')
+          
+          # Plot Earth Trajectory
+          if earth_pos_helio is not None:
+              ax.plot(earth_pos_helio[0, :], earth_pos_helio[1, :], earth_pos_helio[2, :],
+                      color='black', linewidth=2.0, alpha=0.8, label='Earth')
           
           # Plot Earth Initial
           ax.scatter([earth_pos_helio_init[0]], [earth_pos_helio_init[1]], [earth_pos_helio_init[2]],
@@ -1151,16 +1161,23 @@ def plot_3d_trajectory_with_moon(
       ax.grid(True)
       
       # Custom Legend
-      legend_handles_sun = [
-          Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markeredgecolor='orange', markersize=10, linestyle='None', label='Sun'),
-          Line2D([0], [0], color='black', linestyle='--', linewidth=1, label='Earth Orbit'),
+      legend_handles_sun = []
+      
+      if ax == ax_sun_dup:
+          legend_handles_sun.append(Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markeredgecolor='orange', markersize=10, linestyle='None', label='Sun'))
+          legend_handles_sun.append(Line2D([0], [0], color='black', linestyle='--', linewidth=1, label='Earth Orbit'))
+      
+      legend_handles_sun.append(Line2D([0], [0], color='black', linewidth=2.0, label='Earth'))
+          
+      legend_handles_sun.extend([
           Line2D([0], [0], color='gray', linewidth=1, label='Moon'),
           Line2D([0], [0], color='b', linewidth=1.5, label='Spacecraft'),
           Line2D([0], [0], marker='>', color='w', markerfacecolor='white', markeredgecolor='black', 
                 markersize=10, markeredgewidth=2, linestyle='None', label='Initial'),
           Line2D([0], [0], marker='s', color='w', markerfacecolor='white', markeredgecolor='black', 
                 markersize=10, markeredgewidth=2, linestyle='None', label='Final'),
-      ]
+      ])
+
       leg_sun = ax.legend(handles=legend_handles_sun, loc='upper right', fontsize=10, framealpha=0.9)
       leg_sun.get_frame().set_edgecolor('black')
       
@@ -1171,14 +1188,39 @@ def plot_3d_trajectory_with_moon(
       
       # Set limits for heliocentric plot (Variable limits with equal scaling)
       # Collect all data points
-      xs_sun = [0.0] # Sun at origin
-      ys_sun = [0.0]
-      zs_sun = [0.0]
+      xs_sun = []
+      ys_sun = []
+      zs_sun = []
+      
+      # Include Sun at origin only for middle plot
+      if ax == ax_sun_dup:
+          xs_sun.append(0.0)
+          ys_sun.append(0.0)
+          zs_sun.append(0.0)
       
       if earth_orbit_helio is not None:
-          xs_sun.extend(earth_orbit_helio[0, :])
-          ys_sun.extend(earth_orbit_helio[1, :])
-          zs_sun.extend(earth_orbit_helio[2, :])
+          # Include orbit line only for middle plot
+          if ax == ax_sun_dup:
+              xs_sun.extend(earth_orbit_helio[0, :])
+              ys_sun.extend(earth_orbit_helio[1, :])
+              zs_sun.extend(earth_orbit_helio[2, :])
+          
+          # Include Earth trajectory segment for limits
+          if earth_pos_helio is not None:
+              xs_sun.extend(earth_pos_helio[0, :])
+              ys_sun.extend(earth_pos_helio[1, :])
+              zs_sun.extend(earth_pos_helio[2, :])
+          
+          # Include Earth positions for both plots (since markers are plotted)
+          if earth_pos_helio_init is not None:
+             xs_sun.append(earth_pos_helio_init[0])
+             ys_sun.append(earth_pos_helio_init[1])
+             zs_sun.append(earth_pos_helio_init[2])
+          
+          if earth_pos_helio_final is not None:
+             xs_sun.append(earth_pos_helio_final[0])
+             ys_sun.append(earth_pos_helio_final[1])
+             zs_sun.append(earth_pos_helio_final[2])
           
       if sc_pos_helio is not None:
           xs_sun.extend(sc_pos_helio[0, :])
@@ -1191,31 +1233,32 @@ def plot_3d_trajectory_with_moon(
           zs_sun.extend(moon_pos_helio[2, :])
 
       # Convert to numpy arrays for min/max
-      all_x_sun = np.array(xs_sun)
-      all_y_sun = np.array(ys_sun)
-      all_z_sun = np.array(zs_sun)
-      
-      x_min, x_max = np.min(all_x_sun), np.max(all_x_sun)
-      y_min, y_max = np.min(all_y_sun), np.max(all_y_sun)
-      z_min, z_max = np.min(all_z_sun), np.max(all_z_sun)
-      
-      # Add buffer
-      buffer = 0.1
-      dx = x_max - x_min
-      dy = y_max - y_min
-      dz = z_max - z_min
-      
-      # Avoid zero range
-      if dx == 0: dx = 1.0
-      if dy == 0: dy = 1.0
-      if dz == 0: dz = 1.0
-      
-      ax.set_xlim([x_min - buffer*dx, x_max + buffer*dx])
-      ax.set_ylim([y_min - buffer*dy, y_max + buffer*dy])
-      ax.set_zlim([z_min - buffer*dz, z_max + buffer*dz]) # type: ignore
-      
-      # Set box aspect to match data range ratios (maintains equal scale)
-      ax.set_box_aspect((float(dx), float(dy), float(dz))) # type: ignore
+      if len(xs_sun) > 0:
+          all_x_sun = np.array(xs_sun)
+          all_y_sun = np.array(ys_sun)
+          all_z_sun = np.array(zs_sun)
+          
+          x_min, x_max = np.min(all_x_sun), np.max(all_x_sun)
+          y_min, y_max = np.min(all_y_sun), np.max(all_y_sun)
+          z_min, z_max = np.min(all_z_sun), np.max(all_z_sun)
+          
+          # Add buffer
+          buffer = 0.1
+          dx = x_max - x_min
+          dy = y_max - y_min
+          dz = z_max - z_min
+          
+          # Avoid zero range
+          if dx == 0: dx = 1.0
+          if dy == 0: dy = 1.0
+          if dz == 0: dz = 1.0
+          
+          ax.set_xlim([x_min - buffer*dx, x_max + buffer*dx])
+          ax.set_ylim([y_min - buffer*dy, y_max + buffer*dy])
+          ax.set_zlim([z_min - buffer*dz, z_max + buffer*dz]) # type: ignore
+          
+          # Set box aspect to match data range ratios (maintains equal scale)
+          ax.set_box_aspect((float(dx), float(dy), float(dz))) # type: ignore
 
   # Plot on right axis (Earth-Centered)
   ax = ax_earth
