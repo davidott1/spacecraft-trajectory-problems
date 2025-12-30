@@ -1210,7 +1210,7 @@ def plot_3d_trajectory_with_moon(
   ax_sun.set_zlim([z_min - buffer*dz, z_max + buffer*dz]) # type: ignore
   
   # Set box aspect to match data range ratios (maintains equal scale)
-  ax_sun.set_box_aspect((dx, dy, dz)) # type: ignore
+  ax_sun.set_box_aspect((float(dx), float(dy), float(dz))) # type: ignore
 
   # Plot on both axes
   for ax in axes:
