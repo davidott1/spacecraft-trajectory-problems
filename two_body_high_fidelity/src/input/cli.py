@@ -132,6 +132,14 @@ def parse_command_line_arguments(
     help    = "Enable Solar Radiation Pressure (disabled by default).",
   )
   
+  parser.add_argument(
+    '--auto-download',
+    dest    = 'auto_download',
+    action  = 'store_true',
+    default = False,
+    help    = "Automatically download missing data (Horizons/TLE) without prompting.",
+  )
+  
   # Parse arguments
   args = parser.parse_args()
   

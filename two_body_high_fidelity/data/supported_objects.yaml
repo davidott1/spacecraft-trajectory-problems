@@ -103,7 +103,7 @@
     coeff    : 1.3                                                                      # solar radiation pressure coefficient, typically c_r [-]
     area__m2 : 10.0                                                                     # srp cross-sectional area [m²]
 
-# Other Science Missions
+# Science Missions
 '20580'      :
   name       : "HST - Hubble Space Telescope"
   norad_id   : 20580
@@ -138,18 +138,31 @@
     coeff    : 1.2
     area__m2 : 25.0
 
-# Geodetic Satellites (Stable orbits for gravity field analysis)
-'8820'       :
-  name       : "LAGEOS-1"
-  norad_id   : 8820
-  naif_id    : -115
-  mass__kg   : 407.0
+# Deep Space Telescopes
+'57209'      :
+  name       : "Euclid"
+  norad_id   : 57209
+  naif_id    : -156
+  mass__kg   : 950.0
   drag       :
-    coeff    : 2.2
-    area__m2 : 0.28
+    coeff    : 2.0
+    area__m2 : 4.0
   srp        :
-    coeff    : 1.13
-    area__m2 : 0.28
+    coeff    : 1.2
+    area__m2 : 4.0
+
+
+'41757'      :
+  name       : "OSIRIS-REX"
+  norad_id   : 41757
+  naif_id    : -64
+  mass__kg   : 800.0
+  drag       :
+    coeff    : 2.0
+    area__m2 : 3.0
+  srp        :
+    coeff    : 1.2
+    area__m2 : 3.0
 
 # Inactive / Debris Objects
 '27386'      :
@@ -176,3 +189,67 @@
   srp        :
     coeff    : 1.3
     area__m2 : 20.0
+
+'32249'      :
+  name       : "DAWN"
+  norad_id   : 32249
+  naif_id    : -203
+  mass__kg   : 1210.0
+  drag       :
+    coeff    : 2.0
+    area__m2 : 7.0
+  srp        :
+    coeff    : 1.2
+    area__m2 : 7.0
+
+# Additional LEO Satellites
+'22195'      :
+  name       : "LAGEOS-2"
+  norad_id   : 22195
+  naif_id    : null
+  mass__kg   : 405.0
+  drag       :
+    coeff    : 2.2
+    area__m2 : 0.28
+  srp        :
+    coeff    : 1.13
+    area__m2 : 0.28
+
+# Molniya Orbit Satellites (Highly Elliptical)
+'40296'      :
+  name       : "MOLNIYA 1-93"
+  norad_id   : 40296
+  naif_id    : null
+  mass__kg   : 1600.0
+  drag       :
+    coeff    : 2.2
+    area__m2 : 8.0
+  srp        :
+    coeff    : 1.3
+    area__m2 : 8.0
+
+# Deep Space / Lagrange Point Missions
+'36411'      :
+  name       : "GAIA"
+  norad_id   : 36411
+  naif_id    : -74
+  mass__kg   : 2030.0
+  drag       :
+    coeff    : 2.0
+    area__m2 : 10.0
+  srp        :
+    coeff    : 1.2
+    area__m2 : 10.0
+
+# Rocket Bodies / Debris
+'12388'      :
+  name       : "SL-16 R/B"
+  norad_id   : 12388
+  naif_id    : null
+  mass__kg   : 3800.0
+  drag       :
+    coeff    : 2.2
+    area__m2 : 17.0
+  srp        :
+    coeff    : 1.5
+    area__m2 : 17.0

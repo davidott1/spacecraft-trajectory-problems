@@ -131,6 +131,7 @@ def main(
   third_bodies                   : Optional[list] = None,
   gravity_harmonics              : Optional[list] = None,
   include_srp                    : bool           = False,
+  auto_download                  : bool           = False,
   initial_state_source           : str            = 'jpl_horizons',
   gravity_harmonics_degree_order : Optional[list] = None,
   gravity_model_filename         : Optional[str]  = None,
@@ -186,6 +187,7 @@ def main(
     third_bodies,
     gravity_harmonics,
     include_srp,
+    auto_download,
     initial_state_source,
     gravity_harmonics_degree_order,
     gravity_model_filename,
@@ -225,6 +227,7 @@ def main(
       desired_time_f_dt       = config.time_f_dt,
       norad_id                = config.initial_state_norad_id,
       object_name             = config.object_name,
+      auto_download           = config.auto_download,
     )
     
     # Check if Horizons data is required but unavailable
@@ -250,6 +253,7 @@ def main(
       tles_folderpath   = config.tles_folderpath,
       desired_time_o_dt = config.time_o_dt,
       desired_time_f_dt = config.time_f_dt,
+      auto_download     = config.auto_download,
     )
     
     # Extract TLE data to config
@@ -319,6 +323,7 @@ def main(
     compare_jpl_horizons             = config.compare_jpl_horizons,
     compare_tle                      = config.compare_tle,
     object_name                      = config.object_name,
+    object_name_display              = config.object_name_display,
   )
   
   # Unload all files (SPICE kernels)
@@ -346,6 +351,7 @@ if __name__ == "__main__":
     args.third_bodies,
     args.gravity_harmonics_coefficients,
     args.include_srp,
+    args.auto_download,
     args.initial_state_source,
     args.gravity_harmonics_degree_order,
     args.gravity_model_filename,

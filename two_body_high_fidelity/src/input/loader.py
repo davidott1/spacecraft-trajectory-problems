@@ -482,7 +482,8 @@ def get_horizons_ephemeris(
   desired_time_f_dt       : datetime,
   norad_id                : str,
   object_name             : str,
-  step                    : str = "1m",
+  step                    : str  = "1m",
+  auto_download           : bool = False,
 ) -> Optional[dict]:
   """
   Load and process JPL Horizons ephemeris.
@@ -503,6 +504,8 @@ def get_horizons_ephemeris(
       Name of the object (for display purposes).
     step : str
       Time step for ephemeris download (default "1m").
+    auto_download : bool
+      If True, automatically download ephemeris if no compatible file is found.
       
   Output:
   -------
@@ -530,8 +533,11 @@ def get_horizons_ephemeris(
   
   if compatible_file is None:
     # Prompt user to download
-    print(f"               :   ... No compatible files found. Download from JPL Horizons? (y/n)", end=" ", flush=True)
-    user_response = input().strip().lower()
+    if auto_download:
+      user_response = 'y'
+    else:
+      print(f"               :   ... No compatible files found. Download from JPL Horizons? (y/n)", end=" ", flush=True)
+      user_response = input().strip().lower()
     
     if user_response == 'y':
       print(f"               :   ... Downloading {object_name} ({norad_id}) ...", end=" ", flush=True)
@@ -844,6 +850,7 @@ def get_celestrak_tle(
   tles_folderpath   : Path,
   desired_time_o_dt : datetime,
   desired_time_f_dt : datetime,
+  auto_download     : bool = False,
 ) -> Optional[dict]:
   """
   Load TLE from local file or download from Celestrak if not available.
@@ -860,6 +867,8 @@ def get_celestrak_tle(
       Desired initial time for TLE coverage.
     desired_time_f_dt : datetime
       Desired final time for TLE coverage.
+    auto_download : bool
+      If True, automatically download TLE if no compatible file is found.
       
   Output:
   -------
@@ -901,8 +910,11 @@ def get_celestrak_tle(
   # Check if TLE file exists
   if tle_filepath is None or not tle_filepath.exists():
     # Prompt user to download
-    print(f"               :   ... No compatible files found. Download from Celestrak? (y/n)", end=" ", flush=True)
-    user_response = input().strip().lower()
+    if auto_download:
+      user_response = 'y'
+    else:
+      print(f"               :   ... No compatible files found. Download from Celestrak? (y/n)", end=" ", flush=True)
+      user_response = input().strip().lower()
     
     if user_response == 'y':
       print(f"               :   ... Downloading {object_name} ({norad_id}) ...", end=" ", flush=True)
