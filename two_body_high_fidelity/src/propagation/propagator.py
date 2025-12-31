@@ -616,7 +616,19 @@ def run_high_fidelity_propagation(
   if np.isfinite(period):
     # Elliptical orbit
     # Determine number of points
-    points_per_period = 1000
+    
+    # Calculate eccentricity to determine grid density
+    coe = OrbitConverter.pv_to_coe(
+      initial_state[0:3],
+      initial_state[3:6],
+      SOLARSYSTEMCONSTANTS.EARTH.GP
+    )
+    
+    if coe['ecc'] > 0.1:
+      points_per_period = 1000
+    else:
+      points_per_period = 100
+
     num_periods       = abs(delta_time_s) / period
     num_grid_points   = int(num_periods * points_per_period)
     
