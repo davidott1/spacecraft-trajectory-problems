@@ -67,6 +67,17 @@
   srp        :                                                                          # solar radiation pressure parameters
     coeff    : 1.3                                                                      # solar radiation pressure coefficient, typically c_r [-]
     area__m2 : 15.0                                                                     # srp cross-sectional area [m²]
+'22195'      :
+  name       : "LAGEOS-2"
+  norad_id   : 22195
+  naif_id    : null
+  mass__kg   : 405.0
+  drag       :
+    coeff    : 2.2
+    area__m2 : 0.28
+  srp        :
+    coeff    : 1.13
+    area__m2 : 0.28
 
 # GEO satellites (Geostationary Earth Orbit, ~35,786 km altitude)
 '41866'      :                                                                          # norad id as top-level key
@@ -151,19 +162,6 @@
   srp        :
     coeff    : 1.2
     area__m2 : 7.0
-
-# Additional LEO Satellites
-'22195'      :
-  name       : "LAGEOS-2"
-  norad_id   : 22195
-  naif_id    : null
-  mass__kg   : 405.0
-  drag       :
-    coeff    : 2.2
-    area__m2 : 0.28
-  srp        :
-    coeff    : 1.13
-    area__m2 : 0.28
 
 # Deep Space / Lagrange Point Missions
 '36411'      :
