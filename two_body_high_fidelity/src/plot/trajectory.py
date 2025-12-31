@@ -91,7 +91,7 @@ def plot_3d_trajectories(
   # Plot 3D position trajectory
   ax1 = fig.add_subplot(121, projection='3d')
   
-  # Add Earth wireframe ellipsoid
+  # Add Earth
   u       = np.linspace(0, 2 * np.pi, 24)
   v       = np.linspace(0, np.pi, 12)
   r_eq    = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
@@ -102,8 +102,8 @@ def plot_3d_trajectories(
   ax1.plot_wireframe(x_earth, y_earth, z_earth, color='black', linewidth=0.5, alpha=1.0) # type: ignore
   
   ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=2.0)
-  ax1.scatter([pos_x[0]], [pos_y[0]], [pos_z[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2) # type: ignore
-  ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2) # type: ignore
+  ax1.scatter([pos_x[ 0]], [pos_y[ 0]], [pos_z[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
+  ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
   ax1.set_xlabel('Pos-X [m]')
   ax1.set_ylabel('Pos-Y [m]')
   ax1.set_zlabel('Pos-Z [m]') # type: ignore
@@ -111,8 +111,8 @@ def plot_3d_trajectories(
   ax1.set_box_aspect([1,1,1]) # type: ignore
 
   # Set pane colors to white
-  ax1.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax1.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax1.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+  ax1.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
   ax1.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
 
   min_limit, max_limit = get_equal_limits(ax1, buffer_fraction=0.45)
@@ -202,8 +202,8 @@ def plot_3d_trajectories(
   # Plot 3D velocity trajectory
   ax2 = fig.add_subplot(122, projection='3d')
   ax2.plot(vel_x, vel_y, vel_z, 'b-', linewidth=2.0)
-  ax2.scatter([vel_x[ 0]], [vel_y[ 0]], [vel_z[ 0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2) # type: ignore
-  ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2) # type: ignore
+  ax2.scatter([vel_x[ 0]], [vel_y[ 0]], [vel_z[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2) # type: ignore
+  ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2) # type: ignore
   ax2.set_xlabel('Vel-X [m/s]')
   ax2.set_ylabel('Vel-Y [m/s]')
   ax2.set_zlabel('Vel-Z [m/s]') # type: ignore
@@ -421,10 +421,8 @@ def plot_3d_error(
   # Plot 3D position error
   ax1 = fig.add_subplot(121, projection='3d')
   ax1.plot(pos_error[0, :], pos_error[1, :], pos_error[2, :], 'b-', linewidth=1)
-  ax1.scatter([pos_error[0, 0]], [pos_error[1, 0]], [pos_error[2, 0]], 
-              s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, label='Initial') # type: ignore
-  ax1.scatter([pos_error[0, -1]], [pos_error[1, -1]], [pos_error[2, -1]], 
-              s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, label='Final') # type: ignore
+  ax1.scatter([pos_error[0,  0]], [pos_error[1,  0]], [pos_error[2,  0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, label='Initial') # type: ignore
+  ax1.scatter([pos_error[0, -1]], [pos_error[1, -1]], [pos_error[2, -1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, label='Final') # type: ignore
   ax1.set_xlabel('Error X [m]')
   ax1.set_ylabel('Error Y [m]')
   ax1.set_zlabel('Error Z [m]') # type: ignore
@@ -436,8 +434,8 @@ def plot_3d_error(
   # Plot 3D velocity error
   ax2 = fig.add_subplot(122, projection='3d')
   ax2.plot(vel_error[0, :], vel_error[1, :], vel_error[2, :], 'b-', linewidth=1)
-  ax2.scatter([vel_error[0, 0]], [vel_error[1, 0]], [vel_error[2, 0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, label='Initial') # type: ignore
-  ax2.scatter([vel_error[0, -1]], [vel_error[1, -1]], [vel_error[2, -1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, label='Final') # type: ignore
+  ax2.scatter([vel_error[0,  0]], [vel_error[1,  0]], [vel_error[2,  0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, label='Initial') # type: ignore
+  ax2.scatter([vel_error[0, -1]], [vel_error[1, -1]], [vel_error[2, -1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, label='Final') # type: ignore
   ax2.set_xlabel('Error Vx [m/s]')
   ax2.set_ylabel('Error Vy [m/s]')
   ax2.set_zlabel('Error Vz [m/s]') # type: ignore
@@ -654,158 +652,6 @@ def plot_time_series_error(
   return fig
 
 
-def plot_3d_trajectories_body_fixed(
-  result       : dict,
-  epoch_dt_utc : Optional[datetime.datetime] = None,
-) -> Figure:
-  """
-  Plot 3D position and velocity trajectories in body-fixed (IAU_EARTH) frame.
-  
-  Input:
-  ------
-    result : dict
-      Propagation result dictionary containing 'state' (6xN array) and 'plot_time_s'.
-    epoch_dt_utc : datetime, optional
-      Reference epoch (start time) for time conversion to ET.
-      
-  Output:
-  -------
-    fig : matplotlib.figure.Figure
-      Figure object containing the 3D plots.
-  """
-  fig = plt.figure(figsize=(18, 10))
-  
-  # Extract J2000 state vectors
-  j2000_state   = result['state']
-  j2000_pos_vec = j2000_state[0:3, :]
-  j2000_vel_vec = j2000_state[3:6, :]
-  time_s        = result['plot_time_s']
-  n_points      = j2000_state.shape[1]
-  
-  # Convert epoch to ET
-  if epoch_dt_utc is not None:
-    epoch_et = utc_to_et(epoch_dt_utc)
-  else:
-    epoch_et = 0.0
-  
-  # Transform each position and velocity to body-fixed frame
-  iau_earth_pos_vec = np.zeros((3, n_points))
-  iau_earth_vel_vec = np.zeros((3, n_points))
-  for i in range(n_points):
-    epoch_et_i = epoch_et + time_s[i]
-    rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(epoch_et_i)
-    iau_earth_pos_vec[:, i] = rot_mat_j2000_to_iau_earth @ j2000_pos_vec[:, i]
-    iau_earth_vel_vec[:, i] = rot_mat_j2000_to_iau_earth @ j2000_vel_vec[:, i]
-  
-  pos_x, pos_y, pos_z = iau_earth_pos_vec[0, :], iau_earth_pos_vec[1, :], iau_earth_pos_vec[2, :]
-  vel_x, vel_y, vel_z = iau_earth_vel_vec[0, :], iau_earth_vel_vec[1, :], iau_earth_vel_vec[2, :]
-  
-  # Build info string
-  info_text = "Frame: IAU_EARTH (Body-Fixed)"
-  if epoch_dt_utc is not None:
-    start_time_iso_utc = epoch_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
-    end_time_dt_utc    = epoch_dt_utc + timedelta(seconds=time_s[-1])
-    end_time_iso_utc   = end_time_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
-    info_text += f"  |  Initial: {start_time_iso_utc}  |  Final: {end_time_iso_utc}"
-  
-  # Plot 3D position trajectory
-  ax1 = fig.add_subplot(121, projection='3d')
-  
-  # Add Earth wireframe ellipsoid
-  u       = np.linspace(0, 2 * np.pi, 24)
-  v       = np.linspace(0, np.pi, 12)
-  r_eq    = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
-  r_pol   = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.POLAR
-  x_earth = r_eq * np.outer(np.cos(u), np.sin(v))
-  y_earth = r_eq * np.outer(np.sin(u), np.sin(v))
-  z_earth = r_pol * np.outer(np.ones(np.size(u)), np.cos(v))
-  ax1.plot_wireframe(x_earth, y_earth, z_earth, color='black', linewidth=0.5, alpha=1.0)  # type: ignore
-  
-  ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=2.0)
-  ax1.scatter([pos_x[ 0]], [pos_y[ 0]], [pos_z[ 0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
-  ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
-  ax1.set_xlabel('Pos-X [m]')
-  ax1.set_ylabel('Pos-Y [m]')
-  ax1.set_zlabel('Pos-Z [m]') # type: ignore
-  ax1.grid(True)
-  ax1.set_box_aspect([1,1,1]) # type: ignore
-
-  # Set pane colors to white
-  ax1.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
-  ax1.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
-  ax1.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
-
-  min_limit, max_limit = get_equal_limits(ax1, buffer_fraction=0.45)
-  
-  ax1.set_xlim((min_limit, max_limit))
-  ax1.set_ylim((min_limit, max_limit))
-  ax1.set_zlim((min_limit, max_limit))  # type: ignore
-
-  # Add position trajectory shadows
-  shadow_color = 'gray'
-  shadow_alpha = 0.75
-  shadow_lw    = 0.5
-  ax1.plot(pos_x, pos_y, np.full_like(pos_z, min_limit), color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
-  ax1.plot(pos_x, np.full_like(pos_y, max_limit), pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
-  ax1.plot(np.full_like(pos_x, min_limit), pos_y, pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
-
-  # Add Earth projection shadows (filled circles on planes)
-  r_disk = np.linspace(0, r_eq, 2)
-  t_disk = np.linspace(0, 2*np.pi, 60)
-  R_disk, T_disk = np.meshgrid(r_disk, t_disk)
-  U_disk = R_disk * np.cos(T_disk)
-  V_disk = R_disk * np.sin(T_disk)
-  earth_shadow_alpha = 0.1
-
-  ax1.plot_surface(U_disk, V_disk, np.full_like(U_disk, min_limit), color='black', alpha=earth_shadow_alpha, shade=False)  # type: ignore
-  ax1.plot_surface(U_disk, np.full_like(U_disk, max_limit), V_disk, color='black', alpha=earth_shadow_alpha, shade=False)  # type: ignore
-  ax1.plot_surface(np.full_like(U_disk, min_limit), U_disk, V_disk, color='black', alpha=earth_shadow_alpha, shade=False)  # type: ignore
-
-  # Plot 3D velocity trajectory
-  ax2 = fig.add_subplot(122, projection='3d')
-  ax2.plot(vel_x, vel_y, vel_z, 'b-', linewidth=2.0)
-  ax2.scatter([vel_x[ 0]], [vel_y[ 0]], [vel_z[ 0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
-  ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2) # type: ignore
-  ax2.set_xlabel('Vel-X [m/s]')
-  ax2.set_ylabel('Vel-Y [m/s]')
-  ax2.set_zlabel('Vel-Z [m/s]') # type: ignore
-  ax2.grid(True)
-  ax2.set_box_aspect([1,1,1]) # type: ignore
-
-  # Set pane colors to white
-  ax2.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax2.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax2.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0)) # type: ignore
-
-  min_limit_vel, max_limit_vel = get_equal_limits(ax2, buffer_fraction=0.45)
-  
-  ax2.set_xlim((min_limit_vel, max_limit_vel))
-  ax2.set_ylim((min_limit_vel, max_limit_vel))
-  ax2.set_zlim((min_limit_vel, max_limit_vel)) # type: ignore
-
-  # Add velocity trajectory shadows
-  ax2.plot(vel_x, vel_y, np.full_like(vel_z, min_limit_vel), color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
-  ax2.plot(vel_x, np.full_like(vel_y, max_limit_vel), vel_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
-  ax2.plot(np.full_like(vel_x, min_limit_vel), vel_y, vel_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
-
-  # Create custom legend handles (lines only, no markers)
-  legend_handles = [
-    Line2D([0], [0], color='black', linewidth=1.5, label='Earth'),
-    Line2D([0], [0], color='b', linewidth=2.0, label='Spacecraft'),
-    Line2D([0], [0], color='gold', linewidth=1.5, label='Sun'),
-    Line2D([0], [0], color='gray', linewidth=1.5, label='Moon'),
-  ]
-  leg = fig.legend(handles=legend_handles, loc='upper right', fontsize=11, framealpha=0.9)
-  leg.get_frame().set_edgecolor('black')
-
-  # Add info text as figure text
-  fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=11, color='black',
-           bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', alpha=0.9))
-
-  plt.tight_layout(rect=(0.0, 0.06, 1.0, 0.95))  # Leave space at bottom for info text and top for legend
-  return fig
-
-
 def plot_time_series(
   result : dict,
   epoch  : Optional[datetime.datetime] = None,
@@ -980,10 +826,8 @@ def plot_3d_error(
   # Plot 3D position error
   ax1 = fig.add_subplot(121, projection='3d')
   ax1.plot(pos_error[0, :], pos_error[1, :], pos_error[2, :], 'b-', linewidth=1)
-  ax1.scatter([pos_error[0, 0]], [pos_error[1, 0]], [pos_error[2, 0]], 
-              s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, label='Initial') # type: ignore
-  ax1.scatter([pos_error[0, -1]], [pos_error[1, -1]], [pos_error[2, -1]], 
-              s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, label='Final') # type: ignore
+  ax1.scatter([pos_error[0,  0]], [pos_error[1,  0]], [pos_error[2,  0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, label='Initial') # type: ignore
+  ax1.scatter([pos_error[0, -1]], [pos_error[1, -1]], [pos_error[2, -1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, label='Final'  ) # type: ignore
   ax1.set_xlabel('Error X [m]')
   ax1.set_ylabel('Error Y [m]')
   ax1.set_zlabel('Error Z [m]') # type: ignore
@@ -995,8 +839,8 @@ def plot_3d_error(
   # Plot 3D velocity error
   ax2 = fig.add_subplot(122, projection='3d')
   ax2.plot(vel_error[0, :], vel_error[1, :], vel_error[2, :], 'b-', linewidth=1)
-  ax2.scatter([vel_error[0, 0]], [vel_error[1, 0]], [vel_error[2, 0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, label='Initial') # type: ignore
-  ax2.scatter([vel_error[0, -1]], [vel_error[1, -1]], [vel_error[2, -1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, label='Final') # type: ignore
+  ax2.scatter([vel_error[0,  0]], [vel_error[1,  0]], [vel_error[2,  0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, label='Initial') # type: ignore
+  ax2.scatter([vel_error[0, -1]], [vel_error[1, -1]], [vel_error[2, -1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, label='Final') # type: ignore
   ax2.set_xlabel('Error Vx [m/s]')
   ax2.set_ylabel('Error Vy [m/s]')
   ax2.set_zlabel('Error Vz [m/s]') # type: ignore
@@ -1278,11 +1122,11 @@ def plot_3d_trajectories_body_fixed(
   x_earth = r_eq * np.outer(np.cos(u), np.sin(v))
   y_earth = r_eq * np.outer(np.sin(u), np.sin(v))
   z_earth = r_pol * np.outer(np.ones(np.size(u)), np.cos(v))
-  ax1.plot_wireframe(x_earth, y_earth, z_earth, color='black', linewidth=0.5, alpha=1.0)
+  ax1.plot_wireframe(x_earth, y_earth, z_earth, color='black', linewidth=0.5, alpha=1.0)  # type: ignore
   
   ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=2.0)
-  ax1.scatter([pos_x[0]], [pos_y[0]], [pos_z[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2)
-  ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2)
+  ax1.scatter([pos_x[ 0]], [pos_y[ 0]], [pos_z[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2)
+  ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2)
   ax1.set_xlabel('Pos-X [m]')
   ax1.set_ylabel('Pos-Y [m]')
   ax1.set_zlabel('Pos-Z [m]') # type: ignore
@@ -1290,15 +1134,15 @@ def plot_3d_trajectories_body_fixed(
   ax1.set_box_aspect([1,1,1]) # type: ignore
 
   # Set pane colors to white
-  ax1.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax1.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax1.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax1.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+  ax1.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+  ax1.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
 
   min_limit, max_limit = get_equal_limits(ax1, buffer_fraction=0.45)
   
-  ax1.set_xlim([min_limit, max_limit])
-  ax1.set_ylim([min_limit, max_limit])
-  ax1.set_zlim([min_limit, max_limit])
+  ax1.set_xlim((min_limit, max_limit))
+  ax1.set_ylim((min_limit, max_limit))
+  ax1.set_zlim((min_limit, max_limit))  # type: ignore
 
   # Add position trajectory shadows
   shadow_color = 'gray'
@@ -1316,15 +1160,15 @@ def plot_3d_trajectories_body_fixed(
   V_disk = R_disk * np.sin(T_disk)
   earth_shadow_alpha = 0.1
 
-  ax1.plot_surface(U_disk, V_disk, np.full_like(U_disk, min_limit), color='black', alpha=earth_shadow_alpha, shade=False)
-  ax1.plot_surface(U_disk, np.full_like(U_disk, max_limit), V_disk, color='black', alpha=earth_shadow_alpha, shade=False)
-  ax1.plot_surface(np.full_like(U_disk, min_limit), U_disk, V_disk, color='black', alpha=earth_shadow_alpha, shade=False)
+  ax1.plot_surface(U_disk, V_disk, np.full_like(U_disk, min_limit), color='black', alpha=earth_shadow_alpha, shade=False)  # type: ignore
+  ax1.plot_surface(U_disk, np.full_like(U_disk, max_limit), V_disk, color='black', alpha=earth_shadow_alpha, shade=False)  # type: ignore
+  ax1.plot_surface(np.full_like(U_disk, min_limit), U_disk, V_disk, color='black', alpha=earth_shadow_alpha, shade=False)  # type: ignore
 
   # Plot 3D velocity trajectory
   ax2 = fig.add_subplot(122, projection='3d')
   ax2.plot(vel_x, vel_y, vel_z, 'b-', linewidth=2.0)
-  ax2.scatter([vel_x[ 0]], [vel_y[ 0]], [vel_z[ 0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
-  ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
+  ax2.scatter([vel_x[ 0]], [vel_y[ 0]], [vel_z[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
+  ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
   ax2.set_xlabel('Vel-X [m/s]')
   ax2.set_ylabel('Vel-Y [m/s]')
   ax2.set_zlabel('Vel-Z [m/s]') # type: ignore
@@ -1351,8 +1195,6 @@ def plot_3d_trajectories_body_fixed(
   legend_handles = [
     Line2D([0], [0], color='black', linewidth=1.5, label='Earth'),
     Line2D([0], [0], color='b', linewidth=2.0, label='Spacecraft'),
-    Line2D([0], [0], color='gold', linewidth=1.5, label='Sun'),
-    Line2D([0], [0], color='gray', linewidth=1.5, label='Moon'),
   ]
   leg = fig.legend(handles=legend_handles, loc='upper right', fontsize=11, framealpha=0.9)
   leg.get_frame().set_edgecolor('black')
@@ -1389,10 +1231,10 @@ def plot_ground_track(
   """
   fig = plt.figure(figsize=(14, 8))
   ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
-  ax.set_extent([-180, 180, -90, 90], crs=ccrs.PlateCarree())
-  ax.add_feature(cfeature.COASTLINE)
-  ax.add_feature(cfeature.BORDERS, linestyle=':', alpha=0.5)
-  gl = ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False, alpha=0.5, linestyle='--')
+  ax.set_extent([-180, 180, -90, 90], crs=ccrs.PlateCarree())  # type: ignore
+  ax.add_feature(cfeature.COASTLINE)  # type: ignore
+  ax.add_feature(cfeature.BORDERS, linestyle=':', alpha=0.5)  # type: ignore
+  gl = ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False, alpha=0.5, linestyle='--')  # type: ignore
   gl.top_labels = False
   gl.right_labels = False
   
@@ -1436,24 +1278,19 @@ def plot_ground_track(
     ax.plot(lon_seg, lat_seg, 'b-', linewidth=1.5, **plot_kwargs)
   
   # Mark start and end points
-  ax.scatter([lon[0]], [lat[0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Initial', **plot_kwargs)
-  ax.scatter([lon[-1]], [lat[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Final', **plot_kwargs)
-  
-  # Legend
-  leg = ax.legend(loc='upper right')
-  leg.get_frame().set_edgecolor('black')
+  ax.scatter([lon[ 0]], [lat[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Initial', **plot_kwargs)
+  ax.scatter([lon[-1]], [lat[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Final', **plot_kwargs)
   
   # Build info text for bottom of figure (consistent with 3D plots)
   info_text = "Frame: IAU_EARTH (Body-Fixed)"
   if epoch_dt_utc is not None:
-    start_utc = epoch_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
-    end_time  = epoch_dt_utc + timedelta(seconds=time_s[-1])
-    end_utc   = end_time.strftime('%Y-%m-%d %H:%M:%S UTC')
+    start_utc  = epoch_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
+    end_time   = epoch_dt_utc + timedelta(seconds=time_s[-1])
+    end_utc    = end_time.strftime('%Y-%m-%d %H:%M:%S UTC')
     info_text += f"  |  Initial: {start_utc}  |  Final: {end_utc}"
   
   # Add info text as figure text at bottom (consistent with 3D plots)
-  fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=11, color='black',
-           bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', alpha=0.9))
+  fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=11, color='black', bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', alpha=0.9))
   
   # Set title using suptitle (will be overwritten by caller, but provides default)
   fig.suptitle(title_text, fontsize=16)
@@ -1462,7 +1299,7 @@ def plot_ground_track(
   return fig
 
 
-def plot_3d_trajectory_with_moon(
+def plot_3d_trajectory_sun_centered(
   result : dict,
   epoch  : Optional[datetime.datetime] = None,
 ) -> Figure:
@@ -1491,23 +1328,14 @@ def plot_3d_trajectory_with_moon(
   # Build info string
   info_text = "Frame: J2000 - Sun-Centered"
   if epoch is not None and 'plot_time_s' in result:
-    start_utc = epoch.strftime('%Y-%m-%d %H:%M:%S UTC')
-    end_time  = epoch + timedelta(seconds=result['plot_time_s'][-1])
-    end_utc   = end_time.strftime('%Y-%m-%d %H:%M:%S UTC')
+    start_utc  = epoch.strftime('%Y-%m-%d %H:%M:%S UTC')
+    end_time   = epoch + timedelta(seconds=result['plot_time_s'][-1])
+    end_utc    = end_time.strftime('%Y-%m-%d %H:%M:%S UTC')
     info_text += f"  |  Initial: {start_utc}  |  Final: {end_utc}"
   
   # Create subplots in a 1x2 grid
   ax_sun_dup = fig.add_subplot(121, projection='3d')
   ax_sun     = fig.add_subplot(122, projection='3d')
-  
-  # Pre-calculate Earth wireframe ellipsoid
-  u       = np.linspace(0, 2 * np.pi, 24)
-  v       = np.linspace(0, np.pi, 12)
-  r_eq    = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
-  r_pol   = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.POLAR
-  x_earth = r_eq * np.outer(np.cos(u), np.sin(v))
-  y_earth = r_eq * np.outer(np.sin(u), np.sin(v))
-  z_earth = r_pol * np.outer(np.ones(np.size(u)), np.cos(v))
   
   # Pre-calculate Moon and Sun data if epoch is available
   moon_pos        = None
@@ -1686,32 +1514,26 @@ def plot_3d_trajectory_with_moon(
         ax.plot(earth_pos_helio[0, :], earth_pos_helio[1, :], earth_pos_helio[2, :], color='black', linewidth=2.0, alpha=0.8, label='Earth')
       
       # Plot Earth Initial
-      ax.scatter([earth_pos_helio_init[0]], [earth_pos_helio_init[1]], [earth_pos_helio_init[2]], 
-                 s=100, marker='>', facecolors='white', edgecolors='black', linewidths=2, zorder=5)
+      if earth_pos_helio_init is not None:
+        ax.scatter([earth_pos_helio_init[0]], [earth_pos_helio_init[1]], [earth_pos_helio_init[2]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='black', linewidths=2, zorder=5)
                     
       # Plot Earth Final
       if earth_pos_helio_final is not None:
-        ax.scatter([earth_pos_helio_final[0]], [earth_pos_helio_final[1]], [earth_pos_helio_final[2]], 
-                   s=100, marker='s', facecolors='white', edgecolors='black', linewidths=2, zorder=5)
+        ax.scatter([earth_pos_helio_final[0]], [earth_pos_helio_final[1]], [earth_pos_helio_final[2]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='black', linewidths=2, zorder=5)
       
       if ax == ax_sun_dup and moon_pos_helio is not None:
         # Plot Moon Trajectory
         ax.plot(moon_pos_helio[0, :], moon_pos_helio[1, :], moon_pos_helio[2, :], 
                 color='gray', linewidth=1.0, alpha=0.8, label='Moon')
         # Add Moon markers
-        ax.scatter([moon_pos_helio[0, 0]], [moon_pos_helio[1, 0]], [moon_pos_helio[2, 0]], 
-                   s=80, marker='>', facecolors='white', edgecolors='gray', linewidths=2, zorder=8)
-        ax.scatter([moon_pos_helio[0, -1]], [moon_pos_helio[1, -1]], [moon_pos_helio[2, -1]], 
-                   s=80, marker='s', facecolors='white', edgecolors='gray', linewidths=2, zorder=8)
+        ax.scatter([moon_pos_helio[0,  0]], [moon_pos_helio[1,  0]], [moon_pos_helio[2,  0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='gray', linewidths=2, zorder=8)
+        ax.scatter([moon_pos_helio[0, -1]], [moon_pos_helio[1, -1]], [moon_pos_helio[2, -1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='gray', linewidths=2, zorder=8)
 
       if sc_pos_helio is not None:
         # Plot Spacecraft Trajectory
-        ax.plot(sc_pos_helio[0, :], sc_pos_helio[1, :], sc_pos_helio[2, :], 
-                color='b', linewidth=1.5, label='Spacecraft')
-        ax.scatter([sc_pos_helio[0, 0]], [sc_pos_helio[1, 0]], [sc_pos_helio[2, 0]], 
-                   s=80, marker='>', facecolors='white', edgecolors='b', linewidths=2, zorder=10)
-        ax.scatter([sc_pos_helio[0, -1]], [sc_pos_helio[1, -1]], [sc_pos_helio[2, -1]], 
-                   s=80, marker='s', facecolors='white', edgecolors='b', linewidths=2, zorder=10)
+        ax.plot(sc_pos_helio[0, :], sc_pos_helio[1, :], sc_pos_helio[2, :], color='b', linewidth=1.5, label='Spacecraft')
+        ax.scatter([sc_pos_helio[0,  0]], [sc_pos_helio[1,  0]], [sc_pos_helio[2,  0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=10)
+        ax.scatter([sc_pos_helio[0, -1]], [sc_pos_helio[1, -1]], [sc_pos_helio[2, -1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=10)
 
       ax.set_xlabel('Pos-X [m]')
       ax.set_ylabel('Pos-Y [m]')
@@ -2038,7 +1860,7 @@ def generate_3d_and_time_series_plots(
     plt.close(fig_gt)
     
     # 3D plot Sun-centered trajectory
-    fig_moon = plot_3d_trajectory_with_moon(result_high_fidelity_propagation, epoch=time_o_dt)
+    fig_moon = plot_3d_trajectory_sun_centered(result_high_fidelity_propagation, epoch=time_o_dt)
     fig_moon.suptitle(f'3D Inertial - {object_name_display} - High-Fidelity', fontsize=16)
     filename = f'3d_j2000_sun_centered_high_fidelity_{name_lower}.png'
     fig_moon.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
