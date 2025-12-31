@@ -1322,8 +1322,7 @@ def plot_3d_trajectory_sun_centered(
   
   # Extract state vectors
   posvel_vec = result['state']
-  pos_x, pos_y, pos_z = posvel_vec[0, :], posvel_vec[1, :], posvel_vec[2, :]
-  time_s = result['plot_time_s']
+  time_s     = result['plot_time_s']
   
   # Build info string
   info_text = "Frame: J2000 - Sun-Centered"
@@ -1341,7 +1340,6 @@ def plot_3d_trajectory_sun_centered(
   moon_pos        = None
   n_moon_points   = 0
   moon_orbit_full = None
-  x_moon_sphere, y_moon_sphere, z_moon_sphere = None, None, None
   
   sun_pos        = None
   n_sun_points   = 0
@@ -1362,13 +1360,13 @@ def plot_3d_trajectory_sun_centered(
       # --- HELIOCENTRIC EARTH ORBIT ---
       # Get Earth state relative to Sun at start
       earth_state_sun, _   = spice.spkezr('EARTH', epoch_et_start, 'J2000', 'NONE', 'SUN')
-      earth_pos_helio_init = earth_state_sun[0:3] * 1000.0 # m
-      earth_vel_helio_init = earth_state_sun[3:6] * 1000.0 # m/s
+      earth_pos_helio_init = earth_state_sun[0:3] * CONVERTER.M_PER_KM # m
+      earth_vel_helio_init = earth_state_sun[3:6] * CONVERTER.M_PER_KM # m/s
       
       # Get Earth state relative to Sun at end
-      epoch_et_end = epoch_et_start + time_s[-1]
+      epoch_et_end           = epoch_et_start + time_s[-1]
       earth_state_sun_end, _ = spice.spkezr('EARTH', epoch_et_end, 'J2000', 'NONE', 'SUN')
-      earth_pos_helio_final  = earth_state_sun_end[0:3] * 1000.0 # m
+      earth_pos_helio_final  = earth_state_sun_end[0:3] * CONVERTER.M_PER_KM # m
 
       # Calculate full orbit based on initial osculating elements
       try:
