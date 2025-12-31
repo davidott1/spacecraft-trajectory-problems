@@ -1416,7 +1416,7 @@ def plot_3d_trajectory_sun_centered(
         moon_pos_helio[:, i] = pos_earth_sun_m + pos_moon_earth_m
 
       # --- MOON ---
-      # 1. Moon trajectory during simulation
+      # Moon trajectory during simulation
       n_moon_points = min(len(time_s), 500)  # Limit Moon points for performance
       moon_time_indices = np.linspace(0, len(time_s) - 1, n_moon_points, dtype=int)
       
@@ -1426,16 +1426,8 @@ def plot_3d_trajectory_sun_centered(
         # Get Moon position relative to Earth in J2000 (returns in km)
         moon_pos_km, _ = spice.spkpos('MOON', epoch_et_i, 'J2000', 'NONE', 'EARTH')
         moon_pos[:, i] = np.array(moon_pos_km) * 1000.0  # Convert to meters
-      
-      # Moon sphere at final position
-      moon_radius = 1.7374e6  # Moon radius in meters
-      u_moon = np.linspace(0, 2 * np.pi, 12)
-      v_moon = np.linspace(0, np.pi, 8)
-      x_moon_sphere = moon_radius * np.outer(np.cos(u_moon), np.sin(v_moon)) + moon_pos[0, -1]
-      y_moon_sphere = moon_radius * np.outer(np.sin(u_moon), np.sin(v_moon)) + moon_pos[1, -1]
-      z_moon_sphere = moon_radius * np.outer(np.ones(np.size(u_moon)), np.cos(v_moon)) + moon_pos[2, -1]
 
-      # 2. Full approximate Moon orbit (Keplerian ellipse based on initial state)
+      # Full approximate Moon orbit (Keplerian ellipse based on initial state)
       # Get initial state of Moon (km, km/s)
       moon_state_km, _ = spice.spkezr('MOON', epoch_et_start, 'J2000', 'NONE', 'EARTH')
       moon_pos_init = moon_state_km[0:3] * 1000.0 # m
