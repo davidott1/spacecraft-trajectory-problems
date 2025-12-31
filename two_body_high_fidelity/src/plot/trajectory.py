@@ -19,6 +19,38 @@ from src.model.time_converter  import utc_to_et
 from src.model.orbit_converter import GeographicCoordinateConverter, OrbitConverter
 
 
+def project_to_bounds(origin, direction, ax):
+  """
+  Finds the intersection of a vector with the plot boundaries.
+  """
+  x_lim = ax.get_xlim()
+  y_lim = ax.get_ylim()
+  z_lim = ax.get_zlim()
+  
+  # 1. Determine which wall (min or max) the vector is pointing toward for each axis
+  target_x = x_lim[1] if direction[0] >= 0 else x_lim[0]
+  target_y = y_lim[1] if direction[1] >= 0 else y_lim[0]
+  target_z = z_lim[1] if direction[2] >= 0 else z_lim[0]
+  
+  # 2. Calculate the scalar 't' required to hit that wall
+  epsilon = 1e-9
+  t_x = (target_x - origin[0]) / (direction[0] if abs(direction[0]) > epsilon else epsilon)
+  t_y = (target_y - origin[1]) / (direction[1] if abs(direction[1]) > epsilon else epsilon)
+  t_z = (target_z - origin[2]) / (direction[2] if abs(direction[2]) > epsilon else epsilon)
+  
+  # 3. The smallest positive 't' is the wall we hit first
+  # We filter for positive t only (forward direction)
+  ts = [t for t in [t_x, t_y, t_z] if t > 0]
+  if not ts:
+      return origin # Should not happen if direction is valid
+  t_final = min(ts)
+  
+  # 4. Calculate the intersection point
+  intersection = origin + direction * t_final
+  
+  return intersection
+
+
 def plot_3d_trajectories(
   result : dict,
   epoch  : Optional[datetime.datetime] = None,
@@ -81,7 +113,7 @@ def plot_3d_trajectories(
   # Set pane colors to white
   ax1.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
   ax1.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax1.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax1.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
 
   min_limit, max_limit = get_equal_limits(ax1, buffer_fraction=0.45)
   
@@ -109,15 +141,13 @@ def plot_3d_trajectories(
   earth_shadow_alpha = 0.1
 
   # XY plane (z = min_limit)
-  ax1.plot_surface(U_disk, V_disk, np.full_like(U_disk, min_limit), color='black', alpha=earth_shadow_alpha, shade=False)
-
+  ax1.plot_surface(U_disk, V_disk, np.full_like(U_disk, min_limit), color='black', alpha=earth_shadow_alpha, shade=False)  # type: ignore 
   # XZ plane (y = max_limit)
-  ax1.plot_surface(U_disk, np.full_like(U_disk, max_limit), V_disk, color='black', alpha=earth_shadow_alpha, shade=False)
-
+  ax1.plot_surface(U_disk, np.full_like(U_disk, max_limit), V_disk, color='black', alpha=earth_shadow_alpha, shade=False)  # type: ignore
   # YZ plane (x = min_limit)
-  ax1.plot_surface(np.full_like(U_disk, min_limit), U_disk, V_disk, color='black', alpha=earth_shadow_alpha, shade=False)
+  ax1.plot_surface(np.full_like(U_disk, min_limit), U_disk, V_disk, color='black', alpha=earth_shadow_alpha, shade=False)  # type: ignore
 
-  # Add sun direction arrows (only if we have epoch and are in J2000 frame)
+  # Add sun direction markers on box walls (only if we have epoch and are in J2000 frame)
   if epoch is not None and frame == "J2000" and 'plot_time_s' in result:
     try:
       # Get start and end times
@@ -140,149 +170,30 @@ def plot_3d_trajectories(
       moon_pos_end_km, _ = spice.spkpos('MOON', epoch_et_end, 'J2000', 'NONE', 'EARTH')
       moon_dir_end = moon_pos_end_km / np.linalg.norm(moon_pos_end_km)
       
-      # Scale arrows to be visible in the plot based on axis limits
-      axis_range = max_limit - min_limit
       origin = np.array([0, 0, 0])  # Earth center
-      
-      # Sun arrow limits (further out)
-      dist_start_sun = 0.5 * axis_range
-      dist_end_sun   = 0.6 * axis_range
-      
-      # Moon arrow limits (closer, using previous sun limits)
-      dist_start_moon = 0.3 * axis_range
-      dist_end_moon   = 0.4 * axis_range
-      
-      # --- SUN ARROWS ---
-      # Line start points and end points
-      line_start_initial = origin + dist_start_sun * sun_dir_start
-      line_end_initial   = origin + dist_end_sun   * sun_dir_start
-      
-      line_start_final   = origin + dist_start_sun * sun_dir_end
-      line_end_final     = origin + dist_end_sun   * sun_dir_end
-      
-      # Draw 3D line for initial sun direction (gold color)
-      ax1.plot([line_start_initial[0], line_end_initial[0]], 
-               [line_start_initial[1], line_end_initial[1]], 
-               [line_start_initial[2], line_end_initial[2]],
-               color='gold', linewidth=2.5, alpha=0.9)
-      
-      # Draw line for final sun direction (orange color)
-      ax1.plot([line_start_final[0], line_end_final[0]], 
-               [line_start_final[1], line_end_final[1]], 
-               [line_start_final[2], line_end_final[2]],
-               color='orange', linewidth=2.5, alpha=0.9)
-      
-      # Add triangle marker at initial sun direction tip
-      ax1.scatter([line_end_initial[0]], [line_end_initial[1]], [line_end_initial[2]], 
-                  s=40, marker='>', color='gold', edgecolors='gold', linewidths=1.5, 
-                  zorder=10, label='Sun (Initial)')
-      
-      # Add square marker at final sun direction tip
-      ax1.scatter([line_end_final[0]], [line_end_final[1]], [line_end_final[2]], 
-                  s=40, marker='s', color='orange', edgecolors='orange', linewidths=1.5, 
-                  zorder=10, label='Sun (Final)')
-      
-      # Project sun vectors onto planes (like trajectory shadows)
-      sun_shadow_alpha = 0.6
-      sun_shadow_lw = 1.5
-      sun_shadow_color_initial = 'darkgray'   # Lighter gray for initial
-      sun_shadow_color_final   = 'dimgray'    # Darker gray for final
-      
-      # XY plane shadows (z = min_limit)
-      ax1.plot([line_start_initial[0], line_end_initial[0]], 
-               [line_start_initial[1], line_end_initial[1]], 
-               [min_limit, min_limit],
-               color=sun_shadow_color_initial, linewidth=sun_shadow_lw, alpha=sun_shadow_alpha)
-      ax1.plot([line_start_final[0], line_end_final[0]], 
-               [line_start_final[1], line_end_final[1]], 
-               [min_limit, min_limit],
-               color=sun_shadow_color_final, linewidth=sun_shadow_lw, alpha=sun_shadow_alpha)
-      
-      # XZ plane shadows (y = max_limit)
-      ax1.plot([line_start_initial[0], line_end_initial[0]], 
-               [max_limit, max_limit], 
-               [line_start_initial[2], line_end_initial[2]],
-               color=sun_shadow_color_initial, linewidth=sun_shadow_lw, alpha=sun_shadow_alpha)
-      ax1.plot([line_start_final[0], line_end_final[0]], 
-               [max_limit, max_limit], 
-               [line_start_final[2], line_end_final[2]],
-               color=sun_shadow_color_final, linewidth=sun_shadow_lw, alpha=sun_shadow_alpha)
-      
-      # YZ plane shadows (x = min_limit)
-      ax1.plot([min_limit, min_limit], 
-               [line_start_initial[1], line_end_initial[1]], 
-               [line_start_initial[2], line_end_initial[2]],
-               color=sun_shadow_color_initial, linewidth=sun_shadow_lw, alpha=sun_shadow_alpha)
-      ax1.plot([min_limit, min_limit], 
-               [line_start_final[1], line_end_final[1]], 
-               [line_start_final[2], line_end_final[2]],
-               color=sun_shadow_color_final, linewidth=sun_shadow_lw, alpha=sun_shadow_alpha)
+      z_floor = min_limit
 
-      # --- MOON ARROWS ---
-      # Line start points and end points
-      line_start_initial_moon = origin + dist_start_moon * moon_dir_start
-      line_end_initial_moon   = origin + dist_end_moon   * moon_dir_start
-      
-      line_start_final_moon   = origin + dist_start_moon * moon_dir_end
-      line_end_final_moon     = origin + dist_end_moon   * moon_dir_end
-      
-      # Draw 3D line for initial moon direction (silver color)
-      ax1.plot([line_start_initial_moon[0], line_end_initial_moon[0]], 
-               [line_start_initial_moon[1], line_end_initial_moon[1]], 
-               [line_start_initial_moon[2], line_end_initial_moon[2]],
-               color='silver', linewidth=2.5, alpha=0.9)
-      
-      # Draw line for final moon direction (gray color)
-      ax1.plot([line_start_final_moon[0], line_end_final_moon[0]], 
-               [line_start_final_moon[1], line_end_final_moon[1]], 
-               [line_start_final_moon[2], line_end_final_moon[2]],
-               color='gray', linewidth=2.5, alpha=0.9)
-      
-      # Add triangle marker at initial moon direction tip
-      ax1.scatter([line_end_initial_moon[0]], [line_end_initial_moon[1]], [line_end_initial_moon[2]], 
-                  s=40, marker='>', color='silver', edgecolors='silver', linewidths=1.5, 
-                  zorder=10, label='Moon (Initial)')
-      
-      # Add square marker at final moon direction tip
-      ax1.scatter([line_end_final_moon[0]], [line_end_final_moon[1]], [line_end_final_moon[2]], 
-                  s=40, marker='s', color='gray', edgecolors='gray', linewidths=1.5, 
-                  zorder=10, label='Moon (Final)')
-      
-      # Project moon vectors onto planes (like trajectory shadows)
-      moon_shadow_alpha = 0.6
-      moon_shadow_lw = 1.5
-      moon_shadow_color_initial = 'lightgray'
-      moon_shadow_color_final   = 'darkgray'
-      
-      # XY plane shadows (z = min_limit)
-      ax1.plot([line_start_initial_moon[0], line_end_initial_moon[0]], 
-               [line_start_initial_moon[1], line_end_initial_moon[1]], 
-               [min_limit, min_limit],
-               color=moon_shadow_color_initial, linewidth=moon_shadow_lw, alpha=moon_shadow_alpha)
-      ax1.plot([line_start_final_moon[0], line_end_final_moon[0]], 
-               [line_start_final_moon[1], line_end_final_moon[1]], 
-               [min_limit, min_limit],
-               color=moon_shadow_color_final, linewidth=moon_shadow_lw, alpha=moon_shadow_alpha)
-      
-      # XZ plane shadows (y = max_limit)
-      ax1.plot([line_start_initial_moon[0], line_end_initial_moon[0]], 
-               [max_limit, max_limit], 
-               [line_start_initial_moon[2], line_end_initial_moon[2]],
-               color=moon_shadow_color_initial, linewidth=moon_shadow_lw, alpha=moon_shadow_alpha)
-      ax1.plot([line_start_final_moon[0], line_end_final_moon[0]], 
-               [max_limit, max_limit], 
-               [line_start_final_moon[2], line_end_final_moon[2]],
-               color=moon_shadow_color_final, linewidth=moon_shadow_lw, alpha=moon_shadow_alpha)
-      
-      # YZ plane shadows (x = min_limit)
-      ax1.plot([min_limit, min_limit], 
-               [line_start_initial_moon[1], line_end_initial_moon[1]], 
-               [line_start_initial_moon[2], line_end_initial_moon[2]],
-               color=moon_shadow_color_initial, linewidth=moon_shadow_lw, alpha=moon_shadow_alpha)
-      ax1.plot([min_limit, min_limit], 
-               [line_start_final_moon[1], line_end_final_moon[1]], 
-               [line_start_final_moon[2], line_end_final_moon[2]],
-               color=moon_shadow_color_final, linewidth=moon_shadow_lw, alpha=moon_shadow_alpha)
+      # --- SUN MARKERS ---
+      sun_marker_pos_start = project_to_bounds(origin, sun_dir_start, ax1)
+      ax1.scatter([sun_marker_pos_start[0]], [sun_marker_pos_start[1]], [sun_marker_pos_start[2]], s=600, marker=r'$\odot_{\text{o}}$', color='gold', zorder=10, label='Sun (Initial)')
+      ax1.plot([sun_marker_pos_start[0], sun_marker_pos_start[0]], [sun_marker_pos_start[1], sun_marker_pos_start[1]], [sun_marker_pos_start[2], z_floor], color='gold', linestyle=':', linewidth=2, alpha=1.0)
+      ax1.scatter([sun_marker_pos_start[0]], [sun_marker_pos_start[1]], [z_floor], color='gold', marker='.', s=20, alpha=1.0)
+
+      sun_marker_pos_end = project_to_bounds(origin, sun_dir_end, ax1)
+      ax1.scatter([sun_marker_pos_end[0]], [sun_marker_pos_end[1]], [sun_marker_pos_end[2]], s=600, marker=r'$\odot_{\text{f}}$', color='gold', zorder=10, label='Sun (Final)')
+      ax1.plot([sun_marker_pos_end[0], sun_marker_pos_end[0]], [sun_marker_pos_end[1], sun_marker_pos_end[1]], [sun_marker_pos_end[2], z_floor], color='gold', linestyle=':', linewidth=2, alpha=1.0)
+      ax1.scatter([sun_marker_pos_end[0]], [sun_marker_pos_end[1]], [z_floor], color='gold', marker='.', s=20, alpha=1.0)
+
+      # --- MOON MARKERS ---
+      moon_marker_pos_start = project_to_bounds(origin, moon_dir_start, ax1)
+      ax1.scatter([moon_marker_pos_start[0]], [moon_marker_pos_start[1]], [moon_marker_pos_start[2]], s=600, marker=r'$☾_{\text{o}}$', color='gray', zorder=10, label='Moon (Initial)')
+      ax1.plot([moon_marker_pos_start[0], moon_marker_pos_start[0]], [moon_marker_pos_start[1], moon_marker_pos_start[1]], [moon_marker_pos_start[2], z_floor], color='gray', linestyle=':', linewidth=2, alpha=0.5)
+      ax1.scatter([moon_marker_pos_start[0]], [moon_marker_pos_start[1]], [z_floor], color='gray', marker='.', s=20, alpha=0.5)
+
+      moon_marker_pos_end = project_to_bounds(origin, moon_dir_end, ax1)
+      ax1.scatter([moon_marker_pos_end[0]], [moon_marker_pos_end[1]], [moon_marker_pos_end[2]], s=600, marker=r'$☾_{\text{f}}$', color='gray', zorder=10, label='Moon (Final)')
+      ax1.plot([moon_marker_pos_end[0], moon_marker_pos_end[0]], [moon_marker_pos_end[1], moon_marker_pos_end[1]], [moon_marker_pos_end[2], z_floor], color='gray', linestyle=':', linewidth=2, alpha=0.5)
+      ax1.scatter([moon_marker_pos_end[0]], [moon_marker_pos_end[1]], [z_floor], color='gray', marker='.', s=20, alpha=0.5)
       
     except Exception as e:
       # If SPICE kernels aren't loaded or other error, silently skip sun arrow
@@ -290,9 +201,9 @@ def plot_3d_trajectories(
 
   # Plot 3D velocity trajectory
   ax2 = fig.add_subplot(122, projection='3d')
-  ax2.plot(vel_x, vel_y, vel_z, 'r-', linewidth=2.0)
-  ax2.scatter([vel_x[0]], [vel_y[0]], [vel_z[0]], s=100, marker='>', facecolors='white', edgecolors='r', linewidths=2) # type: ignore
-  ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], s=100, marker='s', facecolors='white', edgecolors='r', linewidths=2) # type: ignore
+  ax2.plot(vel_x, vel_y, vel_z, 'b-', linewidth=2.0)
+  ax2.scatter([vel_x[ 0]], [vel_y[ 0]], [vel_z[ 0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2) # type: ignore
+  ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2) # type: ignore
   ax2.set_xlabel('Vel-X [m/s]')
   ax2.set_ylabel('Vel-Y [m/s]')
   ax2.set_zlabel('Vel-Z [m/s]') # type: ignore
@@ -300,15 +211,15 @@ def plot_3d_trajectories(
   ax2.set_box_aspect([1,1,1]) # type: ignore
 
   # Set pane colors to white
-  ax2.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax2.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax2.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax2.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+  ax2.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+  ax2.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
 
   min_limit_vel, max_limit_vel = get_equal_limits(ax2, buffer_fraction=0.45)
   
-  ax2.set_xlim([min_limit_vel, max_limit_vel]) # type: ignore
-  ax2.set_ylim([min_limit_vel, max_limit_vel]) # type: ignore
-  ax2.set_zlim([min_limit_vel, max_limit_vel]) # type: ignore
+  ax2.set_xlim([min_limit_vel, max_limit_vel])  # type: ignore
+  ax2.set_ylim([min_limit_vel, max_limit_vel])  # type: ignore
+  ax2.set_zlim([min_limit_vel, max_limit_vel])  # type: ignore
 
   # Add velocity trajectory shadows (projections onto planes)
   # XY plane shadow (z = min_limit_vel)
@@ -318,12 +229,12 @@ def plot_3d_trajectories(
   # YZ plane shadow (x = min_limit_vel)
   ax2.plot(np.full_like(vel_x, min_limit_vel), vel_y, vel_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
 
-  # Create custom legend handles with black edges
+  # Create custom legend handles (lines only, no markers)
   legend_handles = [
-    Line2D([0], [0], marker='>', color='w', markerfacecolor='white', markeredgecolor='black', 
-           markersize=10, markeredgewidth=2, linestyle='None', label='Initial'),
-    Line2D([0], [0], marker='s', color='w', markerfacecolor='white', markeredgecolor='black', 
-           markersize=10, markeredgewidth=2, linestyle='None', label='Final'),
+    Line2D([0], [0], color='black', linewidth=1.5, label='Earth'),
+    Line2D([0], [0], color='b', linewidth=2.0, label='Spacecraft'),
+    Line2D([0], [0], color='gold', linewidth=1.5, label='Sun'),
+    Line2D([0], [0], color='gray', linewidth=1.5, label='Moon'),
   ]
   leg = fig.legend(handles=legend_handles, loc='upper right', fontsize=11, framealpha=0.9)
   leg.get_frame().set_edgecolor('black')
@@ -524,11 +435,9 @@ def plot_3d_error(
   
   # Plot 3D velocity error
   ax2 = fig.add_subplot(122, projection='3d')
-  ax2.plot(vel_error[0, :], vel_error[1, :], vel_error[2, :], 'r-', linewidth=1)
-  ax2.scatter([vel_error[0, 0]], [vel_error[1, 0]], [vel_error[2, 0]], 
-              s=100, marker='>', facecolors='white', edgecolors='r', linewidths=2, label='Initial') # type: ignore
-  ax2.scatter([vel_error[0, -1]], [vel_error[1, -1]], [vel_error[2, -1]], 
-              s=100, marker='s', facecolors='white', edgecolors='r', linewidths=2, label='Final') # type: ignore
+  ax2.plot(vel_error[0, :], vel_error[1, :], vel_error[2, :], 'b-', linewidth=1)
+  ax2.scatter([vel_error[0, 0]], [vel_error[1, 0]], [vel_error[2, 0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, label='Initial') # type: ignore
+  ax2.scatter([vel_error[0, -1]], [vel_error[1, -1]], [vel_error[2, -1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, label='Final') # type: ignore
   ax2.set_xlabel('Error Vx [m/s]')
   ax2.set_ylabel('Error Vy [m/s]')
   ax2.set_zlabel('Error Vz [m/s]') # type: ignore
@@ -810,6 +719,565 @@ def plot_3d_trajectories_body_fixed(
   x_earth = r_eq * np.outer(np.cos(u), np.sin(v))
   y_earth = r_eq * np.outer(np.sin(u), np.sin(v))
   z_earth = r_pol * np.outer(np.ones(np.size(u)), np.cos(v))
+  ax1.plot_wireframe(x_earth, y_earth, z_earth, color='black', linewidth=0.5, alpha=1.0)  # type: ignore
+  
+  ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=2.0)
+  ax1.scatter([pos_x[ 0]], [pos_y[ 0]], [pos_z[ 0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
+  ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
+  ax1.set_xlabel('Pos-X [m]')
+  ax1.set_ylabel('Pos-Y [m]')
+  ax1.set_zlabel('Pos-Z [m]') # type: ignore
+  ax1.grid(True)
+  ax1.set_box_aspect([1,1,1]) # type: ignore
+
+  # Set pane colors to white
+  ax1.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+  ax1.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+  ax1.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+
+  min_limit, max_limit = get_equal_limits(ax1, buffer_fraction=0.45)
+  
+  ax1.set_xlim((min_limit, max_limit))
+  ax1.set_ylim((min_limit, max_limit))
+  ax1.set_zlim((min_limit, max_limit))  # type: ignore
+
+  # Add position trajectory shadows
+  shadow_color = 'gray'
+  shadow_alpha = 0.75
+  shadow_lw    = 0.5
+  ax1.plot(pos_x, pos_y, np.full_like(pos_z, min_limit), color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  ax1.plot(pos_x, np.full_like(pos_y, max_limit), pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  ax1.plot(np.full_like(pos_x, min_limit), pos_y, pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+
+  # Add Earth projection shadows (filled circles on planes)
+  r_disk = np.linspace(0, r_eq, 2)
+  t_disk = np.linspace(0, 2*np.pi, 60)
+  R_disk, T_disk = np.meshgrid(r_disk, t_disk)
+  U_disk = R_disk * np.cos(T_disk)
+  V_disk = R_disk * np.sin(T_disk)
+  earth_shadow_alpha = 0.1
+
+  ax1.plot_surface(U_disk, V_disk, np.full_like(U_disk, min_limit), color='black', alpha=earth_shadow_alpha, shade=False)  # type: ignore
+  ax1.plot_surface(U_disk, np.full_like(U_disk, max_limit), V_disk, color='black', alpha=earth_shadow_alpha, shade=False)  # type: ignore
+  ax1.plot_surface(np.full_like(U_disk, min_limit), U_disk, V_disk, color='black', alpha=earth_shadow_alpha, shade=False)  # type: ignore
+
+  # Plot 3D velocity trajectory
+  ax2 = fig.add_subplot(122, projection='3d')
+  ax2.plot(vel_x, vel_y, vel_z, 'b-', linewidth=2.0)
+  ax2.scatter([vel_x[ 0]], [vel_y[ 0]], [vel_z[ 0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
+  ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2) # type: ignore
+  ax2.set_xlabel('Vel-X [m/s]')
+  ax2.set_ylabel('Vel-Y [m/s]')
+  ax2.set_zlabel('Vel-Z [m/s]') # type: ignore
+  ax2.grid(True)
+  ax2.set_box_aspect([1,1,1]) # type: ignore
+
+  # Set pane colors to white
+  ax2.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax2.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+  ax2.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0)) # type: ignore
+
+  min_limit_vel, max_limit_vel = get_equal_limits(ax2, buffer_fraction=0.45)
+  
+  ax2.set_xlim((min_limit_vel, max_limit_vel))
+  ax2.set_ylim((min_limit_vel, max_limit_vel))
+  ax2.set_zlim((min_limit_vel, max_limit_vel)) # type: ignore
+
+  # Add velocity trajectory shadows
+  ax2.plot(vel_x, vel_y, np.full_like(vel_z, min_limit_vel), color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  ax2.plot(vel_x, np.full_like(vel_y, max_limit_vel), vel_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  ax2.plot(np.full_like(vel_x, min_limit_vel), vel_y, vel_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+
+  # Create custom legend handles (lines only, no markers)
+  legend_handles = [
+    Line2D([0], [0], color='black', linewidth=1.5, label='Earth'),
+    Line2D([0], [0], color='b', linewidth=2.0, label='Spacecraft'),
+    Line2D([0], [0], color='gold', linewidth=1.5, label='Sun'),
+    Line2D([0], [0], color='gray', linewidth=1.5, label='Moon'),
+  ]
+  leg = fig.legend(handles=legend_handles, loc='upper right', fontsize=11, framealpha=0.9)
+  leg.get_frame().set_edgecolor('black')
+
+  # Add info text as figure text
+  fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=11, color='black',
+           bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', alpha=0.9))
+
+  plt.tight_layout(rect=(0.0, 0.06, 1.0, 0.95))  # Leave space at bottom for info text and top for legend
+  return fig
+
+
+def plot_time_series(
+  result : dict,
+  epoch  : Optional[datetime.datetime] = None,
+) -> Figure:
+  """
+  Plot position and velocity components vs time in a 2x1 grid.
+  
+  Input:
+  ------
+    result : dict
+      Propagation result dictionary containing 'plot_time_s', 'state', and 'coe'.
+    epoch : datetime, optional
+      Reference epoch for UTC time axis.
+      
+  Output:
+  -------
+    fig : matplotlib.figure.Figure
+      Figure object containing the time series plots.
+  """
+  
+  # Create figure
+  fig = plt.figure(figsize=(18,10))
+  
+  # Extract data
+  time = result['plot_time_s']
+  states = result['state']
+  pos_x, pos_y, pos_z = states[0, :], states[1, :], states[2, :]
+  vel_x, vel_y, vel_z = states[3, :], states[4, :], states[5, :]
+  coe = result['coe']
+  
+  # Calculate magnitudes
+  pos_mag = np.sqrt(pos_x**2 + pos_y**2 + pos_z**2)
+  vel_mag = np.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
+  
+  # Plot position vs time (spans rows 0-2, column 0)
+  ax_pos = plt.subplot2grid((6, 2), (0, 0), rowspan=3)
+  ax_pos.plot(time, pos_x, 'r-', label='X', linewidth=1.5)
+  ax_pos.plot(time, pos_y, 'g-', label='Y', linewidth=1.5)
+  ax_pos.plot(time, pos_z, 'b-', label='Z', linewidth=1.5)
+  ax_pos.plot(time, pos_mag, 'k-', label='Magnitude', linewidth=2)
+  ax_pos.tick_params(labelbottom=False)
+  ax_pos.set_ylabel('Position\n[m]')
+  ax_pos.legend()
+  ax_pos.grid(True)
+  ax_pos.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot velocity vs time (spans rows 3-5, column 0)
+  ax_vel = plt.subplot2grid((6, 2), (3, 0), rowspan=3, sharex=ax_pos)
+  ax_vel.plot(time, vel_x, 'r-', label='X', linewidth=1.5)
+  ax_vel.plot(time, vel_y, 'g-', label='Y', linewidth=1.5)
+  ax_vel.plot(time, vel_z, 'b-', label='Z', linewidth=1.5)
+  ax_vel.plot(time, vel_mag, 'k-', label='Magnitude', linewidth=2)
+  ax_vel.set_xlabel('Time\n[s]')
+  ax_vel.set_ylabel('Velocity\n[m/s]')
+  ax_vel.legend()
+  ax_vel.grid(True)
+  ax_vel.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot sma vs time (row 0, column 1)
+  ax_sma = plt.subplot2grid((6, 2), (0, 1), sharex=ax_pos)
+  ax_sma.plot(time, coe['sma'], 'b-', linewidth=1.5)
+  ax_sma.tick_params(labelbottom=False)
+  ax_sma.set_ylabel('Semi-Major Axis\n[m]')
+  ax_sma.grid(True)
+  ax_sma.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot ecc vs time (row 1, column 1)
+  ax_ecc = plt.subplot2grid((6, 2), (1, 1), sharex=ax_pos)
+  ax_ecc.plot(time, coe['ecc'], 'b-', linewidth=1.5)
+  ax_ecc.tick_params(labelbottom=False)
+  ax_ecc.set_ylabel('Eccentricity\n[-]')
+  ax_ecc.grid(True)
+  ax_ecc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot inc vs time (row 2, column 1)
+  ax_inc = plt.subplot2grid((6, 2), (2, 1), sharex=ax_pos)
+  ax_inc.plot(time, coe['inc'] * CONVERTER.DEG_PER_RAD, 'b-', linewidth=1.5)
+  ax_inc.tick_params(labelbottom=False)
+  ax_inc.set_ylabel('Inclination\n[deg]')
+  ax_inc.grid(True)
+  ax_inc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot raan vs time (row 3, column 1)
+  ax_raan = plt.subplot2grid((6, 2), (3, 1), sharex=ax_pos)
+  ax_raan.plot(time, coe['raan'] * CONVERTER.DEG_PER_RAD, 'b-', linewidth=1.5)
+  ax_raan.tick_params(labelbottom=False)
+  ax_raan.set_ylabel('RAAN\n[deg]')
+  ax_raan.grid(True)
+  ax_raan.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot aop vs time (row 4, column 1)
+  ax_aop = plt.subplot2grid((6, 2), (4, 1), sharex=ax_pos)
+  aop_unwrapped = np.unwrap(coe['aop']) * CONVERTER.DEG_PER_RAD
+  ax_aop.plot(time, aop_unwrapped, 'b-', linewidth=1.5)
+  ax_aop.tick_params(labelbottom=False)
+  ax_aop.set_ylabel('Argument of Periapsis\n[deg]')
+  ax_aop.grid(True)
+  ax_aop.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot ta, ea, ma vs time (row 5, column 1)
+  ax_anom = plt.subplot2grid((6, 2), (5, 1), sharex=ax_pos)
+  ax_anom.plot(time, coe['ta'] * CONVERTER.DEG_PER_RAD, 'r-', label='TA', linewidth=1.5)
+  ax_anom.plot(time, coe['ea'] * CONVERTER.DEG_PER_RAD, 'g-', label='EA', linewidth=1.5)
+  ax_anom.plot(time, coe['ma'] * CONVERTER.DEG_PER_RAD, 'b-', label='MA', linewidth=1.5)
+  ax_anom.set_xlabel('Time\n[s]')
+  ax_anom.set_ylabel('Anomaly\n[deg]')
+  ax_anom.legend()
+  ax_anom.grid(True)
+  ax_anom.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Add UTC time axis if epoch is provided
+  if epoch is not None:
+    # Only add UTC time to top row axes
+    top_row_axes = [ax_pos, ax_sma]
+    max_time = time[-1]
+    
+    for ax in top_row_axes:
+      add_utc_time_axis(ax, epoch, max_time)
+
+  # Align y-axis labels for right column
+  fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_aop, ax_anom])
+  
+  # Align y-axis labels for left column
+  fig.align_ylabels([ax_pos, ax_vel])
+
+  plt.subplots_adjust(hspace=0.17, wspace=0.2)
+  return fig
+
+
+def plot_3d_error(
+  result_ref : dict,
+  result_comp : dict,
+  title      : str = "Position and Velocity Error",
+) -> Figure:
+  """
+  Plot 3D position and velocity error trajectories in a 1x2 grid.
+  
+  Input:
+  ------
+    result_ref : dict
+      Reference result dictionary (e.g., SGP4).
+    result_comp : dict
+      Comparison result dictionary (e.g., high-fidelity).
+    title : str
+      Plot title.
+      
+  Output:
+  -------
+    fig : matplotlib.figure.Figure
+      Figure object containing the 3D error plots.
+  """
+  fig = plt.figure(figsize=(18,10))
+  
+  # Interpolate comparison result to reference time points
+  from scipy.interpolate import interp1d
+  
+  time_ref   = result_ref['delta_time']
+  time_comp  = result_comp['time']
+  state_comp = result_comp['state']
+  
+  # Interpolate each state component
+  state_comp_interp = np.zeros((6, len(time_ref)))
+  for i in range(6):
+    interpolator = interp1d(time_comp, state_comp[i, :], kind='cubic', fill_value='extrapolate') # type: ignore
+    state_comp_interp[i, :] = interpolator(time_ref)
+  
+  # Calculate errors (comparison - reference)
+  state_ref = result_ref['state']
+  pos_error = state_comp_interp[0:3, :] - state_ref[0:3, :]
+  vel_error = state_comp_interp[3:6, :] - state_ref[3:6, :]
+  
+  # Plot 3D position error
+  ax1 = fig.add_subplot(121, projection='3d')
+  ax1.plot(pos_error[0, :], pos_error[1, :], pos_error[2, :], 'b-', linewidth=1)
+  ax1.scatter([pos_error[0, 0]], [pos_error[1, 0]], [pos_error[2, 0]], 
+              s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, label='Initial') # type: ignore
+  ax1.scatter([pos_error[0, -1]], [pos_error[1, -1]], [pos_error[2, -1]], 
+              s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, label='Final') # type: ignore
+  ax1.set_xlabel('Error X [m]')
+  ax1.set_ylabel('Error Y [m]')
+  ax1.set_zlabel('Error Z [m]') # type: ignore
+  ax1.set_title('Position Error')
+  ax1.grid(True)
+  leg1 = ax1.legend()
+  leg1.get_frame().set_edgecolor('black')
+  
+  # Plot 3D velocity error
+  ax2 = fig.add_subplot(122, projection='3d')
+  ax2.plot(vel_error[0, :], vel_error[1, :], vel_error[2, :], 'b-', linewidth=1)
+  ax2.scatter([vel_error[0, 0]], [vel_error[1, 0]], [vel_error[2, 0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2, label='Initial') # type: ignore
+  ax2.scatter([vel_error[0, -1]], [vel_error[1, -1]], [vel_error[2, -1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2, label='Final') # type: ignore
+  ax2.set_xlabel('Error Vx [m/s]')
+  ax2.set_ylabel('Error Vy [m/s]')
+  ax2.set_zlabel('Error Vz [m/s]') # type: ignore
+  ax2.set_title('Velocity Error')
+  ax2.grid(True)
+  leg2 = ax2.legend()
+  leg2.get_frame().set_edgecolor('black')
+  
+  fig.suptitle(title, fontsize=16)
+  plt.tight_layout()
+  return fig
+
+
+def plot_time_series_error(
+  result_ref  : dict, 
+  result_comp : dict, 
+  epoch       : Optional[datetime.datetime] = None, 
+  title       : str                         = "Time Series Error", 
+  use_ric     : bool                        = True,
+) -> Figure:
+  """
+  Create time series error plots between reference and comparison trajectories.
+  
+  Input:
+  ------
+    result_ref : dict
+      Reference result dictionary with 'plot_time_s' and 'state'/'coe'.
+    result_comp : dict
+      Comparison result dictionary with 'plot_time_s' and 'state'/'coe'.
+    epoch : datetime, optional
+      Reference epoch for time axis.
+    title : str
+      Title for the figure.
+    use_ric : bool
+      If True, transform to RIC frame. If False, use XYZ inertial frame.
+      
+  Output:
+  -------
+    fig : matplotlib.figure.Figure
+      Figure object containing the time series error plots.
+  """
+  # Use plot_time_s for both datasets
+  time_ref  = result_ref['plot_time_s']
+  time_comp = result_comp['plot_time_s']
+  
+  state_ref  = result_ref['state']
+  state_comp = result_comp['state']
+  coe_ref    = result_ref['coe']
+  coe_comp   = result_comp['coe']
+  
+  # Verify time grids match (use allclose for floating-point comparison)
+  if len(time_ref) != len(time_comp) or not np.allclose(time_ref, time_comp, rtol=1e-9, atol=1e-9):
+    raise ValueError(
+      f"Time grids don't match! "
+      f"Reference has {len(time_ref)} points from {time_ref[0]:.1f} to {time_ref[-1]:.1f} s, "
+      f"Comparison has {len(time_comp)} points from {time_comp[0]:.1f} to {time_comp[-1]:.1f} s. "
+      f"Both datasets must use the same time grid for error comparison."
+    )
+  
+  # Create figure with subplots matching the grid structure
+  fig = plt.figure(figsize=(18, 10))
+  
+  time = time_ref
+  
+  if use_ric:
+    # Compute RIC frame errors
+    pos_error_ric = np.zeros((3, len(time_ref)))
+    vel_error_ric = np.zeros((3, len(time_ref)))
+    
+    for i in range(len(time_ref)):
+      # Reference position and velocity
+      ref_pos = state_ref[0:3, i]
+      ref_vel = state_ref[3:6, i]
+      
+      # Rotation matrix from inertial to RIC
+      R_inertial_to_ric = FrameConverter.xyz_to_ric(ref_pos, ref_vel)
+      
+      # Compute errors in inertial frame
+      pos_error_inertial = state_comp[0:3, i] - state_ref[0:3, i]
+      vel_error_inertial = state_comp[3:6, i] - state_ref[3:6, i]
+      
+      # Transform errors to RIC frame
+      pos_error_ric[:, i] = R_inertial_to_ric @ pos_error_inertial
+      vel_error_ric[:, i] = R_inertial_to_ric @ vel_error_inertial
+    
+    pos_error = pos_error_ric
+    vel_error = vel_error_ric
+    pos_labels = ['Radial', 'In-track', 'Cross-track']
+    vel_labels = ['Radial', 'In-track', 'Cross-track']
+    pos_ylabel = 'Position Error (RIC)\n[m]'
+    vel_ylabel = 'Velocity Error (RIC)\n[m/s]'
+  else:
+    # Use XYZ inertial frame errors
+    pos_error = state_comp[0:3, :] - state_ref[0:3, :]
+    vel_error = state_comp[3:6, :] - state_ref[3:6, :]
+    pos_labels = ['X', 'Y', 'Z']
+    vel_labels = ['X', 'Y', 'Z']
+    pos_ylabel = 'Position Error (XYZ)\n[m]'
+    vel_ylabel = 'Velocity Error (XYZ)\n[m/s]'
+  
+  # Calculate error magnitudes
+  pos_error_mag = np.linalg.norm(pos_error, axis=0)
+  vel_error_mag = np.linalg.norm(vel_error, axis=0)
+  
+  # LEFT SIDE: Position and Velocity Errors
+  # Plot position error vs time (spans rows 0-2, column 0)
+  ax_pos = plt.subplot2grid((6, 2), (0, 0), rowspan=3)
+  ax_pos.plot(time, pos_error[0, :], 'r-', label=pos_labels[0], linewidth=1.5)
+  ax_pos.plot(time, pos_error[1, :], 'g-', label=pos_labels[1], linewidth=1.5)
+  ax_pos.plot(time, pos_error[2, :], 'b-', label=pos_labels[2], linewidth=1.5)
+  ax_pos.plot(time, pos_error_mag, 'k-', label='Magnitude', linewidth=2)
+  ax_pos.tick_params(labelbottom=False)
+  ax_pos.set_ylabel(pos_ylabel)
+  ax_pos.legend()
+  ax_pos.grid(True)
+  ax_pos.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot velocity error vs time (spans rows 3-5, column 0)
+  ax_vel = plt.subplot2grid((6, 2), (3, 0), rowspan=3, sharex=ax_pos)
+  ax_vel.plot(time, vel_error[0, :], 'r-', label=vel_labels[0], linewidth=1.5)
+  ax_vel.plot(time, vel_error[1, :], 'g-', label=vel_labels[1], linewidth=1.5)
+  ax_vel.plot(time, vel_error[2, :], 'b-', label=vel_labels[2], linewidth=1.5)
+  ax_vel.plot(time, vel_error_mag, 'k-', label='Magnitude', linewidth=2)
+  ax_vel.set_xlabel('Time\n[s]')
+  ax_vel.set_ylabel(vel_ylabel)
+  ax_vel.legend()
+  ax_vel.grid(True)
+  ax_vel.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot sma error vs time (row 0, column 1)
+  ax_sma = plt.subplot2grid((6, 2), (0, 1), sharex=ax_pos)
+  if 'sma' in coe_ref and 'sma' in coe_comp:
+    sma_error = coe_comp['sma'] - coe_ref['sma']
+    ax_sma.plot(time, sma_error, 'b-', linewidth=1.5)
+  ax_sma.tick_params(labelbottom=False)
+  ax_sma.set_ylabel('SMA Error\n[m]')
+  ax_sma.grid(True)
+  ax_sma.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot eccentricity error vs time (row 1, column 1)
+  ax_ecc = plt.subplot2grid((6, 2), (1, 1), sharex=ax_pos)
+  if 'ecc' in coe_ref and 'ecc' in coe_comp:
+    ecc_error = coe_comp['ecc'] - coe_ref['ecc']
+    ax_ecc.plot(time, ecc_error, 'b-', linewidth=1.5)
+  ax_ecc.tick_params(labelbottom=False)
+  ax_ecc.set_ylabel('Eccentricity Error\n[-]')
+  ax_ecc.grid(True)
+  ax_ecc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot inclination error (row 2, column 1)
+  ax_inc = plt.subplot2grid((6, 2), (2, 1), sharex=ax_pos)
+  if 'inc' in coe_ref and 'inc' in coe_comp:
+    inc_error = (coe_comp['inc'] - coe_ref['inc']) * CONVERTER.DEG_PER_RAD
+    ax_inc.plot(time, inc_error, 'b-', linewidth=1.5)
+  ax_inc.tick_params(labelbottom=False)
+  ax_inc.set_ylabel('Inclination Error\n[deg]')
+  ax_inc.grid(True)
+  ax_inc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot RAAN error vs time (row 3, column 1)
+  ax_raan = plt.subplot2grid((6, 2), (3, 1), sharex=ax_pos)
+  if 'raan' in coe_ref and 'raan' in coe_comp:
+    # Handle angle wrapping for RAAN
+    raan_error_rad = np.arctan2(np.sin(coe_comp['raan'] - coe_ref['raan']), 
+                   np.cos(coe_comp['raan'] - coe_ref['raan']))
+    raan_error = raan_error_rad * CONVERTER.DEG_PER_RAD
+    ax_raan.plot(time, raan_error, 'b-', linewidth=1.5)
+  ax_raan.tick_params(labelbottom=False)
+  ax_raan.set_ylabel('RAAN Error\n[deg]')
+  ax_raan.grid(True)
+  ax_raan.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot argument of periapsis error (row 4, column 1)
+  ax_aop = plt.subplot2grid((6, 2), (4, 1), sharex=ax_pos)
+  if 'aop' in coe_ref and 'aop' in coe_comp:
+    # Handle angle wrapping for AOP
+    aop_error_rad = np.arctan2(np.sin(coe_comp['aop'] - coe_ref['aop']), 
+                   np.cos(coe_comp['aop'] - coe_ref['aop']))
+    aop_error = aop_error_rad * CONVERTER.DEG_PER_RAD
+    ax_aop.plot(time, aop_error, 'b-', linewidth=1.5)
+  ax_aop.tick_params(labelbottom=False)
+  ax_aop.set_ylabel('Argument of\nPeriapsis Error\n[deg]')
+  ax_aop.grid(True)
+  ax_aop.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot true anomaly error vs time (row 5, column 1)
+  ax_ta = plt.subplot2grid((6, 2), (5, 1), sharex=ax_pos)
+  if 'ta' in coe_ref and 'ta' in coe_comp:
+    # Handle angle wrapping for TA
+    ta_error_rad = np.arctan2(np.sin(coe_comp['ta'] - coe_ref['ta']), 
+                   np.cos(coe_comp['ta'] - coe_ref['ta']))
+    ta_error = ta_error_rad * CONVERTER.DEG_PER_RAD
+    ax_ta.plot(time, ta_error, 'b-', linewidth=1.5)
+  ax_ta.set_xlabel('Time\n[s]')
+  ax_ta.set_ylabel('True Anomaly\nError\n[deg]')
+  ax_ta.grid(True)
+  ax_ta.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Add UTC time axis if epoch is not None:
+  if epoch is not None:
+    # Only add UTC time to top row axes
+    top_row_axes = [ax_pos, ax_sma]
+    max_time = time[-1]
+    
+    for ax in top_row_axes:
+      add_utc_time_axis(ax, epoch, max_time)
+
+  # Align y-axis labels
+  fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_aop, ax_ta])
+  fig.align_ylabels([ax_pos, ax_vel])
+  
+  fig.suptitle(title, fontsize=16)
+  plt.subplots_adjust(hspace=0.17, wspace=0.2)
+  return fig
+
+
+def plot_3d_trajectories_body_fixed(
+  result       : dict,
+  epoch_dt_utc : Optional[datetime.datetime] = None,
+) -> Figure:
+  """
+  Plot 3D position and velocity trajectories in body-fixed (IAU_EARTH) frame.
+  
+  Input:
+  ------
+    result : dict
+      Propagation result dictionary containing 'state' (6xN array) and 'plot_time_s'.
+    epoch_dt_utc : datetime, optional
+      Reference epoch (start time) for time conversion to ET.
+      
+  Output:
+  -------
+    fig : matplotlib.figure.Figure
+      Figure object containing the 3D plots.
+  """
+  fig = plt.figure(figsize=(18, 10))
+  
+  # Extract J2000 state vectors
+  j2000_state   = result['state']
+  j2000_pos_vec = j2000_state[0:3, :]
+  j2000_vel_vec = j2000_state[3:6, :]
+  time_s        = result['plot_time_s']
+  n_points      = j2000_state.shape[1]
+  
+  # Convert epoch to ET
+  if epoch_dt_utc is not None:
+    epoch_et = utc_to_et(epoch_dt_utc)
+  else:
+    epoch_et = 0.0
+  
+  # Transform each position and velocity to body-fixed frame
+  iau_earth_pos_vec = np.zeros((3, n_points))
+  iau_earth_vel_vec = np.zeros((3, n_points))
+  for i in range(n_points):
+    epoch_et_i = epoch_et + time_s[i]
+    rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(epoch_et_i)
+    iau_earth_pos_vec[:, i] = rot_mat_j2000_to_iau_earth @ j2000_pos_vec[:, i]
+    iau_earth_vel_vec[:, i] = rot_mat_j2000_to_iau_earth @ j2000_vel_vec[:, i]
+  
+  pos_x, pos_y, pos_z = iau_earth_pos_vec[0, :], iau_earth_pos_vec[1, :], iau_earth_pos_vec[2, :]
+  vel_x, vel_y, vel_z = iau_earth_vel_vec[0, :], iau_earth_vel_vec[1, :], iau_earth_vel_vec[2, :]
+  
+  # Build info string
+  info_text = "Frame: IAU_EARTH (Body-Fixed)"
+  if epoch_dt_utc is not None:
+    start_time_iso_utc = epoch_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
+    end_time_dt_utc    = epoch_dt_utc + timedelta(seconds=time_s[-1])
+    end_time_iso_utc   = end_time_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
+    info_text += f"  |  Initial: {start_time_iso_utc}  |  Final: {end_time_iso_utc}"
+  
+  # Plot 3D position trajectory
+  ax1 = fig.add_subplot(121, projection='3d')
+  
+  # Add Earth wireframe ellipsoid
+  u       = np.linspace(0, 2 * np.pi, 24)
+  v       = np.linspace(0, np.pi, 12)
+  r_eq    = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
+  r_pol   = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.POLAR
+  x_earth = r_eq * np.outer(np.cos(u), np.sin(v))
+  y_earth = r_eq * np.outer(np.sin(u), np.sin(v))
+  z_earth = r_pol * np.outer(np.ones(np.size(u)), np.cos(v))
   ax1.plot_wireframe(x_earth, y_earth, z_earth, color='black', linewidth=0.5, alpha=1.0)
   
   ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=2.0)
@@ -854,9 +1322,9 @@ def plot_3d_trajectories_body_fixed(
 
   # Plot 3D velocity trajectory
   ax2 = fig.add_subplot(122, projection='3d')
-  ax2.plot(vel_x, vel_y, vel_z, 'r-', linewidth=2.0)
-  ax2.scatter([vel_x[0]], [vel_y[0]], [vel_z[0]], s=100, marker='>', facecolors='white', edgecolors='r', linewidths=2) # type: ignore
-  ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], s=100, marker='s', facecolors='white', edgecolors='r', linewidths=2) # type: ignore
+  ax2.plot(vel_x, vel_y, vel_z, 'b-', linewidth=2.0)
+  ax2.scatter([vel_x[ 0]], [vel_y[ 0]], [vel_z[ 0]], s=100, marker='>', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
+  ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], s=100, marker='s', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
   ax2.set_xlabel('Vel-X [m/s]')
   ax2.set_ylabel('Vel-Y [m/s]')
   ax2.set_zlabel('Vel-Z [m/s]') # type: ignore
@@ -864,9 +1332,9 @@ def plot_3d_trajectories_body_fixed(
   ax2.set_box_aspect([1,1,1]) # type: ignore
 
   # Set pane colors to white
-  ax2.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax2.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-  ax2.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0)) # type: ignore
+  ax2.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+  ax2.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+  ax2.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
 
   min_limit_vel, max_limit_vel = get_equal_limits(ax2, buffer_fraction=0.45)
   
@@ -879,12 +1347,12 @@ def plot_3d_trajectories_body_fixed(
   ax2.plot(vel_x, np.full_like(vel_y, max_limit_vel), vel_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
   ax2.plot(np.full_like(vel_x, min_limit_vel), vel_y, vel_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
 
-  # Legend
+  # Create custom legend handles (lines only, no markers)
   legend_handles = [
-    Line2D([0], [0], marker='>', color='w', markerfacecolor='white', markeredgecolor='black', 
-           markersize=10, markeredgewidth=2, linestyle='None', label='Initial'),
-    Line2D([0], [0], marker='s', color='w', markerfacecolor='white', markeredgecolor='black', 
-           markersize=10, markeredgewidth=2, linestyle='None', label='Final'),
+    Line2D([0], [0], color='black', linewidth=1.5, label='Earth'),
+    Line2D([0], [0], color='b', linewidth=2.0, label='Spacecraft'),
+    Line2D([0], [0], color='gold', linewidth=1.5, label='Sun'),
+    Line2D([0], [0], color='gray', linewidth=1.5, label='Moon'),
   ]
   leg = fig.legend(handles=legend_handles, loc='upper right', fontsize=11, framealpha=0.9)
   leg.get_frame().set_edgecolor('black')
@@ -1218,21 +1686,32 @@ def plot_3d_trajectory_with_moon(
         ax.plot(earth_pos_helio[0, :], earth_pos_helio[1, :], earth_pos_helio[2, :], color='black', linewidth=2.0, alpha=0.8, label='Earth')
       
       # Plot Earth Initial
-      ax.scatter([earth_pos_helio_init[0]], [earth_pos_helio_init[1]], [earth_pos_helio_init[2]], color='black', s=100, marker='>', label='Earth (Initial)')
+      ax.scatter([earth_pos_helio_init[0]], [earth_pos_helio_init[1]], [earth_pos_helio_init[2]], 
+                 s=100, marker='>', facecolors='white', edgecolors='black', linewidths=2, zorder=5)
                     
       # Plot Earth Final
       if earth_pos_helio_final is not None:
-        ax.scatter([earth_pos_helio_final[0]], [earth_pos_helio_final[1]], [earth_pos_helio_final[2]], color='black', s=100, marker='s', label='Earth (Final)')
+        ax.scatter([earth_pos_helio_final[0]], [earth_pos_helio_final[1]], [earth_pos_helio_final[2]], 
+                   s=100, marker='s', facecolors='white', edgecolors='black', linewidths=2, zorder=5)
       
       if ax == ax_sun_dup and moon_pos_helio is not None:
         # Plot Moon Trajectory
-        ax.plot(moon_pos_helio[0, :], moon_pos_helio[1, :], moon_pos_helio[2, :], color='gray', linewidth=1.0, alpha=0.8, label='Moon')
+        ax.plot(moon_pos_helio[0, :], moon_pos_helio[1, :], moon_pos_helio[2, :], 
+                color='gray', linewidth=1.0, alpha=0.8, label='Moon')
+        # Add Moon markers
+        ax.scatter([moon_pos_helio[0, 0]], [moon_pos_helio[1, 0]], [moon_pos_helio[2, 0]], 
+                   s=80, marker='>', facecolors='white', edgecolors='gray', linewidths=2, zorder=8)
+        ax.scatter([moon_pos_helio[0, -1]], [moon_pos_helio[1, -1]], [moon_pos_helio[2, -1]], 
+                   s=80, marker='s', facecolors='white', edgecolors='gray', linewidths=2, zorder=8)
 
       if sc_pos_helio is not None:
         # Plot Spacecraft Trajectory
-        ax.plot(sc_pos_helio[0, :], sc_pos_helio[1, :], sc_pos_helio[2, :], color='b', linewidth=1.5, label='Spacecraft')
-        ax.scatter([sc_pos_helio[0,  0]], [sc_pos_helio[1,  0]], [sc_pos_helio[2,  0]], s=80, marker='>', facecolors='white', edgecolors='b', zorder=10)
-        ax.scatter([sc_pos_helio[0, -1]], [sc_pos_helio[1, -1]], [sc_pos_helio[2, -1]], s=80, marker='s', facecolors='white', edgecolors='b', zorder=10)
+        ax.plot(sc_pos_helio[0, :], sc_pos_helio[1, :], sc_pos_helio[2, :], 
+                color='b', linewidth=1.5, label='Spacecraft')
+        ax.scatter([sc_pos_helio[0, 0]], [sc_pos_helio[1, 0]], [sc_pos_helio[2, 0]], 
+                   s=80, marker='>', facecolors='white', edgecolors='b', linewidths=2, zorder=10)
+        ax.scatter([sc_pos_helio[0, -1]], [sc_pos_helio[1, -1]], [sc_pos_helio[2, -1]], 
+                   s=80, marker='s', facecolors='white', edgecolors='b', linewidths=2, zorder=10)
 
       ax.set_xlabel('Pos-X [m]')
       ax.set_ylabel('Pos-Y [m]')
@@ -1242,14 +1721,12 @@ def plot_3d_trajectory_with_moon(
       # Custom Legend
       if ax == ax_sun_dup:
         legend_handles_sun = []
-        legend_handles_sun.append(Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markeredgecolor='orange', markersize=10, linestyle='None', label='Sun'))
+        legend_handles_sun.append(Line2D([0], [0], color='orange', linewidth=1.5, label='Sun'))
         legend_handles_sun.append(Line2D([0], [0], color='black', linestyle='--', linewidth=1, label='Earth Orbit'))
         legend_handles_sun.append(Line2D([0], [0], color='black', linewidth=2.0, label='Earth'))
         legend_handles_sun.extend([
           Line2D([0], [0], color='gray', linewidth=1, label='Moon'),
           Line2D([0], [0], color='b', linewidth=1.5, label='Spacecraft'),
-          Line2D([0], [0], marker='>', color='w', markerfacecolor='white', markeredgecolor='black', markersize=10, markeredgewidth=2, linestyle='None', label='Initial'),
-          Line2D([0], [0], marker='s', color='w', markerfacecolor='white', markeredgecolor='black', markersize=10, markeredgewidth=2, linestyle='None', label='Final'),
         ])
 
         leg_sun = ax.legend(handles=legend_handles_sun, loc='upper right', fontsize=10, framealpha=0.9)
