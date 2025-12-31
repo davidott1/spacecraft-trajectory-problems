@@ -1430,8 +1430,8 @@ def plot_3d_trajectory_sun_centered(
       # Full approximate Moon orbit (Keplerian ellipse based on initial state)
       # Get initial state of Moon (km, km/s)
       moon_state_km, _ = spice.spkezr('MOON', epoch_et_start, 'J2000', 'NONE', 'EARTH')
-      moon_pos_init = moon_state_km[0:3] * 1000.0 # m
-      moon_vel_init = moon_state_km[3:6] * 1000.0 # m/s
+      moon_pos_init = moon_state_km[0:3] * CONVERTER.M_PER_KM # m
+      moon_vel_init = moon_state_km[3:6] * CONVERTER.M_PER_KM # m/s
       
       # Convert to orbital elements
       moon_coe = OrbitConverter.pv_to_coe(moon_pos_init, moon_vel_init, SOLARSYSTEMCONSTANTS.EARTH.GP)
