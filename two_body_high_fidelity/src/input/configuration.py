@@ -7,9 +7,8 @@ from datetime import datetime
 from types    import SimpleNamespace
 from typing   import Optional
 
-from src.input.loader           import load_supported_objects
-from src.utility.time_helper    import parse_time
-from src.utility.string_helper  import sanitize_filename
+from src.input.loader          import load_supported_objects
+from src.utility.string_helper import sanitize_filename
 
 
 def print_input_configuration(
