@@ -16,7 +16,7 @@ References:
 import numpy as np
 
 from pathlib import Path
-from typing  import Optional, Tuple, Set
+from typing  import Optional, Set
 
 from src.model.constants       import SOLARSYSTEMCONSTANTS
 from src.model.frame_converter import FrameConverter
