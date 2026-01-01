@@ -6,7 +6,6 @@ Usage:
 """
 
 import urllib.request
-import os
 from pathlib import Path
 
 
