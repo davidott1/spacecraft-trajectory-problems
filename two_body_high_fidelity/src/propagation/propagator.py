@@ -161,6 +161,14 @@ def propagate_tle(
       'ta'   : np.zeros(num_points),
       'ea'   : np.zeros(num_points),
     }
+    mee_time_series = {
+      'p' : np.zeros(num_points),
+      'f' : np.zeros(num_points),
+      'g' : np.zeros(num_points),
+      'h' : np.zeros(num_points),
+      'k' : np.zeros(num_points),
+      'L' : np.zeros(num_points),
+    }
 
     # Get epoch Julian date
     jd_epoch, fr_epoch = jday(
@@ -229,6 +237,15 @@ def propagate_tle(
       for key in coe_time_series.keys():
         if coe[key] is not None:
           coe_time_series[key][i] = coe[key]
+      
+      # Compute MEE
+      mee = OrbitConverter.pv_to_mee(
+        posvel_vec_array[0:3, i],
+        posvel_vec_array[3:6, i],
+        gp = SOLARSYSTEMCONSTANTS.EARTH.GP,
+      )
+      for key in mee_time_series.keys():
+        mee_time_series[key][i] = mee[key]
     
     # Return dict result
     return {
@@ -238,6 +255,7 @@ def propagate_tle(
       'time'       : time,
       'state'      : posvel_vec_array,
       'coe'        : coe_time_series,
+      'mee'        : mee_time_series,
     }
   except Exception as e:
     # Catch all exceptions and return failure
@@ -248,6 +266,7 @@ def propagate_tle(
       'time'       : [],
       'state'      : [],
       'coe'        : [],
+      'mee'        : [],
     }
 
 
@@ -402,6 +421,14 @@ def propagate_state_numerical_integration(
     'ta'   : np.zeros(num_steps),
     'ea'   : np.zeros(num_steps),
   }
+  mee_time_series = {
+    'p' : np.zeros(num_steps),
+    'f' : np.zeros(num_steps),
+    'g' : np.zeros(num_steps),
+    'h' : np.zeros(num_steps),
+    'k' : np.zeros(num_steps),
+    'L' : np.zeros(num_steps),
+  }
   
   if get_coe_time_series:
     for i in range(num_steps):
@@ -414,6 +441,13 @@ def propagate_state_numerical_integration(
       for key in coe_time_series.keys():
         if coe[key] is not None:
           coe_time_series[key][i] = coe[key]
+      
+      # Compute MEE
+      mee = OrbitConverter.pv_to_mee(
+        pos, vel, gp
+      )
+      for key in mee_time_series.keys():
+        mee_time_series[key][i] = mee[key]
   
   return {
     'success' : solution.success,
@@ -422,6 +456,7 @@ def propagate_state_numerical_integration(
     'state'   : solution.y,
     'state_f' : solution.y[:, -1],
     'coe'     : coe_time_series,
+    'mee'     : mee_time_series,
   }
 
 
@@ -707,6 +742,14 @@ def run_high_fidelity_propagation(
         'ta'   : np.zeros(len(ephem_times_et)),
         'ea'   : np.zeros(len(ephem_times_et)),
       }
+      mee_at_ephem = {
+        'p' : np.zeros(len(ephem_times_et)),
+        'f' : np.zeros(len(ephem_times_et)),
+        'g' : np.zeros(len(ephem_times_et)),
+        'h' : np.zeros(len(ephem_times_et)),
+        'k' : np.zeros(len(ephem_times_et)),
+        'L' : np.zeros(len(ephem_times_et)),
+      }
       for i in range(len(ephem_times_et)):
         coe = OrbitConverter.pv_to_coe(
           state_at_ephem[0:3, i],
@@ -716,13 +759,23 @@ def run_high_fidelity_propagation(
         for key in coe_at_ephem.keys():
           if coe[key] is not None:
             coe_at_ephem[key][i] = coe[key]
+        
+        # Compute MEE
+        mee = OrbitConverter.pv_to_mee(
+          state_at_ephem[0:3, i],
+          state_at_ephem[3:6, i],
+          SOLARSYSTEMCONSTANTS.EARTH.GP
+        )
+        for key in mee_at_ephem.keys():
+          mee_at_ephem[key][i] = mee[key]
       
       # Store ephemeris-time results
       result_high_fidelity['at_ephem_times'] = {
-        'plot_time_s' : ephem_times_s,
+        'plot_time_s'   : ephem_times_s,
         'integ_time_et' : ephem_times_et,
-        'state' : state_at_ephem,
-        'coe' : coe_at_ephem,
+        'state'         : state_at_ephem,
+        'coe'           : coe_at_ephem,
+        'mee'           : mee_at_ephem,
       }
       
       print("Complete")
@@ -843,14 +896,15 @@ def run_sgp4_propagation(
     if result_sgp4_at_ephem['success']:
       # Store ephemeris-time results
       result_sgp4['at_ephem_times'] = {
-        'plot_time_s' : ephem_times_s,
+        'plot_time_s'  : ephem_times_s,
         'integ_time_s' : ephem_times_from_tle,
-        'state' : result_sgp4_at_ephem['state'],
-        'coe' : result_sgp4_at_ephem['coe'],
+        'state'        : result_sgp4_at_ephem['state'],
+        'coe'          : result_sgp4_at_ephem['coe'],
+        'mee'          : result_sgp4_at_ephem['mee'],
       }
       print("Complete")
     else:
-      print(f"Failed: {result_sgp4_at_ephemeris['message']}")
+      print(f"Failed: {result_sgp4_at_ephem['message']}")
   
   return result_sgp4
 
