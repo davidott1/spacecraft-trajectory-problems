@@ -25,7 +25,9 @@ class DragConfig:
   
   @property
   def is_valid(self) -> bool:
-    """Check if drag parameters are valid."""
+    """
+    Check if drag parameters are valid.
+    """
     return self.enabled and self.cd > 0 and self.area > 0
 
 
@@ -45,7 +47,9 @@ class SRPConfig:
   
   @property
   def is_valid(self) -> bool:
-    """Check if SRP parameters are valid."""
+    """
+    Check if SRP parameters are valid.
+    """
     return self.enabled and self.cr > 0 and self.area > 0
 
 
@@ -66,6 +70,7 @@ class SpacecraftProperties:
   srp      : SRPConfig     = None
   norad_id : Optional[str] = None
   name     : Optional[str] = None
+
   def __post_init__(self):
     if self.drag is None:
       self.drag = DragConfig()
