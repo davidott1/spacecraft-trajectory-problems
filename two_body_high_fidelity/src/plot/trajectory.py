@@ -1182,8 +1182,8 @@ def plot_3d_trajectory_sun_centered(
       # 2. Full approximate Sun orbit
       # Use Sun's GP for relative motion (mu_sun + mu_earth approx mu_sun)
       sun_state_km, _ = spice.spkezr('SUN', epoch_et_start, 'J2000', 'NONE', 'EARTH')
-      sun_pos_init    = sun_state_km[0:3] * 1000.0
-      sun_vel_init    = sun_state_km[3:6] * 1000.0
+      sun_pos_init    = np.array(sun_state_km)[0:3] * 1000.0
+      sun_vel_init    = np.array(sun_state_km)[3:6] * 1000.0
       
       sun_coe = OrbitConverter.pv_to_coe(sun_pos_init, sun_vel_init, mu_sun)
       
@@ -1224,25 +1224,24 @@ def plot_3d_trajectory_sun_centered(
       
       # Plot Earth Initial
       if earth_pos_helio_init is not None:
-        ax.scatter([earth_pos_helio_init[0]], [earth_pos_helio_init[1]], [earth_pos_helio_init[2]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='black', linewidths=2, zorder=5)
+        ax.scatter([earth_pos_helio_init[0]], [earth_pos_helio_init[1]], [earth_pos_helio_init[2]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='black', linewidths=2, zorder=5)  # type: ignore
                     
       # Plot Earth Final
       if earth_pos_helio_final is not None:
-        ax.scatter([earth_pos_helio_final[0]], [earth_pos_helio_final[1]], [earth_pos_helio_final[2]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='black', linewidths=2, zorder=5)
+        ax.scatter([earth_pos_helio_final[0]], [earth_pos_helio_final[1]], [earth_pos_helio_final[2]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='black', linewidths=2, zorder=5)  # type: ignore
       
       if ax == ax_sun_dup and moon_pos_helio is not None:
         # Plot Moon Trajectory
-        ax.plot(moon_pos_helio[0, :], moon_pos_helio[1, :], moon_pos_helio[2, :], 
-                color='gray', linewidth=1.0, alpha=0.8, label='Moon')
+        ax.plot(moon_pos_helio[0, :], moon_pos_helio[1, :], moon_pos_helio[2, :], color='gray', linewidth=1.0, alpha=0.8, label='Moon')
         # Add Moon markers
-        ax.scatter([moon_pos_helio[0,  0]], [moon_pos_helio[1,  0]], [moon_pos_helio[2,  0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='gray', linewidths=2, zorder=8)
-        ax.scatter([moon_pos_helio[0, -1]], [moon_pos_helio[1, -1]], [moon_pos_helio[2, -1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='gray', linewidths=2, zorder=8)
+        ax.scatter([moon_pos_helio[0,  0]], [moon_pos_helio[1,  0]], [moon_pos_helio[2,  0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='gray', linewidths=2, zorder=8)  # type: ignore
+        ax.scatter([moon_pos_helio[0, -1]], [moon_pos_helio[1, -1]], [moon_pos_helio[2, -1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='gray', linewidths=2, zorder=8)  # type: ignore
 
       if sc_pos_helio is not None:
         # Plot Spacecraft Trajectory
         ax.plot(sc_pos_helio[0, :], sc_pos_helio[1, :], sc_pos_helio[2, :], color='b', linewidth=1.5, label='Spacecraft')
-        ax.scatter([sc_pos_helio[0,  0]], [sc_pos_helio[1,  0]], [sc_pos_helio[2,  0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=10)
-        ax.scatter([sc_pos_helio[0, -1]], [sc_pos_helio[1, -1]], [sc_pos_helio[2, -1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=10)
+        ax.scatter([sc_pos_helio[0,  0]], [sc_pos_helio[1,  0]], [sc_pos_helio[2,  0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=10)  # type: ignore
+        ax.scatter([sc_pos_helio[0, -1]], [sc_pos_helio[1, -1]], [sc_pos_helio[2, -1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=10)  # type: ignore
 
       ax.set_xlabel('Pos-X [m]')
       ax.set_ylabel('Pos-Y [m]')
@@ -1252,9 +1251,9 @@ def plot_3d_trajectory_sun_centered(
       # Custom Legend
       if ax == ax_sun_dup:
         legend_handles_sun = []
-        legend_handles_sun.append(Line2D([0], [0], color='orange', linewidth=1.5, label='Sun'))
-        legend_handles_sun.append(Line2D([0], [0], color='black', linestyle='--', linewidth=1, label='Earth Orbit'))
-        legend_handles_sun.append(Line2D([0], [0], color='black', linewidth=2.0, label='Earth'))
+        legend_handles_sun.append(Line2D([0], [0], color='orange',                 linewidth=1.5, label='Sun'        ))
+        legend_handles_sun.append(Line2D([0], [0], color='black' , linestyle='--', linewidth=1  , label='Earth Orbit'))
+        legend_handles_sun.append(Line2D([0], [0], color='black' ,                 linewidth=2.0, label='Earth'      ))
         legend_handles_sun.extend([
           Line2D([0], [0], color='gray', linewidth=1, label='Moon'),
           Line2D([0], [0], color='b', linewidth=1.5, label='Spacecraft'),
