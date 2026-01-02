@@ -1,8 +1,11 @@
 import warnings
-import numpy as np
+import numpy    as np
 import spiceypy as spice
 
+from typing import Union
+
 from src.model.constants import SOLARSYSTEMCONSTANTS
+from src.schemas.state   import ClassicalOrbitalElements, ModifiedEquinoctialElements, GeodeticCoordinates, GeocentricCoordinates
 
 class TwoBody_RootSolvers:
   """
@@ -164,7 +167,8 @@ class OrbitConverter:
     pos_vec : np.ndarray,
     vel_vec : np.ndarray,
     gp      : float = SOLARSYSTEMCONSTANTS.EARTH.GP,
-  ) -> dict:
+    return_dict: bool = True,  # For backward compatibility
+  ) -> Union[ClassicalOrbitalElements,dict]:
     """
     Convert Cartesian position and velocity vectors to classical orbital elements.
     
@@ -176,11 +180,13 @@ class OrbitConverter:
         Velocity vector [m/s].
       gp : float
         Gravitational parameter [m³/s²].
+      return_dict : bool
+        If True, return dict for backward compatibility. If False, return ClassicalOrbitalElements.
         
     Output:
     -------
-      coe : dict
-        Dictionary containing orbital elements:
+      coe : ClassicalOrbitalElements | dict
+        Classical orbital elements:
         - sma  : semi-major axis [m] (or np.inf for parabolic orbits)
         - ecc  : eccentricity [-]
         - inc  : inclination [rad]
@@ -307,18 +313,22 @@ class OrbitConverter:
         pa = np.tan(ta / 2)
         ma = pa + pa**3 / 3
 
-    return {
-      'sma'  : sma,
-      'ecc'  : ecc_mag,
-      'inc'  : inc,
-      'raan' : raan,
-      'aop'  : aop,
-      'ma'   : ma,
-      'ta'   : ta,
-      'ea'   : ea,
-      'ha'   : ha,
-      'pa'   : pa,
-    }
+    coe = ClassicalOrbitalElements(
+      sma=sma,
+      ecc=ecc_mag,
+      inc=inc,
+      raan=raan,
+      aop=aop,
+      ta=ta,
+      ea=ea,
+      ma=ma,
+      ha=ha,
+      pa=pa,
+    )
+    
+    if return_dict:
+      return coe.to_dict()
+    return coe
 
   @staticmethod
   def pv_to_mee(
