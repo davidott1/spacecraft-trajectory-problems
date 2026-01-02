@@ -1586,7 +1586,7 @@ def generate_3d_and_time_series_plots(
     fig_sgp4_3d.suptitle(f'3D Inertial - {object_name_display} - SGP4', fontsize=16)
     filename = f'3d_j2000_earth_centered_sgp4_{name_lower}.png'
     fig_sgp4_3d.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"      3D          : <figures_folderpath>/{filename}")
+    print(f"      3D Inertial    : <figures_folderpath>/{filename}")
     plt.close(fig_sgp4_3d)
     
     # Time series plot
@@ -1594,8 +1594,16 @@ def generate_3d_and_time_series_plots(
     fig_sgp4_ts.suptitle(f'Time Series - {object_name_display} - SGP4', fontsize=16)
     filename = f'timeseries_sgp4_{name_lower}.png'
     fig_sgp4_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"      Time Series : <figures_folderpath>/{filename}")
+    print(f"      Time Series    : <figures_folderpath>/{filename}")
     plt.close(fig_sgp4_ts)
+
+    # Ground track plot for SGP4
+    gt_title = f'Ground Track - {object_name_display} - SGP4'
+    fig_gt_sgp4 = plot_ground_track(result_sgp4_propagation, epoch_dt_utc=time_o_dt, title_text=gt_title)
+    filename = f'groundtrack_sgp4_{name_lower}.png'
+    fig_gt_sgp4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+    print(f"      Ground Track   : <figures_folderpath>/{filename}")
+    plt.close(fig_gt_sgp4)
 
 def generate_plots(
   result_jpl_horizons_ephemeris    : Optional[dict],
