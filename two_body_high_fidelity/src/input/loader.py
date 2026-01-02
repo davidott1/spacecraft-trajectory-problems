@@ -627,7 +627,7 @@ def process_horizons_result(
   Output:
   -------
     result_horizons : dict
-      Processed Horizons result with added 'coe' and 'plot_time_s' fields.
+      Processed Horizons result with added 'coe', 'mee', and 'plot_time_s' fields.
   """
   if result_horizons and result_horizons.get('success'):
     actual_start = result_horizons['time_o']
@@ -665,10 +665,21 @@ def process_horizons_result(
       'ta'   : np.zeros(num_points),
       'ea'   : np.zeros(num_points),
     }
+    
+    # Compute modified equinoctial elements for Horizons data
+    result_horizons['mee'] = {
+      'p' : np.zeros(num_points),
+      'f' : np.zeros(num_points),
+      'g' : np.zeros(num_points),
+      'h' : np.zeros(num_points),
+      'k' : np.zeros(num_points),
+      'L' : np.zeros(num_points),
+    }
 
     for i in range(num_points):
       pos_vec = result_horizons['state'][0:3, i]
       vel_vec = result_horizons['state'][3:6, i]
+      
       coe = OrbitConverter.pv_to_coe(
         pos_vec,
         vel_vec,
@@ -676,6 +687,14 @@ def process_horizons_result(
       )
       for key in result_horizons['coe'].keys():
         result_horizons['coe'][key][i] = coe[key]
+      
+      mee = OrbitConverter.pv_to_mee(
+        pos_vec,
+        vel_vec,
+        SOLARSYSTEMCONSTANTS.EARTH.GP,
+      )
+      for key in result_horizons['mee'].keys():
+        result_horizons['mee'][key][i] = mee[key]
 
     return result_horizons
 

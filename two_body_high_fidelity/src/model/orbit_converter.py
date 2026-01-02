@@ -55,9 +55,6 @@ class TwoBody_RootSolvers:
     
     return ea  # return best estimate if not converged
   
-  # Alias for kepler function - converts mean anomaly to eccentric anomaly
-  M2E_kepler = kepler
-  
   @staticmethod
   def lambert(
     pos_o_vec : np.ndarray,
@@ -157,6 +154,7 @@ class OrbitConverter:
   
   Provides comprehensive conversion utilities for orbital mechanics, including:
   - Cartesian state (position/velocity) ↔ classical orbital elements
+  - Cartesian state (position/velocity) ↔ modified equinoctial elements
   - Anomaly transformations (true, eccentric, mean, hyperbolic, parabolic)
   - Support for all orbit types (circular, elliptical, parabolic, hyperbolic, rectilinear)
   """
@@ -323,31 +321,173 @@ class OrbitConverter:
     }
 
   @staticmethod
+  def pv_to_mee(
+    pos_vec    : np.ndarray,
+    vel_vec    : np.ndarray,
+    gp         : float = SOLARSYSTEMCONSTANTS.EARTH.GP,
+    retrograde : bool  = False,
+  ) -> dict:
+    """
+    Convert Cartesian position and velocity vectors to Modified Equinoctial Elements (MEE).
+    
+    Input:
+    ------
+      pos_vec : np.ndarray
+        Position vector [m].
+      vel_vec : np.ndarray
+        Velocity vector [m/s].
+      gp : float
+        Gravitational parameter [m³/s²].
+      retrograde : bool
+        If True, use retrograde factor (I = -1) for inclinations > 90°.
+        If False (default), use prograde factor (I = +1).
+        
+    Output:
+    -------
+      mee : dict
+        Dictionary containing modified equinoctial elements:
+        - p : semi-latus rectum [m]
+        - f : e*cos(ω + I*Ω) [-]
+        - g : e*sin(ω + I*Ω) [-]
+        - h : tan(i/2)*cos(Ω) [-] (prograde) or cot(i/2)*cos(Ω) [-] (retrograde)
+        - k : tan(i/2)*sin(Ω) [-] (prograde) or cot(i/2)*sin(Ω) [-] (retrograde)
+        - L : true longitude = ω + I*Ω + ν [rad]
+        - I : retrograde factor (+1 prograde, -1 retrograde)
+
+    Notes:
+    ------
+      Modified Equinoctial Elements avoid singularities at:
+      - Zero eccentricity (circular orbits)
+      - Zero inclination (equatorial orbits) when using prograde formulation
+      - 180° inclination when using retrograde formulation
+      
+      The retrograde formulation (I = -1) should be used for i > 90°.
+      
+    Source:
+    -------
+      Walker, Ireland, and Owens (1985)
+      "A Set of Modified Equinoctial Orbit Elements"
+      Celestial Mechanics, Vol. 36, pp. 409-419
+    """
+    # Ensure vectors are numpy arrays
+    pos_vec = np.asarray(pos_vec).flatten()
+    vel_vec = np.asarray(vel_vec).flatten()
+    
+    # Retrograde factor
+    I = -1 if retrograde else 1
+    
+    # Position and velocity magnitudes
+    pos_mag = np.linalg.norm(pos_vec)
+    vel_mag = np.linalg.norm(vel_vec)
+    
+    # Angular momentum vector
+    ang_mom_vec = np.cross(pos_vec, vel_vec)
+    ang_mom_mag = np.linalg.norm(ang_mom_vec)
+    
+    # Semi-latus rectum
+    p = ang_mom_mag**2 / gp
+    
+    # Eccentricity vector
+    ecc_vec = np.cross(vel_vec, ang_mom_vec) / gp - pos_vec / pos_mag
+    ecc_mag = np.linalg.norm(ecc_vec)
+    
+    # Unit vectors
+    pos_dir     = pos_vec / pos_mag
+    ang_mom_dir = ang_mom_vec / ang_mom_mag if ang_mom_mag > 1e-12 else np.array([0, 0, 1])
+    
+    # Compute h and k directly from angular momentum
+    #   h = tan(i/2)*cos(Ω), k = tan(i/2)*sin(Ω) for prograde
+    #   For h_hat = [hx, hy, hz], we have:
+    #     hz = cos(i), so tan(i/2) = sqrt((1-hz)/(1+hz)) for prograde
+    #     hx = sin(i)*sin(Ω), hy = -sin(i)*cos(Ω)
+    ang_mom_dir_z = ang_mom_dir[2]
+    
+    if retrograde:
+      # cot(i/2) = sqrt((1+hz)/(1-hz))
+      if abs(1 - ang_mom_dir_z) > 1e-12:
+        cot_half_i = np.sqrt((1 + ang_mom_dir_z) / (1 - ang_mom_dir_z))
+      else:
+        cot_half_i = np.inf
+      # For retrograde: h = cot(i/2)*cos(Ω), k = cot(i/2)*sin(Ω)
+      # From h_hat: sin(Ω) = hx/sin(i), cos(Ω) = -hy/sin(i)
+      sin_i = np.sqrt(ang_mom_dir[0]**2 + ang_mom_dir[1]**2)
+      if sin_i > 1e-12:
+        h = -cot_half_i * ang_mom_dir[1] / sin_i
+        k =  cot_half_i * ang_mom_dir[0] / sin_i
+      else:
+        h = 0.0
+        k = 0.0
+    else:
+      # tan(i/2) = sqrt((1-hz)/(1+hz))
+      if abs(1 + ang_mom_dir_z) > 1e-12:
+        tan_half_i = np.sqrt((1 - ang_mom_dir_z) / (1 + ang_mom_dir_z))
+      else:
+        tan_half_i = np.inf
+      # For prograde: h = tan(i/2)*cos(Ω), k = tan(i/2)*sin(Ω)
+      sin_i = np.sqrt(ang_mom_dir[0]**2 + ang_mom_dir[1]**2)
+      if sin_i > 1e-12:
+        h = -tan_half_i * ang_mom_dir[1] / sin_i
+        k =  tan_half_i * ang_mom_dir[0] / sin_i
+      else:
+        h = 0.0
+        k = 0.0
+    
+    # Compute f and g from eccentricity vector
+    #   Express ecc_vec in terms of f and g
+    #     ecc_vec = ecc_mag * (cos(ω)*P_hat + sin(ω)*Q_hat)
+    #   where P_hat, Q_hat are perifocal unit vectors
+    #     f = ecc_mag * cos(ω + I*Ω)
+    #     g = ecc_mag * sin(ω + I*Ω)
+    
+    # Define equinoctial frame unit vectors
+    s_sq  = 1 + h**2 + k**2
+    f_dir = np.array([1 - k**2 + h**2, 2*k*h, -2*I*k]) / s_sq
+    g_dir = np.array([2*I*k*h, (1 + k**2 - h**2)*I, 2*h]) / s_sq
+    
+    # Project eccentricity vector onto equinoctial frame
+    f = np.dot(ecc_vec, f_dir)
+    g = np.dot(ecc_vec, g_dir)
+    
+    # Compute true longitude L
+    #   L      = ω + I*Ω + ν
+    #   cos(L) = (r_hat · f_hat)
+    #   sin(L) = (r_hat · g_hat)
+    cos_L = np.dot(pos_dir, f_dir)
+    sin_L = np.dot(pos_dir, g_dir)
+    L = np.arctan2(sin_L, cos_L)
+    if L < 0:
+      L += 2 * np.pi
+    
+    return {
+      'p' : p,
+      'f' : f,
+      'g' : g,
+      'h' : h,
+      'k' : k,
+      'L' : L,
+      'I' : I,
+    }
+
+  @staticmethod
   def coe_to_pv(
     coe : dict,
     gp  : float = SOLARSYSTEMCONSTANTS.EARTH.GP,
   ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Convert classical orbital elements to position and velocity vectors.
-    Handles all orbit types including parabolic and rectilinear cases.
+    Convert Classical Orbital Elements to position and velocity vectors.
     
     Input:
     ------
-    coe : dict
-      sma  : semi-major axis [m]
-      ecc  : eccentricity [-]
-      inc  : inclination [rad]
-      raan : RAAN [rad]
-      aop  : argument of periapsis [rad]
-      ta   : true anomaly [rad] (for non-rectilinear orbits)
-      ea   : eccentric anomaly [rad] (for rectilinear elliptic only)
-      For parabolic orbits (ecc≈1), one of the following must be provided
-      to define the orbit's size, as 'sma' is infinite:
-        - periapsis   : periapsis radius [m]
-        - slr         : semi-latus rectum [m]
-        - ang_mom_mag : angular momentum magnitude [m²/s]
-    gp : float
-      Gravitational parameter [m³/s²]
+      coe : dict
+        Dictionary containing classical orbital elements:
+        - sma  : semi-major axis [m]
+        - ecc  : eccentricity [-]
+        - inc  : inclination [rad]
+        - raan : right ascension of ascending node [rad]
+        - aop  : argument of periapsis [rad]
+        - ta   : true anomaly [rad]
+      gp : float
+        Gravitational parameter [m³/s²].
     
     Output:
     -------
@@ -355,136 +495,303 @@ class OrbitConverter:
         Position vector [m]
       vel_vec : np.ndarray
         Velocity vector [m/s]
-    
+
     Notes:
     ------
-    The code can handle the following orbit types:
-      - circular      :  e = 0           a > 0
-      - elliptical-2D :  0 < e < 1       a > 0
-      - elliptical-1D :  e = 1           a > 0 and finite (rectilinear)
-      - parabolic-2D  :  e = 1           a = inf
-      - hyperbolic-2D :  e > 1           a < 0
-    The code does not handle the following orbit types:
-      - parabolic-1D  :  e = 1           a = ? (rectilinear)
-      - hyperbolic-1D :  e > 1           a < 0 and finite (rectilinear)
-
-    Source:
-    -------
-      Modified from
-      Analytical Mechanics of Space Systems, Fourth Edition
-      Hanspeter Schaub and John L. Junkins
-      DOI: https://doi.org/10.2514/4.105210
+      - For parabolic orbits, the semi-major axis (sma) should be set to np.inf.
+      - The eccentricity (ecc) should be 1 for parabolic orbits.
+      - The true anomaly (ta) is used to compute the position and velocity.
     """
-    # Extract orbital elements
-    sma  = coe['sma' ]
-    ecc  = coe['ecc' ]
-    inc  = coe['inc' ]
+    # Extract elements
+    sma  = coe['sma']
+    ecc  = coe['ecc']
+    inc  = coe['inc']
     raan = coe['raan']
     aop  = coe['aop']
-
-    # Rectilinear vs. non-rectilinear case handling
-    if ecc == 1.0 and sma > 0 and np.isfinite(sma):
-      # Rectilinear elliptic orbit case
-
-      # Extract eccentric anomaly
-      ea = coe.get('ea', None)
-      if ea is None:
-        raise ValueError("Eccentric anomaly 'ea' must be provided for rectilinear elliptic orbits")
-
-      # Position and velocity magnitudes
-      pos_mag = sma * (1 - ecc * np.cos(ea))
-      vel_mag = np.sqrt(2 * gp / pos_mag - gp / sma)
-      
-      # Position vector
-      pos_dir = np.array([
-        np.cos(raan) * np.cos(aop) - np.sin(raan) * np.sin(aop) * np.cos(inc),
-        np.sin(raan) * np.cos(aop) + np.cos(raan) * np.sin(aop) * np.cos(inc),
-        np.sin( aop) * np.sin(inc)
-      ])
-      pos_vec = pos_mag * pos_dir
-      
-      # Velocity direction (along or opposite to position direction)
-      if np.sin(ea) > 0:
-        vel_vec = -vel_mag * pos_dir
-      else:
-        vel_vec =  vel_mag * pos_dir
+    ta   = coe['ta']
     
+    # Gravitational parameter
+    if 'gp' in coe:
+      gp = coe['gp']
+    
+    # Compute semi-latus rectum
+    if np.isinf(sma):
+      # Parabolic case
+      p = 0  # Semi-latus rectum is not used for parabolic orbits
     else:
-      # Non-rectilinear cases: elliptic-2D, hyperbolic, parabolic
+      p = sma * (1 - ecc**2)
+    
+    # Position in orbital plane
+    pqw_pos_vec = p * (1 - ecc) / (1 - ecc * np.cos(ta)) * np.array([ np.cos(ta), np.sin(ta), 0])
+    
+    # Velocity in orbital plane
+    if np.isinf(sma):
+      # Parabolic case
+      pqw_vel_vec = np.sqrt(gp / (2 * np.linalg.norm(pqw_pos_vec))) * np.array([ -np.sin(ta), ecc - np.cos(ta), 0 ])
+    else:
+      # Elliptic case
+      pqw_vel_vec = np.sqrt(gp / sma) * (1 - ecc * np.cos(ta)) * np.array([ -np.sin(ta), ecc - np.cos(ta), 0 ])
+    
+    # Precompute trigonometric functions
+    cos_raan = np.cos(raan)
+    sin_raan = np.sin(raan)
+    cos_inc  = np.cos(inc)
+    sin_inc  = np.sin(inc)
+    cos_aop  = np.cos(aop)
+    sin_aop  = np.sin(aop)
 
-      # Extract true anomaly
-      ta = coe.get('ta', None)  
-      if ta is None:
-        raise ValueError("True anomaly 'ta' must be provided for non-rectilinear orbits")
+    # Combined rotation matrix (perifocal to inertial)
+    #   rot_mat_pqw_to_xyz = rot_z(-raan) @ rot_x(-inc) @ rot_z(-aop)
+    rot_mat_pqw_to_xyz = np.array([
+      [ cos_raan * cos_aop - sin_raan * sin_aop * cos_inc, -cos_raan * sin_aop - sin_raan * cos_aop * cos_inc,  sin_raan * sin_inc ],
+      [ sin_raan * cos_aop + cos_raan * sin_aop * cos_inc, -sin_raan * sin_aop + cos_raan * cos_aop * cos_inc, -cos_raan * sin_inc ],
+      [                                 sin_aop * sin_inc,                                  cos_aop * sin_inc,             cos_inc ]
+    ])
+    
+    # Transform to inertial frame
+    xyz_pos_vec = rot_mat_pqw_to_xyz @ pqw_pos_vec
+    xyz_vel_vec = rot_mat_pqw_to_xyz @ pqw_vel_vec
+    
+    return xyz_pos_vec, xyz_vel_vec
 
-      # Orbit conic cases: parabolic vs. elliptic/hyperbolic
-      if ecc == 1:
-        # Parabolic case
-        #   Priority cascade for size input parameter:
-        #   1. 'periapsis' (highest priority)
-        #   2. 'slr'
-        #   3. 'ang_mom_mag' (lowest priority)
+  @staticmethod
+  def mee_to_pv(
+    mee : dict,
+    gp  : float = SOLARSYSTEMCONSTANTS.EARTH.GP,
+  ) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Convert Modified Equinoctial Elements (MEE) to position and velocity vectors in the inertial frame.
+    
+    Input:
+    ------
+      mee : dict
+        Dictionary containing modified equinoctial elements:
+        - p : semi-latus rectum [m]
+        - f : e*cos(ω + I*Ω) [-]
+        - g : e*sin(ω + I*Ω) [-]
+        - h : tan(i/2)*cos(Ω) [-] or cot(i/2)*cos(Ω) [-] (retrograde)
+        - k : tan(i/2)*sin(Ω) [-] or cot(i/2)*sin(Ω) [-] (retrograde)
+        - L : true longitude = ω + I*Ω + ν [rad]
+        - I : retrograde factor (+1 prograde, -1 retrograde), optional (default +1)
+      gp : float
+        Gravitational parameter [m³/s²]
+    
+    Output:
+    -------
+      pos_vec : np.ndarray
+        Position vector [m]
+      vel_vec : np.ndarray
+        Velocity vector [m/s]
 
-        # Fetch all possible inputs first
-        periapsis_mag = coe.get('periapsis', None)
-        slr_val       = coe.get('slr', None)
-        ang_mom_mag   = coe.get('ang_mom_mag', None)
-
-        # Apply priority cascade
-        if periapsis_mag is not None:
-          slr = 2 * periapsis_mag
-          # Build a list of ignored parameters for a specific warning
-          ignored_params = []
-          if slr_val is not None:
-            ignored_params.append("'slr'")
-          if ang_mom_mag is not None:
-            ignored_params.append("'ang_mom_mag'")
-          if ignored_params:
-            ignored_str = " and ".join(ignored_params)
-            warning_msg = (
-              "Multiple size parameters for non-rectilinear parabolic orbit found in 'coe' dict. "
-              f"Using 'periapsis' (highest priority). Ignoring {ignored_str}."
-            )
-            warnings.warn(warning_msg, UserWarning)
-
-        elif slr_val is not None:
-          slr = slr_val
-          # Warn if lower-priority key was also present
-          if ang_mom_mag is not None:
-            warnings.warn("Multiple parabolic input parameters found to coe_to_pv function. 'periapsis' is None. Using 'slr' and ignoring 'ang_mom_mag'.", UserWarning)
-        
-        elif ang_mom_mag is not None:
-            slr = ang_mom_mag**2 / gp
-            # No warning needed, this is the last resort
-        
-        else:
-            # All three are None, this is a fatal error
-            raise ValueError("Either 'periapsis', 'slr', or 'ang_mom_mag' must be provided for parabolic orbits")
+    Notes:
+    ------
+      The conversion uses the direct transformation from MEE to Cartesian
+      coordinates without going through classical elements.
       
-      else:
-        # Elliptic and hyperbolic cases
-        slr = sma * (1 - ecc**2)  # semi-latus rectum
-
-      # Position magnitude, true latitude angle, angular momentum magnitude
-      pos_mag     = slr / (1 + ecc * np.cos(ta))  # orbit radius
-      theta       = aop + ta                      # true latitude angle
-      ang_mom_mag = np.sqrt(gp * slr)             # orbit angular momentum magnitude
-
-      # Position vector
-      pos_vec = np.array([
-        pos_mag * (np.cos(raan) * np.cos(theta) - np.sin(raan) * np.sin(theta) * np.cos(inc)),
-        pos_mag * (np.sin(raan) * np.cos(theta) + np.cos(raan) * np.sin(theta) * np.cos(inc)),
-        pos_mag * (                                              np.sin(theta) * np.sin(inc))
-      ])
-      
-      # Velocity vector
-      vel_vec = np.array([
-        -gp / ang_mom_mag * (np.cos(raan) * (np.sin(theta) + ecc * np.sin(aop)) + np.sin(raan) * (np.cos(theta) + ecc * np.cos(aop)) * np.cos(inc)),
-        -gp / ang_mom_mag * (np.sin(raan) * (np.sin(theta) + ecc * np.sin(aop)) - np.cos(raan) * (np.cos(theta) + ecc * np.cos(aop)) * np.cos(inc)),
-        -gp / ang_mom_mag * (                                                                   -(np.cos(theta) + ecc * np.cos(aop)) * np.sin(inc))
-      ])
+    Source:
+    -------
+      Walker, Ireland, and Owens (1985)
+      "A Set of Modified Equinoctial Orbit Elements"
+      Celestial Mechanics, Vol. 36, pp. 409-419
+    """
+    # Extract elements
+    p = mee['p']
+    f = mee['f']
+    g = mee['g']
+    h = mee['h']
+    k = mee['k']
+    L = mee['L']
+    I = mee.get('I', 1)  # Default to prograde if not specified
+    
+    # Auxiliary quantities
+    s_sq = 1 + h**2 + k**2
+    w    = 1 + f * np.cos(L) + g * np.sin(L)
+    r    = p / w
+    
+    # Trigonometric quantities
+    cos_L = np.cos(L)
+    sin_L = np.sin(L)
+    
+    # Transformation matrix components (unit vectors in equinoctial frame)
+    f_hat = np.array([ 1 - k**2 + h**2,             2 * k * h, -2 * I * k ]) / s_sq
+    g_hat = np.array([   2 * I * k * h, (1 + k**2 - h**2) * I,      2 * h ]) / s_sq
+    
+    # Position vector
+    pos_vec = r * cos_L * f_hat + r * sin_L * g_hat
+    
+    # Velocity vector
+    sqrt_gp_over_p = np.sqrt(gp / p)
+    vel_vec        = -sqrt_gp_over_p * (sin_L + g) * f_hat + sqrt_gp_over_p * (cos_L + f) * g_hat
     
     return pos_vec, vel_vec
+
+  @staticmethod
+  def coe_to_mee(
+    coe        : dict,
+    retrograde : bool = False,
+  ) -> dict:
+    """
+    Convert Classical Orbital Elements to Modified Equinoctial Elements.
+    
+    Input:
+    ------
+      coe : dict
+        Dictionary containing classical orbital elements:
+        - sma  : semi-major axis [m]
+        - ecc  : eccentricity [-]
+        - inc  : inclination [rad]
+        - raan : right ascension of ascending node [rad]
+        - aop  : argument of periapsis [rad]
+        - ta   : true anomaly [rad]
+      retrograde : bool
+        If True, use retrograde factor (I = -1).
+        
+    Output:
+    -------
+      mee : dict
+        Dictionary containing modified equinoctial elements.
+    """
+    # Extract elements
+    sma  = coe['sma']
+    ecc  = coe['ecc']
+    inc  = coe['inc']
+    raan = coe['raan']
+    aop  = coe['aop']
+    ta   = coe['ta']
+    
+    # Retrograde factor
+    I = -1 if retrograde else 1
+    
+    # Semi-latus rectum
+    if np.isinf(sma):
+      # Parabolic case - need slr or periapsis from coe
+      p = coe.get('slr', coe.get('periapsis', 0) * 2)
+    else:
+      p = sma * (1 - ecc**2)
+    
+    # Longitude of periapsis
+    varpi = aop + I * raan
+    
+    # f and g
+    f = ecc * np.cos(varpi)
+    g = ecc * np.sin(varpi)
+    
+    # h and k
+    if retrograde:
+      half_inc = inc / 2
+      if np.abs(np.tan(half_inc)) > 1e-12:
+        cot_half_inc = 1.0 / np.tan(half_inc)
+      else:
+        cot_half_inc = np.inf
+      h = cot_half_inc * np.cos(raan)
+      k = cot_half_inc * np.sin(raan)
+    else:
+      tan_half_inc = np.tan(inc / 2)
+      h = tan_half_inc * np.cos(raan)
+      k = tan_half_inc * np.sin(raan)
+    
+    # True longitude
+    L = (varpi + ta) % (2 * np.pi)
+    
+    return {
+      'p' : p,
+      'f' : f,
+      'g' : g,
+      'h' : h,
+      'k' : k,
+      'L' : L,
+      'I' : I,
+    }
+
+  @staticmethod
+  def mee_to_coe(
+    mee : dict,
+  ) -> dict:
+    """
+    Convert Modified Equinoctial Elements to Classical Orbital Elements.
+    
+    Input:
+    ------
+      mee : dict
+        Dictionary containing modified equinoctial elements:
+        - p : semi-latus rectum [m]
+        - f : e*cos(ω + I*Ω) [-]
+        - g : e*sin(ω + I*Ω) [-]
+        - h : tan(i/2)*cos(Ω) [-] or cot(i/2)*cos(Ω) [-]
+        - k : tan(i/2)*sin(Ω) [-] or cot(i/2)*sin(Ω) [-]
+        - L : true longitude [rad]
+        - I : retrograde factor (+1 or -1), optional (default +1)
+        
+    Output:
+    -------
+      coe : dict
+        Dictionary containing classical orbital elements:
+        - sma  : semi-major axis [m]
+        - ecc  : eccentricity [-]
+        - inc  : inclination [rad]
+        - raan : right ascension of ascending node [rad]
+        - aop  : argument of periapsis [rad]
+        - ta   : true anomaly [rad]
+    """
+    # Extract elements
+    p = mee['p']
+    f = mee['f']
+    g = mee['g']
+    h = mee['h']
+    k = mee['k']
+    L = mee['L']
+    I = mee.get('I', 1)
+    
+    # Eccentricity
+    ecc = np.sqrt(f**2 + g**2)
+    
+    # Semi-major axis
+    if ecc < 1.0:
+      sma = p / (1 - ecc**2)
+    elif ecc > 1.0:
+      sma = p / (ecc**2 - 1)  # Negative for hyperbolic
+    else:
+      sma = np.inf  # Parabolic
+    
+    # Inclination
+    # From h² + k² = tan²(i/2) for prograde, cot²(i/2) for retrograde
+    hk_sq = h**2 + k**2
+    if I == 1:  # Prograde
+      inc = 2 * np.arctan(np.sqrt(hk_sq))
+    else:  # Retrograde
+      if hk_sq > 1e-12:
+        inc = 2 * np.arctan(1.0 / np.sqrt(hk_sq))
+      else:
+        inc = np.pi
+    
+    # RAAN
+    raan = np.arctan2(k, h)
+    if raan < 0:
+      raan += 2 * np.pi
+    
+    # Longitude of periapsis
+    varpi = np.arctan2(g, f)
+    
+    # Argument of periapsis
+    aop = varpi - I * raan
+    aop = aop % (2 * np.pi)
+    
+    # True anomaly
+    ta = L - varpi
+    ta = ta % (2 * np.pi)
+    
+    return {
+      'sma'  : sma,
+      'ecc'  : ecc,
+      'inc'  : inc,
+      'raan' : raan,
+      'aop'  : aop,
+      'ta'   : ta,
+      'ma'   : None,  # Not computed here
+      'ea'   : None,
+      'ha'   : None,
+      'pa'   : None,
+    }
 
   @staticmethod
   def pv_to_specific_energy(
