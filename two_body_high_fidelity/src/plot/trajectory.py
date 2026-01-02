@@ -175,25 +175,25 @@ def plot_3d_trajectories(
 
       # --- SUN MARKERS ---
       sun_marker_pos_start = project_to_bounds(origin, sun_dir_start, ax1)
-      ax1.scatter([sun_marker_pos_start[0]], [sun_marker_pos_start[1]], [sun_marker_pos_start[2]], s=600, marker=r'$\odot_{\text{o}}$', color='gold', zorder=10, label='Sun (Initial)')
-      ax1.plot([sun_marker_pos_start[0], sun_marker_pos_start[0]], [sun_marker_pos_start[1], sun_marker_pos_start[1]], [sun_marker_pos_start[2], z_floor], color='gold', linestyle=':', linewidth=2, alpha=1.0)
-      ax1.scatter([sun_marker_pos_start[0]], [sun_marker_pos_start[1]], [z_floor], color='gold', marker='.', s=20, alpha=1.0)
+      ax1.scatter([sun_marker_pos_start[0]], [sun_marker_pos_start[1]], [sun_marker_pos_start[2]], s=600, marker=r'$\odot_{\text{o}}$', color='gold', zorder=10, label='Sun (Initial)')  # type: ignore
+      ax1.plot([sun_marker_pos_start[0], sun_marker_pos_start[0]], [sun_marker_pos_start[1], sun_marker_pos_start[1]], [sun_marker_pos_start[2], z_floor], color='gold', linestyle=':', linewidth=2, alpha=1.0)  # type: ignore
+      ax1.scatter([sun_marker_pos_start[0]], [sun_marker_pos_start[1]], [z_floor], color='gold', marker='.', s=20, alpha=1.0)  # type: ignore
 
       sun_marker_pos_end = project_to_bounds(origin, sun_dir_end, ax1)
-      ax1.scatter([sun_marker_pos_end[0]], [sun_marker_pos_end[1]], [sun_marker_pos_end[2]], s=600, marker=r'$\odot_{\text{f}}$', color='gold', zorder=10, label='Sun (Final)')
-      ax1.plot([sun_marker_pos_end[0], sun_marker_pos_end[0]], [sun_marker_pos_end[1], sun_marker_pos_end[1]], [sun_marker_pos_end[2], z_floor], color='gold', linestyle=':', linewidth=2, alpha=1.0)
-      ax1.scatter([sun_marker_pos_end[0]], [sun_marker_pos_end[1]], [z_floor], color='gold', marker='.', s=20, alpha=1.0)
+      ax1.scatter([sun_marker_pos_end[0]], [sun_marker_pos_end[1]], [sun_marker_pos_end[2]], s=600, marker=r'$\odot_{\text{f}}$', color='gold', zorder=10, label='Sun (Final)')  # type: ignore
+      ax1.plot([sun_marker_pos_end[0], sun_marker_pos_end[0]], [sun_marker_pos_end[1], sun_marker_pos_end[1]], [sun_marker_pos_end[2], z_floor], color='gold', linestyle=':', linewidth=2, alpha=1.0)  # type: ignore
+      ax1.scatter([sun_marker_pos_end[0]], [sun_marker_pos_end[1]], [z_floor], color='gold', marker='.', s=20, alpha=1.0)  # type: ignore
 
       # --- MOON MARKERS ---
       moon_marker_pos_start = project_to_bounds(origin, moon_dir_start, ax1)
-      ax1.scatter([moon_marker_pos_start[0]], [moon_marker_pos_start[1]], [moon_marker_pos_start[2]], s=600, marker=r'$☾_{\text{o}}$', color='gray', zorder=10, label='Moon (Initial)')
-      ax1.plot([moon_marker_pos_start[0], moon_marker_pos_start[0]], [moon_marker_pos_start[1], moon_marker_pos_start[1]], [moon_marker_pos_start[2], z_floor], color='gray', linestyle=':', linewidth=2, alpha=0.5)
-      ax1.scatter([moon_marker_pos_start[0]], [moon_marker_pos_start[1]], [z_floor], color='gray', marker='.', s=20, alpha=0.5)
+      ax1.scatter([moon_marker_pos_start[0]], [moon_marker_pos_start[1]], [moon_marker_pos_start[2]], s=600, marker=r'$☾_{\text{o}}$', color='gray', zorder=10, label='Moon (Initial)')  # type: ignore
+      ax1.plot([moon_marker_pos_start[0], moon_marker_pos_start[0]], [moon_marker_pos_start[1], moon_marker_pos_start[1]], [moon_marker_pos_start[2], z_floor], color='gray', linestyle=':', linewidth=2, alpha=0.5)  # type: ignore
+      ax1.scatter([moon_marker_pos_start[0]], [moon_marker_pos_start[1]], [z_floor], color='gray', marker='.', s=20, alpha=0.5)  # type: ignore
 
       moon_marker_pos_end = project_to_bounds(origin, moon_dir_end, ax1)
-      ax1.scatter([moon_marker_pos_end[0]], [moon_marker_pos_end[1]], [moon_marker_pos_end[2]], s=600, marker=r'$☾_{\text{f}}$', color='gray', zorder=10, label='Moon (Final)')
-      ax1.plot([moon_marker_pos_end[0], moon_marker_pos_end[0]], [moon_marker_pos_end[1], moon_marker_pos_end[1]], [moon_marker_pos_end[2], z_floor], color='gray', linestyle=':', linewidth=2, alpha=0.5)
-      ax1.scatter([moon_marker_pos_end[0]], [moon_marker_pos_end[1]], [z_floor], color='gray', marker='.', s=20, alpha=0.5)
+      ax1.scatter([moon_marker_pos_end[0]], [moon_marker_pos_end[1]], [moon_marker_pos_end[2]], s=600, marker=r'$☾_{\text{f}}$', color='gray', zorder=10, label='Moon (Final)')  # type: ignore
+      ax1.plot([moon_marker_pos_end[0], moon_marker_pos_end[0]], [moon_marker_pos_end[1], moon_marker_pos_end[1]], [moon_marker_pos_end[2], z_floor], color='gray', linestyle=':', linewidth=2, alpha=0.5)  # type: ignore
+      ax1.scatter([moon_marker_pos_end[0]], [moon_marker_pos_end[1]], [z_floor], color='gray', marker='.', s=20, alpha=0.5)  # type: ignore
       
     except Exception as e:
       # If SPICE kernels aren't loaded or other error, silently skip sun arrow
@@ -843,8 +843,8 @@ def plot_3d_trajectories_body_fixed(
   ax1.plot_wireframe(x_earth, y_earth, z_earth, color='black', linewidth=0.5, alpha=1.0)  # type: ignore
   
   ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=2.0)
-  ax1.scatter([pos_x[ 0]], [pos_y[ 0]], [pos_z[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2)
-  ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2)
+  ax1.scatter([pos_x[ 0]], [pos_y[ 0]], [pos_z[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
+  ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
   ax1.set_xlabel('Pos-X [m]')
   ax1.set_ylabel('Pos-Y [m]')
   ax1.set_zlabel('Pos-Z [m]') # type: ignore
@@ -1078,13 +1078,13 @@ def plot_3d_trajectory_sun_centered(
       # --- HELIOCENTRIC EARTH ORBIT ---
       # Get Earth state relative to Sun at start
       earth_state_sun, _   = spice.spkezr('EARTH', epoch_et_start, 'J2000', 'NONE', 'SUN')
-      earth_pos_helio_init = earth_state_sun[0:3] * CONVERTER.M_PER_KM # m
-      earth_vel_helio_init = earth_state_sun[3:6] * CONVERTER.M_PER_KM # m/s
+      earth_pos_helio_init = np.array(earth_state_sun)[0:3] * CONVERTER.M_PER_KM  # m
+      earth_vel_helio_init = np.array(earth_state_sun)[3:6] * CONVERTER.M_PER_KM  # m/s
       
       # Get Earth state relative to Sun at end
       epoch_et_end           = epoch_et_start + time_s[-1]
       earth_state_sun_end, _ = spice.spkezr('EARTH', epoch_et_end, 'J2000', 'NONE', 'SUN')
-      earth_pos_helio_final  = earth_state_sun_end[0:3] * CONVERTER.M_PER_KM # m
+      earth_pos_helio_final  = np.array(earth_state_sun_end)[0:3] * CONVERTER.M_PER_KM  # m
 
       # Calculate full orbit based on initial osculating elements
       try:
@@ -1148,8 +1148,9 @@ def plot_3d_trajectory_sun_centered(
       # Full approximate Moon orbit (Keplerian ellipse based on initial state)
       # Get initial state of Moon (km, km/s)
       moon_state_km, _ = spice.spkezr('MOON', epoch_et_start, 'J2000', 'NONE', 'EARTH')
-      moon_pos_init = moon_state_km[0:3] * CONVERTER.M_PER_KM # m
-      moon_vel_init = moon_state_km[3:6] * CONVERTER.M_PER_KM # m/s
+      moon_state_arr = np.array(moon_state_km)
+      moon_pos_init = moon_state_arr[0:3] * CONVERTER.M_PER_KM  # m
+      moon_vel_init = moon_state_arr[3:6] * CONVERTER.M_PER_KM  # m/s
       
       # Convert to orbital elements
       moon_coe = OrbitConverter.pv_to_coe(moon_pos_init, moon_vel_init, SOLARSYSTEMCONSTANTS.EARTH.GP)
