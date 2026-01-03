@@ -116,14 +116,14 @@ def get_initial_state(
     print(f"    Position :  {horizons_initial_state[0]:>19.12e}  {horizons_initial_state[1]:>19.12e}  {horizons_initial_state[2]:>19.12e} m")
     print(f"    Velocity :  {horizons_initial_state[3]:>19.12e}  {horizons_initial_state[4]:>19.12e}  {horizons_initial_state[5]:>19.12e} m/s")
     print(f"  Classical Orbital Elements")
-    print(f"    SMA  :  {coe['sma' ]:19.12e} m")
-    print(f"    ECC  :  {coe['ecc' ]:19.12e} -")
-    print(f"    INC  :  {coe['inc' ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    RAAN :  {coe['raan']*CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    AOP  :  {coe['aop' ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    TA   :  {coe['ta'  ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"    SMA  :  {coe.sma                         :19.12e} m")
+    print(f"    ECC  :  {coe.ecc                         :19.12e} -")
+    print(f"    INC  :  {coe.inc  * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"    RAAN :  {coe.raan * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"    AOP  :  {coe.aop  * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"    TA   :  {coe.ta   * CONVERTER.DEG_PER_RAD:19.12e} deg")
     # print(f"    EA   :  {coe['ea'  ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    MA   :  {coe['ma'  ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"    MA   :  {coe.ma   * CONVERTER.DEG_PER_RAD:19.12e} deg")
     return horizons_initial_state
 
   # Fallback to TLE

@@ -76,37 +76,6 @@ class ClassicalOrbitalElements:
   ma   : Optional[Union[float, np.ndarray]] = None
   ha   : Optional[Union[float, np.ndarray]] = None
   pa   : Optional[Union[float, np.ndarray]] = None
-  
-  def to_dict(self) -> dict:
-    """Convert to dictionary format for backward compatibility."""
-    return {
-      'sma'  : self.sma,
-      'ecc'  : self.ecc,
-      'inc'  : self.inc,
-      'raan' : self.raan,
-      'aop'  : self.aop,
-      'ta'   : self.ta,
-      'ea'   : self.ea,
-      'ma'   : self.ma,
-      'ha'   : self.ha,
-      'pa'   : self.pa,
-    }
-  
-  @classmethod
-  def from_dict(cls, data: dict) -> 'ClassicalOrbitalElements':
-    """Create from dictionary."""
-    return cls(
-      sma  = data['sma'],
-      ecc  = data['ecc'],
-      inc  = data['inc'],
-      raan = data['raan'],
-      aop  = data['aop'],
-      ta   = data['ta'],
-      ea   = data.get('ea'),
-      ma   = data.get('ma'),
-      ha   = data.get('ha'),
-      pa   = data.get('pa'),
-    )
 
 
 @dataclass

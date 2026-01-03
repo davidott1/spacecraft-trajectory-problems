@@ -234,9 +234,14 @@ def propagate_tle(
         posvel_vec_array[3:6, i],
         gp = SOLARSYSTEMCONSTANTS.EARTH.GP,
       )
-      for key in coe_time_series.keys():
-        if coe[key] is not None:
-          coe_time_series[key][i] = coe[key]
+      coe_time_series['sma'][i]  = coe.sma
+      coe_time_series['ecc'][i]  = coe.ecc
+      coe_time_series['inc'][i]  = coe.inc
+      coe_time_series['raan'][i] = coe.raan
+      coe_time_series['aop'][i]  = coe.aop
+      coe_time_series['ta'][i]   = coe.ta if coe.ta is not None else 0.0
+      coe_time_series['ea'][i]   = coe.ea if coe.ea is not None else 0.0
+      coe_time_series['ma'][i]   = coe.ma if coe.ma is not None else 0.0
       
       # Compute MEE
       mee = OrbitConverter.pv_to_mee(
@@ -244,8 +249,12 @@ def propagate_tle(
         posvel_vec_array[3:6, i],
         gp = SOLARSYSTEMCONSTANTS.EARTH.GP,
       )
-      for key in mee_time_series.keys():
-        mee_time_series[key][i] = mee[key]
+      mee_time_series['p'][i] = mee.p
+      mee_time_series['f'][i] = mee.f
+      mee_time_series['g'][i] = mee.g
+      mee_time_series['h'][i] = mee.h
+      mee_time_series['k'][i] = mee.k
+      mee_time_series['L'][i] = mee.L
     
     # Return dict result
     return {
@@ -435,19 +444,25 @@ def propagate_state_numerical_integration(
       pos = solution.y[0:3, i]
       vel = solution.y[3:6, i]
       
-      coe = OrbitConverter.pv_to_coe(
-        pos, vel, gp
-      )
-      for key in coe_time_series.keys():
-        if coe[key] is not None:
-          coe_time_series[key][i] = coe[key]
+      # Compute COE
+      coe = OrbitConverter.pv_to_coe(pos, vel, gp)
+      coe_time_series['sma'][i]  = coe.sma
+      coe_time_series['ecc'][i]  = coe.ecc
+      coe_time_series['inc'][i]  = coe.inc
+      coe_time_series['raan'][i] = coe.raan
+      coe_time_series['aop'][i]  = coe.aop
+      coe_time_series['ma'][i]   = coe.ma
+      coe_time_series['ta'][i]   = coe.ta
+      coe_time_series['ea'][i]   = coe.ea
       
       # Compute MEE
-      mee = OrbitConverter.pv_to_mee(
-        pos, vel, gp
-      )
-      for key in mee_time_series.keys():
-        mee_time_series[key][i] = mee[key]
+      mee = OrbitConverter.pv_to_mee(pos, vel, gp)
+      mee_time_series['p'][i] = mee.p
+      mee_time_series['f'][i] = mee.f
+      mee_time_series['g'][i] = mee.g
+      mee_time_series['h'][i] = mee.h
+      mee_time_series['k'][i] = mee.k
+      mee_time_series['L'][i] = mee.L
   
   return {
     'success' : solution.success,
@@ -659,7 +674,7 @@ def run_high_fidelity_propagation(
       SOLARSYSTEMCONSTANTS.EARTH.GP
     )
     
-    if coe['ecc'] > 0.1:
+    if coe.ecc > 0.1:
       points_per_period = 1000
     else:
       points_per_period = 100
@@ -756,9 +771,17 @@ def run_high_fidelity_propagation(
           state_at_ephem[3:6, i],
           SOLARSYSTEMCONSTANTS.EARTH.GP
         )
-        for key in coe_at_ephem.keys():
-          if coe[key] is not None:
-            coe_at_ephem[key][i] = coe[key]
+        # for key in coe_at_ephem.keys():
+        #   if coe[key] is not None:
+        #     coe_at_ephem[key][i] = coe[key]
+        coe_at_ephem['sma' ][i] = coe.sma
+        coe_at_ephem['ecc' ][i] = coe.ecc
+        coe_at_ephem['inc' ][i] = coe.inc
+        coe_at_ephem['raan'][i] = coe.raan
+        coe_at_ephem['aop' ][i] = coe.aop
+        coe_at_ephem['ma'  ][i] = coe.ma
+        coe_at_ephem['ta'  ][i] = coe.ta
+        coe_at_ephem['ea'  ][i] = coe.ea
         
         # Compute MEE
         mee = OrbitConverter.pv_to_mee(
@@ -766,8 +789,14 @@ def run_high_fidelity_propagation(
           state_at_ephem[3:6, i],
           SOLARSYSTEMCONSTANTS.EARTH.GP
         )
-        for key in mee_at_ephem.keys():
-          mee_at_ephem[key][i] = mee[key]
+        # for key in mee_at_ephem.keys():
+        #   mee_at_ephem[key][i] = mee[key]
+        mee_at_ephem['p'][i] = mee.p
+        mee_at_ephem['f'][i] = mee.f
+        mee_at_ephem['g'][i] = mee.g
+        mee_at_ephem['h'][i] = mee.h
+        mee_at_ephem['k'][i] = mee.k
+        mee_at_ephem['L'][i] = mee.L
       
       # Store ephemeris-time results
       result_high_fidelity['at_ephem_times'] = {
