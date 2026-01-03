@@ -31,14 +31,18 @@ class CartesianState:
   
   @property
   def state_vector(self) -> np.ndarray:
-    """Combined state vector [pos, vel], shape (6,) or (6, N)."""
+    """
+    Combined state vector [pos, vel], shape (6,) or (6, N).
+    """
     if self.position.ndim == 1:
       return np.concatenate([self.position, self.velocity])
     return np.vstack([self.position, self.velocity])
   
   @classmethod
   def from_state_vector(cls, state: np.ndarray, frame: str = "J2000") -> 'CartesianState':
-    """Create from combined state vector."""
+    """
+    Create from combined state vector.
+    """
     state = np.asarray(state)
     if state.ndim == 1:
       return cls(position=state[0:3], velocity=state[3:6], frame=frame)
@@ -128,31 +132,6 @@ class ModifiedEquinoctialElements:
   k : Union[float, np.ndarray]
   L : Union[float, np.ndarray]
   I : int = 1
-  
-  def to_dict(self) -> dict:
-    """Convert to dictionary format for backward compatibility."""
-    return {
-      'p' : self.p,
-      'f' : self.f,
-      'g' : self.g,
-      'h' : self.h,
-      'k' : self.k,
-      'L' : self.L,
-      'I' : self.I,
-    }
-  
-  @classmethod
-  def from_dict(cls, data: dict) -> 'ModifiedEquinoctialElements':
-    """Create from dictionary."""
-    return cls(
-      p = data['p'],
-      f = data['f'],
-      g = data['g'],
-      h = data['h'],
-      k = data['k'],
-      L = data['L'],
-      I = data.get('I', 1),
-    )
 
 
 @dataclass
@@ -168,21 +147,6 @@ class GeodeticCoordinates:
   latitude  : Union[float, np.ndarray]
   longitude : Union[float, np.ndarray]
   altitude  : Union[float, np.ndarray]
-  
-  def to_dict(self) -> dict:
-    return {
-      'latitude'  : self.latitude,
-      'longitude' : self.longitude,
-      'altitude'  : self.altitude,
-    }
-  
-  @classmethod
-  def from_dict(cls, data: dict) -> 'GeodeticCoordinates':
-    return cls(
-      latitude  = data['latitude'],
-      longitude = data['longitude'],
-      altitude  = data['altitude'],
-    )
 
 
 @dataclass
