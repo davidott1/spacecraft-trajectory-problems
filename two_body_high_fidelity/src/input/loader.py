@@ -685,16 +685,29 @@ def process_horizons_result(
         vel_vec,
         SOLARSYSTEMCONSTANTS.EARTH.GP,
       )
-      for key in result_horizons['coe'].keys():
-        result_horizons['coe'][key][i] = coe[key]
+      # Access attributes directly from dataclass
+      result_horizons['coe']['sma' ][i] = coe.sma
+      result_horizons['coe']['ecc' ][i] = coe.ecc
+      result_horizons['coe']['inc' ][i] = coe.inc
+      result_horizons['coe']['raan'][i] = coe.raan
+      result_horizons['coe']['aop' ][i] = coe.aop
+      result_horizons['coe']['ta'  ][i] = coe.ta if coe.ta is not None else 0.0
+      result_horizons['coe']['ea'  ][i] = coe.ea if coe.ea is not None else 0.0
+      result_horizons['coe']['ma'  ][i] = coe.ma if coe.ma is not None else 0.0
       
+      # pv_to_mee returns ModifiedEquinoctialElements dataclass
       mee = OrbitConverter.pv_to_mee(
         pos_vec,
         vel_vec,
         SOLARSYSTEMCONSTANTS.EARTH.GP,
       )
-      for key in result_horizons['mee'].keys():
-        result_horizons['mee'][key][i] = mee[key]
+      # Access attributes directly from dataclass
+      result_horizons['mee']['p'][i] = mee.p
+      result_horizons['mee']['f'][i] = mee.f
+      result_horizons['mee']['g'][i] = mee.g
+      result_horizons['mee']['h'][i] = mee.h
+      result_horizons['mee']['k'][i] = mee.k
+      result_horizons['mee']['L'][i] = mee.L
 
     return result_horizons
 

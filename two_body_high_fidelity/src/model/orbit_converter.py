@@ -167,8 +167,7 @@ class OrbitConverter:
     pos_vec : np.ndarray,
     vel_vec : np.ndarray,
     gp      : float = SOLARSYSTEMCONSTANTS.EARTH.GP,
-    return_dict: bool = True,  # For backward compatibility
-  ) -> Union[ClassicalOrbitalElements,dict]:
+  ) -> ClassicalOrbitalElements:
     """
     Convert Cartesian position and velocity vectors to classical orbital elements.
     
@@ -180,8 +179,6 @@ class OrbitConverter:
         Velocity vector [m/s].
       gp : float
         Gravitational parameter [m³/s²].
-      return_dict : bool
-        If True, return dict for backward compatibility. If False, return ClassicalOrbitalElements.
         
     Output:
     -------
@@ -314,20 +311,18 @@ class OrbitConverter:
         ma = pa + pa**3 / 3
 
     coe = ClassicalOrbitalElements(
-      sma=sma,
-      ecc=ecc_mag,
-      inc=inc,
-      raan=raan,
-      aop=aop,
-      ta=ta,
-      ea=ea,
-      ma=ma,
-      ha=ha,
-      pa=pa,
+      sma  = sma,
+      ecc  = ecc_mag,
+      inc  = inc,
+      raan = raan,
+      aop  = aop,
+      ta   = ta,
+      ea   = ea,
+      ma   = ma,
+      ha   = ha,
+      pa   = pa,
     )
     
-    if return_dict:
-      return coe.to_dict()
     return coe
 
   @staticmethod
@@ -336,7 +331,7 @@ class OrbitConverter:
     vel_vec    : np.ndarray,
     gp         : float = SOLARSYSTEMCONSTANTS.EARTH.GP,
     retrograde : bool  = False,
-  ) -> dict:
+  ) -> ModifiedEquinoctialElements:
     """
     Convert Cartesian position and velocity vectors to Modified Equinoctial Elements (MEE).
     
@@ -468,19 +463,19 @@ class OrbitConverter:
     if L < 0:
       L += 2 * np.pi
     
-    return {
-      'p' : p,
-      'f' : f,
-      'g' : g,
-      'h' : h,
-      'k' : k,
-      'L' : L,
-      'I' : I,
-    }
+    return ModifiedEquinoctialElements(
+      p = p,
+      f = f,
+      g = g,
+      h = h,
+      k = k,
+      L = L,
+      I = I,
+    )
 
   @staticmethod
   def coe_to_pv(
-    coe : dict,
+    coe : ClassicalOrbitalElements,
     gp  : float = SOLARSYSTEMCONSTANTS.EARTH.GP,
   ) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -513,16 +508,16 @@ class OrbitConverter:
       - The true anomaly (ta) is used to compute the position and velocity.
     """
     # Extract elements
-    sma  = coe['sma']
-    ecc  = coe['ecc']
-    inc  = coe['inc']
-    raan = coe['raan']
-    aop  = coe['aop']
-    ta   = coe['ta']
+    sma  = coe.sma
+    ecc  = coe.ecc
+    inc  = coe.inc
+    raan = coe.raan
+    aop  = coe.aop
+    ta   = coe.ta
     
     # Gravitational parameter
-    if 'gp' in coe:
-      gp = coe['gp']
+    if hasattr(coe, 'gp'):
+      gp = coe.gp
     
     # Compute semi-latus rectum
     if np.isinf(sma):
