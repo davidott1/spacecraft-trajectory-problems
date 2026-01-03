@@ -8,7 +8,6 @@ from src.propagation.propagator import propagate_tle
 from src.model.time_converter   import utc_to_et
 from src.model.orbit_converter  import OrbitConverter
 from src.model.constants        import SOLARSYSTEMCONSTANTS, CONVERTER
-from src.utility.time_helper    import format_time_offset
 
 
 def get_initial_state(
@@ -74,14 +73,14 @@ def get_initial_state(
     print(f"    Position :  {custom_state_vector[0]:>19.12e}  {custom_state_vector[1]:>19.12e}  {custom_state_vector[2]:>19.12e} m")
     print(f"    Velocity :  {custom_state_vector[3]:>19.12e}  {custom_state_vector[4]:>19.12e}  {custom_state_vector[5]:>19.12e} m/s")
     print(f"  Classical Orbital Elements")
-    print(f"    SMA  :  {coe['sma' ]:19.12e} m")
-    print(f"    ECC  :  {coe['ecc' ]:19.12e} -")
-    print(f"    INC  :  {coe['inc' ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    RAAN :  {coe['raan']*CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    AOP  :  {coe['aop' ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    TA   :  {coe['ta'  ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    EA   :  {coe['ea'  ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    MA   :  {coe['ma'  ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"    SMA  :  {coe.sma:19.12e} m")
+    print(f"    ECC  :  {coe.ecc:19.12e} -")
+    print(f"    INC  :  {coe.inc  * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"    RAAN :  {coe.raan * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"    AOP  :  {coe.aop  * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"    TA   :  {coe.ta   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"    EA   :  {coe.ea   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"    MA   :  {coe.ma   * CONVERTER.DEG_PER_RAD:19.12e} deg")
     
     return custom_state_vector
 
@@ -122,7 +121,7 @@ def get_initial_state(
     print(f"    RAAN :  {coe.raan * CONVERTER.DEG_PER_RAD:19.12e} deg")
     print(f"    AOP  :  {coe.aop  * CONVERTER.DEG_PER_RAD:19.12e} deg")
     print(f"    TA   :  {coe.ta   * CONVERTER.DEG_PER_RAD:19.12e} deg")
-    # print(f"    EA   :  {coe['ea'  ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"    EA   :  {coe.ea   * CONVERTER.DEG_PER_RAD:19.12e} deg")
     print(f"    MA   :  {coe.ma   * CONVERTER.DEG_PER_RAD:19.12e} deg")
     return horizons_initial_state
 

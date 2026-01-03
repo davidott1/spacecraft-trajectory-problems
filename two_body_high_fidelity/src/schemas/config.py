@@ -8,10 +8,10 @@ Dataclasses for simulation configuration and output paths.
 from dataclasses import dataclass, field
 from datetime    import datetime
 from pathlib     import Path
-from typing      import Optional, List
+from typing      import Optional
 
 from src.schemas.gravity    import GravityModelConfig
-from src.schemas.spacecraft import SpacecraftProperties, DragConfig, SRPConfig
+from src.schemas.spacecraft import SpacecraftProperties
 from src.schemas.state      import CartesianState
 
 
