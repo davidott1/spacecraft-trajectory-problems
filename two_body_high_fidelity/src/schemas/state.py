@@ -162,18 +162,3 @@ class GeocentricCoordinates:
   latitude  : Union[float, np.ndarray]
   longitude : Union[float, np.ndarray]
   radius    : Union[float, np.ndarray]
-  
-  def to_dict(self) -> dict:
-    return {
-      'latitude'  : self.latitude,
-      'longitude' : self.longitude,
-      'radius'    : self.radius,
-    }
-  
-  @classmethod
-  def from_dict(cls, data: dict) -> 'GeocentricCoordinates':
-    return cls(
-      latitude  = data['latitude'],
-      longitude = data['longitude'],
-      radius    = data['radius'],
-    )
