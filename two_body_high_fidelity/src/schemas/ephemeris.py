@@ -77,63 +77,6 @@ class HorizonsEphemeris:
   state       : Optional[np.ndarray] = None
   coe         : Optional[dict]       = None
   mee         : Optional[dict]       = None
-  
-  @property
-  def plot_time_s(self) -> Optional[np.ndarray]:
-    """
-    Legacy accessor for backward compatibility.
-    """
-    return self.time_s
-  
-  def to_dict(self) -> dict:
-    """
-    Convert to dictionary for backward compatibility.
-    """
-    result = {
-      'success' : self.success,
-      'message' : self.message,
-    }
-    if self.norad_id is not None:
-      result['norad_id'] = self.norad_id
-    if self.object_name is not None:
-      result['object_name'] = self.object_name
-    if self.time_s is not None:
-      result['plot_time_s'] = self.time_s
-    if self.state is not None:
-      result['state'] = self.state
-    if self.coe is not None:
-      result['coe'] = self.coe
-    if self.mee is not None:
-      result['mee'] = self.mee
-    return result
-  
-  @classmethod
-  def from_dict(cls, data: dict) -> 'HorizonsEphemeris':
-    """
-    Create from dictionary.
-    """
-    return cls(
-      success     = data.get('success', False),
-      message     = data.get('message', ''),
-      norad_id    = data.get('norad_id'),
-      object_name = data.get('object_name'),
-      epoch_dt    = data.get('epoch_dt'),
-      time_s      = data.get('plot_time_s'),
-      state       = data.get('state'),
-      coe         = data.get('coe'),
-      mee         = data.get('mee'),
-    )
-  
-  def get(self, key: str, default=None):
-    """
-    Dict-like access for backward compatibility.
-    """
-    return self.to_dict().get(key, default)
-  
-  def __getitem__(self, key: str):
-    """
-    Dict-like access for backward compatibility."""
-    return self.to_dict()[key]
 
 
 @dataclass
@@ -148,6 +91,6 @@ class EphemerisResult:
     data    : Source-specific data object
   """
   success : bool
-  message : str                                          = ""
-  source  : str                                          = ""
-  data    : Optional[Union[HorizonsEphemeris, TLEData]]  = None
+  message : str                                         = ""
+  source  : str                                         = ""
+  data    : Optional[Union[HorizonsEphemeris, TLEData]] = None
