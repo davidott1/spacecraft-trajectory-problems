@@ -1099,7 +1099,7 @@ def plot_3d_trajectory_sun_centered(
       earth_orbit_helio = np.zeros((3, n_orbit_points))
       
       for i, ta in enumerate(ta_vals):
-        earth_coe['ta'] = ta
+        earth_coe.ta = ta
         r_vec, _ = OrbitConverter.coe_to_pv(earth_coe, mu_sun)
         earth_orbit_helio[:, i] = r_vec
       
@@ -1162,7 +1162,7 @@ def plot_3d_trajectory_sun_centered(
       
       for i, ta in enumerate(ta_vals):
         # Update TA in COE
-        moon_coe['ta'] = ta
+        moon_coe.ta = ta
 
         # Convert back to PV
         r_vec, _ = OrbitConverter.coe_to_pv(moon_coe, SOLARSYSTEMCONSTANTS.EARTH.GP)
@@ -1189,7 +1189,7 @@ def plot_3d_trajectory_sun_centered(
       
       sun_orbit_full = np.zeros((3, n_orbit_points))
       for i, ta in enumerate(ta_vals):
-        sun_coe['ta'] = ta
+        sun_coe.ta = ta
         r_vec, _ = OrbitConverter.coe_to_pv(sun_coe, mu_sun)
         sun_orbit_full[:, i] = r_vec
       
