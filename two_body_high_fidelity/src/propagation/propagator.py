@@ -548,9 +548,11 @@ def run_high_fidelity_propagation(
     spherical_harmonics_model = two_body_gravity_model.spherical_harmonics.model
 
   # Configure gravity harmonics
-  # If spherical_harmonics_model is provided (from file or explicit coefficients),
-  # we don't use the analytical TwoBodyGravity harmonics
-  harmonic_coeffs = _get_harmonic_coefficients([])  # All zeros - let spherical_harmonics_model handle it
+  #   - If spherical_harmonics_model is provided (from file or explicit coefficients), we don't use the analytical TwoBodyGravity harmonics
+  if spherical_harmonics_model is not None:
+    harmonic_coeffs = _get_harmonic_coefficients([])  # All zeros - let spherical_harmonics_model handle it
+  else:
+    harmonic_coeffs = _get_harmonic_coefficients(gravity_harmonics_list)
 
   # Print configuration
   print(f"  Configuration")
