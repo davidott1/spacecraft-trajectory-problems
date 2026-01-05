@@ -21,6 +21,7 @@ from src.model.time_converter  import utc_to_et
 from src.model.frame_converter import VectorConverter
 from src.utility.tle_helper    import modify_tle_bstar, get_tle_satellite_and_tle_epoch
 from src.schemas.gravity       import GravityModelConfig
+from src.schemas.spacecraft    import SpacecraftProperties
 
 
 FORMAT_NUMBER = ">19.12e"
@@ -480,13 +481,7 @@ def run_high_fidelity_propagation(
   initial_state                 : np.ndarray,
   time_o_utc_dt                 : datetime,
   time_f_utc_dt                 : datetime,
-  mass                          : float,
-  include_drag                  : bool,
-  cd                            : float,
-  area_drag                     : float,
-  cr                            : float,
-  area_srp                      : float,
-  include_srp                   : bool,
+  spacecraft                    : SpacecraftProperties,
   result_jpl_horizons_ephemeris : Optional[dict],
   compare_jpl_horizons          : bool,
   two_body_gravity_model        : GravityModelConfig,
@@ -502,20 +497,8 @@ def run_high_fidelity_propagation(
       Initial time as datetime object (UTC).
     time_f_utc_dt : datetime
       Final time as datetime object (UTC).
-    mass : float
-      Spacecraft mass [kg].
-    include_drag : bool
-      Flag to enable atmospheric drag.
-    cd : float
-      Drag coefficient.
-    area_drag : float
-      Cross-sectional area for drag [m²].
-    cr : float
-      Radiation pressure coefficient.
-    area_srp : float
-      Cross-sectional area for SRP [m²].
-    include_srp : bool
-      Flag to enable solar radiation pressure.
+    spacecraft : SpacecraftProperties
+      Spacecraft physical properties and force model settings.
     result_jpl_horizons_ephemeris : dict | None
       JPL Horizons ephemeris result for comparison.
     compare_jpl_horizons : bool
@@ -607,19 +590,19 @@ def run_high_fidelity_propagation(
     print(f"          Bodies    : {', '.join(third_bodies_list)}")
     print(f"          Ephemeris : SPICE")
   
-  if include_drag:
+  if spacecraft.drag.enabled:
     print(f"      Atmospheric Drag")
     print(f"        Model : Exponential Atmosphere")
-    print(f"        Coeff : {cd:{PRINTFORMATTER.SCIENTIFIC_NOTATION}}")
-    print(f"        Area  : {area_drag:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m²")
-    print(f"        Mass  : {mass:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} kg")
+    print(f"        Coeff : {spacecraft.drag.cd:{PRINTFORMATTER.SCIENTIFIC_NOTATION}}")
+    print(f"        Area  : {spacecraft.drag.area:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m²")
+    print(f"        Mass  : {spacecraft.mass:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} kg")
   
-  if include_srp:
+  if spacecraft.srp.enabled:
     print(f"      Solar Radiation Pressure")
     print(f"        Model : Spherical Earth & Cylindrical Shadow")
-    print(f"        Coeff : {cr:{PRINTFORMATTER.SCIENTIFIC_NOTATION}}")
-    print(f"        Area  : {area_srp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m²")
-    print(f"        Mass  : {mass:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} kg")
+    print(f"        Coeff : {spacecraft.srp.cr:{PRINTFORMATTER.SCIENTIFIC_NOTATION}}")
+    print(f"        Area  : {spacecraft.srp.area:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m²")
+    print(f"        Mass  : {spacecraft.mass:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} kg")
 
   # Initialize acceleration model
   acceleration = Acceleration(
@@ -640,15 +623,15 @@ def run_high_fidelity_propagation(
     c33                       = harmonic_coeffs['c33'],
     s33                       = harmonic_coeffs['s33'],
     pos_ref                   = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR,
-    mass                      = mass,
-    enable_drag               = include_drag,
-    cd                        = cd,
-    area_drag                 = area_drag,
+    mass                      = spacecraft.mass,
+    enable_drag               = spacecraft.drag.enabled,
+    cd                        = spacecraft.drag.cd,
+    area_drag                 = spacecraft.drag.area,
     enable_third_body         = include_third_body,
     third_body_bodies         = third_bodies_list,
-    enable_srp                = include_srp,
-    cr                        = cr,
-    area_srp                  = area_srp,
+    enable_srp                = spacecraft.srp.enabled,
+    cr                        = spacecraft.srp.cr,
+    area_srp                  = spacecraft.srp.area,
     spherical_harmonics_model = spherical_harmonics_model,
   )
   
@@ -938,15 +921,9 @@ def run_propagations(
   initial_state                 : np.ndarray,
   time_o_dt                     : datetime,
   time_f_dt                     : datetime,
-  mass                          : float,
-  include_drag                  : bool,
+  spacecraft                    : SpacecraftProperties,
   compare_tle                   : bool,
   compare_jpl_horizons          : bool,
-  cd                            : float,
-  area_drag                     : float,
-  cr                            : float,
-  area_srp                      : float,
-  include_srp                   : bool,
   result_jpl_horizons_ephemeris : Optional[dict],
   tle_line_1                    : Optional[str],
   tle_line_2                    : Optional[str],
@@ -963,24 +940,12 @@ def run_propagations(
       Initial time as datetime object.
     time_f_dt : datetime
       Final time as datetime object.
-    mass : float
-      Spacecraft mass [kg].
-    include_drag : bool
-      Flag to enable atmospheric drag.
+    spacecraft : SpacecraftProperties
+      Spacecraft properties.
     compare_tle : bool
       Flag to enable TLE/SGP4 comparison.
     compare_jpl_horizons : bool
       Flag to enable Horizons comparison.
-    cd : float
-      Drag coefficient.
-    area_drag : float
-      Cross-sectional area for drag [m²].
-    cr : float
-      Radiation pressure coefficient.
-    area_srp : float
-      Cross-sectional area for SRP [m²].
-    include_srp : bool
-      Flag to enable solar radiation pressure.
     result_jpl_horizons_ephemeris : dict | None
       JPL Horizons ephemeris result for comparison.
     tle_line_1 : str
@@ -1002,13 +967,7 @@ def run_propagations(
     initial_state                 = initial_state,
     time_o_utc_dt                 = time_o_dt,
     time_f_utc_dt                 = time_f_dt,
-    mass                          = mass,
-    include_drag                  = include_drag,
-    cd                            = cd,
-    area_drag                     = area_drag,
-    cr                            = cr,
-    area_srp                      = area_srp,
-    include_srp                   = include_srp,
+    spacecraft                    = spacecraft,
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     compare_jpl_horizons          = compare_jpl_horizons,
     two_body_gravity_model        = two_body_gravity_model,

@@ -63,6 +63,7 @@ from src.input.cli                     import parse_command_line_arguments
 from src.input.configuration           import build_config, print_configuration, extract_tle_to_config
 from src.propagation.state_initializer import get_initial_state
 from src.utility.logger                import start_logging, stop_logging
+from src.schemas.spacecraft            import SpacecraftProperties, DragConfig, SRPConfig
 
 def check_data_availability(
   result              : Optional[dict],
@@ -284,20 +285,31 @@ def main(
     initial_state_filename        = config.initial_state_filename,
   )
 
+  # Create spacecraft properties object
+  spacecraft = SpacecraftProperties(
+    mass     = config.mass,
+    drag     = DragConfig(
+      enabled = config.include_drag,
+      cd      = config.cd,
+      area    = config.area_drag
+    ),
+    srp      = SRPConfig(
+      enabled = config.include_srp,
+      cr      = config.cr,
+      area    = config.area_srp
+    ),
+    norad_id = config.initial_state_norad_id,
+    name     = config.object_name
+  )
+
   # Run propagations: high-fidelity and SGP4
   result_high_fidelity_propagation, result_sgp4_propagation = run_propagations(
     initial_state                 = initial_state,
     time_o_dt                     = config.time_o_dt,
     time_f_dt                     = config.time_f_dt,
-    mass                          = config.mass,
-    include_drag                  = config.include_drag,
+    spacecraft                    = spacecraft,
     compare_tle                   = config.compare_tle,
     compare_jpl_horizons          = config.compare_jpl_horizons,
-    cd                            = config.cd,
-    area_drag                     = config.area_drag,
-    cr                            = config.cr,
-    area_srp                      = config.area_srp,
-    include_srp                   = config.include_srp,
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     tle_line_1                    = config.tle_line_1,
     tle_line_2                    = config.tle_line_2,
