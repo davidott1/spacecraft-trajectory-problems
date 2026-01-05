@@ -6,10 +6,7 @@ Numerical integration of spacecraft equations of motion.
 """
 import numpy as np
 
-from datetime          import datetime, timedelta
-from typing            import Optional, TYPE_CHECKING
-from types             import SimpleNamespace
-from pathlib           import Path
+from typing            import Optional
 from scipy.integrate   import solve_ivp
 from scipy.interpolate import interp1d
 from sgp4.api          import jday
@@ -494,7 +491,7 @@ def run_high_fidelity_propagation(
   initial_state                 : np.ndarray,
   propagation_config            : PropagationConfig,
   spacecraft                    : SpacecraftProperties,
-  result_jpl_horizons_ephemeris : Optional[dict],
+  result_jpl_horizons_ephemeris : Optional[PropagationResult],
   compare_jpl_horizons          : bool,
   two_body_gravity_model        : GravityModelConfig,
 ) -> PropagationResult:
@@ -509,7 +506,7 @@ def run_high_fidelity_propagation(
       Propagation time and integration settings.
     spacecraft : SpacecraftProperties
       Spacecraft physical properties and force model settings.
-    result_jpl_horizons_ephemeris : dict | None
+    result_jpl_horizons_ephemeris : PropagationResult | None
       JPL Horizons ephemeris result for comparison.
     compare_jpl_horizons : bool
       Flag to enable comparison with Horizons.
@@ -718,8 +715,8 @@ def run_high_fidelity_propagation(
     result_high_fidelity.plot_time_s = result_high_fidelity.time - time_et_o
     
     # If comparing to Horizons, interpolate to ephemeris times and store separately
-    if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
-      ephem_times_s = result_jpl_horizons_ephemeris['plot_time_s']
+    if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
+      ephem_times_s = result_jpl_horizons_ephemeris.plot_time_s
       ephem_times_et = ephem_times_s + time_et_o
       
       print(f"    Interpolating to {len(ephem_times_et)} ephemeris time points ... ", end='', flush=True)
@@ -806,7 +803,7 @@ def run_high_fidelity_propagation(
 
 
 def run_sgp4_propagation(
-  result_jpl_horizons_ephemeris : Optional[dict],
+  result_jpl_horizons_ephemeris : Optional[PropagationResult],
   tle_line_1                    : str,
   tle_line_2                    : str,
   propagation_config            : PropagationConfig,
@@ -820,7 +817,7 @@ def run_sgp4_propagation(
   
   Input:
   ------
-    result_jpl_horizons_ephemeris : dict | None
+    result_jpl_horizons_ephemeris : PropagationResult | None
       JPL Horizons ephemeris result for comparison.
     tle_line_1 : str
       First line of TLE.
@@ -897,8 +894,8 @@ def run_sgp4_propagation(
   result_sgp4.plot_time_s = result_sgp4.time - time_offset_o_s
   
   # If comparing to Horizons, also propagate at ephemeris times
-  if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
-    ephem_times_s = result_jpl_horizons_ephemeris['plot_time_s']  # seconds from time_o
+  if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
+    ephem_times_s = result_jpl_horizons_ephemeris.plot_time_s  # seconds from time_o
     ephem_times_from_tle = ephem_times_s + time_offset_o_s  # seconds from TLE epoch
     
     print(f"    Propagating at {len(ephem_times_from_tle)} ephemeris time points ... ", end='', flush=True)
@@ -932,7 +929,7 @@ def run_propagations(
   spacecraft                    : SpacecraftProperties,
   compare_tle                   : bool,
   compare_jpl_horizons          : bool,
-  result_jpl_horizons_ephemeris : Optional[dict],
+  result_jpl_horizons_ephemeris : Optional[PropagationResult],
   tle_line_1                    : Optional[str],
   tle_line_2                    : Optional[str],
   two_body_gravity_model        : GravityModelConfig,
@@ -952,7 +949,7 @@ def run_propagations(
       Flag to enable TLE/SGP4 comparison.
     compare_jpl_horizons : bool
       Flag to enable Horizons comparison.
-    result_jpl_horizons_ephemeris : dict | None
+    result_jpl_horizons_ephemeris : PropagationResult | None
       JPL Horizons ephemeris result for comparison.
     tle_line_1 : str
       First line of TLE.
@@ -963,9 +960,9 @@ def run_propagations(
       
   Output:
   -------
-    result_high_fidelity : dict
+    result_high_fidelity : PropagationResult
       High-fidelity propagation result.
-    result_sgp4 : dict | None
+    result_sgp4 : PropagationResult | None
       SGP4 propagation result or None.
   """
   # High-fidelity propagation

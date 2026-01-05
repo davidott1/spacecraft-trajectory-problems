@@ -2,19 +2,20 @@ import numpy as np
 
 from datetime            import datetime, timedelta
 from sgp4.api            import Satrec
-from typing              import Optional
+from typing              import Optional, Union
 
 from src.propagation.propagator import propagate_tle
 from src.model.time_converter   import utc_to_et
 from src.model.orbit_converter  import OrbitConverter
 from src.model.constants        import SOLARSYSTEMCONSTANTS, CONVERTER
+from src.schemas.propagation    import PropagationResult
 
 
 def get_initial_state(
   tle_line_1                    : Optional[str],
   tle_line_2                    : Optional[str],
   time_o_dt                     : datetime,
-  result_jpl_horizons_ephemeris : Optional[dict],
+  result_jpl_horizons_ephemeris : Optional[PropagationResult],
   initial_state_source          : str = 'jpl_horizons',
   custom_state_vector           : Optional[np.ndarray] = None,
   initial_state_filename        : Optional[str] = None,
@@ -30,7 +31,7 @@ def get_initial_state(
       TLE line 2.
     time_o_dt : datetime
       Initial time for propagation.
-    result_jpl_horizons_ephemeris : dict | None
+    result_jpl_horizons_ephemeris : PropagationResult | None
       JPL Horizons ephemeris result.
     initial_state_source : str
       Source for initial state ('jpl_horizons', 'tle', or 'custom_state_vector').
@@ -88,12 +89,16 @@ def get_initial_state(
   use_jpl_horizons = 'jpl_horizons' in initial_state_source.lower()
 
   # Use Horizons if available and requested
-  if use_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
+  if use_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
     # Use the first available state from the ephemeris (not interpolated)
-    horizons_initial_state = result_jpl_horizons_ephemeris['state'][:, 0]
+    horizons_initial_state = result_jpl_horizons_ephemeris.state[:, 0]
     
     # Get the actual epoch from the ephemeris
-    epoch_dt = result_jpl_horizons_ephemeris['time_o']
+    if result_jpl_horizons_ephemeris.time_grid:
+      epoch_dt = result_jpl_horizons_ephemeris.time_grid.epoch_dt
+    else:
+      epoch_dt = time_o_dt
+
     try:
       epoch_et = utc_to_et(epoch_dt)
       et_str   = f" / {epoch_et:.6f} ET"
@@ -151,11 +156,11 @@ def get_initial_state(
     num_points = 1,
     to_j2000   = True,
   )
-  if not result_tle_initial['success']:
-    raise RuntimeError(f"Failed to get initial state from TLE: {result_tle_initial['message']}")
+  if not result_tle_initial.success:
+    raise RuntimeError(f"Failed to get initial state from TLE: {result_tle_initial.message}")
 
   # Extract initial state from TLE propagation result
-  tle_initial_state = result_tle_initial['state'][:, 0]
+  tle_initial_state = result_tle_initial.state[:, 0]
 
   # Get ET for display
   try:
@@ -179,13 +184,13 @@ def get_initial_state(
   print(f"    Position :  {tle_initial_state[0]:>19.12e}  {tle_initial_state[1]:>19.12e}  {tle_initial_state[2]:>19.12e} m")
   print(f"    Velocity :  {tle_initial_state[3]:>19.12e}  {tle_initial_state[4]:>19.12e}  {tle_initial_state[5]:>19.12e} m/s")
   print(f"  Classical Orbital Elements")
-  print(f"    SMA  :  {coe['sma' ]:19.12e} m")
-  print(f"    ECC  :  {coe['ecc' ]:19.12e} -")
-  print(f"    INC  :  {coe['inc' ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
-  print(f"    RAAN :  {coe['raan']*CONVERTER.DEG_PER_RAD:19.12e} deg")
-  print(f"    AOP  :  {coe['aop' ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
-  print(f"    TA   :  {coe['ta'  ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
-  print(f"    EA   :  {coe['ea'  ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
-  print(f"    MA   :  {coe['ma'  ]*CONVERTER.DEG_PER_RAD:19.12e} deg")
+  print(f"    SMA  :  {coe.sma:19.12e} m")
+  print(f"    ECC  :  {coe.ecc:19.12e} -")
+  print(f"    INC  :  {coe.inc *CONVERTER.DEG_PER_RAD:19.12e} deg")
+  print(f"    RAAN :  {coe.raan*CONVERTER.DEG_PER_RAD:19.12e} deg")
+  print(f"    AOP  :  {coe.aop *CONVERTER.DEG_PER_RAD:19.12e} deg")
+  print(f"    TA   :  {coe.ta  *CONVERTER.DEG_PER_RAD:19.12e} deg")
+  print(f"    EA   :  {coe.ea  *CONVERTER.DEG_PER_RAD:19.12e} deg")
+  print(f"    MA   :  {coe.ma  *CONVERTER.DEG_PER_RAD:19.12e} deg")
 
   return tle_initial_state
