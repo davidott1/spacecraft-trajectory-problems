@@ -198,9 +198,9 @@ def plot_3d_trajectories(
       ax1.scatter([moon_marker_pos_start[0]], [moon_marker_pos_start[1]], [z_floor], color='gray', marker='.', s=20, alpha=0.5)  # type: ignore
 
       moon_marker_pos_end = project_to_bounds(origin, moon_dir_end, ax1)
-      ax1.scatter([moon_marker_pos_end[0]], [moon_marker_pos_end[1]], [moon_marker_pos_end[2]], s=600, marker=r'$☾_{\text{f}}$', color='gray', zorder=10, label='Moon (Final)')  # type: ignore
-      ax1.plot([moon_marker_pos_end[0], moon_marker_pos_end[0]], [moon_marker_pos_end[1], moon_marker_pos_end[1]], [moon_marker_pos_end[2], z_floor], color='gray', linestyle=':', linewidth=2, alpha=0.5)  # type: ignore
-      ax1.scatter([moon_marker_pos_end[0]], [moon_marker_pos_end[1]], [z_floor], color='gray', marker='.', s=20, alpha=0.5)  # type: ignore
+      ax1.scatter([moon_marker_pos_end[0]], [moon_marker_posEnd[1]], [moon_marker_pos_end[2]], s=600, marker=r'$☾_{\text{f}}$', color='gray', zorder=10, label='Moon (Final)')  # type: ignore
+      ax1.plot([moon_marker_pos_end[0], moon_marker_posEnd[0]], [moon_marker_posEnd[1], moon_marker_posEnd[1]], [moon_marker_posEnd[2], z_floor], color='gray', linestyle=':', linewidth=2, alpha=0.5)  # type: ignore
+      ax1.scatter([moon_marker_pos_end[0]], [moon_marker_posEnd[1]], [z_floor], color='gray', marker='.', s=20, alpha=0.5)  # type: ignore
       
     except Exception as e:
       # If SPICE kernels aren't loaded or other error, silently skip sun arrow
@@ -1600,6 +1600,8 @@ def plot_3d_trajectories_body_fixed(
   legend_handles = [
     Line2D([0], [0], color='black', linewidth=1.5, label='Earth'),
     Line2D([0], [0], color='b', linewidth=2.0, label='Spacecraft'),
+    Line2D([0], [0], color='gold', linewidth=1.5, label='Sun'),
+    Line2D([0], [0], color='gray', linewidth=1.5, label='Moon'),
   ]
   leg = fig.legend(handles=legend_handles, loc='upper right', fontsize=11, framealpha=0.9)
   leg.get_frame().set_edgecolor('black')
@@ -1608,7 +1610,7 @@ def plot_3d_trajectories_body_fixed(
   fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=11, color='black',
            bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', alpha=0.9))
 
-  plt.tight_layout(rect=(0.0, 0.06, 1.0, 0.95))
+  plt.tight_layout(rect=(0.0, 0.06, 1.0, 0.95))  # Leave space at bottom for info text and top for legend
   return fig
 
 
@@ -2043,7 +2045,7 @@ def plot_3d_trajectory_sun_centered(
   return fig
 
 def generate_error_plots(
-  result_jpl_horizons_ephemeris    : Optional[dict],
+  result_jpl_horizons_ephemeris    : Optional[PropagationResult],
   result_high_fidelity_propagation : PropagationResult,
   result_sgp4_propagation          : Optional[PropagationResult],
   time_o_dt                        : datetime.datetime,
@@ -2063,7 +2065,7 @@ def generate_error_plots(
   print("\n  Generate Error Plots")
 
   # Define availability flags
-  has_horizons      = result_jpl_horizons_ephemeris is not None and result_jpl_horizons_ephemeris.get('success', False)
+  has_horizons      = result_jpl_horizons_ephemeris is not None and result_jpl_horizons_ephemeris.success
   has_high_fidelity = result_high_fidelity_propagation.success
   has_sgp4          = result_sgp4_propagation is not None and result_sgp4_propagation.success
   
@@ -2137,7 +2139,7 @@ def generate_error_plots(
 
 
 def generate_3d_and_time_series_plots(
-  result_jpl_horizons_ephemeris    : Optional[dict],
+  result_jpl_horizons_ephemeris    : Optional[PropagationResult],
   result_high_fidelity_propagation : PropagationResult,
   result_sgp4_propagation          : Optional[PropagationResult],
   time_o_dt                        : datetime.datetime,
@@ -2152,11 +2154,11 @@ def generate_3d_and_time_series_plots(
   
   Input:
   ------
-    result_horizons : dict | None
+    result_horizons : PropagationResult | None
       Horizons ephemeris result.
-    result_high_fidelity : dict
+    result_high_fidelity : PropagationResult
       High-fidelity propagation result.
-    result_sgp4 : dict | None
+    result_sgp4 : PropagationResult | None
       SGP4 propagation result.
     time_o_dt : datetime
       Simulation start time (for plot labels).
@@ -2181,7 +2183,7 @@ def generate_3d_and_time_series_plots(
   name_lower = object_name.lower()
 
   # Horizons plots
-  if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
+  if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
     print("    JPL-Horizons-Ephemeris Plots")
 
     fig1 = plot_3d_trajectories(result_jpl_horizons_ephemeris, epoch=time_o_dt, frame="J2000")
@@ -2285,7 +2287,7 @@ def generate_3d_and_time_series_plots(
     plt.close(fig_gt_sgp4)
 
 def generate_plots(
-  result_jpl_horizons_ephemeris    : Optional[dict],
+  result_jpl_horizons_ephemeris    : Optional[PropagationResult],
   result_high_fidelity_propagation : PropagationResult,
   result_sgp4_propagation          : Optional[PropagationResult],
   time_o_dt                        : datetime.datetime,
@@ -2300,11 +2302,11 @@ def generate_plots(
   
   Input:
   ------
-    result_horizons : dict | None
+    result_horizons : PropagationResult | None
       Horizons ephemeris result.
-    result_high_fidelity : dict
+    result_high_fidelity : PropagationResult
       High-fidelity propagation result.
-    result_sgp4 : dict | None
+    result_sgp4 : PropagationResult | None
       SGP4 propagation result.
     time_o_dt : datetime
       Simulation start time (for plot labels).

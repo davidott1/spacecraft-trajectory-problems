@@ -52,7 +52,7 @@ Usage:
       --srp \
       --drag
 """
-from typing                            import Optional
+from typing                            import Optional, Union
 from datetime                          import datetime, timedelta
 from dataclasses                       import fields
 
@@ -65,7 +65,7 @@ from src.input.configuration           import build_config, print_configuration,
 from src.propagation.state_initializer import get_initial_state
 from src.utility.logger                import start_logging, stop_logging
 from src.schemas.spacecraft            import SpacecraftProperties, DragConfig, SRPConfig
-from src.schemas.propagation           import PropagationConfig
+from src.schemas.propagation           import PropagationConfig, PropagationResult
 from src.schemas.state                 import ClassicalOrbitalElements, ModifiedEquinoctialElements
 
 def _convert_to_objects(result: dict) -> None:
@@ -83,8 +83,22 @@ def _convert_to_objects(result: dict) -> None:
     filtered = {k: v for k, v in result['mee'].items() if k in valid_keys}
     result['mee'] = ModifiedEquinoctialElements(**filtered)
 
+def _convert_to_propagation_result(result: dict) -> Optional[PropagationResult]:
+  """Convert dictionary to PropagationResult object."""
+  if not result:
+    return None
+  
+  # Ensure nested objects are converted
+  _convert_to_objects(result)
+  
+  # Filter keys
+  valid_keys = {f.name for f in fields(PropagationResult)}
+  filtered = {k: v for k, v in result.items() if k in valid_keys}
+  
+  return PropagationResult(**filtered)
+
 def check_data_availability(
-  result              : Optional[dict],
+  result              : Union[dict, PropagationResult, None],
   data_name           : str,
   needs_initial_state : bool,
   needs_comparison    : bool,
@@ -96,8 +110,8 @@ def check_data_availability(
   
   Input:
   ------
-    result : dict | None
-      Result dictionary from data loading (e.g., Horizons or TLE).
+    result : dict | PropagationResult | None
+      Result from data loading (e.g., Horizons or TLE).
     data_name : str
       Human-readable name of the data source (e.g., "JPL Horizons ephemeris", "TLE").
     needs_initial_state : bool
@@ -115,7 +129,12 @@ def check_data_availability(
       Error dictionary with 'success': False if data unavailable, None if data is available.
   """
   # Check if data loading failed
-  data_failed = result is None or not result.get('success', False)
+  if result is None:
+    data_failed = True
+  elif isinstance(result, dict):
+    data_failed = not result.get('success', False)
+  else:
+    data_failed = not result.success
   
   if not data_failed:
     return None  # Data is available, no error
@@ -240,7 +259,7 @@ def main(
   # Get Horizons ephemeris (only if needed for initial state or comparison)
   result_jpl_horizons_ephemeris = None
   if config.initial_state_source == 'jpl_horizons' or config.compare_jpl_horizons:
-    result_jpl_horizons_ephemeris = get_horizons_ephemeris(
+    result_jpl_horizons_ephemeris_dict = get_horizons_ephemeris(
       jpl_horizons_folderpath = config.jpl_horizons_folderpath,
       desired_time_o_dt       = config.time_o_dt,
       desired_time_f_dt       = config.time_f_dt,
@@ -249,8 +268,8 @@ def main(
       auto_download           = config.auto_download,
     )
     
-    # Convert dictionaries to objects
-    _convert_to_objects(result_jpl_horizons_ephemeris)
+    # Convert to PropagationResult
+    result_jpl_horizons_ephemeris = _convert_to_propagation_result(result_jpl_horizons_ephemeris_dict)
     
     # Check if Horizons data is required but unavailable
     error = check_data_availability(
@@ -296,6 +315,10 @@ def main(
       return error
 
   # Determine initial state: JPL Horizons, TLE, or Custom State Vector
+  # Note: get_initial_state might expect a dict for result_jpl_horizons_ephemeris.
+  # We pass the object, assuming it handles it or we pass __dict__ if needed.
+  # horizons_arg = result_jpl_horizons_ephemeris.__dict__ if result_jpl_horizons_ephemeris else None
+
   initial_state = get_initial_state(
     tle_line_1                    = config.tle_line_1,
     tle_line_2                    = config.tle_line_2,
@@ -351,10 +374,6 @@ def main(
   )
   
   # Generate plots
-  # Note: plot functions currently expect dicts for Horizons but objects for others
-  # We need to ensure consistency. The plot functions were updated to handle objects.
-  # However, result_jpl_horizons_ephemeris is still a dict.
-  
   generate_plots(
     result_jpl_horizons_ephemeris    = result_jpl_horizons_ephemeris,
     result_high_fidelity_propagation = result_high_fidelity_propagation,
@@ -374,7 +393,7 @@ def main(
   stop_logging(logger)
   
   # Return high-fidelity propagation results
-  return result_high_fidelity_propagation
+  return result_high_fidelity_propagation.__dict__
 
 
 if __name__ == "__main__":
