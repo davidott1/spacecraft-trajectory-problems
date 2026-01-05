@@ -344,11 +344,17 @@ def main(
   )
   
   # Display results and create plots
+  # Convert PropagationResult to dict for printer if necessary, or update printer
+  # For now, we'll assume printer handles objects or we convert to dict
   print_results_summary( 
-    result_high_fidelity_propagation,
+    result_high_fidelity_propagation.__dict__,
   )
   
   # Generate plots
+  # Note: plot functions currently expect dicts for Horizons but objects for others
+  # We need to ensure consistency. The plot functions were updated to handle objects.
+  # However, result_jpl_horizons_ephemeris is still a dict.
+  
   generate_plots(
     result_jpl_horizons_ephemeris    = result_jpl_horizons_ephemeris,
     result_high_fidelity_propagation = result_high_fidelity_propagation,

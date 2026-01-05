@@ -52,18 +52,26 @@ class PropagationResult:
     success        : Whether propagation completed successfully
     message        : Status or error message
     time_grid      : Time grid used for propagation
+    time           : Time array [s] (raw output from integrator/SGP4)
     state          : Cartesian state array, shape (6, N)
     coe            : Classical orbital elements at each time
     mee            : Modified equinoctial elements at each time
     at_ephem_times : Results interpolated to ephemeris times (optional)
+    plot_time_s    : Time array for plotting [s from epoch] (optional)
+    integ_time_et  : Integration time in ET (optional)
+    integ_time_s   : Integration time in seconds from TLE epoch (optional)
   """
   success        : bool
   message        : str                  = ""
   time_grid      : Optional[TimeGrid]   = None
+  time           : Optional[np.ndarray] = None
   state          : Optional[np.ndarray] = None
   coe            : Optional[ClassicalOrbitalElements]    = None
   mee            : Optional[ModifiedEquinoctialElements] = None
   at_ephem_times : Optional[dict]       = None
+  plot_time_s    : Optional[np.ndarray] = None
+  integ_time_et  : Optional[np.ndarray] = None
+  integ_time_s   : Optional[np.ndarray] = None
 
 
 @dataclass

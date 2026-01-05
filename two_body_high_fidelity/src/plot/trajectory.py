@@ -8,7 +8,7 @@ import spiceypy          as spice
 
 from datetime          import timedelta
 from pathlib           import Path
-from typing            import Optional
+from typing            import Optional, Union
 from matplotlib.figure import Figure
 from matplotlib.lines  import Line2D
 
@@ -17,7 +17,13 @@ from src.model.constants       import CONVERTER, SOLARSYSTEMCONSTANTS
 from src.model.frame_converter import FrameConverter
 from src.model.time_converter  import utc_to_et
 from src.model.orbit_converter import GeographicCoordinateConverter, OrbitConverter
+from src.schemas.propagation   import PropagationResult
 
+def _get_attr(obj, key):
+  """Helper to get attribute or dict item."""
+  if isinstance(obj, dict):
+    return obj.get(key)
+  return getattr(obj, key, None)
 
 def project_to_bounds(origin, direction, ax):
   """
@@ -52,7 +58,7 @@ def project_to_bounds(origin, direction, ax):
 
 
 def plot_3d_trajectories(
-  result : dict,
+  result : Union[dict, PropagationResult],
   epoch  : Optional[datetime.datetime] = None,
   frame  : str = "J2000",
 ) -> Figure:
@@ -76,15 +82,16 @@ def plot_3d_trajectories(
   fig = plt.figure(figsize=(18,10))
   
   # Extract state vectors
-  posvel_vec = result['state']
+  posvel_vec = _get_attr(result, 'state')
   pos_x, pos_y, pos_z = posvel_vec[0, :], posvel_vec[1, :], posvel_vec[2, :]
   vel_x, vel_y, vel_z = posvel_vec[3, :], posvel_vec[4, :], posvel_vec[5, :]
   
   # Build info string with frame and time if epoch is provided
+  plot_time_s = _get_attr(result, 'plot_time_s')
   info_text = f"Frame: {frame}"
-  if epoch is not None and 'plot_time_s' in result:
+  if epoch is not None and plot_time_s is not None:
     start_utc = epoch.strftime('%Y-%m-%d %H:%M:%S UTC')
-    end_time  = epoch + timedelta(seconds=result['plot_time_s'][-1])
+    end_time  = epoch + timedelta(seconds=plot_time_s[-1])
     end_utc   = end_time.strftime('%Y-%m-%d %H:%M:%S UTC')
     info_text += f"  |  Initial: {start_utc}  |  Final: {end_utc}"
   
@@ -148,11 +155,11 @@ def plot_3d_trajectories(
   ax1.plot_surface(np.full_like(U_disk, min_limit), U_disk, V_disk, color='black', alpha=earth_shadow_alpha, shade=False)  # type: ignore
 
   # Add sun direction markers on box walls (only if we have epoch and are in J2000 frame)
-  if epoch is not None and frame == "J2000" and 'plot_time_s' in result:
+  if epoch is not None and frame == "J2000" and plot_time_s is not None:
     try:
       # Get start and end times
       epoch_et_start = utc_to_et(epoch)
-      epoch_et_end = epoch_et_start + result['plot_time_s'][-1]
+      epoch_et_end = epoch_et_start + plot_time_s[-1]
       
       # Get sun position at start time (returns in km)
       sun_pos_start_km, _ = spice.spkpos('SUN', epoch_et_start, 'J2000', 'NONE', 'EARTH')
@@ -248,7 +255,7 @@ def plot_3d_trajectories(
 
 
 def plot_time_series(
-  result : dict,
+  result : Union[dict, PropagationResult],
   epoch  : Optional[datetime.datetime] = None,
 ) -> Figure:
   """
@@ -256,8 +263,8 @@ def plot_time_series(
   
   Input:
   ------
-    result : dict
-      Propagation result dictionary containing 'plot_time_s', 'state', 'coe', and 'mee'.
+    result : dict | PropagationResult
+      Propagation result.
     epoch : datetime, optional
       Reference epoch for UTC time axis.
       
@@ -271,12 +278,12 @@ def plot_time_series(
   fig = plt.figure(figsize=(24, 10))
   
   # Extract data
-  time   = result['plot_time_s']
-  states = result['state']
+  time   = _get_attr(result, 'plot_time_s')
+  states = _get_attr(result, 'state')
   pos_x, pos_y, pos_z = states[0, :], states[1, :], states[2, :]
   vel_x, vel_y, vel_z = states[3, :], states[4, :], states[5, :]
-  coe = result['coe']
-  mee = result['mee']
+  coe = _get_attr(result, 'coe')
+  mee = _get_attr(result, 'mee')
   
   # Calculate magnitudes
   pos_mag = np.sqrt(pos_x**2 + pos_y**2 + pos_z**2)
@@ -505,8 +512,8 @@ def plot_3d_error(
 
 
 def plot_time_series_error(
-  result_ref  : dict, 
-  result_comp : dict, 
+  result_ref  : Union[dict, PropagationResult], 
+  result_comp : Union[dict, PropagationResult], 
   epoch       : Optional[datetime.datetime] = None, 
   title       : str                         = "Time Series Error", 
   use_ric     : bool                        = True,
@@ -533,15 +540,15 @@ def plot_time_series_error(
       Figure object containing the time series error plots.
   """
   # Use plot_time_s for both datasets
-  time_ref  = result_ref['plot_time_s']
-  time_comp = result_comp['plot_time_s']
+  time_ref  = _get_attr(result_ref, 'plot_time_s')
+  time_comp = _get_attr(result_comp, 'plot_time_s')
   
-  state_ref  = result_ref['state']
-  state_comp = result_comp['state']
-  coe_ref    = result_ref['coe']
-  coe_comp   = result_comp['coe']
-  mee_ref    = result_ref['mee']
-  mee_comp   = result_comp['mee']
+  state_ref  = _get_attr(result_ref, 'state')
+  state_comp = _get_attr(result_comp, 'state')
+  coe_ref    = _get_attr(result_ref, 'coe')
+  coe_comp   = _get_attr(result_comp, 'coe')
+  mee_ref    = _get_attr(result_ref, 'mee')
+  mee_comp   = _get_attr(result_comp, 'mee')
   
   # Verify time grids match (use allclose for floating-point comparison)
   if len(time_ref) != len(time_comp) or not np.allclose(time_ref, time_comp, rtol=1e-9, atol=1e-9):
@@ -776,7 +783,7 @@ def plot_time_series_error(
 
 
 def plot_3d_trajectories_body_fixed(
-  result       : dict,
+  result       : Union[dict, PropagationResult],
   epoch_dt_utc : Optional[datetime.datetime] = None,
 ) -> Figure:
   """
@@ -797,10 +804,10 @@ def plot_3d_trajectories_body_fixed(
   fig = plt.figure(figsize=(18, 10))
   
   # Extract J2000 state vectors
-  j2000_state   = result['state']
+  j2000_state   = _get_attr(result, 'state')
   j2000_pos_vec = j2000_state[0:3, :]
   j2000_vel_vec = j2000_state[3:6, :]
-  time_s        = result['plot_time_s']
+  time_s        = _get_attr(result, 'plot_time_s')
   n_points      = j2000_state.shape[1]
   
   # Convert epoch to ET
@@ -928,7 +935,7 @@ def plot_3d_trajectories_body_fixed(
 
 
 def plot_time_series(
-  result : dict,
+  result : Union[dict, PropagationResult],
   epoch  : Optional[datetime.datetime] = None,
 ) -> Figure:
   """
@@ -936,8 +943,8 @@ def plot_time_series(
   
   Input:
   ------
-    result : dict
-      Propagation result dictionary containing 'plot_time_s', 'state', 'coe', and 'mee'.
+    result : dict | PropagationResult
+      Propagation result.
     epoch : datetime, optional
       Reference epoch for UTC time axis.
       
@@ -951,12 +958,12 @@ def plot_time_series(
   fig = plt.figure(figsize=(24, 10))
   
   # Extract data
-  time   = result['plot_time_s']
-  states = result['state']
+  time   = _get_attr(result, 'plot_time_s')
+  states = _get_attr(result, 'state')
   pos_x, pos_y, pos_z = states[0, :], states[1, :], states[2, :]
   vel_x, vel_y, vel_z = states[3, :], states[4, :], states[5, :]
-  coe = result['coe']
-  mee = result['mee']
+  coe = _get_attr(result, 'coe')
+  mee = _get_attr(result, 'mee')
   
   # Calculate magnitudes
   pos_mag = np.sqrt(pos_x**2 + pos_y**2 + pos_z**2)
@@ -1185,8 +1192,8 @@ def plot_3d_error(
 
 
 def plot_time_series_error(
-  result_ref  : dict, 
-  result_comp : dict, 
+  result_ref  : Union[dict, PropagationResult], 
+  result_comp : Union[dict, PropagationResult], 
   epoch       : Optional[datetime.datetime] = None, 
   title       : str                         = "Time Series Error", 
   use_ric     : bool                        = True,
@@ -1213,15 +1220,15 @@ def plot_time_series_error(
       Figure object containing the time series error plots.
   """
   # Use plot_time_s for both datasets
-  time_ref  = result_ref['plot_time_s']
-  time_comp = result_comp['plot_time_s']
+  time_ref  = _get_attr(result_ref, 'plot_time_s')
+  time_comp = _get_attr(result_comp, 'plot_time_s')
   
-  state_ref  = result_ref['state']
-  state_comp = result_comp['state']
-  coe_ref    = result_ref['coe']
-  coe_comp   = result_comp['coe']
-  mee_ref    = result_ref['mee']
-  mee_comp   = result_comp['mee']
+  state_ref  = _get_attr(result_ref, 'state')
+  state_comp = _get_attr(result_comp, 'state')
+  coe_ref    = _get_attr(result_ref, 'coe')
+  coe_comp   = _get_attr(result_comp, 'coe')
+  mee_ref    = _get_attr(result_ref, 'mee')
+  mee_comp   = _get_attr(result_comp, 'mee')
   
   # Verify time grids match (use allclose for floating-point comparison)
   if len(time_ref) != len(time_comp) or not np.allclose(time_ref, time_comp, rtol=1e-9, atol=1e-9):
@@ -1456,7 +1463,7 @@ def plot_time_series_error(
 
 
 def plot_3d_trajectories_body_fixed(
-  result       : dict,
+  result       : Union[dict, PropagationResult],
   epoch_dt_utc : Optional[datetime.datetime] = None,
 ) -> Figure:
   """
@@ -1477,10 +1484,10 @@ def plot_3d_trajectories_body_fixed(
   fig = plt.figure(figsize=(18, 10))
   
   # Extract J2000 state vectors
-  j2000_state   = result['state']
+  j2000_state   = _get_attr(result, 'state')
   j2000_pos_vec = j2000_state[0:3, :]
   j2000_vel_vec = j2000_state[3:6, :]
-  time_s        = result['plot_time_s']
+  time_s        = _get_attr(result, 'plot_time_s')
   n_points      = j2000_state.shape[1]
   
   # Convert epoch to ET
@@ -1606,7 +1613,7 @@ def plot_3d_trajectories_body_fixed(
 
 
 def plot_ground_track(
-  result       : dict,
+  result       : Union[dict, PropagationResult],
   epoch_dt_utc : Optional[datetime.datetime] = None,
   title_text   : str = "Ground Track",
 ) -> Figure:
@@ -1637,9 +1644,9 @@ def plot_ground_track(
   gl.right_labels = False
   
   # Extract J2000 state vectors
-  j2000_state   = result['state']
+  j2000_state   = _get_attr(result, 'state')
   j2000_pos_vec = j2000_state[0:3, :]
-  time_s        = result['plot_time_s']
+  time_s        = _get_attr(result, 'plot_time_s')
   n_points      = j2000_state.shape[1]
   
   # Convert epoch to ET
@@ -1698,7 +1705,7 @@ def plot_ground_track(
 
 
 def plot_3d_trajectory_sun_centered(
-  result : dict,
+  result : Union[dict, PropagationResult],
   epoch  : Optional[datetime.datetime] = None,
 ) -> Figure:
   """
@@ -1719,14 +1726,14 @@ def plot_3d_trajectory_sun_centered(
   fig = plt.figure(figsize=(18, 10))
   
   # Extract state vectors
-  posvel_vec = result['state']
-  time_s     = result['plot_time_s']
+  posvel_vec = _get_attr(result, 'state')
+  time_s     = _get_attr(result, 'plot_time_s')
   
   # Build info string
   info_text = "Frame: J2000 - Sun-Centered"
-  if epoch is not None and 'plot_time_s' in result:
+  if epoch is not None and time_s is not None:
     start_utc  = epoch.strftime('%Y-%m-%d %H:%M:%S UTC')
-    end_time   = epoch + timedelta(seconds=result['plot_time_s'][-1])
+    end_time   = epoch + timedelta(seconds=time_s[-1])
     end_utc    = end_time.strftime('%Y-%m-%d %H:%M:%S UTC')
     info_text += f"  |  Initial: {start_utc}  |  Final: {end_utc}"
   
@@ -2037,8 +2044,8 @@ def plot_3d_trajectory_sun_centered(
 
 def generate_error_plots(
   result_jpl_horizons_ephemeris    : Optional[dict],
-  result_high_fidelity_propagation : dict,
-  result_sgp4_propagation          : Optional[dict],
+  result_high_fidelity_propagation : PropagationResult,
+  result_sgp4_propagation          : Optional[PropagationResult],
   time_o_dt                        : datetime.datetime,
   figures_folderpath               : Path,
   compare_jpl_horizons             : bool,
@@ -2057,12 +2064,12 @@ def generate_error_plots(
 
   # Define availability flags
   has_horizons      = result_jpl_horizons_ephemeris is not None and result_jpl_horizons_ephemeris.get('success', False)
-  has_high_fidelity = result_high_fidelity_propagation.get('success', False)
-  has_sgp4          = result_sgp4_propagation is not None and result_sgp4_propagation.get('success', False)
+  has_high_fidelity = result_high_fidelity_propagation.success
+  has_sgp4          = result_sgp4_propagation is not None and result_sgp4_propagation.success
   
   # Check for pre-computed ephemeris-time data
-  has_hf_at_ephem   = has_high_fidelity and 'at_ephem_times' in result_high_fidelity_propagation
-  has_sgp4_at_ephem = has_sgp4 and 'at_ephem_times' in result_sgp4_propagation
+  has_hf_at_ephem   = has_high_fidelity and result_high_fidelity_propagation.at_ephem_times is not None
+  has_sgp4_at_ephem = has_sgp4 and result_sgp4_propagation.at_ephem_times is not None
   
   # Lowercase name for filenames
   name_lower = object_name.lower()
@@ -2072,12 +2079,9 @@ def generate_error_plots(
     print("    High-Fidelity Relative To JPL Horizons (at ephemeris times)")
     
     # Build result dict for comparison using pre-computed at_ephem_times data
-    hf_at_ephem = {
-      'plot_time_s' : result_high_fidelity_propagation['at_ephem_times']['plot_time_s'],
-      'state'       : result_high_fidelity_propagation['at_ephem_times']['state'],
-      'coe'         : result_high_fidelity_propagation['at_ephem_times']['coe'],
-      'mee'         : result_high_fidelity_propagation['at_ephem_times']['mee'],
-    }
+    # Note: plot_time_series_error expects dicts or objects. 
+    # at_ephem_times is a dict in PropagationResult.
+    hf_at_ephem = result_high_fidelity_propagation.at_ephem_times
     
     fig_err_ts = plot_time_series_error(
       result_ref  = result_jpl_horizons_ephemeris,
@@ -2115,12 +2119,7 @@ def generate_error_plots(
     print("    SGP4 Relative To JPL Horizons (at ephemeris times)")
     
     # Build result dict for comparison using pre-computed at_ephem_times data
-    sgp4_at_ephem = {
-      'plot_time_s' : result_sgp4_propagation['at_ephem_times']['plot_time_s'],
-      'state'       : result_sgp4_propagation['at_ephem_times']['state'],
-      'coe'         : result_sgp4_propagation['at_ephem_times']['coe'],
-      'mee'         : result_sgp4_propagation['at_ephem_times']['mee'],
-    }
+    sgp4_at_ephem = result_sgp4_propagation.at_ephem_times
     
     fig_err_ts = plot_time_series_error(
       result_ref  = result_jpl_horizons_ephemeris,
@@ -2139,8 +2138,8 @@ def generate_error_plots(
 
 def generate_3d_and_time_series_plots(
   result_jpl_horizons_ephemeris    : Optional[dict],
-  result_high_fidelity_propagation : dict,
-  result_sgp4_propagation          : Optional[dict],
+  result_high_fidelity_propagation : PropagationResult,
+  result_sgp4_propagation          : Optional[PropagationResult],
   time_o_dt                        : datetime.datetime,
   figures_folderpath               : Path,
   compare_jpl_horizons             : bool,
@@ -2216,7 +2215,7 @@ def generate_3d_and_time_series_plots(
     plt.close(fig_gt)
   
   # High-fidelity plots
-  if result_high_fidelity_propagation.get('success'):
+  if result_high_fidelity_propagation.success:
     print("    High-Fidelity-Model Plots")
 
     fig3 = plot_3d_trajectories(result_high_fidelity_propagation, epoch=time_o_dt, frame="J2000")
@@ -2258,7 +2257,7 @@ def generate_3d_and_time_series_plots(
     plt.close(fig_moon)
   
   # SGP4 plots
-  if compare_tle and result_sgp4_propagation and result_sgp4_propagation.get('success'):
+  if compare_tle and result_sgp4_propagation and result_sgp4_propagation.success:
     print("    SGP4-Model Plots")
     
     # 3D trajectory plot
@@ -2287,8 +2286,8 @@ def generate_3d_and_time_series_plots(
 
 def generate_plots(
   result_jpl_horizons_ephemeris    : Optional[dict],
-  result_high_fidelity_propagation : dict,
-  result_sgp4_propagation          : Optional[dict],
+  result_high_fidelity_propagation : PropagationResult,
+  result_sgp4_propagation          : Optional[PropagationResult],
   time_o_dt                        : datetime.datetime,
   figures_folderpath               : Path,
   compare_jpl_horizons             : bool = False,

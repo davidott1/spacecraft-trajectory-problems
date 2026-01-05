@@ -22,7 +22,7 @@ from src.model.frame_converter import VectorConverter
 from src.utility.tle_helper    import modify_tle_bstar, get_tle_satellite_and_tle_epoch
 from src.schemas.gravity       import GravityModelConfig
 from src.schemas.spacecraft    import SpacecraftProperties
-from src.schemas.propagation   import PropagationConfig
+from src.schemas.propagation   import PropagationConfig, PropagationResult
 from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoctialElements
 
 
@@ -100,7 +100,7 @@ def propagate_tle(
   time_eval    : Optional[np.ndarray] = None,
   to_j2000     : bool = False,
   disable_drag : bool = False,
-) -> dict:
+) -> PropagationResult:
   """
   Propagate orbit from TLE using SGP4.
   
@@ -125,8 +125,8 @@ def propagate_tle(
       
   Output:
   -------
-    result : dict
-      Result dictionary with 'success', 'state', 'time', 'message', 'frame', 'coe'.
+    result : PropagationResult
+      Result object with 'success', 'state', 'time', 'message', 'coe', 'mee'.
   """
   # Input validation
   if (time_o is not None or time_f is not None) and time_eval is not None:
@@ -194,15 +194,12 @@ def propagate_tle(
     # Check for errors
     if np.any(error_code_arr != 0):
       idx = np.where(error_code_arr != 0)[0][0]
-      return {
-        'success' : False,
-        'message' : f'SGP4 error code: {error_code_arr[idx]} at index {idx}',
-        'frame'   : frame,
-        'time'    : time[:idx],
-        'state'   : np.zeros((6, idx)),
-        'coe'     : None,
-        'mee'     : None,
-      }
+      return PropagationResult(
+        success = False,
+        message = f'SGP4 error code: {error_code_arr[idx]} at index {idx}',
+        time    = time[:idx],
+        state   = np.zeros((6, idx)),
+      )
 
     # Convert SGP4 output km, km/s to m, m/s
     teme_pos_vec_arr *= 1000.0
@@ -269,27 +266,23 @@ def propagate_tle(
       p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L
     )
 
-    # Return dict result
-    return {
-      'success'    : True,
-      'message'    : 'SGP4 propagation successful',
-      'frame'      : frame,
-      'time'       : time,
-      'state'      : posvel_vec_array,
-      'coe'        : coe_time_series,
-      'mee'        : mee_time_series,
-    }
+    # Return result object
+    return PropagationResult(
+      success = True,
+      message = 'SGP4 propagation successful',
+      time    = time,
+      state   = posvel_vec_array,
+      coe     = coe_time_series,
+      mee     = mee_time_series,
+    )
   except Exception as e:
     # Catch all exceptions and return failure
-    return {
-      'success'    : False,
-      'message'    : str(e),
-      'frame'      : frame,
-      'time'       : [],
-      'state'      : [],
-      'coe'        : None,
-      'mee'        : None,
-    }
+    return PropagationResult(
+      success = False,
+      message = str(e),
+      time    = np.array([]),
+      state   = np.array([]),
+    )
 
 
 def get_tle_initial_state(
@@ -366,7 +359,7 @@ def propagate_state_numerical_integration(
   get_coe_time_series : bool                 = False,
   num_points          : Optional[int]        = None,
   gp                  : float                = SOLARSYSTEMCONSTANTS.EARTH.GP,
-) -> dict:
+) -> PropagationResult:
   """
   Propagate an orbit from initial cartesian state using numerical integration.
   
@@ -400,14 +393,14 @@ def propagate_state_numerical_integration(
   
   Output:
   -------
-    result : dict
-      Dictionary containing:
+    result : PropagationResult
+      Object containing:
       - success : bool - Integration success flag
       - message : str - Status message
       - time : np.ndarray - Time array [s]
       - state : np.ndarray - State history [6 x N]
-      - state_f : np.ndarray - Final state vector
-      - coe : dict - Classical orbital elements time series (if requested)
+      - coe : ClassicalOrbitalElements - Classical orbital elements time series (if requested)
+      - mee : ModifiedEquinoctialElements - Modified equinoctial elements time series (if requested)
   """
   # Time span for integration
   time_span = (time_o, time_f)
@@ -487,15 +480,14 @@ def propagate_state_numerical_integration(
       p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L
     )
   
-  return {
-    'success' : solution.success,
-    'message' : solution.message,
-    'time'    : solution.t,
-    'state'   : solution.y,
-    'state_f' : solution.y[:, -1],
-    'coe'     : coe_time_series,
-    'mee'     : mee_time_series,
-  }
+  return PropagationResult(
+    success = solution.success,
+    message = solution.message,
+    time    = solution.t,
+    state   = solution.y,
+    coe     = coe_time_series,
+    mee     = mee_time_series,
+  )
 
 
 def run_high_fidelity_propagation(
@@ -505,7 +497,7 @@ def run_high_fidelity_propagation(
   result_jpl_horizons_ephemeris : Optional[dict],
   compare_jpl_horizons          : bool,
   two_body_gravity_model        : GravityModelConfig,
-) -> dict:
+) -> PropagationResult:
   """
   Configure and run the high-fidelity numerical propagator.
   
@@ -526,8 +518,8 @@ def run_high_fidelity_propagation(
       
   Output:
   -------
-    result : dict
-      Dictionary containing propagation results.
+    result : PropagationResult
+      Object containing propagation results.
   """
   # Extract configuration from model
   include_third_body        = two_body_gravity_model.third_body.enabled
@@ -719,11 +711,11 @@ def run_high_fidelity_propagation(
 
   print("Complete")
   
-  if result_high_fidelity['success']:
+  if result_high_fidelity.success:
     # Store integration time (ET)
-    result_high_fidelity['integ_time_et'] = result_high_fidelity['time']
+    result_high_fidelity.integ_time_et = result_high_fidelity.time
     # Create plotting time array (seconds from time_o)
-    result_high_fidelity['plot_time_s'] = result_high_fidelity['time'] - time_et_o
+    result_high_fidelity.plot_time_s = result_high_fidelity.time - time_et_o
     
     # If comparing to Horizons, interpolate to ephemeris times and store separately
     if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
@@ -736,8 +728,8 @@ def run_high_fidelity_propagation(
       state_at_ephem = np.zeros((6, len(ephem_times_et)))
       for i in range(6):
         interpolator = interp1d(
-          result_high_fidelity['time'], 
-          result_high_fidelity['state'][i, :], 
+          result_high_fidelity.time, 
+          result_high_fidelity.state[i, :], 
           kind='cubic', 
           fill_value='extrapolate'
         )
@@ -798,7 +790,7 @@ def run_high_fidelity_propagation(
       )
 
       # Store ephemeris-time results
-      result_high_fidelity['at_ephem_times'] = {
+      result_high_fidelity.at_ephem_times = {
         'plot_time_s'   : ephem_times_s,
         'integ_time_et' : ephem_times_et,
         'state'         : state_at_ephem,
@@ -808,7 +800,7 @@ def run_high_fidelity_propagation(
       
       print("Complete")
   else:
-    print(f"  Propagation failed: {result_high_fidelity['message']}")
+    print(f"  Propagation failed: {result_high_fidelity.message}")
   
   return result_high_fidelity
 
@@ -820,7 +812,7 @@ def run_sgp4_propagation(
   propagation_config            : PropagationConfig,
   compare_jpl_horizons          : bool,
   time_eval_s                   : Optional[np.ndarray] = None,
-) -> Optional[dict]:
+) -> Optional[PropagationResult]:
   """
   Propagate SGP4 on equal-spaced grid.
   
@@ -844,8 +836,8 @@ def run_sgp4_propagation(
       
   Output:
   -------
-    result : dict | None
-      Result dictionary containing SGP4 propagation results, or None if failed.
+    result : PropagationResult | None
+      Result object containing SGP4 propagation results, or None if failed.
   """
   print("\nSGP4 Model")
 
@@ -894,15 +886,15 @@ def run_sgp4_propagation(
   )
   print("Complete")
   
-  if not result_sgp4['success']:
-    print(f"  SGP4 propagation failed: {result_sgp4['message']}")
+  if not result_sgp4.success:
+    print(f"  SGP4 propagation failed: {result_sgp4.message}")
     return None
 
   # Store integration time (seconds from TLE epoch)
-  result_sgp4['integ_time_s'] = result_sgp4['time']
+  result_sgp4.integ_time_s = result_sgp4.time
   
   # Create plotting time array (seconds from time_o)
-  result_sgp4['plot_time_s'] = result_sgp4['time'] - time_offset_o_s
+  result_sgp4.plot_time_s = result_sgp4.time - time_offset_o_s
   
   # If comparing to Horizons, also propagate at ephemeris times
   if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.get('success'):
@@ -918,18 +910,18 @@ def run_sgp4_propagation(
       time_eval  = ephem_times_from_tle,
     )
     
-    if result_sgp4_at_ephem['success']:
+    if result_sgp4_at_ephem.success:
       # Store ephemeris-time results
-      result_sgp4['at_ephem_times'] = {
+      result_sgp4.at_ephem_times = {
         'plot_time_s'  : ephem_times_s,
         'integ_time_s' : ephem_times_from_tle,
-        'state'        : result_sgp4_at_ephem['state'],
-        'coe'          : result_sgp4_at_ephem['coe'],
-        'mee'          : result_sgp4_at_ephem['mee'],
+        'state'        : result_sgp4_at_ephem.state,
+        'coe'          : result_sgp4_at_ephem.coe,
+        'mee'          : result_sgp4_at_ephem.mee,
       }
       print("Complete")
     else:
-      print(f"Failed: {result_sgp4_at_ephem['message']}")
+      print(f"Failed: {result_sgp4_at_ephem.message}")
   
   return result_sgp4
 
@@ -991,8 +983,8 @@ def run_propagations(
   if compare_tle:
     # Use high-fidelity time grid if available for direct comparison
     time_eval_s = None
-    if result_high_fidelity.get('success'):
-      time_eval_s = result_high_fidelity.get('plot_time_s')
+    if result_high_fidelity.success:
+      time_eval_s = result_high_fidelity.plot_time_s
     
     result_sgp4 = run_sgp4_propagation(
       result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
