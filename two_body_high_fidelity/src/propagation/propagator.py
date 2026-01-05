@@ -23,6 +23,7 @@ from src.utility.tle_helper    import modify_tle_bstar, get_tle_satellite_and_tl
 from src.schemas.gravity       import GravityModelConfig
 from src.schemas.spacecraft    import SpacecraftProperties
 from src.schemas.propagation   import PropagationConfig
+from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoctialElements
 
 
 FORMAT_NUMBER = ">19.12e"
@@ -154,24 +155,24 @@ def propagate_tle(
     
     # Initialize arrays
     posvel_vec_array = np.zeros((6, num_points))
-    coe_time_series = {
-      'sma'  : np.zeros(num_points),
-      'ecc'  : np.zeros(num_points),
-      'inc'  : np.zeros(num_points),
-      'raan' : np.zeros(num_points),
-      'aop'  : np.zeros(num_points),
-      'ma'   : np.zeros(num_points),
-      'ta'   : np.zeros(num_points),
-      'ea'   : np.zeros(num_points),
-    }
-    mee_time_series = {
-      'p' : np.zeros(num_points),
-      'f' : np.zeros(num_points),
-      'g' : np.zeros(num_points),
-      'h' : np.zeros(num_points),
-      'k' : np.zeros(num_points),
-      'L' : np.zeros(num_points),
-    }
+    
+    # Initialize COE arrays
+    coe_sma  = np.zeros(num_points)
+    coe_ecc  = np.zeros(num_points)
+    coe_inc  = np.zeros(num_points)
+    coe_raan = np.zeros(num_points)
+    coe_aop  = np.zeros(num_points)
+    coe_ma   = np.zeros(num_points)
+    coe_ta   = np.zeros(num_points)
+    coe_ea   = np.zeros(num_points)
+
+    # Initialize MEE arrays
+    mee_p = np.zeros(num_points)
+    mee_f = np.zeros(num_points)
+    mee_g = np.zeros(num_points)
+    mee_h = np.zeros(num_points)
+    mee_k = np.zeros(num_points)
+    mee_L = np.zeros(num_points)
 
     # Get epoch Julian date
     jd_epoch, fr_epoch = jday(
@@ -199,7 +200,7 @@ def propagate_tle(
         'frame'   : frame,
         'time'    : time[:idx],
         'state'   : np.zeros((6, idx)),
-        'coe'     : coe_time_series,
+        'coe'     : None,
       }
 
     # Convert SGP4 output km, km/s to m, m/s
@@ -237,14 +238,14 @@ def propagate_tle(
         posvel_vec_array[3:6, i],
         gp = SOLARSYSTEMCONSTANTS.EARTH.GP,
       )
-      coe_time_series['sma'][i]  = coe.sma
-      coe_time_series['ecc'][i]  = coe.ecc
-      coe_time_series['inc'][i]  = coe.inc
-      coe_time_series['raan'][i] = coe.raan
-      coe_time_series['aop'][i]  = coe.aop
-      coe_time_series['ta'][i]   = coe.ta if coe.ta is not None else 0.0
-      coe_time_series['ea'][i]   = coe.ea if coe.ea is not None else 0.0
-      coe_time_series['ma'][i]   = coe.ma if coe.ma is not None else 0.0
+      coe_sma[i]  = coe.sma
+      coe_ecc[i]  = coe.ecc
+      coe_inc[i]  = coe.inc
+      coe_raan[i] = coe.raan
+      coe_aop[i]  = coe.aop
+      coe_ta[i]   = coe.ta if coe.ta is not None else 0.0
+      coe_ea[i]   = coe.ea if coe.ea is not None else 0.0
+      coe_ma[i]   = coe.ma if coe.ma is not None else 0.0
       
       # Compute MEE
       mee = OrbitConverter.pv_to_mee(
@@ -252,13 +253,21 @@ def propagate_tle(
         posvel_vec_array[3:6, i],
         gp = SOLARSYSTEMCONSTANTS.EARTH.GP,
       )
-      mee_time_series['p'][i] = mee.p
-      mee_time_series['f'][i] = mee.f
-      mee_time_series['g'][i] = mee.g
-      mee_time_series['h'][i] = mee.h
-      mee_time_series['k'][i] = mee.k
-      mee_time_series['L'][i] = mee.L
+      mee_p[i] = mee.p
+      mee_f[i] = mee.f
+      mee_g[i] = mee.g
+      mee_h[i] = mee.h
+      mee_k[i] = mee.k
+      mee_L[i] = mee.L
     
+    # Construct state objects
+    coe_time_series = ClassicalOrbitalElements(
+      sma=coe_sma, ecc=coe_ecc, inc=coe_inc, raan=coe_raan, aop=coe_aop, ma=coe_ma, ta=coe_ta, ea=coe_ea
+    )
+    mee_time_series = ModifiedEquinoctialElements(
+      p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L
+    )
+
     # Return dict result
     return {
       'success'    : True,
@@ -277,8 +286,8 @@ def propagate_tle(
       'frame'      : frame,
       'time'       : [],
       'state'      : [],
-      'coe'        : [],
-      'mee'        : [],
+      'coe'        : None,
+      'mee'        : None,
     }
 
 
@@ -423,49 +432,59 @@ def propagate_state_numerical_integration(
   
   # Convert all states to classical orbital elements
   num_steps = solution.y.shape[1]
-  coe_time_series = {
-    'sma'  : np.zeros(num_steps),
-    'ecc'  : np.zeros(num_steps),
-    'inc'  : np.zeros(num_steps),
-    'raan' : np.zeros(num_steps),
-    'aop'  : np.zeros(num_steps),
-    'ma'   : np.zeros(num_steps),
-    'ta'   : np.zeros(num_steps),
-    'ea'   : np.zeros(num_steps),
-  }
-  mee_time_series = {
-    'p' : np.zeros(num_steps),
-    'f' : np.zeros(num_steps),
-    'g' : np.zeros(num_steps),
-    'h' : np.zeros(num_steps),
-    'k' : np.zeros(num_steps),
-    'L' : np.zeros(num_steps),
-  }
   
+  coe_time_series = None
+  mee_time_series = None
+
   if get_coe_time_series:
+    # Initialize arrays
+    coe_sma  = np.zeros(num_steps)
+    coe_ecc  = np.zeros(num_steps)
+    coe_inc  = np.zeros(num_steps)
+    coe_raan = np.zeros(num_steps)
+    coe_aop  = np.zeros(num_steps)
+    coe_ma   = np.zeros(num_steps)
+    coe_ta   = np.zeros(num_steps)
+    coe_ea   = np.zeros(num_steps)
+
+    mee_p = np.zeros(num_steps)
+    mee_f = np.zeros(num_steps)
+    mee_g = np.zeros(num_steps)
+    mee_h = np.zeros(num_steps)
+    mee_k = np.zeros(num_steps)
+    mee_L = np.zeros(num_steps)
+
     for i in range(num_steps):
       pos = solution.y[0:3, i]
       vel = solution.y[3:6, i]
       
       # Compute COE
       coe = OrbitConverter.pv_to_coe(pos, vel, gp)
-      coe_time_series['sma'][i]  = coe.sma
-      coe_time_series['ecc'][i]  = coe.ecc
-      coe_time_series['inc'][i]  = coe.inc
-      coe_time_series['raan'][i] = coe.raan
-      coe_time_series['aop'][i]  = coe.aop
-      coe_time_series['ma'][i]   = coe.ma
-      coe_time_series['ta'][i]   = coe.ta
-      coe_time_series['ea'][i]   = coe.ea
+      coe_sma[i]  = coe.sma
+      coe_ecc[i]  = coe.ecc
+      coe_inc[i]  = coe.inc
+      coe_raan[i] = coe.raan
+      coe_aop[i]  = coe.aop
+      coe_ma[i]   = coe.ma
+      coe_ta[i]   = coe.ta
+      coe_ea[i]   = coe.ea
       
       # Compute MEE
       mee = OrbitConverter.pv_to_mee(pos, vel, gp)
-      mee_time_series['p'][i] = mee.p
-      mee_time_series['f'][i] = mee.f
-      mee_time_series['g'][i] = mee.g
-      mee_time_series['h'][i] = mee.h
-      mee_time_series['k'][i] = mee.k
-      mee_time_series['L'][i] = mee.L
+      mee_p[i] = mee.p
+      mee_f[i] = mee.f
+      mee_g[i] = mee.g
+      mee_h[i] = mee.h
+      mee_k[i] = mee.k
+      mee_L[i] = mee.L
+    
+    # Construct objects
+    coe_time_series = ClassicalOrbitalElements(
+      sma=coe_sma, ecc=coe_ecc, inc=coe_inc, raan=coe_raan, aop=coe_aop, ma=coe_ma, ta=coe_ta, ea=coe_ea
+    )
+    mee_time_series = ModifiedEquinoctialElements(
+      p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L
+    )
   
   return {
     'success' : solution.success,
@@ -724,41 +743,37 @@ def run_high_fidelity_propagation(
         state_at_ephem[i, :] = interpolator(ephem_times_et)
       
       # Compute COEs at ephemeris times
-      coe_at_ephem = {
-        'sma'  : np.zeros(len(ephem_times_et)),
-        'ecc'  : np.zeros(len(ephem_times_et)),
-        'inc'  : np.zeros(len(ephem_times_et)),
-        'raan' : np.zeros(len(ephem_times_et)),
-        'aop'  : np.zeros(len(ephem_times_et)),
-        'ma'   : np.zeros(len(ephem_times_et)),
-        'ta'   : np.zeros(len(ephem_times_et)),
-        'ea'   : np.zeros(len(ephem_times_et)),
-      }
-      mee_at_ephem = {
-        'p' : np.zeros(len(ephem_times_et)),
-        'f' : np.zeros(len(ephem_times_et)),
-        'g' : np.zeros(len(ephem_times_et)),
-        'h' : np.zeros(len(ephem_times_et)),
-        'k' : np.zeros(len(ephem_times_et)),
-        'L' : np.zeros(len(ephem_times_et)),
-      }
+      n_ephem = len(ephem_times_et)
+      coe_sma  = np.zeros(n_ephem)
+      coe_ecc  = np.zeros(n_ephem)
+      coe_inc  = np.zeros(n_ephem)
+      coe_raan = np.zeros(n_ephem)
+      coe_aop  = np.zeros(n_ephem)
+      coe_ma   = np.zeros(n_ephem)
+      coe_ta   = np.zeros(n_ephem)
+      coe_ea   = np.zeros(n_ephem)
+
+      mee_p = np.zeros(n_ephem)
+      mee_f = np.zeros(n_ephem)
+      mee_g = np.zeros(n_ephem)
+      mee_h = np.zeros(n_ephem)
+      mee_k = np.zeros(n_ephem)
+      mee_L = np.zeros(n_ephem)
+
       for i in range(len(ephem_times_et)):
         coe = OrbitConverter.pv_to_coe(
           state_at_ephem[0:3, i],
           state_at_ephem[3:6, i],
           SOLARSYSTEMCONSTANTS.EARTH.GP
         )
-        # for key in coe_at_ephem.keys():
-        #   if coe[key] is not None:
-        #     coe_at_ephem[key][i] = coe[key]
-        coe_at_ephem['sma' ][i] = coe.sma
-        coe_at_ephem['ecc' ][i] = coe.ecc
-        coe_at_ephem['inc' ][i] = coe.inc
-        coe_at_ephem['raan'][i] = coe.raan
-        coe_at_ephem['aop' ][i] = coe.aop
-        coe_at_ephem['ma'  ][i] = coe.ma
-        coe_at_ephem['ta'  ][i] = coe.ta
-        coe_at_ephem['ea'  ][i] = coe.ea
+        coe_sma[i]  = coe.sma
+        coe_ecc[i]  = coe.ecc
+        coe_inc[i]  = coe.inc
+        coe_raan[i] = coe.raan
+        coe_aop[i]  = coe.aop
+        coe_ma[i]   = coe.ma
+        coe_ta[i]   = coe.ta
+        coe_ea[i]   = coe.ea
         
         # Compute MEE
         mee = OrbitConverter.pv_to_mee(
@@ -766,15 +781,21 @@ def run_high_fidelity_propagation(
           state_at_ephem[3:6, i],
           SOLARSYSTEMCONSTANTS.EARTH.GP
         )
-        # for key in mee_at_ephem.keys():
-        #   mee_at_ephem[key][i] = mee[key]
-        mee_at_ephem['p'][i] = mee.p
-        mee_at_ephem['f'][i] = mee.f
-        mee_at_ephem['g'][i] = mee.g
-        mee_at_ephem['h'][i] = mee.h
-        mee_at_ephem['k'][i] = mee.k
-        mee_at_ephem['L'][i] = mee.L
+        mee_p[i] = mee.p
+        mee_f[i] = mee.f
+        mee_g[i] = mee.g
+        mee_h[i] = mee.h
+        mee_k[i] = mee.k
+        mee_L[i] = mee.L
       
+      # Construct objects
+      coe_at_ephem = ClassicalOrbitalElements(
+        sma=coe_sma, ecc=coe_ecc, inc=coe_inc, raan=coe_raan, aop=coe_aop, ma=coe_ma, ta=coe_ta, ea=coe_ea
+      )
+      mee_at_ephem = ModifiedEquinoctialElements(
+        p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L
+      )
+
       # Store ephemeris-time results
       result_high_fidelity['at_ephem_times'] = {
         'plot_time_s'   : ephem_times_s,

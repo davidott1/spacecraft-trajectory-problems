@@ -34,14 +34,15 @@ def print_results_summary(
     vel_vec_f = result_high_fidelity['state'][3:6, -1]
     
     # Extract final COEs
-    sma  = result_high_fidelity['coe']['sma' ][-1]
-    ecc  = result_high_fidelity['coe']['ecc' ][-1]
-    inc  = result_high_fidelity['coe']['inc' ][-1] * CONVERTER.DEG_PER_RAD
-    raan = result_high_fidelity['coe']['raan'][-1] * CONVERTER.DEG_PER_RAD
-    aop  = result_high_fidelity['coe']['aop' ][-1] * CONVERTER.DEG_PER_RAD
-    ta   = result_high_fidelity['coe']['ta'  ][-1] * CONVERTER.DEG_PER_RAD
-    ea   = result_high_fidelity['coe']['ea'  ][-1] * CONVERTER.DEG_PER_RAD
-    ma   = result_high_fidelity['coe']['ma'  ][-1] * CONVERTER.DEG_PER_RAD
+    coe = result_high_fidelity['coe']
+    sma  = coe.sma[-1]
+    ecc  = coe.ecc[-1]
+    inc  = coe.inc[-1] * CONVERTER.DEG_PER_RAD
+    raan = coe.raan[-1] * CONVERTER.DEG_PER_RAD
+    aop  = coe.aop[-1] * CONVERTER.DEG_PER_RAD
+    ta   = coe.ta[-1] * CONVERTER.DEG_PER_RAD
+    ea   = coe.ea[-1] * CONVERTER.DEG_PER_RAD
+    ma   = coe.ma[-1] * CONVERTER.DEG_PER_RAD
 
     print(f"  Final State (High-Fidelity)")
     print(f"    Epoch : {time_utc_f_str}")
