@@ -22,6 +22,7 @@ from src.model.frame_converter import VectorConverter
 from src.utility.tle_helper    import modify_tle_bstar, get_tle_satellite_and_tle_epoch
 from src.schemas.gravity       import GravityModelConfig
 from src.schemas.spacecraft    import SpacecraftProperties
+from src.schemas.propagation   import PropagationConfig
 
 
 FORMAT_NUMBER = ">19.12e"
@@ -479,8 +480,7 @@ def propagate_state_numerical_integration(
 
 def run_high_fidelity_propagation(
   initial_state                 : np.ndarray,
-  time_o_utc_dt                 : datetime,
-  time_f_utc_dt                 : datetime,
+  propagation_config            : PropagationConfig,
   spacecraft                    : SpacecraftProperties,
   result_jpl_horizons_ephemeris : Optional[dict],
   compare_jpl_horizons          : bool,
@@ -493,10 +493,8 @@ def run_high_fidelity_propagation(
   ------
     initial_state : np.ndarray
       Initial state vector [pos, vel] in meters and m/s.
-    time_o_utc_dt : datetime
-      Initial time as datetime object (UTC).
-    time_f_utc_dt : datetime
-      Final time as datetime object (UTC).
+    propagation_config : PropagationConfig
+      Propagation time and integration settings.
     spacecraft : SpacecraftProperties
       Spacecraft physical properties and force model settings.
     result_jpl_horizons_ephemeris : dict | None
@@ -521,9 +519,9 @@ def run_high_fidelity_propagation(
   print("\nHigh-Fidelity Model")
 
   # Calculate Ephemeris Times (ET) for integration
-  time_et_o    = utc_to_et(time_o_utc_dt)
-  time_et_f    = utc_to_et(time_f_utc_dt)
-  delta_time_s = (time_f_utc_dt - time_o_utc_dt).total_seconds()
+  time_et_o    = utc_to_et(propagation_config.time_o_dt)
+  time_et_f    = utc_to_et(propagation_config.time_f_dt)
+  delta_time_s = (propagation_config.time_f_dt - propagation_config.time_o_dt).total_seconds()
 
   # Extract the actual gravity model from the namespace
   spherical_harmonics_model = None
@@ -540,8 +538,8 @@ def run_high_fidelity_propagation(
   # Print configuration
   print(f"  Configuration")
   print(f"    Timespan")
-  print(f"      Initial  : {time_o_utc_dt} UTC / {time_et_o:.6f} ET")
-  print(f"      Final    : {time_f_utc_dt} UTC / {time_et_f:.6f} ET")
+  print(f"      Initial  : {propagation_config.time_o_dt} UTC / {time_et_o:.6f} ET")
+  print(f"      Final    : {propagation_config.time_f_dt} UTC / {time_et_f:.6f} ET")
   print(f"      Duration : {delta_time_s} s")
   print(f"    Forces")
   print(f"      Gravity")
@@ -677,8 +675,8 @@ def run_high_fidelity_propagation(
   t_eval_grid = np.linspace(time_et_o, time_et_f, num_grid_points)
 
   print("    Numerical Integration")
-  print(f"      Method     : DOP853")
-  print(f"      Tolerances : rtol=1.0e-12, atol=1.0e-15")  # Updated display
+  print(f"      Method     : {propagation_config.method}")
+  print(f"      Tolerances : rtol={propagation_config.rtol}, atol={propagation_config.atol}")
   print(f"      Grid       : {len(t_eval_grid)} points (equal-spaced)")
 
   print("\n  Compute")
@@ -690,9 +688,9 @@ def run_high_fidelity_propagation(
     time_o              = time_et_o,
     time_f              = time_et_f,
     dynamics            = acceleration,
-    method              = 'DOP853',
-    rtol                = 1e-12,
-    atol                = 1e-15,
+    method              = propagation_config.method,
+    rtol                = propagation_config.rtol,
+    atol                = propagation_config.atol,
     dense_output        = True,
     t_eval              = t_eval_grid,
     get_coe_time_series = True,
@@ -797,8 +795,7 @@ def run_sgp4_propagation(
   result_jpl_horizons_ephemeris : Optional[dict],
   tle_line_1                    : str,
   tle_line_2                    : str,
-  time_o_dt                     : datetime,
-  time_f_dt                     : datetime,
+  propagation_config            : PropagationConfig,
   compare_jpl_horizons          : bool,
   time_eval_s                   : Optional[np.ndarray] = None,
 ) -> Optional[dict]:
@@ -815,10 +812,8 @@ def run_sgp4_propagation(
       First line of TLE.
     tle_line_2 : str
       Second line of TLE.
-    time_o_dt : datetime
-      Initial time as datetime object.
-    time_f_dt : datetime
-      Final time as datetime object.
+    propagation_config : PropagationConfig
+      Propagation time settings.
     compare_jpl_horizons : bool
       Flag to enable Horizons comparison.
     time_eval_s : np.ndarray | None
@@ -840,8 +835,8 @@ def run_sgp4_propagation(
   tle_epoch_dt, _ = get_tle_satellite_and_tle_epoch(tle_line_1, tle_line_2)
   
   # Calculate times relative to TLE epoch
-  time_offset_o_s = (time_o_dt - tle_epoch_dt).total_seconds()
-  time_offset_f_s = (time_f_dt - tle_epoch_dt).total_seconds()
+  time_offset_o_s = (propagation_config.time_o_dt - tle_epoch_dt).total_seconds()
+  time_offset_f_s = (propagation_config.time_f_dt - tle_epoch_dt).total_seconds()
   delta_time_s = time_offset_f_s - time_offset_o_s
   
   # Create time grid (seconds from TLE epoch)
@@ -855,14 +850,14 @@ def run_sgp4_propagation(
     grid_type_str   = f"{num_grid_points} points (equal-spaced)"
 
   # Calculate ET for display
-  time_et_o = utc_to_et(time_o_dt)
-  time_et_f = utc_to_et(time_f_dt)
+  time_et_o = utc_to_et(propagation_config.time_o_dt)
+  time_et_f = utc_to_et(propagation_config.time_f_dt)
 
   # Display propagation info
   print(f"  Configuration")
   print(f"    Timespan")
-  print(f"      Initial  : {time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {time_et_o:.6f} ET")
-  print(f"      Final    : {time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {time_et_f:.6f} ET")
+  print(f"      Initial  : {propagation_config.time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {time_et_o:.6f} ET")
+  print(f"      Final    : {propagation_config.time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {time_et_f:.6f} ET")
   print(f"      Duration : {delta_time_s:.1f} s")
   print(f"      Grid     : {grid_type_str}")
 
@@ -919,8 +914,7 @@ def run_sgp4_propagation(
 
 def run_propagations(
   initial_state                 : np.ndarray,
-  time_o_dt                     : datetime,
-  time_f_dt                     : datetime,
+  propagation_config            : PropagationConfig,
   spacecraft                    : SpacecraftProperties,
   compare_tle                   : bool,
   compare_jpl_horizons          : bool,
@@ -936,10 +930,8 @@ def run_propagations(
   ------
     initial_state : np.ndarray
       Initial state vector [pos, vel] in meters and m/s.
-    time_o_dt : datetime
-      Initial time as datetime object.
-    time_f_dt : datetime
-      Final time as datetime object.
+    propagation_config : PropagationConfig
+      Propagation settings.
     spacecraft : SpacecraftProperties
       Spacecraft properties.
     compare_tle : bool
@@ -965,8 +957,7 @@ def run_propagations(
   # High-fidelity propagation
   result_high_fidelity = run_high_fidelity_propagation(
     initial_state                 = initial_state,
-    time_o_utc_dt                 = time_o_dt,
-    time_f_utc_dt                 = time_f_dt,
+    propagation_config            = propagation_config,
     spacecraft                    = spacecraft,
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     compare_jpl_horizons          = compare_jpl_horizons,
@@ -985,8 +976,7 @@ def run_propagations(
       result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
       tle_line_1                    = tle_line_1,
       tle_line_2                    = tle_line_2,
-      time_o_dt                     = time_o_dt,
-      time_f_dt                     = time_f_dt,
+      propagation_config            = propagation_config,
       compare_jpl_horizons          = compare_jpl_horizons,
       time_eval_s                   = time_eval_s,
     )

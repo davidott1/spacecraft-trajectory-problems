@@ -64,6 +64,7 @@ from src.input.configuration           import build_config, print_configuration,
 from src.propagation.state_initializer import get_initial_state
 from src.utility.logger                import start_logging, stop_logging
 from src.schemas.spacecraft            import SpacecraftProperties, DragConfig, SRPConfig
+from src.schemas.propagation           import PropagationConfig
 
 def check_data_availability(
   result              : Optional[dict],
@@ -302,11 +303,17 @@ def main(
     name     = config.object_name
   )
 
+  # Create propagation configuration
+  propagation_config = PropagationConfig(
+    time_o_dt = config.time_o_dt,
+    time_f_dt = config.time_f_dt,
+    atol      = 1e-15, # Match previous hardcoded value
+  )
+
   # Run propagations: high-fidelity and SGP4
   result_high_fidelity_propagation, result_sgp4_propagation = run_propagations(
     initial_state                 = initial_state,
-    time_o_dt                     = config.time_o_dt,
-    time_f_dt                     = config.time_f_dt,
+    propagation_config            = propagation_config,
     spacecraft                    = spacecraft,
     compare_tle                   = config.compare_tle,
     compare_jpl_horizons          = config.compare_jpl_horizons,
