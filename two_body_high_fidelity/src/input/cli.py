@@ -140,6 +140,22 @@ def parse_command_line_arguments(
     help    = "Automatically download missing data (Horizons/TLE) without prompting.",
   )
   
+  parser.add_argument(
+    '--atol',
+    dest    = 'atol',
+    type    = float,
+    default = 1e-15,
+    help    = "Absolute tolerance for numerical integration (default: 1e-15).",
+  )
+
+  parser.add_argument(
+    '--rtol',
+    dest    = 'rtol',
+    type    = float,
+    default = 1e-12,
+    help    = "Relative tolerance for numerical integration (default: 1e-12).",
+  )
+  
   # Parse arguments
   args = parser.parse_args()
   

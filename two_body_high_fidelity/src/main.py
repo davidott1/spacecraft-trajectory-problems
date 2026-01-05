@@ -143,6 +143,8 @@ def main(
   initial_state_source           : str            = 'jpl_horizons',
   gravity_harmonics_degree_order : Optional[list] = None,
   gravity_model_filename         : Optional[str]  = None,
+  atol                           : float          = 1e-15,
+  rtol                           : float          = 1e-12,
 ) -> dict:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -177,6 +179,10 @@ def main(
       Degree and order for gravity harmonics (e.g., [4, 4]). None means disabled.
     gravity_model_filename : str | None
       Filename for custom gravity harmonics file. None means disabled.
+    atol : float
+      Absolute tolerance for numerical integration.
+    rtol : float
+      Relative tolerance for numerical integration.
   
   Output:
   -------
@@ -199,6 +205,8 @@ def main(
     initial_state_source,
     gravity_harmonics_degree_order,
     gravity_model_filename,
+    atol,
+    rtol,
   )
 
   # Start logging to file
@@ -282,9 +290,6 @@ def main(
       return error
 
   # Determine initial state: JPL Horizons, TLE, or Custom State Vector
-  # Note: get_initial_state might expect a dict for result_jpl_horizons_ephemeris.
-  # We pass the object, assuming it handles it or we pass __dict__ if needed.
-  
   initial_state = get_initial_state(
     tle_line_1                    = config.tle_line_1,
     tle_line_2                    = config.tle_line_2,
@@ -295,35 +300,11 @@ def main(
     initial_state_filename        = config.initial_state_filename,
   )
 
-  # Create spacecraft properties object
-  spacecraft = SpacecraftProperties(
-    mass     = config.mass,
-    drag     = DragConfig(
-      enabled = config.include_drag,
-      cd      = config.cd,
-      area    = config.area_drag
-    ),
-    srp      = SRPConfig(
-      enabled = config.include_srp,
-      cr      = config.cr,
-      area    = config.area_srp
-    ),
-    norad_id = config.initial_state_norad_id,
-    name     = config.object_name
-  )
-
-  # Create propagation configuration
-  propagation_config = PropagationConfig(
-    time_o_dt = config.time_o_dt,
-    time_f_dt = config.time_f_dt,
-    atol      = 1e-15, # Match previous hardcoded value
-  )
-
   # Run propagations: high-fidelity and SGP4
   result_high_fidelity_propagation, result_sgp4_propagation = run_propagations(
     initial_state                 = initial_state,
-    propagation_config            = propagation_config,
-    spacecraft                    = spacecraft,
+    propagation_config            = config.propagation_config,
+    spacecraft                    = config.spacecraft,
     compare_tle                   = config.compare_tle,
     compare_jpl_horizons          = config.compare_jpl_horizons,
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
@@ -333,8 +314,6 @@ def main(
   )
   
   # Display results and create plots
-  # Convert PropagationResult to dict for printer if necessary, or update printer
-  # For now, we'll assume printer handles objects or we convert to dict
   print_results_summary( 
     result_high_fidelity_propagation.__dict__,
   )
@@ -381,4 +360,6 @@ if __name__ == "__main__":
     args.initial_state_source,
     args.gravity_harmonics_degree_order,
     args.gravity_model_filename,
+    args.atol,
+    args.rtol,
   )

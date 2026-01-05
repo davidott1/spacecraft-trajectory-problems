@@ -607,7 +607,6 @@ def get_horizons_ephemeris(
   if result_horizons.get('success'):
     result_horizons = process_horizons_result(result_horizons)
 
-  # Process Horizons data
   if result_horizons and result_horizons.get('success'):
     # Construct TimeGrid
     time_grid = TimeGrid(
