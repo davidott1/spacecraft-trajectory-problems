@@ -1,21 +1,23 @@
 import numpy as np
 
-from typing   import Optional
+from typing import Optional
 
 from src.model.time_converter import et_to_utc
 from src.model.constants      import CONVERTER
 
+from src.schemas.propagation import PropagationResult
+
 
 def print_results_summary(
-  result_high_fidelity : dict,
+  result_high_fidelity : PropagationResult,
 ) -> None:
   """
   Print a summary of the propagation results.
   
   Input:
   ------
-    result_high_fidelity : dict
-      High-fidelity propagation result dictionary.
+    result_high_fidelity : PropagationResult
+      High-fidelity propagation result object.
       
   Output:
   -------
@@ -24,17 +26,17 @@ def print_results_summary(
   print("\nResults Summary")
   
   # Print final Cartesian state and classical orbital elements (high-fidelity)
-  if result_high_fidelity.get('success'):
+  if result_high_fidelity.success:
     # Final time of high-fidelity propagation
-    time_et_f      = result_high_fidelity['time'][-1]
+    time_et_f      = result_high_fidelity.time[-1]
     time_utc_f_str = f"{et_to_utc(time_et_f)} UTC / {time_et_f:.6f} ET"
 
     # Final position and velocity vectors
-    pos_vec_f = result_high_fidelity['state'][0:3, -1]
-    vel_vec_f = result_high_fidelity['state'][3:6, -1]
+    pos_vec_f = result_high_fidelity.state[0:3, -1]
+    vel_vec_f = result_high_fidelity.state[3:6, -1]
     
     # Extract final COEs
-    coe = result_high_fidelity['coe']
+    coe = result_high_fidelity.coe
     sma  = coe.sma[-1]
     ecc  = coe.ecc[-1]
     inc  = coe.inc[-1] * CONVERTER.DEG_PER_RAD

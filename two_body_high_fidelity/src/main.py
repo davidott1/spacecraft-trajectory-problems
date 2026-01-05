@@ -145,7 +145,7 @@ def main(
   gravity_model_filename         : Optional[str]  = None,
   atol                           : float          = 1e-15,
   rtol                           : float          = 1e-12,
-) -> dict:
+) -> PropagationResult:
   """
   Main function to run the high-fidelity orbit propagation.
   
@@ -186,8 +186,8 @@ def main(
   
   Output:
   -------
-    result : dict
-      Dictionary containing the results of the high-fidelity propagation.
+    result : PropagationResult
+      Object containing the results of the high-fidelity propagation.
   """
   
   # Process inputs and setup
@@ -315,7 +315,7 @@ def main(
   
   # Display results and create plots
   print_results_summary( 
-    result_high_fidelity_propagation.__dict__,
+    result_high_fidelity_propagation,
   )
   
   # Generate plots
@@ -338,7 +338,7 @@ def main(
   stop_logging(logger)
   
   # Return high-fidelity propagation results
-  return result_high_fidelity_propagation.__dict__
+  return result_high_fidelity_propagation
 
 
 if __name__ == "__main__":
