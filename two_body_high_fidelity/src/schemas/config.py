@@ -38,8 +38,6 @@ class OutputPaths:
       self.figures_folderpath = self.base_folderpath / 'figures'
     if self.logs_folderpath is None:
       self.logs_folderpath = self.base_folderpath / 'logs'
-    if self.data_folderpath is None:
-      self.data_folderpath = self.base_folderpath / 'data'
   
   def ensure_directories(self) -> None:
     """
@@ -47,7 +45,8 @@ class OutputPaths:
     """
     self.figures_folderpath.mkdir(parents=True, exist_ok=True)
     self.logs_folderpath.mkdir(parents=True, exist_ok=True)
-    self.data_folderpath.mkdir(parents=True, exist_ok=True)
+    if self.data_folderpath:
+      self.data_folderpath.mkdir(parents=True, exist_ok=True)
 
 
 @dataclass

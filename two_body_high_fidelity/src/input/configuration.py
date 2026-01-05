@@ -7,6 +7,7 @@ from datetime import datetime
 from types    import SimpleNamespace
 from typing   import Optional
 
+from src.schemas.config        import OutputPaths
 from src.input.loader          import load_supported_objects
 from src.utility.string_helper import sanitize_filename
 
@@ -469,6 +470,7 @@ def build_config(
     include_srp                = include_srp,
     auto_download              = auto_download,
     initial_state_source       = initial_state_source,
+    output_paths               = paths['output_paths'],
     output_folderpath          = paths['output_folderpath'],
     timestamp_folderpath       = paths['timestamp_folderpath'],
     figures_folderpath         = paths['figures_folderpath'],
@@ -554,20 +556,23 @@ def setup_paths(
   timestamp_str        = datetime.now().strftime("%Y%m%d_%H%M%S")
   output_folderpath    = project_root / 'output'
   timestamp_folderpath = output_folderpath / timestamp_str
-  figures_folderpath   = timestamp_folderpath / 'figures'
-  files_folderpath     = timestamp_folderpath / 'files'
-  log_filepath         = files_folderpath / 'output.log'
   
-  # Ensure output directory exists
-  figures_folderpath.mkdir(parents=True, exist_ok=True)
-  files_folderpath.mkdir(parents=True, exist_ok=True)
+  # Initialize OutputPaths
+  output_paths = OutputPaths(
+    base_folderpath = timestamp_folderpath,
+    logs_folderpath = timestamp_folderpath / 'files',
+    log_filepath    = timestamp_folderpath / 'files' / 'output.log',
+    data_folderpath = data_folderpath,
+  )
+  output_paths.ensure_directories()
 
   return {
+    'output_paths'                 : output_paths,
     'output_folderpath'            : output_folderpath,
     'timestamp_folderpath'         : timestamp_folderpath,
-    'figures_folderpath'           : figures_folderpath,
-    'files_folderpath'             : files_folderpath,
-    'log_filepath'                 : log_filepath,
+    'figures_folderpath'           : output_paths.figures_folderpath,
+    'files_folderpath'             : output_paths.logs_folderpath,
+    'log_filepath'                 : output_paths.log_filepath,
     'spice_kernels_folderpath'     : spice_kernels_folderpath,
     'gravity_model_folderpath'     : gravity_model_folderpath,
     'gravity_model_filename'       : gravity_model_filename,
