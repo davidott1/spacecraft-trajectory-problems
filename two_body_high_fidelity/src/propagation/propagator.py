@@ -201,6 +201,7 @@ def propagate_tle(
         'time'    : time[:idx],
         'state'   : np.zeros((6, idx)),
         'coe'     : None,
+        'mee'     : None,
       }
 
     # Convert SGP4 output km, km/s to m, m/s

@@ -54,6 +54,7 @@ Usage:
 """
 from typing                            import Optional
 from datetime                          import datetime, timedelta
+from dataclasses                       import fields
 
 from src.plot.trajectory               import generate_plots
 from src.propagation.propagator        import run_propagations
@@ -65,6 +66,22 @@ from src.propagation.state_initializer import get_initial_state
 from src.utility.logger                import start_logging, stop_logging
 from src.schemas.spacecraft            import SpacecraftProperties, DragConfig, SRPConfig
 from src.schemas.propagation           import PropagationConfig
+from src.schemas.state                 import ClassicalOrbitalElements, ModifiedEquinoctialElements
+
+def _convert_to_objects(result: dict) -> None:
+  """Convert dictionary elements to dataclasses if necessary."""
+  if not result or not result.get('success'):
+    return
+
+  if 'coe' in result and isinstance(result['coe'], dict):
+    valid_keys = {f.name for f in fields(ClassicalOrbitalElements)}
+    filtered = {k: v for k, v in result['coe'].items() if k in valid_keys}
+    result['coe'] = ClassicalOrbitalElements(**filtered)
+
+  if 'mee' in result and isinstance(result['mee'], dict):
+    valid_keys = {f.name for f in fields(ModifiedEquinoctialElements)}
+    filtered = {k: v for k, v in result['mee'].items() if k in valid_keys}
+    result['mee'] = ModifiedEquinoctialElements(**filtered)
 
 def check_data_availability(
   result              : Optional[dict],
@@ -231,6 +248,9 @@ def main(
       object_name             = config.object_name,
       auto_download           = config.auto_download,
     )
+    
+    # Convert dictionaries to objects
+    _convert_to_objects(result_jpl_horizons_ephemeris)
     
     # Check if Horizons data is required but unavailable
     error = check_data_availability(
