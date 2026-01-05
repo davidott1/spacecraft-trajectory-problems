@@ -77,17 +77,6 @@ class ClassicalOrbitalElements:
   ha   : Optional[Union[float, np.ndarray]] = None
   pa   : Optional[Union[float, np.ndarray]] = None
 
-  def __getitem__(self, key):
-    if not isinstance(key, str):
-      raise TypeError(f"Key must be a string, got {type(key)}")
-    try:
-      return getattr(self, key)
-    except AttributeError:
-      raise KeyError(key)
-
-  def __contains__(self, key):
-    return isinstance(key, str) and hasattr(self, key)
-
 
 @dataclass
 class ModifiedEquinoctialElements:
@@ -112,17 +101,6 @@ class ModifiedEquinoctialElements:
   k : Union[float, np.ndarray]
   L : Union[float, np.ndarray]
   I : int = 1
-
-  def __getitem__(self, key):
-    if not isinstance(key, str):
-      raise TypeError(f"Key must be a string, got {type(key)}")
-    try:
-      return getattr(self, key)
-    except AttributeError:
-      raise KeyError(key)
-
-  def __contains__(self, key):
-    return isinstance(key, str) and hasattr(self, key)
 
 
 @dataclass

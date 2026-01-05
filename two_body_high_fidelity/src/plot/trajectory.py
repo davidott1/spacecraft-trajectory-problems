@@ -271,7 +271,7 @@ def plot_time_series(
   fig = plt.figure(figsize=(24, 10))
   
   # Extract data
-  time = result['plot_time_s']
+  time   = result['plot_time_s']
   states = result['state']
   pos_x, pos_y, pos_z = states[0, :], states[1, :], states[2, :]
   vel_x, vel_y, vel_z = states[3, :], states[4, :], states[5, :]
@@ -310,7 +310,7 @@ def plot_time_series(
   # MIDDLE COLUMN: Classical Orbital Elements
   # Plot sma vs time (row 0, column 1)
   ax_sma = plt.subplot2grid((6, 3), (0, 1), sharex=ax_pos)
-  ax_sma.plot(time, coe['sma'], 'b-', linewidth=1.5)
+  ax_sma.plot(time, coe.sma, 'b-', linewidth=1.5)
   ax_sma.tick_params(labelbottom=False)
   ax_sma.set_ylabel('SMA\n[m]')
   ax_sma.grid(True)
@@ -318,7 +318,7 @@ def plot_time_series(
 
   # Plot ecc vs time (row 1, column 1)
   ax_ecc = plt.subplot2grid((6, 3), (1, 1), sharex=ax_pos)
-  ax_ecc.plot(time, coe['ecc'], 'b-', linewidth=1.5)
+  ax_ecc.plot(time, coe.ecc, 'b-', linewidth=1.5)
   ax_ecc.tick_params(labelbottom=False)
   ax_ecc.set_ylabel('ECC\n[-]')
   ax_ecc.grid(True)
@@ -326,7 +326,7 @@ def plot_time_series(
 
   # Plot inc vs time (row 2, column 1)
   ax_inc = plt.subplot2grid((6, 3), (2, 1), sharex=ax_pos)
-  ax_inc.plot(time, coe['inc'] * CONVERTER.DEG_PER_RAD, 'b-', linewidth=1.5)
+  ax_inc.plot(time, coe.inc * CONVERTER.DEG_PER_RAD, 'b-', linewidth=1.5)
   ax_inc.tick_params(labelbottom=False)
   ax_inc.set_ylabel('INC\n[deg]')
   ax_inc.grid(True)
@@ -334,7 +334,7 @@ def plot_time_series(
 
   # Plot raan vs time (row 3, column 1)
   ax_raan = plt.subplot2grid((6, 3), (3, 1), sharex=ax_pos)
-  ax_raan.plot(time, coe['raan'] * CONVERTER.DEG_PER_RAD, 'b-', linewidth=1.5)
+  ax_raan.plot(time, coe.raan * CONVERTER.DEG_PER_RAD, 'b-', linewidth=1.5)
   ax_raan.tick_params(labelbottom=False)
   ax_raan.set_ylabel('RAAN\n[deg]')
   ax_raan.grid(True)
@@ -342,7 +342,7 @@ def plot_time_series(
 
   # Plot aop vs time (row 4, column 1)
   ax_aop = plt.subplot2grid((6, 3), (4, 1), sharex=ax_pos)
-  aop_unwrapped = np.unwrap(coe['aop']) * CONVERTER.DEG_PER_RAD
+  aop_unwrapped = np.unwrap(coe.aop) * CONVERTER.DEG_PER_RAD
   ax_aop.plot(time, aop_unwrapped, 'b-', linewidth=1.5)
   ax_aop.tick_params(labelbottom=False)
   ax_aop.set_ylabel('AOP\n[deg]')
@@ -351,9 +351,9 @@ def plot_time_series(
 
   # Plot ta, ea, ma vs time (row 5, column 1)
   ax_anom = plt.subplot2grid((6, 3), (5, 1), sharex=ax_pos)
-  ax_anom.plot(time, coe['ta'] * CONVERTER.DEG_PER_RAD, 'r-', label='TA', linewidth=1.5)
-  ax_anom.plot(time, coe['ea'] * CONVERTER.DEG_PER_RAD, 'g-', label='EA', linewidth=1.5)
-  ax_anom.plot(time, coe['ma'] * CONVERTER.DEG_PER_RAD, 'b-', label='MA', linewidth=1.5)
+  ax_anom.plot(time, coe.ta * CONVERTER.DEG_PER_RAD, 'r-', label='TA', linewidth=1.5)
+  ax_anom.plot(time, coe.ea * CONVERTER.DEG_PER_RAD, 'g-', label='EA', linewidth=1.5)
+  ax_anom.plot(time, coe.ma * CONVERTER.DEG_PER_RAD, 'b-', label='MA', linewidth=1.5)
   ax_anom.set_xlabel('Time\n[s]')
   ax_anom.set_ylabel('ANOMALY\n[deg]')
   ax_anom.legend(fontsize=8)
@@ -363,7 +363,7 @@ def plot_time_series(
   # RIGHT COLUMN: Modified Equinoctial Elements
   # Plot p (semi-latus rectum) vs time (row 0, column 2)
   ax_p = plt.subplot2grid((6, 3), (0, 2), sharex=ax_pos)
-  ax_p.plot(time, mee['p'], 'b-', linewidth=1.5)
+  ax_p.plot(time, mee.p, 'b-', linewidth=1.5)
   ax_p.tick_params(labelbottom=False)
   ax_p.set_ylabel('p\n[m]')
   ax_p.grid(True)
@@ -371,7 +371,7 @@ def plot_time_series(
 
   # Plot f vs time (row 1, column 2)
   ax_f = plt.subplot2grid((6, 3), (1, 2), sharex=ax_pos)
-  ax_f.plot(time, mee['f'], 'b-', linewidth=1.5)
+  ax_f.plot(time, mee.f, 'b-', linewidth=1.5)
   ax_f.tick_params(labelbottom=False)
   ax_f.set_ylabel('f\n[-]')
   ax_f.grid(True)
@@ -379,7 +379,7 @@ def plot_time_series(
 
   # Plot g vs time (row 2, column 2)
   ax_g = plt.subplot2grid((6, 3), (2, 2), sharex=ax_pos)
-  ax_g.plot(time, mee['g'], 'b-', linewidth=1.5)
+  ax_g.plot(time, mee.g, 'b-', linewidth=1.5)
   ax_g.tick_params(labelbottom=False)
   ax_g.set_ylabel('g\n[-]')
   ax_g.grid(True)
@@ -387,7 +387,7 @@ def plot_time_series(
 
   # Plot h vs time (row 3, column 2)
   ax_h = plt.subplot2grid((6, 3), (3, 2), sharex=ax_pos)
-  ax_h.plot(time, mee['h'], 'b-', linewidth=1.5)
+  ax_h.plot(time, mee.h, 'b-', linewidth=1.5)
   ax_h.tick_params(labelbottom=False)
   ax_h.set_ylabel('h\n[-]')
   ax_h.grid(True)
@@ -395,7 +395,7 @@ def plot_time_series(
 
   # Plot k vs time (row 4, column 2)
   ax_k = plt.subplot2grid((6, 3), (4, 2), sharex=ax_pos)
-  ax_k.plot(time, mee['k'], 'b-', linewidth=1.5)
+  ax_k.plot(time, mee.k, 'b-', linewidth=1.5)
   ax_k.tick_params(labelbottom=False)
   ax_k.set_ylabel('k\n[-]')
   ax_k.grid(True)
@@ -403,7 +403,7 @@ def plot_time_series(
 
   # Plot L (true longitude) vs time (row 5, column 2)
   ax_L = plt.subplot2grid((6, 3), (5, 2), sharex=ax_pos)
-  ax_L.plot(time, mee['L'] * CONVERTER.DEG_PER_RAD, 'b-', linewidth=1.5)
+  ax_L.plot(time, mee.L * CONVERTER.DEG_PER_RAD, 'b-', linewidth=1.5)
   ax_L.set_xlabel('Time\n[s]')
   ax_L.set_ylabel('L\n[deg]')
   ax_L.grid(True)
@@ -625,8 +625,8 @@ def plot_time_series_error(
   # MIDDLE COLUMN: Classical Orbital Elements Errors
   # Plot sma error vs time (row 0, column 1)
   ax_sma = plt.subplot2grid((6, 3), (0, 1), sharex=ax_pos)
-  if 'sma' in coe_ref and 'sma' in coe_comp:
-    sma_error = coe_comp['sma'] - coe_ref['sma']
+  if coe_ref.sma is not None and coe_comp.sma is not None:
+    sma_error = coe_comp.sma - coe_ref.sma
     ax_sma.plot(time, sma_error, 'b-', linewidth=1.5)
   ax_sma.tick_params(labelbottom=False)
   ax_sma.set_ylabel('SMA Error\n[m]')
@@ -635,8 +635,8 @@ def plot_time_series_error(
 
   # Plot eccentricity error vs time (row 1, column 1)
   ax_ecc = plt.subplot2grid((6, 3), (1, 1), sharex=ax_pos)
-  if 'ecc' in coe_ref and 'ecc' in coe_comp:
-    ecc_error = coe_comp['ecc'] - coe_ref['ecc']
+  if coe_ref.ecc is not None and coe_comp.ecc is not None:
+    ecc_error = coe_comp.ecc - coe_ref.ecc
     ax_ecc.plot(time, ecc_error, 'b-', linewidth=1.5)
   ax_ecc.tick_params(labelbottom=False)
   ax_ecc.set_ylabel('ECC Error\n[-]')
@@ -645,8 +645,8 @@ def plot_time_series_error(
 
   # Plot inclination error (row 2, column 1)
   ax_inc = plt.subplot2grid((6, 3), (2, 1), sharex=ax_pos)
-  if 'inc' in coe_ref and 'inc' in coe_comp:
-    inc_error = (coe_comp['inc'] - coe_ref['inc']) * CONVERTER.DEG_PER_RAD
+  if coe_ref.inc is not None and coe_comp.inc is not None:
+    inc_error = (coe_comp.inc - coe_ref.inc) * CONVERTER.DEG_PER_RAD
     ax_inc.plot(time, inc_error, 'b-', linewidth=1.5)
   ax_inc.tick_params(labelbottom=False)
   ax_inc.set_ylabel('INC Error\n[deg]')
@@ -655,10 +655,10 @@ def plot_time_series_error(
 
   # Plot RAAN error vs time (row 3, column 1)
   ax_raan = plt.subplot2grid((6, 3), (3, 1), sharex=ax_pos)
-  if 'raan' in coe_ref and 'raan' in coe_comp:
+  if coe_ref.raan is not None and coe_comp.raan is not None:
     # Handle angle wrapping for RAAN
-    raan_error_rad = np.arctan2(np.sin(coe_comp['raan'] - coe_ref['raan']), 
-                   np.cos(coe_comp['raan'] - coe_ref['raan']))
+    raan_error_rad = np.arctan2(np.sin(coe_comp.raan - coe_ref.raan), 
+                   np.cos(coe_comp.raan - coe_ref.raan))
     raan_error = raan_error_rad * CONVERTER.DEG_PER_RAD
     ax_raan.plot(time, raan_error, 'b-', linewidth=1.5)
   ax_raan.tick_params(labelbottom=False)
@@ -668,10 +668,10 @@ def plot_time_series_error(
 
   # Plot argument of periapsis error (row 4, column 1)
   ax_aop = plt.subplot2grid((6, 3), (4, 1), sharex=ax_pos)
-  if 'aop' in coe_ref and 'aop' in coe_comp:
+  if coe_ref.aop is not None and coe_comp.aop is not None:
     # Handle angle wrapping for AOP
-    aop_error_rad = np.arctan2(np.sin(coe_comp['aop'] - coe_ref['aop']), 
-                   np.cos(coe_comp['aop'] - coe_ref['aop']))
+    aop_error_rad = np.arctan2(np.sin(coe_comp.aop - coe_ref.aop), 
+                   np.cos(coe_comp.aop - coe_ref.aop))
     aop_error = aop_error_rad * CONVERTER.DEG_PER_RAD
     ax_aop.plot(time, aop_error, 'b-', linewidth=1.5)
   ax_aop.tick_params(labelbottom=False)
@@ -681,10 +681,10 @@ def plot_time_series_error(
 
   # Plot true anomaly error vs time (row 5, column 1)
   ax_ta = plt.subplot2grid((6, 3), (5, 1), sharex=ax_pos)
-  if 'ta' in coe_ref and 'ta' in coe_comp:
+  if coe_ref.ta is not None and coe_comp.ta is not None:
     # Handle angle wrapping for TA
-    ta_error_rad = np.arctan2(np.sin(coe_comp['ta'] - coe_ref['ta']), 
-                   np.cos(coe_comp['ta'] - coe_ref['ta']))
+    ta_error_rad = np.arctan2(np.sin(coe_comp.ta - coe_ref.ta), 
+                   np.cos(coe_comp.ta - coe_ref.ta))
     ta_error = ta_error_rad * CONVERTER.DEG_PER_RAD
     ax_ta.plot(time, ta_error, 'b-', linewidth=1.5)
   ax_ta.set_xlabel('Time\n[s]')
@@ -695,8 +695,8 @@ def plot_time_series_error(
   # RIGHT COLUMN: Modified Equinoctial Elements Errors
   # Plot p error vs time (row 0, column 2)
   ax_p = plt.subplot2grid((6, 3), (0, 2), sharex=ax_pos)
-  if mee_ref is not None and mee_comp is not None and 'p' in mee_ref and 'p' in mee_comp:
-    p_error = mee_comp['p'] - mee_ref['p']
+  if mee_ref is not None and mee_comp is not None and mee_ref.p is not None and mee_comp.p is not None:
+    p_error = mee_comp.p - mee_ref.p
     ax_p.plot(time, p_error, 'b-', linewidth=1.5)
   ax_p.tick_params(labelbottom=False)
   ax_p.set_ylabel('p Error\n[m]')
@@ -705,8 +705,8 @@ def plot_time_series_error(
 
   # Plot f error vs time (row 1, column 2)
   ax_f = plt.subplot2grid((6, 3), (1, 2), sharex=ax_pos)
-  if mee_ref is not None and mee_comp is not None and 'f' in mee_ref and 'f' in mee_comp:
-    f_error = mee_comp['f'] - mee_ref['f']
+  if mee_ref is not None and mee_comp is not None and mee_ref.f is not None and mee_comp.f is not None:
+    f_error = mee_comp.f - mee_ref.f
     ax_f.plot(time, f_error, 'b-', linewidth=1.5)
   ax_f.tick_params(labelbottom=False)
   ax_f.set_ylabel('f Error\n[-]')
@@ -715,8 +715,8 @@ def plot_time_series_error(
 
   # Plot g error vs time (row 2, column 2)
   ax_g = plt.subplot2grid((6, 3), (2, 2), sharex=ax_pos)
-  if mee_ref is not None and mee_comp is not None and 'g' in mee_ref and 'g' in mee_comp:
-    g_error = mee_comp['g'] - mee_ref['g']
+  if mee_ref is not None and mee_comp is not None and mee_ref.g is not None and mee_comp.g is not None:
+    g_error = mee_comp.g - mee_ref.g
     ax_g.plot(time, g_error, 'b-', linewidth=1.5)
   ax_g.tick_params(labelbottom=False)
   ax_g.set_ylabel('g Error\n[-]')
@@ -725,8 +725,8 @@ def plot_time_series_error(
 
   # Plot h error vs time (row 3, column 2)
   ax_h = plt.subplot2grid((6, 3), (3, 2), sharex=ax_pos)
-  if mee_ref is not None and mee_comp is not None and 'h' in mee_ref and 'h' in mee_comp:
-    h_error = mee_comp['h'] - mee_ref['h']
+  if mee_ref is not None and mee_comp is not None and mee_ref.h is not None and mee_comp.h is not None:
+    h_error = mee_comp.h - mee_ref.h
     ax_h.plot(time, h_error, 'b-', linewidth=1.5)
   ax_h.tick_params(labelbottom=False)
   ax_h.set_ylabel('h Error\n[-]')
@@ -735,8 +735,8 @@ def plot_time_series_error(
 
   # Plot k error vs time (row 4, column 2)
   ax_k = plt.subplot2grid((6, 3), (4, 2), sharex=ax_pos)
-  if mee_ref is not None and mee_comp is not None and 'k' in mee_ref and 'k' in mee_comp:
-    k_error = mee_comp['k'] - mee_ref['k']
+  if mee_ref is not None and mee_comp is not None and mee_ref.k is not None and mee_comp.k is not None:
+    k_error = mee_comp.k - mee_ref.k
     ax_k.plot(time, k_error, 'b-', linewidth=1.5)
   ax_k.tick_params(labelbottom=False)
   ax_k.set_ylabel('k Error\n[-]')
@@ -745,10 +745,690 @@ def plot_time_series_error(
 
   # Plot L error vs time (row 5, column 2)
   ax_L = plt.subplot2grid((6, 3), (5, 2), sharex=ax_pos)
-  if mee_ref is not None and mee_comp is not None and 'L' in mee_ref and 'L' in mee_comp:
+  if mee_ref is not None and mee_comp is not None and mee_ref.L is not None and mee_comp.L is not None:
     # Handle angle wrapping for L (true longitude)
-    L_error_rad = np.arctan2(np.sin(mee_comp['L'] - mee_ref['L']), 
-                   np.cos(mee_comp['L'] - mee_ref['L']))
+    L_error_rad = np.arctan2(np.sin(mee_comp.L - mee_ref.L), 
+                   np.cos(mee_comp.L - mee_ref.L))
+    L_error = L_error_rad * CONVERTER.DEG_PER_RAD
+    ax_L.plot(time, L_error, 'b-', linewidth=1.5)
+  ax_L.set_xlabel('Time\n[s]')
+  ax_L.set_ylabel('L Error\n[deg]')
+  ax_L.grid(True)
+  ax_L.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Add UTC time axis if epoch is not None:
+  if epoch is not None:
+    # Only add UTC time to top row axes
+    top_row_axes = [ax_pos, ax_sma, ax_p]
+    max_time = time[-1]
+    
+    for ax in top_row_axes:
+      add_utc_time_axis(ax, epoch, max_time)
+
+  # Align y-axis labels
+  fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_aop, ax_ta])
+  fig.align_ylabels([ax_p, ax_f, ax_g, ax_h, ax_k, ax_L])
+  fig.align_ylabels([ax_pos, ax_vel])
+  
+  fig.suptitle(title, fontsize=16)
+  plt.subplots_adjust(hspace=0.17, wspace=0.2)
+  return fig
+
+
+def plot_3d_trajectories_body_fixed(
+  result       : dict,
+  epoch_dt_utc : Optional[datetime.datetime] = None,
+) -> Figure:
+  """
+  Plot 3D position and velocity trajectories in body-fixed (IAU_EARTH) frame.
+  
+  Input:
+  ------
+    result : dict
+      Propagation result dictionary containing 'state' (6xN array) and 'plot_time_s'.
+    epoch_dt_utc : datetime, optional
+      Reference epoch (start time) for time conversion to ET.
+      
+  Output:
+  -------
+    fig : matplotlib.figure.Figure
+      Figure object containing the 3D plots.
+  """
+  fig = plt.figure(figsize=(18, 10))
+  
+  # Extract J2000 state vectors
+  j2000_state   = result['state']
+  j2000_pos_vec = j2000_state[0:3, :]
+  j2000_vel_vec = j2000_state[3:6, :]
+  time_s        = result['plot_time_s']
+  n_points      = j2000_state.shape[1]
+  
+  # Convert epoch to ET
+  if epoch_dt_utc is not None:
+    epoch_et = utc_to_et(epoch_dt_utc)
+  else:
+    epoch_et = 0.0
+  
+  # Transform each position and velocity to body-fixed frame
+  iau_earth_pos_vec = np.zeros((3, n_points))
+  iau_earth_vel_vec = np.zeros((3, n_points))
+  for i in range(n_points):
+    epoch_et_i = epoch_et + time_s[i]
+    rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(epoch_et_i)
+    iau_earth_pos_vec[:, i] = rot_mat_j2000_to_iau_earth @ j2000_pos_vec[:, i]
+    iau_earth_vel_vec[:, i] = rot_mat_j2000_to_iau_earth @ j2000_vel_vec[:, i]
+  
+  pos_x, pos_y, pos_z = iau_earth_pos_vec[0, :], iau_earth_pos_vec[1, :], iau_earth_pos_vec[2, :]
+  vel_x, vel_y, vel_z = iau_earth_vel_vec[0, :], iau_earth_vel_vec[1, :], iau_earth_vel_vec[2, :]
+  
+  # Build info string
+  info_text = "Frame: IAU_EARTH (Body-Fixed)"
+  if epoch_dt_utc is not None:
+    start_time_iso_utc = epoch_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
+    end_time_dt_utc    = epoch_dt_utc + timedelta(seconds=time_s[-1])
+    end_time_iso_utc   = end_time_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
+    info_text += f"  |  Initial: {start_time_iso_utc}  |  Final: {end_time_iso_utc}"
+  
+  # Plot 3D position trajectory
+  ax1 = fig.add_subplot(121, projection='3d')
+  
+  # Add Earth wireframe ellipsoid
+  u       = np.linspace(0, 2 * np.pi, 24)
+  v       = np.linspace(0, np.pi, 12)
+  r_eq    = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
+  r_pol   = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.POLAR
+  x_earth = r_eq * np.outer(np.cos(u), np.sin(v))
+  y_earth = r_eq * np.outer(np.sin(u), np.sin(v))
+  z_earth = r_pol * np.outer(np.ones(np.size(u)), np.cos(v))
+  ax1.plot_wireframe(x_earth, y_earth, z_earth, color='black', linewidth=0.5, alpha=1.0)  # type: ignore
+  
+  ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=2.0)
+  ax1.scatter([pos_x[ 0]], [pos_y[ 0]], [pos_z[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
+  ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
+  ax1.set_xlabel('Pos-X [m]')
+  ax1.set_ylabel('Pos-Y [m]')
+  ax1.set_zlabel('Pos-Z [m]') # type: ignore
+  ax1.grid(True)
+  ax1.set_box_aspect([1,1,1]) # type: ignore
+
+  # Set pane colors to white
+  ax1.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+  ax1.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+  ax1.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+
+  min_limit, max_limit = get_equal_limits(ax1, buffer_fraction=0.45)
+  
+  ax1.set_xlim((min_limit, max_limit))
+  ax1.set_ylim((min_limit, max_limit))
+  ax1.set_zlim((min_limit, max_limit))  # type: ignore
+
+  # Add position trajectory shadows
+  shadow_color = 'gray'
+  shadow_alpha = 0.75
+  shadow_lw    = 0.5
+  ax1.plot(pos_x, pos_y, np.full_like(pos_z, min_limit), color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  ax1.plot(pos_x, np.full_like(pos_y, max_limit), pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  ax1.plot(np.full_like(pos_x, min_limit), pos_y, pos_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+
+  # Add Earth projection shadows (filled circles on planes)
+  r_disk = np.linspace(0, r_eq, 2)
+  t_disk = np.linspace(0, 2*np.pi, 60)
+  R_disk, T_disk = np.meshgrid(r_disk, t_disk)
+  U_disk = R_disk * np.cos(T_disk)
+  V_disk = R_disk * np.sin(T_disk)
+  earth_shadow_alpha = 0.1
+
+  ax1.plot_surface(U_disk, V_disk, np.full_like(U_disk, min_limit), color='black', alpha=earth_shadow_alpha, shade=False)  # type: ignore
+  ax1.plot_surface(U_disk, np.full_like(U_disk, max_limit), V_disk, color='black', alpha=earth_shadow_alpha, shade=False)  # type: ignore
+  ax1.plot_surface(np.full_like(U_disk, min_limit), U_disk, V_disk, color='black', alpha=earth_shadow_alpha, shade=False)  # type: ignore
+
+  # Plot 3D velocity trajectory
+  ax2 = fig.add_subplot(122, projection='3d')
+  ax2.plot(vel_x, vel_y, vel_z, 'b-', linewidth=2.0)
+  ax2.scatter([vel_x[ 0]], [vel_y[ 0]], [vel_z[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
+  ax2.scatter([vel_x[-1]], [vel_y[-1]], [vel_z[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
+  ax2.set_xlabel('Vel-X [m/s]')
+  ax2.set_ylabel('Vel-Y [m/s]')
+  ax2.set_zlabel('Vel-Z [m/s]') # type: ignore
+  ax2.grid(True)
+  ax2.set_box_aspect([1,1,1]) # type: ignore
+
+  # Set pane colors to white
+  ax2.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+  ax2.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+  ax2.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+
+  min_limit_vel, max_limit_vel = get_equal_limits(ax2, buffer_fraction=0.45)
+  
+  ax2.set_xlim((min_limit_vel, max_limit_vel))
+  ax2.set_ylim((min_limit_vel, max_limit_vel))
+  ax2.set_zlim((min_limit_vel, max_limit_vel)) # type: ignore
+
+  # Add velocity trajectory shadows
+  ax2.plot(vel_x, vel_y, np.full_like(vel_z, min_limit_vel), color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  ax2.plot(vel_x, np.full_like(vel_y, max_limit_vel), vel_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  ax2.plot(np.full_like(vel_x, min_limit_vel), vel_y, vel_z, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+
+  # Create custom legend handles (lines only, no markers)
+  legend_handles = [
+    Line2D([0], [0], color='black', linewidth=1.5, label='Earth'),
+    Line2D([0], [0], color='b', linewidth=2.0, label='Spacecraft'),
+    Line2D([0], [0], color='gold', linewidth=1.5, label='Sun'),
+    Line2D([0], [0], color='gray', linewidth=1.5, label='Moon'),
+  ]
+  leg = fig.legend(handles=legend_handles, loc='upper right', fontsize=11, framealpha=0.9)
+  leg.get_frame().set_edgecolor('black')
+
+  # Add info text as figure text
+  fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=11, color='black',
+           bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', alpha=0.9))
+
+  plt.tight_layout(rect=(0.0, 0.06, 1.0, 0.95))  # Leave space at bottom for info text and top for legend
+  return fig
+
+
+def plot_time_series(
+  result : dict,
+  epoch  : Optional[datetime.datetime] = None,
+) -> Figure:
+  """
+  Plot position and velocity components vs time in a 3-column grid.
+  
+  Input:
+  ------
+    result : dict
+      Propagation result dictionary containing 'plot_time_s', 'state', 'coe', and 'mee'.
+    epoch : datetime, optional
+      Reference epoch for UTC time axis.
+      
+  Output:
+  -------
+    fig : matplotlib.figure.Figure
+      Figure object containing the time series plots.
+  """
+  
+  # Create figure (wider to accommodate 3 columns)
+  fig = plt.figure(figsize=(24, 10))
+  
+  # Extract data
+  time   = result['plot_time_s']
+  states = result['state']
+  pos_x, pos_y, pos_z = states[0, :], states[1, :], states[2, :]
+  vel_x, vel_y, vel_z = states[3, :], states[4, :], states[5, :]
+  coe = result['coe']
+  mee = result['mee']
+  
+  # Calculate magnitudes
+  pos_mag = np.sqrt(pos_x**2 + pos_y**2 + pos_z**2)
+  vel_mag = np.sqrt(vel_x**2 + vel_y**2 + vel_z**2)
+  
+  # LEFT COLUMN: Position and Velocity
+  # Plot position vs time (spans rows 0-2, column 0)
+  ax_pos = plt.subplot2grid((6, 3), (0, 0), rowspan=3)
+  ax_pos.plot(time, pos_x, 'r-', label='X', linewidth=1.5)
+  ax_pos.plot(time, pos_y, 'g-', label='Y', linewidth=1.5)
+  ax_pos.plot(time, pos_z, 'b-', label='Z', linewidth=1.5)
+  ax_pos.plot(time, pos_mag, 'k-', label='Magnitude', linewidth=2)
+  ax_pos.tick_params(labelbottom=False)
+  ax_pos.set_ylabel('Position\n[m]')
+  ax_pos.legend()
+  ax_pos.grid(True)
+  ax_pos.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot velocity vs time (spans rows 3-5, column 0)
+  ax_vel = plt.subplot2grid((6, 3), (3, 0), rowspan=3, sharex=ax_pos)
+  ax_vel.plot(time, vel_x, 'r-', label='X', linewidth=1.5)
+  ax_vel.plot(time, vel_y, 'g-', label='Y', linewidth=1.5)
+  ax_vel.plot(time, vel_z, 'b-', label='Z', linewidth=1.5)
+  ax_vel.plot(time, vel_mag, 'k-', label='Magnitude', linewidth=2)
+  ax_vel.set_xlabel('Time\n[s]')
+  ax_vel.set_ylabel('Velocity\n[m/s]')
+  ax_vel.legend()
+  ax_vel.grid(True)
+  ax_vel.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # MIDDLE COLUMN: Classical Orbital Elements
+  # Plot sma vs time (row 0, column 1)
+  ax_sma = plt.subplot2grid((6, 3), (0, 1), sharex=ax_pos)
+  ax_sma.plot(time, coe.sma, 'b-', linewidth=1.5)
+  ax_sma.tick_params(labelbottom=False)
+  ax_sma.set_ylabel('SMA\n[m]')
+  ax_sma.grid(True)
+  ax_sma.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot ecc vs time (row 1, column 1)
+  ax_ecc = plt.subplot2grid((6, 3), (1, 1), sharex=ax_pos)
+  ax_ecc.plot(time, coe.ecc, 'b-', linewidth=1.5)
+  ax_ecc.tick_params(labelbottom=False)
+  ax_ecc.set_ylabel('ECC\n[-]')
+  ax_ecc.grid(True)
+  ax_ecc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot inc vs time (row 2, column 1)
+  ax_inc = plt.subplot2grid((6, 3), (2, 1), sharex=ax_pos)
+  ax_inc.plot(time, coe.inc * CONVERTER.DEG_PER_RAD, 'b-', linewidth=1.5)
+  ax_inc.tick_params(labelbottom=False)
+  ax_inc.set_ylabel('INC\n[deg]')
+  ax_inc.grid(True)
+  ax_inc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot raan vs time (row 3, column 1)
+  ax_raan = plt.subplot2grid((6, 3), (3, 1), sharex=ax_pos)
+  ax_raan.plot(time, coe.raan * CONVERTER.DEG_PER_RAD, 'b-', linewidth=1.5)
+  ax_raan.tick_params(labelbottom=False)
+  ax_raan.set_ylabel('RAAN\n[deg]')
+  ax_raan.grid(True)
+  ax_raan.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot aop vs time (row 4, column 1)
+  ax_aop = plt.subplot2grid((6, 3), (4, 1), sharex=ax_pos)
+  aop_unwrapped = np.unwrap(coe.aop) * CONVERTER.DEG_PER_RAD
+  ax_aop.plot(time, aop_unwrapped, 'b-', linewidth=1.5)
+  ax_aop.tick_params(labelbottom=False)
+  ax_aop.set_ylabel('AOP\n[deg]')
+  ax_aop.grid(True)
+  ax_aop.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot ta, ea, ma vs time (row 5, column 1)
+  ax_anom = plt.subplot2grid((6, 3), (5, 1), sharex=ax_pos)
+  ax_anom.plot(time, coe.ta * CONVERTER.DEG_PER_RAD, 'r-', label='TA', linewidth=1.5)
+  ax_anom.plot(time, coe.ea * CONVERTER.DEG_PER_RAD, 'g-', label='EA', linewidth=1.5)
+  ax_anom.plot(time, coe.ma * CONVERTER.DEG_PER_RAD, 'b-', label='MA', linewidth=1.5)
+  ax_anom.set_xlabel('Time\n[s]')
+  ax_anom.set_ylabel('ANOMALY\n[deg]')
+  ax_anom.legend(fontsize=8)
+  ax_anom.grid(True)
+  ax_anom.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # RIGHT COLUMN: Modified Equinoctial Elements
+  # Plot p (semi-latus rectum) vs time (row 0, column 2)
+  ax_p = plt.subplot2grid((6, 3), (0, 2), sharex=ax_pos)
+  ax_p.plot(time, mee.p, 'b-', linewidth=1.5)
+  ax_p.tick_params(labelbottom=False)
+  ax_p.set_ylabel('p\n[m]')
+  ax_p.grid(True)
+  ax_p.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot f vs time (row 1, column 2)
+  ax_f = plt.subplot2grid((6, 3), (1, 2), sharex=ax_pos)
+  ax_f.plot(time, mee.f, 'b-', linewidth=1.5)
+  ax_f.tick_params(labelbottom=False)
+  ax_f.set_ylabel('f\n[-]')
+  ax_f.grid(True)
+  ax_f.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot g vs time (row 2, column 2)
+  ax_g = plt.subplot2grid((6, 3), (2, 2), sharex=ax_pos)
+  ax_g.plot(time, mee.g, 'b-', linewidth=1.5)
+  ax_g.tick_params(labelbottom=False)
+  ax_g.set_ylabel('g\n[-]')
+  ax_g.grid(True)
+  ax_g.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot h vs time (row 3, column 2)
+  ax_h = plt.subplot2grid((6, 3), (3, 2), sharex=ax_pos)
+  ax_h.plot(time, mee.h, 'b-', linewidth=1.5)
+  ax_h.tick_params(labelbottom=False)
+  ax_h.set_ylabel('h\n[-]')
+  ax_h.grid(True)
+  ax_h.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot k vs time (row 4, column 2)
+  ax_k = plt.subplot2grid((6, 3), (4, 2), sharex=ax_pos)
+  ax_k.plot(time, mee.k, 'b-', linewidth=1.5)
+  ax_k.tick_params(labelbottom=False)
+  ax_k.set_ylabel('k\n[-]')
+  ax_k.grid(True)
+  ax_k.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot L (true longitude) vs time (row 5, column 2)
+  ax_L = plt.subplot2grid((6, 3), (5, 2), sharex=ax_pos)
+  ax_L.plot(time, mee.L * CONVERTER.DEG_PER_RAD, 'b-', linewidth=1.5)
+  ax_L.set_xlabel('Time\n[s]')
+  ax_L.set_ylabel('L\n[deg]')
+  ax_L.grid(True)
+  ax_L.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Add UTC time axis if epoch is provided
+  if epoch is not None:
+    # Only add UTC time to top row axes
+    top_row_axes = [ax_pos, ax_sma, ax_p]
+    max_time = time[-1]
+    
+    for ax in top_row_axes:
+      add_utc_time_axis(ax, epoch, max_time)
+
+  # Align y-axis labels for middle column (COE)
+  fig.align_ylabels([ax_sma, ax_ecc, ax_inc, ax_raan, ax_aop, ax_anom])
+  
+  # Align y-axis labels for right column (MEE)
+  fig.align_ylabels([ax_p, ax_f, ax_g, ax_h, ax_k, ax_L])
+  
+  # Align y-axis labels for left column
+  fig.align_ylabels([ax_pos, ax_vel])
+
+  plt.subplots_adjust(hspace=0.17, wspace=0.25)
+  return fig
+
+
+def plot_3d_error(
+  result_ref : dict,
+  result_comp : dict,
+  title      : str = "Position and Velocity Error",
+) -> Figure:
+  """
+  Plot 3D position and velocity error trajectories in a 1x2 grid.
+  
+  Input:
+  ------
+    result_ref : dict
+      Reference result dictionary (e.g., SGP4).
+    result_comp : dict
+      Comparison result dictionary (e.g., high-fidelity).
+    title : str
+      Plot title.
+      
+  Output:
+  -------
+    fig : matplotlib.figure.Figure
+      Figure object containing the 3D error plots.
+  """
+  fig = plt.figure(figsize=(18,10))
+  
+  # Interpolate comparison result to reference time points
+  from scipy.interpolate import interp1d
+  
+  time_ref   = result_ref['delta_time']
+  time_comp  = result_comp['time']
+  state_comp = result_comp['state']
+  
+  # Interpolate each state component
+  state_comp_interp = np.zeros((6, len(time_ref)))
+  for i in range(6):
+    interpolator = interp1d(time_comp, state_comp[i, :], kind='cubic', fill_value='extrapolate') # type: ignore
+    state_comp_interp[i, :] = interpolator(time_ref)
+  
+  # Calculate errors (comparison - reference)
+  state_ref = result_ref['state']
+  pos_error = state_comp_interp[0:3, :] - state_ref[0:3, :]
+  vel_error = state_comp_interp[3:6, :] - state_ref[3:6, :]
+  
+  # Plot 3D position error
+  ax1 = fig.add_subplot(121, projection='3d')
+  ax1.plot(pos_error[0, :], pos_error[1, :], pos_error[2, :], 'b-', linewidth=1)
+  ax1.scatter([pos_error[0,  0]], [pos_error[1,  0]], [pos_error[2,  0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, label='Initial') # type: ignore
+  ax1.scatter([pos_error[0, -1]], [pos_error[1, -1]], [pos_error[2, -1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, label='Final'  ) # type: ignore
+  ax1.set_xlabel('Error X [m]')
+  ax1.set_ylabel('Error Y [m]')
+  ax1.set_zlabel('Error Z [m]') # type: ignore
+  ax1.set_title('Position Error')
+  ax1.grid(True)
+  leg1 = ax1.legend()
+  leg1.get_frame().set_edgecolor('black')
+  
+  # Plot 3D velocity error
+  ax2 = fig.add_subplot(122, projection='3d')
+  ax2.plot(vel_error[0, :], vel_error[1, :], vel_error[2, :], 'b-', linewidth=1)
+  ax2.scatter([vel_error[0,  0]], [vel_error[1,  0]], [vel_error[2,  0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, label='Initial') # type: ignore
+  ax2.scatter([vel_error[0, -1]], [vel_error[1, -1]], [vel_error[2, -1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, label='Final') # type: ignore
+  ax2.set_xlabel('Error Vx [m/s]')
+  ax2.set_ylabel('Error Vy [m/s]')
+  ax2.set_zlabel('Error Vz [m/s]') # type: ignore
+  ax2.set_title('Velocity Error')
+  ax2.grid(True)
+  leg2 = ax2.legend()
+  leg2.get_frame().set_edgecolor('black')
+  
+  fig.suptitle(title, fontsize=16)
+  plt.tight_layout()
+  return fig
+
+
+def plot_time_series_error(
+  result_ref  : dict, 
+  result_comp : dict, 
+  epoch       : Optional[datetime.datetime] = None, 
+  title       : str                         = "Time Series Error", 
+  use_ric     : bool                        = True,
+) -> Figure:
+  """
+  Create time series error plots between reference and comparison trajectories.
+  
+  Input:
+  ------
+    result_ref : dict
+      Reference result dictionary with 'plot_time_s' and 'state'/'coe'/'mee'.
+    result_comp : dict
+      Comparison result dictionary with 'plot_time_s' and 'state'/'coe'/'mee'.
+    epoch : datetime, optional
+      Reference epoch for time axis.
+    title : str
+      Title for the figure.
+    use_ric : bool
+      If True, transform to RIC frame. If False, use XYZ inertial frame.
+      
+  Output:
+  -------
+    fig : matplotlib.figure.Figure
+      Figure object containing the time series error plots.
+  """
+  # Use plot_time_s for both datasets
+  time_ref  = result_ref['plot_time_s']
+  time_comp = result_comp['plot_time_s']
+  
+  state_ref  = result_ref['state']
+  state_comp = result_comp['state']
+  coe_ref    = result_ref['coe']
+  coe_comp   = result_comp['coe']
+  mee_ref    = result_ref['mee']
+  mee_comp   = result_comp['mee']
+  
+  # Verify time grids match (use allclose for floating-point comparison)
+  if len(time_ref) != len(time_comp) or not np.allclose(time_ref, time_comp, rtol=1e-9, atol=1e-9):
+    raise ValueError(
+      f"Time grids don't match! "
+      f"Reference has {len(time_ref)} points from {time_ref[0]:.1f} to {time_ref[-1]:.1f} s, "
+      f"Comparison has {len(time_comp)} points from {time_comp[0]:.1f} to {time_comp[-1]:.1f} s. "
+      f"Both datasets must use the same time grid for error comparison."
+    )
+  
+  # Create figure with subplots matching the grid structure
+  fig = plt.figure(figsize=(24, 10))
+  
+  time = time_ref
+  
+  if use_ric:
+    # Compute RIC frame errors
+    pos_error_ric = np.zeros((3, len(time_ref)))
+    vel_error_ric = np.zeros((3, len(time_ref)))
+    
+    for i in range(len(time_ref)):
+      # Reference position and velocity
+      ref_pos = state_ref[0:3, i]
+      ref_vel = state_ref[3:6, i]
+      
+      # Rotation matrix from inertial to RIC
+      R_inertial_to_ric = FrameConverter.xyz_to_ric(ref_pos, ref_vel)
+      
+      # Compute errors in inertial frame
+      pos_error_inertial = state_comp[0:3, i] - state_ref[0:3, i]
+      vel_error_inertial = state_comp[3:6, i] - state_ref[3:6, i]
+      
+      # Transform errors to RIC frame
+      pos_error_ric[:, i] = R_inertial_to_ric @ pos_error_inertial
+      vel_error_ric[:, i] = R_inertial_to_ric @ vel_error_inertial
+    
+    pos_error = pos_error_ric
+    vel_error = vel_error_ric
+    pos_labels = ['Radial', 'In-track', 'Cross-track']
+    vel_labels = ['Radial', 'In-track', 'Cross-track']
+    pos_ylabel = 'Position Error (RIC)\n[m]'
+    vel_ylabel = 'Velocity Error (RIC)\n[m/s]'
+  else:
+    # Use XYZ inertial frame errors
+    pos_error = state_comp[0:3, :] - state_ref[0:3, :]
+    vel_error = state_comp[3:6, :] - state_ref[3:6, :]
+    pos_labels = ['X', 'Y', 'Z']
+    vel_labels = ['X', 'Y', 'Z']
+    pos_ylabel = 'Position Error (XYZ)\n[m]'
+    vel_ylabel = 'Velocity Error (XYZ)\n[m/s]'
+  
+  # Calculate error magnitudes
+  pos_error_mag = np.linalg.norm(pos_error, axis=0)
+  vel_error_mag = np.linalg.norm(vel_error, axis=0)
+  
+  # LEFT COLUMN: Position and Velocity Errors
+  # Plot position error vs time (spans rows 0-2, column 0)
+  ax_pos = plt.subplot2grid((6, 3), (0, 0), rowspan=3)
+  ax_pos.plot(time, pos_error[0, :], 'r-', label=pos_labels[0], linewidth=1.5)
+  ax_pos.plot(time, pos_error[1, :], 'g-', label=pos_labels[1], linewidth=1.5)
+  ax_pos.plot(time, pos_error[2, :], 'b-', label=pos_labels[2], linewidth=1.5)
+  ax_pos.plot(time, pos_error_mag, 'k-', label='Magnitude', linewidth=2)
+  ax_pos.tick_params(labelbottom=False)
+  ax_pos.set_ylabel(pos_ylabel)
+  ax_pos.legend()
+  ax_pos.grid(True)
+  ax_pos.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot velocity error vs time (spans rows 3-5, column 0)
+  ax_vel = plt.subplot2grid((6, 3), (3, 0), rowspan=3, sharex=ax_pos)
+  ax_vel.plot(time, vel_error[0, :], 'r-', label=vel_labels[0], linewidth=1.5)
+  ax_vel.plot(time, vel_error[1, :], 'g-', label=vel_labels[1], linewidth=1.5)
+  ax_vel.plot(time, vel_error[2, :], 'b-', label=vel_labels[2], linewidth=1.5)
+  ax_vel.plot(time, vel_error_mag, 'k-', label='Magnitude', linewidth=2)
+  ax_vel.set_xlabel('Time\n[s]')
+  ax_vel.set_ylabel(vel_ylabel)
+  ax_vel.legend()
+  ax_vel.grid(True)
+  ax_vel.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # MIDDLE COLUMN: Classical Orbital Elements Errors
+  # Plot sma error vs time (row 0, column 1)
+  ax_sma = plt.subplot2grid((6, 3), (0, 1), sharex=ax_pos)
+  if coe_ref.sma is not None and coe_comp.sma is not None:
+    sma_error = coe_comp.sma - coe_ref.sma
+    ax_sma.plot(time, sma_error, 'b-', linewidth=1.5)
+  ax_sma.tick_params(labelbottom=False)
+  ax_sma.set_ylabel('SMA Error\n[m]')
+  ax_sma.grid(True)
+  ax_sma.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot eccentricity error vs time (row 1, column 1)
+  ax_ecc = plt.subplot2grid((6, 3), (1, 1), sharex=ax_pos)
+  if coe_ref.ecc is not None and coe_comp.ecc is not None:
+    ecc_error = coe_comp.ecc - coe_ref.ecc
+    ax_ecc.plot(time, ecc_error, 'b-', linewidth=1.5)
+  ax_ecc.tick_params(labelbottom=False)
+  ax_ecc.set_ylabel('ECC Error\n[-]')
+  ax_ecc.grid(True)
+  ax_ecc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot inclination error (row 2, column 1)
+  ax_inc = plt.subplot2grid((6, 3), (2, 1), sharex=ax_pos)
+  if coe_ref.inc is not None and coe_comp.inc is not None:
+    inc_error = (coe_comp.inc - coe_ref.inc) * CONVERTER.DEG_PER_RAD
+    ax_inc.plot(time, inc_error, 'b-', linewidth=1.5)
+  ax_inc.tick_params(labelbottom=False)
+  ax_inc.set_ylabel('INC Error\n[deg]')
+  ax_inc.grid(True)
+  ax_inc.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot RAAN error vs time (row 3, column 1)
+  ax_raan = plt.subplot2grid((6, 3), (3, 1), sharex=ax_pos)
+  if coe_ref.raan is not None and coe_comp.raan is not None:
+    # Handle angle wrapping for RAAN
+    raan_error_rad = np.arctan2(np.sin(coe_comp.raan - coe_ref.raan), 
+                   np.cos(coe_comp.raan - coe_ref.raan))
+    raan_error = raan_error_rad * CONVERTER.DEG_PER_RAD
+    ax_raan.plot(time, raan_error, 'b-', linewidth=1.5)
+  ax_raan.tick_params(labelbottom=False)
+  ax_raan.set_ylabel('RAAN Error\n[deg]')
+  ax_raan.grid(True)
+  ax_raan.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot argument of periapsis error (row 4, column 1)
+  ax_aop = plt.subplot2grid((6, 3), (4, 1), sharex=ax_pos)
+  if coe_ref.aop is not None and coe_comp.aop is not None:
+    # Handle angle wrapping for AOP
+    aop_error_rad = np.arctan2(np.sin(coe_comp.aop - coe_ref.aop), 
+                   np.cos(coe_comp.aop - coe_ref.aop))
+    aop_error = aop_error_rad * CONVERTER.DEG_PER_RAD
+    ax_aop.plot(time, aop_error, 'b-', linewidth=1.5)
+  ax_aop.tick_params(labelbottom=False)
+  ax_aop.set_ylabel('AOP Error\n[deg]')
+  ax_aop.grid(True)
+  ax_aop.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot true anomaly error vs time (row 5, column 1)
+  ax_ta = plt.subplot2grid((6, 3), (5, 1), sharex=ax_pos)
+  if coe_ref.ta is not None and coe_comp.ta is not None:
+    # Handle angle wrapping for TA
+    ta_error_rad = np.arctan2(np.sin(coe_comp.ta - coe_ref.ta), 
+                   np.cos(coe_comp.ta - coe_ref.ta))
+    ta_error = ta_error_rad * CONVERTER.DEG_PER_RAD
+    ax_ta.plot(time, ta_error, 'b-', linewidth=1.5)
+  ax_ta.set_xlabel('Time\n[s]')
+  ax_ta.set_ylabel('TA Error\n[deg]')
+  ax_ta.grid(True)
+  ax_ta.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # RIGHT COLUMN: Modified Equinoctial Elements Errors
+  # Plot p error vs time (row 0, column 2)
+  ax_p = plt.subplot2grid((6, 3), (0, 2), sharex=ax_pos)
+  if mee_ref is not None and mee_comp is not None and mee_ref.p is not None and mee_comp.p is not None:
+    p_error = mee_comp.p - mee_ref.p
+    ax_p.plot(time, p_error, 'b-', linewidth=1.5)
+  ax_p.tick_params(labelbottom=False)
+  ax_p.set_ylabel('p Error\n[m]')
+  ax_p.grid(True)
+  ax_p.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot f error vs time (row 1, column 2)
+  ax_f = plt.subplot2grid((6, 3), (1, 2), sharex=ax_pos)
+  if mee_ref is not None and mee_comp is not None and mee_ref.f is not None and mee_comp.f is not None:
+    f_error = mee_comp.f - mee_ref.f
+    ax_f.plot(time, f_error, 'b-', linewidth=1.5)
+  ax_f.tick_params(labelbottom=False)
+  ax_f.set_ylabel('f Error\n[-]')
+  ax_f.grid(True)
+  ax_f.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot g error vs time (row 2, column 2)
+  ax_g = plt.subplot2grid((6, 3), (2, 2), sharex=ax_pos)
+  if mee_ref is not None and mee_comp is not None and mee_ref.g is not None and mee_comp.g is not None:
+    g_error = mee_comp.g - mee_ref.g
+    ax_g.plot(time, g_error, 'b-', linewidth=1.5)
+  ax_g.tick_params(labelbottom=False)
+  ax_g.set_ylabel('g Error\n[-]')
+  ax_g.grid(True)
+  ax_g.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot h error vs time (row 3, column 2)
+  ax_h = plt.subplot2grid((6, 3), (3, 2), sharex=ax_pos)
+  if mee_ref is not None and mee_comp is not None and mee_ref.h is not None and mee_comp.h is not None:
+    h_error = mee_comp.h - mee_ref.h
+    ax_h.plot(time, h_error, 'b-', linewidth=1.5)
+  ax_h.tick_params(labelbottom=False)
+  ax_h.set_ylabel('h Error\n[-]')
+  ax_h.grid(True)
+  ax_h.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot k error vs time (row 4, column 2)
+  ax_k = plt.subplot2grid((6, 3), (4, 2), sharex=ax_pos)
+  if mee_ref is not None and mee_comp is not None and mee_ref.k is not None and mee_comp.k is not None:
+    k_error = mee_comp.k - mee_ref.k
+    ax_k.plot(time, k_error, 'b-', linewidth=1.5)
+  ax_k.tick_params(labelbottom=False)
+  ax_k.set_ylabel('k Error\n[-]')
+  ax_k.grid(True)
+  ax_k.ticklabel_format(style='scientific', axis='y', scilimits=(0,0))
+
+  # Plot L error vs time (row 5, column 2)
+  ax_L = plt.subplot2grid((6, 3), (5, 2), sharex=ax_pos)
+  if mee_ref is not None and mee_comp is not None and mee_ref.L is not None and mee_comp.L is not None:
+    # Handle angle wrapping for L (true longitude)
+    L_error_rad = np.arctan2(np.sin(mee_comp.L - mee_ref.L), 
+                   np.cos(mee_comp.L - mee_ref.L))
     L_error = L_error_rad * CONVERTER.DEG_PER_RAD
     ax_L.plot(time, L_error, 'b-', linewidth=1.5)
   ax_L.set_xlabel('Time\n[s]')
