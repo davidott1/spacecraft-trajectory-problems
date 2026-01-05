@@ -9,6 +9,8 @@ from typing   import Optional
 
 from src.schemas.config        import OutputPaths
 from src.schemas.gravity       import GravityModelConfig, SphericalHarmonicsConfig, ThirdBodyConfig
+from src.schemas.spacecraft    import SpacecraftProperties, DragConfig, SRPConfig
+from src.schemas.propagation   import PropagationConfig
 from src.model.constants       import SOLARSYSTEMCONSTANTS
 from src.input.loader          import load_supported_objects
 from src.utility.string_helper import sanitize_filename
@@ -179,8 +181,8 @@ def print_configuration(
     None
   """
   print_input_configuration(
-    initial_state_source       = config.initial_state_source,
-    initial_state_norad_id     = config.initial_state_norad_id,
+    initial_state_source   = config.initial_state_source,
+    initial_state_norad_id = config.initial_state_norad_id,
     initial_state_filename     = config.initial_state_filename,
     desired_timespan           = config.desired_timespan,
     include_drag               = config.include_drag,
@@ -246,6 +248,8 @@ def build_config(
   initial_state_source           : str            = 'jpl_horizons',
   gravity_harmonics_degree_order : Optional[list] = None,
   gravity_model_filename         : Optional[str]  = None,
+  atol                           : float          = 1e-15,
+  rtol                           : float          = 1e-12,
 ) -> SimpleNamespace:
   """
   Parse, validate, and set up input parameters for orbit propagation.
@@ -271,6 +275,10 @@ def build_config(
       None or empty list disables all harmonics.
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
+    atol : float
+      Absolute tolerance for numerical integration.
+    rtol : float
+      Relative tolerance for numerical integration.
   
   Output:
   -------
@@ -430,14 +438,40 @@ def build_config(
     # Update paths with correct name
     paths = setup_paths()
   
+  # Create SpacecraftProperties object
+  spacecraft = SpacecraftProperties(
+    mass     = obj_props['mass__kg'],
+    drag     = DragConfig(
+      enabled = include_drag,
+      cd      = obj_props['drag']['coeff'],
+      area    = obj_props['drag']['area__m2']
+    ),
+    srp      = SRPConfig(
+      enabled = include_srp,
+      cr      = obj_props['srp']['coeff'],
+      area    = obj_props['srp']['area__m2']
+    ),
+    norad_id = initial_state_norad_id,
+    name     = object_name
+  )
+
+  # Create PropagationConfig object
+  propagation_config = PropagationConfig(
+    time_o_dt = time_o_dt,
+    time_f_dt = time_f_dt,
+    atol      = atol,
+    rtol      = rtol,
+  )
+
   # Create GravityModelConfig
   gravity_model = GravityModelConfig(
     gp                  = SOLARSYSTEMCONSTANTS.EARTH.GP,
     folderpath          = paths['gravity_model_folderpath'],
     filename            = paths['gravity_model_filename'],
     spherical_harmonics = SphericalHarmonicsConfig(
-      degree = gravity_harmonics_degree if gravity_harmonics_degree is not None else 0,
-      order  = gravity_harmonics_order  if gravity_harmonics_order  is not None else 0,
+      degree       = gravity_harmonics_degree if gravity_harmonics_degree is not None else 0,
+      order        = gravity_harmonics_order  if gravity_harmonics_order  is not None else 0,
+      coefficients = gravity_harmonics_list,
     ),
     third_body = ThirdBodyConfig(
       enabled = include_third_body,
@@ -458,11 +492,8 @@ def build_config(
     time_o_dt                  = time_o_dt,
     time_f_dt                  = time_f_dt,
     delta_time_s               = delta_time_s,
-    mass                       = obj_props['mass__kg'],
-    cd                         = obj_props['drag']['coeff'],
-    area_drag                  = obj_props['drag']['area__m2'],
-    cr                         = obj_props['srp']['coeff'],
-    area_srp                   = obj_props['srp']['area__m2'],
+    spacecraft                 = spacecraft,
+    propagation_config         = propagation_config,
     include_drag               = include_drag,
     compare_tle                = compare_tle,
     compare_jpl_horizons       = compare_jpl_horizons,
