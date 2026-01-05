@@ -209,7 +209,7 @@ def main(
     gravity_model_filename    = config.two_body_gravity_model.filename,
     gravity_model_degree      = config.two_body_gravity_model.spherical_harmonics.degree,
     gravity_model_order       = config.two_body_gravity_model.spherical_harmonics.order,
-    gravity_coefficient_names = config.gravity_harmonics_list if config.include_gravity_harmonics else None,
+    gravity_coefficient_names = config.two_body_gravity_model.spherical_harmonics.coefficients if config.two_body_gravity_model.spherical_harmonics.enabled else None,
   )
   
   # Update two_body_gravity_model namespace with loaded values
@@ -297,10 +297,6 @@ def main(
     area_drag                     = config.area_drag,
     cr                            = config.cr,
     area_srp                      = config.area_srp,
-    include_third_body            = config.include_third_body,
-    third_bodies_list             = config.third_bodies_list,
-    include_gravity_harmonics     = config.include_gravity_harmonics,
-    gravity_harmonics_list        = config.gravity_harmonics_list,
     include_srp                   = config.include_srp,
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     tle_line_1                    = config.tle_line_1,

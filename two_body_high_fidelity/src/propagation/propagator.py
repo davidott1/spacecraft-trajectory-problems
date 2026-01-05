@@ -7,7 +7,7 @@ Numerical integration of spacecraft equations of motion.
 import numpy as np
 
 from datetime          import datetime, timedelta
-from typing            import Optional
+from typing            import Optional, TYPE_CHECKING
 from types             import SimpleNamespace
 from pathlib           import Path
 from scipy.integrate   import solve_ivp
@@ -20,6 +20,7 @@ from src.model.constants       import PRINTFORMATTER, SOLARSYSTEMCONSTANTS
 from src.model.time_converter  import utc_to_et
 from src.model.frame_converter import VectorConverter
 from src.utility.tle_helper    import modify_tle_bstar, get_tle_satellite_and_tle_epoch
+from src.schemas.gravity       import GravityModelConfig
 
 
 FORMAT_NUMBER = ">19.12e"
@@ -485,14 +486,10 @@ def run_high_fidelity_propagation(
   area_drag                     : float,
   cr                            : float,
   area_srp                      : float,
-  include_third_body            : bool,
-  third_bodies_list             : list,
-  include_gravity_harmonics     : bool,
-  gravity_harmonics_list        : list,
   include_srp                   : bool,
   result_jpl_horizons_ephemeris : Optional[dict],
   compare_jpl_horizons          : bool,
-  two_body_gravity_model        : Optional[SimpleNamespace] = None,
+  two_body_gravity_model        : GravityModelConfig,
 ) -> dict:
   """
   Configure and run the high-fidelity numerical propagator.
@@ -517,29 +514,26 @@ def run_high_fidelity_propagation(
       Radiation pressure coefficient.
     area_srp : float
       Cross-sectional area for SRP [m²].
-    include_third_body : bool
-      Flag to enable third-body gravity.
-    third_bodies_list : list
-      List of third bodies (e.g., ['SUN', 'MOON']).
-    include_gravity_harmonics : bool
-      Flag to enable gravity harmonics.
-    gravity_harmonics_list : list
-      List of gravity harmonics (e.g., ['J2', 'J3', 'J4']).
     include_srp : bool
       Flag to enable solar radiation pressure.
     result_jpl_horizons_ephemeris : dict | None
       JPL Horizons ephemeris result for comparison.
     compare_jpl_horizons : bool
       Flag to enable comparison with Horizons.
-    two_body_gravity_model : SimpleNamespace, optional
-      Gravity model namespace containing degree, order, and coefficients.
-      If provided with coefficients, replaces analytical harmonics.
+    two_body_gravity_model : GravityModelConfig
+      Gravity model configuration containing harmonics and third-body settings.
       
   Output:
   -------
     result : dict
       Dictionary containing propagation results.
   """
+  # Extract configuration from model
+  include_third_body        = two_body_gravity_model.third_body.enabled
+  third_bodies_list         = two_body_gravity_model.third_body.bodies
+  include_gravity_harmonics = two_body_gravity_model.spherical_harmonics.enabled
+  gravity_harmonics_list    = two_body_gravity_model.spherical_harmonics.coefficients
+
   # Print header
   print("\nHigh-Fidelity Model")
 
@@ -550,7 +544,7 @@ def run_high_fidelity_propagation(
 
   # Extract the actual gravity model from the namespace
   spherical_harmonics_model = None
-  if two_body_gravity_model is not None and two_body_gravity_model.spherical_harmonics.model is not None:
+  if two_body_gravity_model.spherical_harmonics.model is not None:
     spherical_harmonics_model = two_body_gravity_model.spherical_harmonics.model
 
   # Configure gravity harmonics
@@ -950,15 +944,11 @@ def run_propagations(
   area_drag                     : float,
   cr                            : float,
   area_srp                      : float,
-  include_third_body            : bool,
-  third_bodies_list             : list,
-  include_gravity_harmonics     : bool,
-  gravity_harmonics_list        : list,
   include_srp                   : bool,
   result_jpl_horizons_ephemeris : Optional[dict],
   tle_line_1                    : Optional[str],
   tle_line_2                    : Optional[str],
-  two_body_gravity_model        : Optional[SimpleNamespace] = None,
+  two_body_gravity_model        : GravityModelConfig,
 ) -> tuple:
   """
   Run high-fidelity and SGP4 propagations.
@@ -987,26 +977,16 @@ def run_propagations(
       Radiation pressure coefficient.
     area_srp : float
       Cross-sectional area for SRP [m²].
-    include_third_body : bool
-      Flag to enable third-body gravity.
-    third_bodies_list : list
-      List of third bodies (e.g., ['SUN', 'MOON']).
-    include_gravity_harmonics : bool
-      Flag to enable gravity harmonics.
-    gravity_harmonics_list : list
-      List of gravity harmonics (e.g., ['J2', 'J3', 'J4']).
     include_srp : bool
       Flag to enable solar radiation pressure.
-    spice_kernels_folderpath : Path
-      Path to SPICE kernels folder.
     result_jpl_horizons_ephemeris : dict | None
       JPL Horizons ephemeris result for comparison.
     tle_line_1 : str
       First line of TLE.
     tle_line_2 : str
       Second line of TLE.
-    two_body_gravity_model : SimpleNamespace, optional
-      Gravity model namespace containing degree, order, and coefficients.
+    two_body_gravity_model : GravityModelConfig
+      Gravity model configuration.
       
   Output:
   -------
@@ -1026,10 +1006,6 @@ def run_propagations(
     area_drag                     = area_drag,
     cr                            = cr,
     area_srp                      = area_srp,
-    include_third_body            = include_third_body,
-    third_bodies_list             = third_bodies_list,
-    include_gravity_harmonics     = include_gravity_harmonics,
-    gravity_harmonics_list        = gravity_harmonics_list,
     include_srp                   = include_srp,
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     compare_jpl_horizons          = compare_jpl_horizons,

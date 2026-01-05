@@ -26,12 +26,12 @@ class SphericalHarmonicsConfig:
     coefficients : List of coefficient names to include (e.g., ['J2', 'J3', 'C22'])
     model        : Loaded spherical harmonics model instance
   """
-  degree       : int                                    = 0
-  order        : int                                    = 0
-  gp           : Optional[float]                        = None
-  radius       : Optional[float]                        = None
-  coefficients : List[str]                              = field(default_factory=list)
-  model        : Optional['SphericalHarmonicsGravity']  = None
+  degree       : int                                   = 0
+  order        : int                                   = 0
+  gp           : Optional[float]                       = None
+  radius       : Optional[float]                       = None
+  coefficients : List[str]                             = field(default_factory=list)
+  model        : Optional['SphericalHarmonicsGravity'] = None
   
   @property
   def enabled(self) -> bool:
