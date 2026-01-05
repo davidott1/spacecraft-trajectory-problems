@@ -10,8 +10,7 @@ from datetime    import datetime
 from typing      import Optional, TYPE_CHECKING
 import numpy as np
 
-if TYPE_CHECKING:
-  from src.schemas.state import ClassicalOrbitalElements, ModifiedEquinoctialElements
+from src.schemas.state import ClassicalOrbitalElements, ModifiedEquinoctialElements
 
 
 @dataclass
@@ -62,8 +61,8 @@ class PropagationResult:
   message        : str                  = ""
   time_grid      : Optional[TimeGrid]   = None
   state          : Optional[np.ndarray] = None
-  coe            : Optional[dict]       = None
-  mee            : Optional[dict]       = None
+  coe            : Optional[ClassicalOrbitalElements]    = None
+  mee            : Optional[ModifiedEquinoctialElements] = None
   at_ephem_times : Optional[dict]       = None
 
 
