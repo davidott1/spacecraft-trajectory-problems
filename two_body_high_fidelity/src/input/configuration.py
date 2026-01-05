@@ -8,6 +8,8 @@ from types    import SimpleNamespace
 from typing   import Optional
 
 from src.schemas.config        import OutputPaths
+from src.schemas.gravity       import GravityModelConfig, SphericalHarmonicsConfig, ThirdBodyConfig
+from src.model.constants       import SOLARSYSTEMCONSTANTS
 from src.input.loader          import load_supported_objects
 from src.utility.string_helper import sanitize_filename
 
@@ -22,7 +24,7 @@ def print_input_configuration(
   compare_jpl_horizons       : bool,
   third_bodies_list          : list,
   gravity_harmonics_list     : list,
-  two_body_gravity_model     : SimpleNamespace,
+  two_body_gravity_model     : GravityModelConfig,
   include_srp                : bool,
   auto_download              : bool,
 ) -> None:
@@ -47,8 +49,8 @@ def print_input_configuration(
       List of third bodies to include. Empty list if disabled.
     gravity_harmonics_list : list
       List of gravity harmonics to include. Empty list if disabled.
-    two_body_gravity_model : SimpleNamespace
-      Nested namespace containing gravity model configuration.
+    two_body_gravity_model : GravityModelConfig
+      Gravity model configuration object.
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
       
@@ -428,16 +430,18 @@ def build_config(
     # Update paths with correct name
     paths = setup_paths()
   
-  # Create nested two_body_gravity_model namespace
-  two_body_gravity_model = SimpleNamespace(
+  # Create GravityModelConfig
+  gravity_model = GravityModelConfig(
+    gp                  = SOLARSYSTEMCONSTANTS.EARTH.GP,
     folderpath          = paths['gravity_model_folderpath'],
     filename            = paths['gravity_model_filename'],
-    spherical_harmonics = SimpleNamespace(
-      gp     = None,  # Set after loading
-      radius = None,  # Set after loading
-      degree = gravity_harmonics_degree,
-      order  = gravity_harmonics_order,
-      model  = None,  # Loaded later by load_files
+    spherical_harmonics = SphericalHarmonicsConfig(
+      degree = gravity_harmonics_degree if gravity_harmonics_degree is not None else 0,
+      order  = gravity_harmonics_order  if gravity_harmonics_order  is not None else 0,
+    ),
+    third_body = ThirdBodyConfig(
+      enabled = include_third_body,
+      bodies  = third_bodies_list,
     ),
   )
 
@@ -466,7 +470,7 @@ def build_config(
     third_bodies_list          = third_bodies_list,
     include_gravity_harmonics  = include_gravity_harmonics,
     gravity_harmonics_list     = gravity_harmonics_list,
-    two_body_gravity_model     = two_body_gravity_model,
+    two_body_gravity_model     = gravity_model,
     include_srp                = include_srp,
     auto_download              = auto_download,
     initial_state_source       = initial_state_source,

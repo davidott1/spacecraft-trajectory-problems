@@ -116,9 +116,6 @@ class SimulationConfig:
   
   @property
   def duration_s(self) -> float:
-    """
-    Total simulation duration in seconds.
-    """
     return (self.time_f_dt - self.time_o_dt).total_seconds()
   
   @property
