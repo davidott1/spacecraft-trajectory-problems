@@ -12,6 +12,8 @@ from src.model.orbit_converter import OrbitConverter
 from src.model.constants       import PRINTFORMATTER, SOLARSYSTEMCONSTANTS
 from src.input.cli             import parse_time
 from src.utility.tle_helper    import get_tle_satellite_and_tle_epoch
+from src.schemas.propagation   import PropagationResult, TimeGrid
+from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoctialElements
 
 
 def load_supported_objects() -> dict:
@@ -480,11 +482,11 @@ def get_horizons_ephemeris(
   jpl_horizons_folderpath : Path,
   desired_time_o_dt       : datetime,
   desired_time_f_dt       : datetime,
-  norad_id                : str,
-  object_name             : str,
-  step                    : str  = "1m",
+  norad_id                : Optional[str] = None,
+  object_name             : str = "object",
   auto_download           : bool = False,
-) -> Optional[dict]:
+  step                    : str = "1m",
+) -> Optional[PropagationResult]:
   """
   Load and process JPL Horizons ephemeris.
   
@@ -498,20 +500,17 @@ def get_horizons_ephemeris(
       Start time for data request.
     desired_time_f_dt : datetime
       End time for data request.
-    norad_id : str
-      NORAD catalog ID for the object.
+    norad_id : str | None
+      NORAD ID for the object.
     object_name : str
-      Name of the object (for display purposes).
-    step : str
-      Time step for ephemeris download (default "1m").
+      Object name for filename.
     auto_download : bool
       If True, automatically download ephemeris if no compatible file is found.
       
   Output:
   -------
-    result_jpl_horizons : dict | None
-      Processed Horizons result dictionary, or None if loading failed.
-      Contains 'success' key indicating if data was loaded successfully.
+    result : PropagationResult | None
+      PropagationResult object or None if failed.
   """
   # Display JPL Horizons folderpath
   try:
@@ -572,10 +571,7 @@ def get_horizons_ephemeris(
   # Check if we have a compatible file after potential download
   if compatible_file is None:
     print(f"    Filepath   : None (no compatible file available)")
-    return {
-      'success' : False,
-      'message' : 'No JPL Horizons ephemeris file available',
-    }
+    return PropagationResult(success=False, message='No JPL Horizons ephemeris file available')
   # Display the file being loaded
   try:
     rel_path = compatible_file.relative_to(Path.cwd())
@@ -601,16 +597,60 @@ def get_horizons_ephemeris(
   print(f"        Duration : {duration_s:.1f} s")
   
   # Load Horizons data
-  result_jpl_horizons = load_horizons_ephemeris(
+  result_horizons = load_horizons_ephemeris(
     filepath      = str(compatible_file),
     time_start_dt = desired_time_o_dt,
     time_end_dt   = desired_time_f_dt,
   )
 
   # Process Horizons data
-  result_jpl_horizons = process_horizons_result(result_jpl_horizons)
-  
-  return result_jpl_horizons
+  if result_horizons.get('success'):
+    result_horizons = process_horizons_result(result_horizons)
+
+  # Process Horizons data
+  if result_horizons and result_horizons.get('success'):
+    # Construct TimeGrid
+    time_grid = TimeGrid(
+        epoch_dt = result_horizons['time_o'],
+        epoch_et = utc_to_et(result_horizons['time_o']),
+        time_s   = result_horizons['delta_time']
+    )
+
+    # Construct COE object
+    coe_obj = ClassicalOrbitalElements(
+        sma  = result_horizons['coe']['sma'],
+        ecc  = result_horizons['coe']['ecc'],
+        inc  = result_horizons['coe']['inc'],
+        raan = result_horizons['coe']['raan'],
+        aop  = result_horizons['coe']['aop'],
+        ta   = result_horizons['coe']['ta'],
+        ea   = result_horizons['coe'].get('ea'),
+        ma   = result_horizons['coe'].get('ma')
+    )
+
+    # Construct MEE object
+    mee_obj = ModifiedEquinoctialElements(
+        p = result_horizons['mee']['p'],
+        f = result_horizons['mee']['f'],
+        g = result_horizons['mee']['g'],
+        h = result_horizons['mee']['h'],
+        k = result_horizons['mee']['k'],
+        L = result_horizons['mee']['L']
+    )
+
+    return PropagationResult(
+        success     = True,
+        message     = "JPL Horizons ephemeris loaded successfully",
+        time_grid   = time_grid,
+        time        = result_horizons['delta_time'],
+        state       = result_horizons['state'],
+        coe         = coe_obj,
+        mee         = mee_obj,
+        plot_time_s = result_horizons['delta_time']
+    )
+  else:
+    msg = result_horizons.get('message') if result_horizons else "Failed to process Horizons data"
+    return PropagationResult(success=False, message=msg)
 
 
 def process_horizons_result(

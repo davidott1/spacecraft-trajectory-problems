@@ -2,7 +2,7 @@ import numpy as np
 
 from datetime            import datetime, timedelta
 from sgp4.api            import Satrec
-from typing              import Optional, Union
+from typing              import Optional
 
 from src.propagation.propagator import propagate_tle
 from src.model.time_converter   import utc_to_et
@@ -97,6 +97,7 @@ def get_initial_state(
     if result_jpl_horizons_ephemeris.time_grid:
       epoch_dt = result_jpl_horizons_ephemeris.time_grid.epoch_dt
     else:
+      # Fallback if time_grid is missing (shouldn't happen for valid Horizons result)
       epoch_dt = time_o_dt
 
     try:

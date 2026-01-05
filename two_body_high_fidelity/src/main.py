@@ -53,8 +53,7 @@ Usage:
       --drag
 """
 from typing                            import Optional, Union
-from datetime                          import datetime, timedelta
-from dataclasses                       import fields
+from datetime                          import datetime
 
 from src.plot.trajectory               import generate_plots
 from src.propagation.propagator        import run_propagations
@@ -66,36 +65,7 @@ from src.propagation.state_initializer import get_initial_state
 from src.utility.logger                import start_logging, stop_logging
 from src.schemas.spacecraft            import SpacecraftProperties, DragConfig, SRPConfig
 from src.schemas.propagation           import PropagationConfig, PropagationResult
-from src.schemas.state                 import ClassicalOrbitalElements, ModifiedEquinoctialElements
 
-def _convert_to_objects(result: dict) -> None:
-  """Convert dictionary elements to dataclasses if necessary."""
-  if not result or not result.get('success'):
-    return
-
-  if 'coe' in result and isinstance(result['coe'], dict):
-    valid_keys = {f.name for f in fields(ClassicalOrbitalElements)}
-    filtered = {k: v for k, v in result['coe'].items() if k in valid_keys}
-    result['coe'] = ClassicalOrbitalElements(**filtered)
-
-  if 'mee' in result and isinstance(result['mee'], dict):
-    valid_keys = {f.name for f in fields(ModifiedEquinoctialElements)}
-    filtered = {k: v for k, v in result['mee'].items() if k in valid_keys}
-    result['mee'] = ModifiedEquinoctialElements(**filtered)
-
-def _convert_to_propagation_result(result: dict) -> Optional[PropagationResult]:
-  """Convert dictionary to PropagationResult object."""
-  if not result:
-    return None
-  
-  # Ensure nested objects are converted
-  _convert_to_objects(result)
-  
-  # Filter keys
-  valid_keys = {f.name for f in fields(PropagationResult)}
-  filtered = {k: v for k, v in result.items() if k in valid_keys}
-  
-  return PropagationResult(**filtered)
 
 def check_data_availability(
   result              : Union[dict, PropagationResult, None],
@@ -259,7 +229,7 @@ def main(
   # Get Horizons ephemeris (only if needed for initial state or comparison)
   result_jpl_horizons_ephemeris = None
   if config.initial_state_source == 'jpl_horizons' or config.compare_jpl_horizons:
-    result_jpl_horizons_ephemeris_dict = get_horizons_ephemeris(
+    result_jpl_horizons_ephemeris = get_horizons_ephemeris(
       jpl_horizons_folderpath = config.jpl_horizons_folderpath,
       desired_time_o_dt       = config.time_o_dt,
       desired_time_f_dt       = config.time_f_dt,
@@ -267,9 +237,6 @@ def main(
       object_name             = config.object_name,
       auto_download           = config.auto_download,
     )
-    
-    # Convert to PropagationResult
-    result_jpl_horizons_ephemeris = _convert_to_propagation_result(result_jpl_horizons_ephemeris_dict)
     
     # Check if Horizons data is required but unavailable
     error = check_data_availability(
@@ -317,8 +284,7 @@ def main(
   # Determine initial state: JPL Horizons, TLE, or Custom State Vector
   # Note: get_initial_state might expect a dict for result_jpl_horizons_ephemeris.
   # We pass the object, assuming it handles it or we pass __dict__ if needed.
-  # horizons_arg = result_jpl_horizons_ephemeris.__dict__ if result_jpl_horizons_ephemeris else None
-
+  
   initial_state = get_initial_state(
     tle_line_1                    = config.tle_line_1,
     tle_line_2                    = config.tle_line_2,
