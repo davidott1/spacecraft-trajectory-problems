@@ -198,9 +198,9 @@ def plot_3d_trajectories(
       ax1.scatter([moon_marker_pos_start[0]], [moon_marker_pos_start[1]], [z_floor], color='gray', marker='.', s=20, alpha=0.5)  # type: ignore
 
       moon_marker_pos_end = project_to_bounds(origin, moon_dir_end, ax1)
-      ax1.scatter([moon_marker_pos_end[0]], [moon_marker_posEnd[1]], [moon_marker_pos_end[2]], s=600, marker=r'$☾_{\text{f}}$', color='gray', zorder=10, label='Moon (Final)')  # type: ignore
-      ax1.plot([moon_marker_pos_end[0], moon_marker_posEnd[0]], [moon_marker_posEnd[1], moon_marker_posEnd[1]], [moon_marker_posEnd[2], z_floor], color='gray', linestyle=':', linewidth=2, alpha=0.5)  # type: ignore
-      ax1.scatter([moon_marker_pos_end[0]], [moon_marker_posEnd[1]], [z_floor], color='gray', marker='.', s=20, alpha=0.5)  # type: ignore
+      ax1.scatter([moon_marker_pos_end[0]], [moon_marker_pos_end[1]], [moon_marker_pos_end[2]], s=600, marker=r'$☾_{\text{f}}$', color='gray', zorder=10, label='Moon (Final)')  # type: ignore
+      ax1.plot([moon_marker_pos_end[0], moon_marker_pos_end[0]], [moon_marker_pos_end[1], moon_marker_pos_end[1]], [moon_marker_pos_end[2], z_floor], color='gray', linestyle=':', linewidth=2, alpha=0.5)  # type: ignore
+      ax1.scatter([moon_marker_pos_end[0]], [moon_marker_pos_end[1]], [z_floor], color='gray', marker='.', s=20, alpha=0.5)  # type: ignore
       
     except Exception as e:
       # If SPICE kernels aren't loaded or other error, silently skip sun arrow
@@ -1600,8 +1600,6 @@ def plot_3d_trajectories_body_fixed(
   legend_handles = [
     Line2D([0], [0], color='black', linewidth=1.5, label='Earth'),
     Line2D([0], [0], color='b', linewidth=2.0, label='Spacecraft'),
-    Line2D([0], [0], color='gold', linewidth=1.5, label='Sun'),
-    Line2D([0], [0], color='gray', linewidth=1.5, label='Moon'),
   ]
   leg = fig.legend(handles=legend_handles, loc='upper right', fontsize=11, framealpha=0.9)
   leg.get_frame().set_edgecolor('black')
@@ -1610,7 +1608,7 @@ def plot_3d_trajectories_body_fixed(
   fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=11, color='black',
            bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', alpha=0.9))
 
-  plt.tight_layout(rect=(0.0, 0.06, 1.0, 0.95))  # Leave space at bottom for info text and top for legend
+  plt.tight_layout(rect=(0.0, 0.06, 1.0, 0.95))
   return fig
 
 
