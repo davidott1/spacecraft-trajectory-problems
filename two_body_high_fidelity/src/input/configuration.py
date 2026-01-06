@@ -4,13 +4,13 @@ import os
 
 from pathlib  import Path
 from datetime import datetime
-from types    import SimpleNamespace
 from typing   import Optional
 
-from src.schemas.config        import OutputPaths
+from src.schemas.config        import OutputPaths, SimulationConfig, InitialStateConfig, ComparisonConfig
 from src.schemas.gravity       import GravityModelConfig, SphericalHarmonicsConfig, ThirdBodyConfig
 from src.schemas.spacecraft    import SpacecraftProperties, DragConfig, SRPConfig
 from src.schemas.propagation   import PropagationConfig
+from src.schemas.ephemeris     import TLEData
 from src.model.constants       import SOLARSYSTEMCONSTANTS
 from src.input.loader          import load_supported_objects
 from src.utility.string_helper import sanitize_filename
@@ -134,46 +134,46 @@ def print_input_configuration(
 
 
 def print_paths(
-  config : SimpleNamespace,
+  config : SimulationConfig,
 ) -> None:
   """
   Print the paths configuration.
   
   Input:
   ------
-    config : SimpleNamespace
+    config : SimulationConfig
       Configuration object containing path attributes.
       
   Output:
   -------
     None
   """
-  data_folderpath = config.spice_kernels_folderpath.parent
+  data_folderpath = config.output_paths.spice_kernels_folderpath.parent
   
   print("\nPaths and Files Setup")
-  print(f"  Output Folderpath          : {config.output_folderpath}")
-  print(f"    Timestamp Folderpath     : <output_folderpath>/{config.timestamp_folderpath.relative_to(config.output_folderpath)}")
-  print(f"    Figures Folderpath       : <output_folderpath>/{config.figures_folderpath.relative_to(config.output_folderpath)}")
-  print(f"    Files Folderpath         : <output_folderpath>/{config.files_folderpath.relative_to(config.output_folderpath)}")
-  print(f"    Log Filepath             : <output_folderpath>/{config.log_filepath.relative_to(config.output_folderpath)}")
+  print(f"  Output Folderpath          : {config.output_paths.base_folderpath.parent}")
+  print(f"    Timestamp Folderpath     : <output_folderpath>/{config.output_paths.base_folderpath.name}")
+  print(f"    Figures Folderpath       : <output_folderpath>/{config.output_paths.base_folderpath.name}/{config.output_paths.figures_folderpath.name}")
+  print(f"    Files Folderpath         : <output_folderpath>/{config.output_paths.base_folderpath.name}/{config.output_paths.logs_folderpath.name}")
+  print(f"    Log Filepath             : <output_folderpath>/{config.output_paths.base_folderpath.name}/{config.output_paths.logs_folderpath.name}/{config.output_paths.log_filepath.name}")
   print(f"  Data Folderpath            : {data_folderpath}")
-  print(f"    SPICE Kernels Folderpath : <data_folderpath>/{config.spice_kernels_folderpath.relative_to(data_folderpath)}")
-  print(f"    LSK Filepath             : <data_folderpath>/{config.lsk_filepath.relative_to(data_folderpath)}")
-  print(f"    Gravity Folderpath       : <data_folderpath>/{config.two_body_gravity_model.folderpath.relative_to(data_folderpath)}")
-  print(f"    JPL Horizons Folderpath  : <data_folderpath>/{config.jpl_horizons_folderpath.relative_to(data_folderpath)}")
-  print(f"    TLEs Folderpath          : <data_folderpath>/{config.tles_folderpath.relative_to(data_folderpath)}")
-  print(f"    State Vectors Folderpath : <data_folderpath>/{config.state_vectors_folderpath.relative_to(data_folderpath)}")
+  print(f"    SPICE Kernels Folderpath : <data_folderpath>/{config.output_paths.spice_kernels_folderpath.relative_to(data_folderpath)}")
+  print(f"    LSK Filepath             : <data_folderpath>/{config.output_paths.lsk_filepath.relative_to(data_folderpath)}")
+  print(f"    Gravity Folderpath       : <data_folderpath>/{config.gravity.folderpath.relative_to(data_folderpath)}")
+  print(f"    JPL Horizons Folderpath  : <data_folderpath>/{config.output_paths.jpl_horizons_folderpath.relative_to(data_folderpath)}")
+  print(f"    TLEs Folderpath          : <data_folderpath>/{config.output_paths.tles_folderpath.relative_to(data_folderpath)}")
+  print(f"    State Vectors Folderpath : <data_folderpath>/{config.output_paths.state_vectors_folderpath.relative_to(data_folderpath)}")
 
 
 def print_configuration(
-  config : SimpleNamespace,
+  config : SimulationConfig,
 ) -> None:
   """
   Print the complete configuration (input arguments and paths).
   
   Input:
   ------
-    config : SimpleNamespace
+    config : SimulationConfig
       Configuration object containing all input and path attributes.
       
   Output:
@@ -181,18 +181,18 @@ def print_configuration(
     None
   """
   print_input_configuration(
-    initial_state_source   = config.initial_state_source,
-    initial_state_norad_id = config.initial_state_norad_id,
-    initial_state_filename     = config.initial_state_filename,
-    desired_timespan           = config.desired_timespan,
-    include_drag               = config.include_drag,
-    compare_tle                = config.compare_tle,
-    compare_jpl_horizons       = config.compare_jpl_horizons,
-    third_bodies_list          = config.third_bodies_list,
-    gravity_harmonics_list     = config.gravity_harmonics_list,
-    two_body_gravity_model     = config.two_body_gravity_model,
-    include_srp                = config.include_srp,
-    auto_download              = config.auto_download,
+    initial_state_source   = config.initial_state.source,
+    initial_state_norad_id = config.initial_state.norad_id,
+    initial_state_filename = config.initial_state.filename,
+    desired_timespan       = [config.time_o_dt, config.time_f_dt],
+    include_drag           = config.include_drag,
+    compare_tle            = config.comparison.compare_tle,
+    compare_jpl_horizons   = config.comparison.compare_jpl_horizons,
+    third_bodies_list      = config.gravity.third_body.bodies,
+    gravity_harmonics_list = config.gravity.spherical_harmonics.coefficients,
+    two_body_gravity_model = config.gravity,
+    include_srp            = config.include_srp,
+    auto_download          = config.auto_download,
   )
   
   print_paths(config)
@@ -250,7 +250,7 @@ def build_config(
   gravity_model_filename         : Optional[str]  = None,
   atol                           : float          = 1e-15,
   rtol                           : float          = 1e-12,
-) -> SimpleNamespace:
+) -> SimulationConfig:
   """
   Parse, validate, and set up input parameters for orbit propagation.
   
@@ -282,7 +282,7 @@ def build_config(
   
   Output:
   -------
-    config : SimpleNamespace
+    config : SimulationConfig
       Configuration object containing parsed and calculated propagation parameters.
   
   Raises:
@@ -479,48 +479,38 @@ def build_config(
     ),
   )
 
-  return SimpleNamespace(
-    # Store original input values for print_configuration
-    initial_state_norad_id = initial_state_norad_id,
-    initial_state_filename = initial_state_filename,
-    desired_timespan       = timespan_dt,
-    # Parsed and calculated values
-    obj_props                  = obj_props,
-    object_name                = object_name,
-    object_name_display        = object_name_display,
-    custom_state_vector        = custom_state_vector,
-    time_o_dt                  = time_o_dt,
-    time_f_dt                  = time_f_dt,
-    delta_time_s               = delta_time_s,
-    spacecraft                 = spacecraft,
-    propagation_config         = propagation_config,
-    include_drag               = include_drag,
-    compare_tle                = compare_tle,
-    compare_jpl_horizons       = compare_jpl_horizons,
-    include_third_body         = include_third_body,
-    third_bodies_list          = third_bodies_list,
-    include_gravity_harmonics  = include_gravity_harmonics,
-    gravity_harmonics_list     = gravity_harmonics_list,
-    two_body_gravity_model     = gravity_model,
-    include_srp                = include_srp,
-    auto_download              = auto_download,
-    initial_state_source       = initial_state_source,
-    output_paths               = paths['output_paths'],
-    output_folderpath          = paths['output_folderpath'],
-    timestamp_folderpath       = paths['timestamp_folderpath'],
-    figures_folderpath         = paths['figures_folderpath'],
-    files_folderpath           = paths['files_folderpath'],
-    log_filepath               = paths['log_filepath'],
-    spice_kernels_folderpath   = paths['spice_kernels_folderpath'],
-    jpl_horizons_folderpath    = paths['jpl_horizons_folderpath'],
-    tles_folderpath            = paths['tles_folderpath'],
-    state_vectors_folderpath   = paths['state_vectors_folderpath'],
-    lsk_filepath               = paths['lsk_filepath'],
-    # Values calculated later
-    tle_line_0   = None,
-    tle_line_1   = None,
-    tle_line_2   = None,
-    tle_epoch_dt = None,
+  # Create InitialStateConfig
+  initial_state_config = InitialStateConfig(
+    source   = initial_state_source,
+    norad_id = initial_state_norad_id,
+    filename = initial_state_filename,
+  )
+  
+  # Create ComparisonConfig
+  comparison_config = ComparisonConfig(
+    compare_jpl_horizons = compare_jpl_horizons,
+    compare_tle          = compare_tle,
+  )
+  
+  # Update output_paths with all path information
+  output_paths = paths['output_paths']
+  output_paths.spice_kernels_folderpath = paths['spice_kernels_folderpath']
+  output_paths.lsk_filepath             = paths['lsk_filepath']
+  output_paths.jpl_horizons_folderpath  = paths['jpl_horizons_folderpath']
+  output_paths.tles_folderpath          = paths['tles_folderpath']
+  output_paths.state_vectors_folderpath = paths['state_vectors_folderpath']
+
+  return SimulationConfig(
+    initial_state       = initial_state_config,
+    time_o_dt           = time_o_dt,
+    time_f_dt           = time_f_dt,
+    spacecraft          = spacecraft,
+    gravity             = gravity_model,
+    comparison          = comparison_config,
+    output_paths        = output_paths,
+    object_name         = object_name,
+    object_name_display = object_name_display,
+    auto_download       = auto_download,
   )
 
 
@@ -620,25 +610,24 @@ def setup_paths(
 
 
 def extract_tle_to_config(
-  config               : SimpleNamespace,
-  result_celestrak_tle : Optional[dict],
+  config               : SimulationConfig,
+  result_celestrak_tle : Optional[TLEData],
 ) -> None:
   """
-  Extract TLE data from result dictionary and store on config object.
+  Extract TLE data from TLEData object and store on config object.
   
   Input:
   ------
-    config : SimpleNamespace
+    config : SimulationConfig
       Configuration object to store TLE data on.
-    result_celestrak_tle : dict | None
-      Result dictionary from get_celestrak_tle containing TLE data.
+    result_celestrak_tle : TLEData | None
+      TLEData object from get_celestrak_tle.
       
   Output:
   -------
     None
   """
-  if result_celestrak_tle and result_celestrak_tle.get('success'):
-    config.tle_line_0   = result_celestrak_tle['tle_line_0']
-    config.tle_line_1   = result_celestrak_tle['tle_line_1']
-    config.tle_line_2   = result_celestrak_tle['tle_line_2']
-    config.tle_epoch_dt = result_celestrak_tle['tle_epoch_dt']
+  if result_celestrak_tle is not None:
+    config.tle_line_1   = result_celestrak_tle.line_1
+    config.tle_line_2   = result_celestrak_tle.line_2
+    config.tle_epoch_dt = result_celestrak_tle.epoch_dt

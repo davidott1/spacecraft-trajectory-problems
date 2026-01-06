@@ -56,7 +56,7 @@ class PropagationResult:
     state          : Cartesian state array, shape (6, N)
     coe            : Classical orbital elements at each time
     mee            : Modified equinoctial elements at each time
-    at_ephem_times : Results interpolated to ephemeris times (optional)
+    at_ephem_times : Results interpolated to ephemeris times (optional, PropagationResult)
     plot_time_s    : Time array for plotting [s from epoch] (optional)
     integ_time_et  : Integration time in ET (optional)
     integ_time_s   : Integration time in seconds from TLE epoch (optional)
@@ -68,7 +68,7 @@ class PropagationResult:
   state          : Optional[np.ndarray] = None
   coe            : Optional[ClassicalOrbitalElements]    = None
   mee            : Optional[ModifiedEquinoctialElements] = None
-  at_ephem_times : Optional[dict]       = None
+  at_ephem_times : Optional['PropagationResult'] = None
   plot_time_s    : Optional[np.ndarray] = None
   integ_time_et  : Optional[np.ndarray] = None
   integ_time_s   : Optional[np.ndarray] = None

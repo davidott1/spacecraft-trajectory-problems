@@ -26,68 +26,6 @@ from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoct
 FORMAT_NUMBER = ">19.12e"
 
 
-def _get_harmonic_coefficients(
-  gravity_harmonics_list : list,
-) -> dict:
-  """
-  Map harmonic names to their coefficient values from constants.
-  
-  Input:
-  ------
-    gravity_harmonics_list : list
-      List of harmonic names (e.g., ['J2', 'J3', 'C22', 'S22']).
-      
-  Output:
-  -------
-    coeffs : dict
-      Dictionary mapping parameter names to values.
-  """
-  coeffs = {
-    'j2'  : 0.0,
-    'j3'  : 0.0,
-    'j4'  : 0.0,
-    'j5'  : 0.0,
-    'j6'  : 0.0,
-    'c21' : 0.0,
-    's21' : 0.0,
-    'c22' : 0.0,
-    's22' : 0.0,
-    'c31' : 0.0,
-    's31' : 0.0,
-    'c32' : 0.0,
-    's32' : 0.0,
-    'c33' : 0.0,
-    's33' : 0.0,
-  }
-  
-  # Map harmonic names to constants
-  harmonic_map = {
-    'J2'  : ('j2',  SOLARSYSTEMCONSTANTS.EARTH.J2),
-    'J3'  : ('j3',  SOLARSYSTEMCONSTANTS.EARTH.J3),
-    'J4'  : ('j4',  SOLARSYSTEMCONSTANTS.EARTH.J4),
-    'J5'  : ('j5',  SOLARSYSTEMCONSTANTS.EARTH.J5),
-    'J6'  : ('j6',  SOLARSYSTEMCONSTANTS.EARTH.J6),
-    'C21' : ('c21', SOLARSYSTEMCONSTANTS.EARTH.C21),
-    'S21' : ('s21', SOLARSYSTEMCONSTANTS.EARTH.S21),
-    'C22' : ('c22', SOLARSYSTEMCONSTANTS.EARTH.C22),
-    'S22' : ('s22', SOLARSYSTEMCONSTANTS.EARTH.S22),
-    'C31' : ('c31', SOLARSYSTEMCONSTANTS.EARTH.C31),
-    'S31' : ('s31', SOLARSYSTEMCONSTANTS.EARTH.S31),
-    'C32' : ('c32', SOLARSYSTEMCONSTANTS.EARTH.C32),
-    'S32' : ('s32', SOLARSYSTEMCONSTANTS.EARTH.S32),
-    'C33' : ('c33', SOLARSYSTEMCONSTANTS.EARTH.C33),
-    'S33' : ('s33', SOLARSYSTEMCONSTANTS.EARTH.S33),
-  }
-  
-  for harmonic in gravity_harmonics_list:
-    harmonic_upper = harmonic.upper()
-    if harmonic_upper in harmonic_map:
-      key, value = harmonic_map[harmonic_upper]
-      coeffs[key] = value
-  
-  return coeffs
-
-
 def propagate_tle(
   tle_line_1   : str,
   tle_line_2   : str,
@@ -533,16 +471,7 @@ def run_high_fidelity_propagation(
   delta_time_s = (propagation_config.time_f_dt - propagation_config.time_o_dt).total_seconds()
 
   # Extract the actual gravity model from the namespace
-  spherical_harmonics_model = None
-  if two_body_gravity_model.spherical_harmonics.model is not None:
-    spherical_harmonics_model = two_body_gravity_model.spherical_harmonics.model
-
-  # Configure gravity harmonics
-  #   - If spherical_harmonics_model is provided (from file or explicit coefficients), we don't use the analytical TwoBodyGravity harmonics
-  if spherical_harmonics_model is not None:
-    harmonic_coeffs = _get_harmonic_coefficients([])  # All zeros - let spherical_harmonics_model handle it
-  else:
-    harmonic_coeffs = _get_harmonic_coefficients(gravity_harmonics_list)
+  spherical_harmonics_model = two_body_gravity_model.spherical_harmonics.model
 
   # Print configuration
   print(f"  Configuration")
@@ -613,33 +542,8 @@ def run_high_fidelity_propagation(
 
   # Initialize acceleration model
   acceleration = Acceleration(
-    gp                        = SOLARSYSTEMCONSTANTS.EARTH.GP,
-    j2                        = harmonic_coeffs['j2'],
-    j3                        = harmonic_coeffs['j3'],
-    j4                        = harmonic_coeffs['j4'],
-    j5                        = harmonic_coeffs['j5'],
-    j6                        = harmonic_coeffs['j6'],
-    c21                       = harmonic_coeffs['c21'],
-    s21                       = harmonic_coeffs['s21'],
-    c22                       = harmonic_coeffs['c22'],
-    s22                       = harmonic_coeffs['s22'],
-    c31                       = harmonic_coeffs['c31'],
-    s31                       = harmonic_coeffs['s31'],
-    c32                       = harmonic_coeffs['c32'],
-    s32                       = harmonic_coeffs['s32'],
-    c33                       = harmonic_coeffs['c33'],
-    s33                       = harmonic_coeffs['s33'],
-    pos_ref                   = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR,
-    mass                      = spacecraft.mass,
-    enable_drag               = spacecraft.drag.enabled,
-    cd                        = spacecraft.drag.cd,
-    area_drag                 = spacecraft.drag.area,
-    enable_third_body         = include_third_body,
-    third_body_bodies         = third_bodies_list,
-    enable_srp                = spacecraft.srp.enabled,
-    cr                        = spacecraft.srp.cr,
-    area_srp                  = spacecraft.srp.area,
-    spherical_harmonics_model = spherical_harmonics_model,
+    gravity_config = two_body_gravity_model,
+    spacecraft     = spacecraft,
   )
   
   # Get orbital period for grid density
@@ -786,14 +690,16 @@ def run_high_fidelity_propagation(
         p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L
       )
 
-      # Store ephemeris-time results
-      result_high_fidelity.at_ephem_times = {
-        'plot_time_s'   : ephem_times_s,
-        'integ_time_et' : ephem_times_et,
-        'state'         : state_at_ephem,
-        'coe'           : coe_at_ephem,
-        'mee'           : mee_at_ephem,
-      }
+      # Store ephemeris-time results as PropagationResult
+      result_high_fidelity.at_ephem_times = PropagationResult(
+        success       = True,
+        message       = "Interpolated to ephemeris times",
+        plot_time_s   = ephem_times_s,
+        integ_time_et = ephem_times_et,
+        state         = state_at_ephem,
+        coe           = coe_at_ephem,
+        mee           = mee_at_ephem,
+      )
       
       print("Complete")
   else:
@@ -908,14 +814,16 @@ def run_sgp4_propagation(
     )
     
     if result_sgp4_at_ephem.success:
-      # Store ephemeris-time results
-      result_sgp4.at_ephem_times = {
-        'plot_time_s'  : ephem_times_s,
-        'integ_time_s' : ephem_times_from_tle,
-        'state'        : result_sgp4_at_ephem.state,
-        'coe'          : result_sgp4_at_ephem.coe,
-        'mee'          : result_sgp4_at_ephem.mee,
-      }
+      # Store ephemeris-time results as PropagationResult
+      result_sgp4.at_ephem_times = PropagationResult(
+        success      = True,
+        message      = "Interpolated to ephemeris times",
+        plot_time_s  = ephem_times_s,
+        integ_time_s = ephem_times_from_tle,
+        state        = result_sgp4_at_ephem.state,
+        coe          = result_sgp4_at_ephem.coe,
+        mee          = result_sgp4_at_ephem.mee,
+      )
       print("Complete")
     else:
       print(f"Failed: {result_sgp4_at_ephem.message}")

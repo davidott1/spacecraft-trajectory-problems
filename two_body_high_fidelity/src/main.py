@@ -65,10 +65,11 @@ from src.propagation.state_initializer import get_initial_state
 from src.utility.logger                import start_logging, stop_logging
 from src.schemas.spacecraft            import SpacecraftProperties, DragConfig, SRPConfig
 from src.schemas.propagation           import PropagationConfig, PropagationResult
+from src.schemas.ephemeris             import TLEData
 
 
 def check_data_availability(
-  result              : Union[dict, PropagationResult, None],
+  result              : Union[TLEData, PropagationResult, None],
   data_name           : str,
   needs_initial_state : bool,
   needs_comparison    : bool,
@@ -80,7 +81,7 @@ def check_data_availability(
   
   Input:
   ------
-    result : dict | PropagationResult | None
+    result : TLEData | PropagationResult | None
       Result from data loading (e.g., Horizons or TLE).
     data_name : str
       Human-readable name of the data source (e.g., "JPL Horizons ephemeris", "TLE").
@@ -99,12 +100,16 @@ def check_data_availability(
       Error dictionary with 'success': False if data unavailable, None if data is available.
   """
   # Check if data loading failed
+  # For TLEData, it's either a valid object or None
+  # For PropagationResult, check the success attribute
   if result is None:
     data_failed = True
-  elif isinstance(result, dict):
-    data_failed = not result.get('success', False)
-  else:
+  elif isinstance(result, TLEData):
+    data_failed = False  # TLEData is always valid if it exists
+  elif isinstance(result, PropagationResult):
     data_failed = not result.success
+  else:
+    data_failed = True  # Unknown type
   
   if not data_failed:
     return None  # Data is available, no error
@@ -211,7 +216,7 @@ def main(
 
   # Start logging to file
   logger = start_logging(
-    config.log_filepath,
+    config.output_paths.log_filepath,
   )
   
   # Print input configuration and paths
@@ -219,29 +224,29 @@ def main(
 
   # Load files: SPICE, spherical harmonics coefficients
   spherical_harmonics_model = load_files(
-    spice_kernels_folderpath  = config.spice_kernels_folderpath,
-    lsk_filepath              = config.lsk_filepath,
-    gravity_model_folderpath  = config.two_body_gravity_model.folderpath,
-    gravity_model_filename    = config.two_body_gravity_model.filename,
-    gravity_model_degree      = config.two_body_gravity_model.spherical_harmonics.degree,
-    gravity_model_order       = config.two_body_gravity_model.spherical_harmonics.order,
-    gravity_coefficient_names = config.two_body_gravity_model.spherical_harmonics.coefficients if config.two_body_gravity_model.spherical_harmonics.enabled else None,
+    spice_kernels_folderpath  = config.output_paths.spice_kernels_folderpath,
+    lsk_filepath              = config.output_paths.lsk_filepath,
+    gravity_model_folderpath  = config.gravity.folderpath,
+    gravity_model_filename    = config.gravity.filename,
+    gravity_model_degree      = config.gravity.spherical_harmonics.degree,
+    gravity_model_order       = config.gravity.spherical_harmonics.order,
+    gravity_coefficient_names = config.gravity.spherical_harmonics.coefficients if config.gravity.spherical_harmonics.enabled else None,
   )
   
-  # Update two_body_gravity_model namespace with loaded values
+  # Update gravity model with loaded values
   if spherical_harmonics_model is not None:
-    config.two_body_gravity_model.spherical_harmonics.model  = spherical_harmonics_model
-    config.two_body_gravity_model.spherical_harmonics.gp     = spherical_harmonics_model.gp
-    config.two_body_gravity_model.spherical_harmonics.radius = spherical_harmonics_model.radius
+    config.gravity.spherical_harmonics.model  = spherical_harmonics_model
+    config.gravity.spherical_harmonics.gp     = spherical_harmonics_model.gp
+    config.gravity.spherical_harmonics.radius = spherical_harmonics_model.radius
 
   # Get Horizons ephemeris (only if needed for initial state or comparison)
   result_jpl_horizons_ephemeris = None
-  if config.initial_state_source == 'jpl_horizons' or config.compare_jpl_horizons:
+  if config.initial_state.source == 'jpl_horizons' or config.comparison.compare_jpl_horizons:
     result_jpl_horizons_ephemeris = get_horizons_ephemeris(
-      jpl_horizons_folderpath = config.jpl_horizons_folderpath,
+      jpl_horizons_folderpath = config.output_paths.jpl_horizons_folderpath,
       desired_time_o_dt       = config.time_o_dt,
       desired_time_f_dt       = config.time_f_dt,
-      norad_id                = config.initial_state_norad_id,
+      norad_id                = config.initial_state.norad_id,
       object_name             = config.object_name,
       auto_download           = config.auto_download,
     )
@@ -250,8 +255,8 @@ def main(
     error = check_data_availability(
       result              = result_jpl_horizons_ephemeris,
       data_name           = "JPL Horizons ephemeris",
-      needs_initial_state = config.initial_state_source == 'jpl_horizons',
-      needs_comparison    = config.compare_jpl_horizons,
+      needs_initial_state = config.initial_state.source == 'jpl_horizons',
+      needs_comparison    = config.comparison.compare_jpl_horizons,
       initial_state_flag  = "--initial-state-source jpl_horizons",
       comparison_flag     = "--compare-jpl-horizons",
     )
@@ -262,11 +267,11 @@ def main(
 
   # Get Celestrak TLE (if needed for initial state or comparison)
   result_celestrak_tle = None
-  if config.initial_state_source == 'tle' or config.compare_tle:
+  if config.initial_state.source == 'tle' or config.comparison.compare_tle:
     result_celestrak_tle = get_celestrak_tle(
-      norad_id          = config.initial_state_norad_id,
+      norad_id          = config.initial_state.norad_id,
       object_name       = config.object_name,
-      tles_folderpath   = config.tles_folderpath,
+      tles_folderpath   = config.output_paths.tles_folderpath,
       desired_time_o_dt = config.time_o_dt,
       desired_time_f_dt = config.time_f_dt,
       auto_download     = config.auto_download,
@@ -279,8 +284,8 @@ def main(
     error = check_data_availability(
       result              = result_celestrak_tle,
       data_name           = "TLE",
-      needs_initial_state = config.initial_state_source == 'tle',
-      needs_comparison    = config.compare_tle,
+      needs_initial_state = config.initial_state.source == 'tle',
+      needs_comparison    = config.comparison.compare_tle,
       initial_state_flag  = "--initial-state-source tle",
       comparison_flag     = "--compare-tle",
     )
@@ -295,22 +300,28 @@ def main(
     tle_line_2                    = config.tle_line_2,
     time_o_dt                     = config.time_o_dt,
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
-    initial_state_source          = config.initial_state_source,
-    custom_state_vector           = config.custom_state_vector,
-    initial_state_filename        = config.initial_state_filename,
+    initial_state_source          = config.initial_state.source,
+    custom_state_vector           = config.initial_state.state,
+    initial_state_filename        = config.initial_state.filename,
+  )
+
+  # Create PropagationConfig for the propagator
+  propagation_config = PropagationConfig(
+    time_o_dt = config.time_o_dt,
+    time_f_dt = config.time_f_dt,
   )
 
   # Run propagations: high-fidelity and SGP4
   result_high_fidelity_propagation, result_sgp4_propagation = run_propagations(
     initial_state                 = initial_state,
-    propagation_config            = config.propagation_config,
+    propagation_config            = propagation_config,
     spacecraft                    = config.spacecraft,
-    compare_tle                   = config.compare_tle,
-    compare_jpl_horizons          = config.compare_jpl_horizons,
+    compare_tle                   = config.comparison.compare_tle,
+    compare_jpl_horizons          = config.comparison.compare_jpl_horizons,
     result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
     tle_line_1                    = config.tle_line_1,
     tle_line_2                    = config.tle_line_2,
-    two_body_gravity_model        = config.two_body_gravity_model,
+    two_body_gravity_model        = config.gravity,
   )
   
   # Display results and create plots
@@ -324,9 +335,9 @@ def main(
     result_high_fidelity_propagation = result_high_fidelity_propagation,
     result_sgp4_propagation          = result_sgp4_propagation,
     time_o_dt                        = config.time_o_dt,
-    figures_folderpath               = config.figures_folderpath,
-    compare_jpl_horizons             = config.compare_jpl_horizons,
-    compare_tle                      = config.compare_tle,
+    figures_folderpath               = config.output_paths.figures_folderpath,
+    compare_jpl_horizons             = config.comparison.compare_jpl_horizons,
+    compare_tle                      = config.comparison.compare_tle,
     object_name                      = config.object_name,
     object_name_display              = config.object_name_display,
   )

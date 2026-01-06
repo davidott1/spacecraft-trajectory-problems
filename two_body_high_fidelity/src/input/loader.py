@@ -14,6 +14,7 @@ from src.input.cli             import parse_time
 from src.utility.tle_helper    import get_tle_satellite_and_tle_epoch
 from src.schemas.propagation   import PropagationResult, TimeGrid
 from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoctialElements
+from src.schemas.ephemeris     import TLEData
 
 
 def load_supported_objects() -> dict:
@@ -922,7 +923,7 @@ def get_celestrak_tle(
   desired_time_o_dt : datetime,
   desired_time_f_dt : datetime,
   auto_download     : bool = False,
-) -> Optional[dict]:
+) -> Optional[TLEData]:
   """
   Load TLE from local file or download from Celestrak if not available.
   
@@ -943,16 +944,8 @@ def get_celestrak_tle(
       
   Output:
   -------
-    result : dict | None
-      Dictionary containing TLE data if successful:
-      - success : bool
-      - message : str
-      - tle_line_0 : str (closest TLE name line)
-      - tle_line_1 : str (closest TLE to desired_time_o_dt)
-      - tle_line_2 : str (closest TLE to desired_time_o_dt)
-      - tle_epoch_dt : datetime (epoch of closest TLE)
-      - all_tles : list[dict] (all TLEs in the file)
-      Returns None if loading failed.
+    result : TLEData | None
+      TLEData object if successful, None if loading failed.
   """
   # Display TLE folderpath
   try:
@@ -1013,31 +1006,19 @@ def get_celestrak_tle(
           tle_filepath = compatible_file
         else:
           print("Failed - Downloaded file not found")
-          return {
-            'success' : False,
-            'message' : f"TLE download completed but file not found",
-          }
+          return None
           
       except subprocess.CalledProcessError as e:
         print(f"Error")
         print(f"               :   ... stderr: {e.stderr}")
         print(f"               :   ... stdout: {e.stdout}")
-        return {
-          'success' : False,
-          'message' : f"TLE download failed: {e.stderr}",
-        }
+        return None
       except Exception as e:
         print(f"Error : {e}")
-        return {
-          'success' : False,
-          'message' : f"TLE download failed: {e}",
-        }
+        return None
     else:
       print(f"    Filepath   : None (no compatible file available)")
-      return {
-        'success' : False,
-        'message' : f"TLE file not found and download declined",
-      }
+      return None
 
   # Display the file being loaded
   try:
@@ -1048,19 +1029,21 @@ def get_celestrak_tle(
   print(f"    Filepath   : {display_path}")
 
   # Load TLE from file
-  result = load_tle_file(tle_filepath, desired_time_o_dt)
+  tle_data = load_tle_file(tle_filepath, desired_time_o_dt)
   
-  if result and result.get('success'):
-    print(f"    TLE Count  : {len(result.get('all_tles', []))} TLE(s)")
-    print(f"    TLE Epoch  : {result['tle_epoch_dt'].strftime('%Y-%m-%d %H:%M:%S')} UTC (closest to desired initial time)")
+  if tle_data is not None:
+    print(f"    TLE Epoch  : {tle_data.epoch_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC (closest to desired initial time)")
+    # Set the NORAD ID if not already set
+    if tle_data.norad_id is None:
+      tle_data.norad_id = norad_id
   
-  return result
+  return tle_data
 
 
 def load_tle_file(
   filepath          : Path,
   reference_time_dt : Optional[datetime] = None,
-) -> Optional[dict]:
+) -> Optional[TLEData]:
   """
   Load TLE data from a file. Supports multiple TLEs in a single file.
   
@@ -1079,25 +1062,15 @@ def load_tle_file(
       
   Output:
   -------
-    result : dict | None
-      Dictionary containing TLE data if successful:
-      - success    : bool
-      - message    : str
-      - tle_line_0 : str (name line)
-      - tle_line_1 : str (closest TLE to reference_time_dt)
-      - tle_line_2 : str (closest TLE to reference_time_dt)
-      - tle_epoch_dt : datetime (epoch of closest TLE)
-      - all_tles   : list[dict] (all TLEs in the file)
+    result : TLEData | None
+      TLEData object if successful, None if failed.
   """
   try:
     with open(filepath, 'r') as f:
       lines = [line.strip() for line in f.readlines() if line.strip()]
     
     if len(lines) < 2:
-      return {
-        'success' : False,
-        'message' : f"TLE file has insufficient lines: {filepath}",
-      }
+      return None
     
     # Parse all TLEs from the file
     all_tles = []
@@ -1135,10 +1108,7 @@ def load_tle_file(
         continue
     
     if not all_tles:
-      return {
-        'success' : False,
-        'message' : f"No valid TLEs found in file: {filepath}",
-      }
+      return None
     
     # Select the closest TLE to reference time, or first TLE if no reference
     if reference_time_dt is not None:
@@ -1151,18 +1121,12 @@ def load_tle_file(
       # Assume first TLE if no reference time provided
       closest_tle = all_tles[0]
     
-    return {
-      'success'      : True,
-      'message'      : 'TLE loaded successfully',
-      'tle_line_0'   : closest_tle['tle_line_0'],
-      'tle_line_1'   : closest_tle['tle_line_1'],
-      'tle_line_2'   : closest_tle['tle_line_2'],
-      'tle_epoch_dt' : closest_tle['tle_epoch_dt'],
-      'all_tles'     : all_tles,
-    }
+    return TLEData(
+      line_1      = closest_tle['tle_line_1'],
+      line_2      = closest_tle['tle_line_2'],
+      epoch_dt    = closest_tle['tle_epoch_dt'],
+      object_name = closest_tle['tle_line_0'] if closest_tle['tle_line_0'] else None,
+    )
     
   except Exception as e:
-    return {
-      'success' : False,
-      'message' : str(e),
-    }
+    return None
