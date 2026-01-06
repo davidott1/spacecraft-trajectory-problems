@@ -60,7 +60,7 @@ res_robust = minimize(evaluate_strategy, [dv1_hohmann], method='Nelder-Mead',
                       options={'xatol': 1e-12, 'fatol': 1e-12, 'maxiter': 10000})
 dv_robust = res_robust.fun
 dv1_robust = res_robust.x[0]
-dv2_robust = get_dv2_circularize(dv1_robust, R2)
+dv2_robust = get_dv2_circularize(dv1_robust, R2) # 
 
 # --- PRINT RESULTS ---
 print("=== Stochastic Trajectory Optimization Results ===")

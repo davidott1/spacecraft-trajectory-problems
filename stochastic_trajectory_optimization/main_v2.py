@@ -57,6 +57,108 @@ def get_deltav(r1, r2, delta_inc1, delta_inc2):
     return dv1, dv2
 
 
+def lambert_solver(r1, r2, tof, mu=MU, tm=1):
+    """
+    Solve Lambert's problem using the universal variable formulation.
+    
+    Args:
+        r1: Initial position vector (3,)
+        r2: Final position vector (3,)
+        tof: Time of flight
+        mu: Gravitational parameter
+        tm: Transfer type: +1 for short way, -1 for long way
+    
+    Returns:
+        v1, v2: Velocity vectors at r1 and r2
+    """
+    r1_mag = np.linalg.norm(r1)
+    r2_mag = np.linalg.norm(r2)
+    
+    # Compute cos(delta_nu) 
+    cos_dnu = np.dot(r1, r2) / (r1_mag * r2_mag)
+    cos_dnu = np.clip(cos_dnu, -1, 1)
+    
+    # A parameter depends on transfer direction
+    A = tm * np.sqrt(r1_mag * r2_mag * (1 + cos_dnu))
+    
+    if abs(A) < 1e-10:
+        raise ValueError("Lambert solver: A ≈ 0, trajectory is degenerate (180° transfer)")
+    
+    # Stumpff functions
+    def stumpff_C(z):
+        if z > 1e-6:
+            return (1 - np.cos(np.sqrt(z))) / z
+        elif z < -1e-6:
+            return (1 - np.cosh(np.sqrt(-z))) / z
+        else:
+            return 0.5 - z/24 + z**2/720 - z**3/40320
+    
+    def stumpff_S(z):
+        if z > 1e-6:
+            sz = np.sqrt(z)
+            return (sz - np.sin(sz)) / (sz**3)
+        elif z < -1e-6:
+            sz = np.sqrt(-z)
+            return (np.sinh(sz) - sz) / (sz**3)
+        else:
+            return 1/6 - z/120 + z**2/5040 - z**3/362880
+    
+    # Function to compute time of flight for given z
+    def tof_from_z(z):
+        C = stumpff_C(z)
+        S = stumpff_S(z)
+        
+        y = r1_mag + r2_mag + A * (z * S - 1) / np.sqrt(C)
+        
+        if y < 0:
+            return float('inf')
+        
+        x = np.sqrt(y / C)
+        t = (x**3 * S + A * np.sqrt(y)) / np.sqrt(mu)
+        return t
+    
+    # Use bisection to find z (more robust than Newton)
+    # For elliptic orbits: 0 < z < (2*pi)^2
+    # Initial bounds
+    z_low = -4 * np.pi**2  # Hyperbolic
+    z_high = 4 * np.pi**2  # Elliptic
+    
+    # Adjust bounds
+    while tof_from_z(z_low) < tof:
+        z_low -= 4 * np.pi**2
+    while tof_from_z(z_high) > tof:
+        z_high += 4 * np.pi**2
+    
+    # Bisection
+    for _ in range(100):
+        z = (z_low + z_high) / 2
+        t = tof_from_z(z)
+        
+        if abs(t - tof) < 1e-10:
+            break
+        
+        if t < tof:
+            z_low = z
+        else:
+            z_high = z
+    
+    # Compute final values
+    C = stumpff_C(z)
+    S = stumpff_S(z)
+    y = r1_mag + r2_mag + A * (z * S - 1) / np.sqrt(C)
+    
+    # Lagrange coefficients
+    f = 1 - y / r1_mag
+    g = A * np.sqrt(y / mu)
+    g_dot = 1 - y / r2_mag
+    
+    # Velocities
+    v1 = (r2 - f * r1) / g
+    v2 = (g_dot * r2 - r1) / g
+    
+    return v1, v2
+
+
 def kepler_E(M, e, tol=1e-10):
     """Solve Kepler's equation M = E - e*sin(E) for E using Newton-Raphson."""
     E = M if e < 0.8 else np.pi
@@ -218,6 +320,28 @@ def generate_trajectory(r1, r2, inc1_rad, delta_inc1, delta_inc2, n_points=200):
     dv1_vec = v1_after - v0
     dv2_vec = v2_after - v_transfer_end
     
+    # --- Transfer positions at EA = 0°, 90°, 180° ---
+    # Transfer orbit parameters
+    e_transfer = (r2 - r1) / (r2 + r1)  # Eccentricity of transfer ellipse
+    
+    # EA = 0° (periapsis) - initial position
+    EA_0 = 0.0
+    r_EA0 = r0.copy()  # Already at periapsis
+    _, v_EA0 = propagate_kepler(r0, v1_after, 0)
+    
+    # EA = 90° (middle of transfer)
+    EA_90 = np.pi / 2
+    # Time from Kepler's equation: M = E - e*sin(E), t = M/n
+    M_90 = EA_90 - e_transfer * np.sin(EA_90)
+    n_transfer = np.sqrt(MU / a_transfer**3)
+    t_90 = M_90 / n_transfer
+    r_EA90, v_EA90 = propagate_kepler(r0, v1_after, t_90)
+    
+    # EA = 180° (apoapsis) - final position
+    EA_180 = np.pi
+    r_EA180 = r_final.copy()  # Already at apoapsis
+    v_EA180 = v_transfer_end.copy()
+    
     return {
         'initial': init_orbit,
         'transfer': transfer_orbit,
@@ -236,6 +360,11 @@ def generate_trajectory(r1, r2, inc1_rad, delta_inc1, delta_inc2, n_points=200):
         'v_before_burn2': v_transfer_end,
         'v_after_burn2': v2_after,
         'dv2_vec': dv2_vec,
+        # Transfer positions at EA = 0°, 90°, 180°
+        'transfer_EA0': {'r': r_EA0, 'v': v_EA0, 'EA_deg': 0.0, 't': 0.0},
+        'transfer_EA90': {'r': r_EA90, 'v': v_EA90, 'EA_deg': 90.0, 't': t_90},
+        'transfer_EA180': {'r': r_EA180, 'v': v_EA180, 'EA_deg': 180.0, 't': tof},
+        'transfer_params': {'a': a_transfer, 'e': e_transfer},
     }
 
 
@@ -295,6 +424,179 @@ if __name__ == "__main__":
     print(f"  ΔV2: {traj['dv2']:.4f} km/s (inc change: {np.degrees(delta_inc2_opt):.2f}°)")
     print(f"  Total ΔV: {traj['dv_total']:.4f} km/s")
     
+    print(f"\n--- Transfer Positions (EA = 0°, 90°, 180°) ---")
+    print(f"  Transfer orbit: a = {traj['transfer_params']['a']:.1f} km, e = {traj['transfer_params']['e']:.4f}")
+    for key, label in [('transfer_EA0', 'EA=0° (periapsis)'), 
+                       ('transfer_EA90', 'EA=90° (middle)'), 
+                       ('transfer_EA180', 'EA=180° (apoapsis)')]:
+        pos = traj[key]
+        r_mag = np.linalg.norm(pos['r'])
+        v_mag = np.linalg.norm(pos['v'])
+        print(f"  {label}:")
+        print(f"    t = {pos['t']:.1f} s ({pos['t']/60:.1f} min)")
+        print(f"    r = [{pos['r'][0]:10.1f}, {pos['r'][1]:10.1f}, {pos['r'][2]:10.1f}] km  (|r| = {r_mag:.1f} km)")
+        print(f"    v = [{pos['v'][0]:10.4f}, {pos['v'][1]:10.4f}, {pos['v'][2]:10.4f}] km/s  (|v| = {v_mag:.4f} km/s)")
+    
+    # --- LAMBERT PROBLEM SOLUTION ---
+    print(f"\n--- Lambert Problem Solution (Nominal) ---")
+    
+    # Get positions and times
+    r_init = traj['transfer_EA0']['r']
+    r_mid = traj['transfer_EA90']['r']
+    r_final = traj['transfer_EA180']['r']
+    
+    t_init = traj['transfer_EA0']['t']
+    t_mid = traj['transfer_EA90']['t']
+    t_final = traj['transfer_EA180']['t']
+    
+    tof_1 = t_mid - t_init    # Time of flight: init -> mid
+    tof_2 = t_final - t_mid   # Time of flight: mid -> final
+    
+    # Solve Lambert problem 1: r_init -> r_mid (perturbed)
+    # tm=+1 for short way (prograde direction based on angular momentum)
+    v1_dep_L1, v1_arr_L1 = lambert_solver(r_init, r_mid, tof_1, tm=1)
+    
+    # Solve Lambert problem 2: r_mid (perturbed) -> r_final
+    v2_dep_L2, v2_arr_L2 = lambert_solver(r_mid, r_final, tof_2, tm=1)
+    
+    # Get reference velocities from the direct transfer
+    v_init_orbit = traj['v_before_burn1']  # Initial orbit velocity at node
+    v_init_transfer = traj['transfer_EA0']['v']  # Transfer velocity at init
+    v_mid_transfer = traj['transfer_EA90']['v']  # Transfer velocity at mid
+    v_final_transfer = traj['transfer_EA180']['v']  # Transfer velocity at final
+    v_final_orbit = traj['v_after_burn2']  # Final orbit velocity at node
+    
+    # Compute delta-Vs at each node (Lambert solution)
+    dv_init_lambert = v1_dep_L1 - v_init_orbit  # From initial orbit to Lambert arc 1
+    dv_mid_lambert = v2_dep_L2 - v1_arr_L1      # From Lambert arc 1 arrival to Lambert arc 2 departure
+    dv_final_lambert = v_final_orbit - v2_arr_L2  # From Lambert arc 2 to final orbit
+    
+    dv_init_mag = np.linalg.norm(dv_init_lambert)
+    dv_mid_mag = np.linalg.norm(dv_mid_lambert)
+    dv_final_mag = np.linalg.norm(dv_final_lambert)
+    dv_total_lambert = dv_init_mag + dv_mid_mag + dv_final_mag
+    
+    # Reference values from direct transfer
+    dv_init_direct = np.linalg.norm(traj['dv1_vec'])
+    dv_mid_direct = 0.0  # No mid-course maneuver in direct transfer
+    dv_final_direct = np.linalg.norm(traj['dv2_vec'])
+    dv_total_direct = dv_init_direct + dv_mid_direct + dv_final_direct
+    
+    # Print comparison table
+    print(f"\n  {'Node':<12} {'Lambert ΔV':<14} {'Direct ΔV':<14} {'Difference':<14}")
+    print(f"  {'-'*12} {'-'*14} {'-'*14} {'-'*14}")
+    print(f"  {'Initial':<12} {dv_init_mag:>10.6f} km/s {dv_init_direct:>10.6f} km/s {abs(dv_init_mag-dv_init_direct):>10.6f} km/s")
+    print(f"  {'Middle':<12} {dv_mid_mag:>10.6f} km/s {dv_mid_direct:>10.6f} km/s {abs(dv_mid_mag-dv_mid_direct):>10.6f} km/s")
+    print(f"  {'Final':<12} {dv_final_mag:>10.6f} km/s {dv_final_direct:>10.6f} km/s {abs(dv_final_mag-dv_final_direct):>10.6f} km/s")
+    print(f"  {'-'*12} {'-'*14} {'-'*14} {'-'*14}")
+    print(f"  {'TOTAL':<12} {dv_total_lambert:>10.6f} km/s {dv_total_direct:>10.6f} km/s {abs(dv_total_lambert-dv_total_direct):>10.6f} km/s")
+    
+    print(f"\n  Lambert arc velocities:")
+    print(f"    Arc 1 departure (at init):  [{v1_dep_L1[0]:10.4f}, {v1_dep_L1[1]:10.4f}, {v1_dep_L1[2]:10.4f}] km/s")
+    print(f"    Arc 1 arrival (at mid):     [{v1_arr_L1[0]:10.4f}, {v1_arr_L1[1]:10.4f}, {v1_arr_L1[2]:10.4f}] km/s")
+    print(f"    Arc 2 departure (at mid):   [{v2_dep_L2[0]:10.4f}, {v2_dep_L2[1]:10.4f}, {v2_dep_L2[2]:10.4f}] km/s")
+    print(f"    Arc 2 arrival (at final):   [{v2_arr_L2[0]:10.4f}, {v2_arr_L2[1]:10.4f}, {v2_arr_L2[2]:10.4f}] km/s")
+    
+    # --- UNOPTIMIZED MCC SOLUTION WITH UNCERTAINTY (3 Samples) ---
+    print(f"\n--- Unoptimized MCC + Fixed Final State, Fixed Flight Times (3 Samples) ---")
+    
+    # Uncertainty parameters
+    np.random.seed(42)
+    N_samples = 3
+    
+    # Nominal ΔV1 vector and magnitude
+    dv1_nominal_vec = traj['dv1_vec']
+    dv1_nominal_mag = np.linalg.norm(dv1_nominal_vec)
+    dv1_direction = dv1_nominal_vec / dv1_nominal_mag  # Unit vector
+    
+    # Compute 1σ as 10% of nominal in absolute units (km/s)
+    sigma_dv1_abs = 0.10 * dv1_nominal_mag  # km/s
+    
+    print(f"  Nominal ΔV1: {dv1_nominal_mag:.4f} km/s")
+    print(f"  Uncertainty (1σ): {sigma_dv1_abs*1000:.1f} m/s ({sigma_dv1_abs/dv1_nominal_mag*100:.1f}% of nominal)")
+    
+    # Storage for MCC solutions
+    mcc_solutions = []
+    
+    # Colors for each sample
+    mcc_colors = ['orange', 'magenta', 'cyan']
+    
+    for i in range(N_samples):
+        print(f"\n  --- Sample {i+1} ---")
+        
+        # 1. Generate random magnitude error (additive, in km/s)
+        dv1_error = np.random.normal(0, sigma_dv1_abs)  # Error in km/s
+        dv1_actual_mag = dv1_nominal_mag + dv1_error
+        dv1_actual_vec = dv1_actual_mag * dv1_direction
+        
+        print(f"    Error: {dv1_error*1000:+.1f} m/s ({dv1_error/dv1_nominal_mag*100:+.2f}%)")
+        print(f"    Actual ΔV1: {dv1_actual_mag:.4f} km/s")
+        
+        # New velocity after burn 1
+        v1_actual = v_init_orbit + dv1_actual_vec
+        
+        # 2. Propagate to t_mid with perturbed velocity
+        r_mid_new, v_mid_arrival = propagate_kepler(r_init, v1_actual, tof_1)
+        pos_error = np.linalg.norm(r_mid_new - r_mid)
+        print(f"    Position error at mid: {pos_error:.1f} km")
+        
+        # 3. Use Lambert to solve r_mid_new -> r_final with fixed tof_2
+        v_mid_dep_L, v_final_arr_L = lambert_solver(r_mid_new, r_final, tof_2, tm=1)
+        
+        # 4. Calculate ΔVs
+        dv_init_mcc = dv1_actual_mag
+        dv_mid_mcc_vec = v_mid_dep_L - v_mid_arrival
+        dv_mid_mcc = np.linalg.norm(dv_mid_mcc_vec)
+        dv_final_mcc_vec = v_final_orbit - v_final_arr_L
+        dv_final_mcc = np.linalg.norm(dv_final_mcc_vec)
+        dv_total_mcc = dv_init_mcc + dv_mid_mcc + dv_final_mcc
+        
+        print(f"    ΔV_mid: {dv_mid_mcc:.4f} km/s, ΔV_final: {dv_final_mcc:.4f} km/s, TOTAL: {dv_total_mcc:.4f} km/s")
+        
+        # 5. Generate trajectory arcs for plotting
+        n_mcc_pts = 100
+        
+        # Arc 1: Perturbed trajectory from init to r_mid_new
+        mcc_arc1 = []
+        times_arc1 = np.linspace(0, tof_1, n_mcc_pts)
+        for t in times_arc1:
+            r_t, _ = propagate_kepler(r_init, v1_actual, t)
+            mcc_arc1.append(r_t)
+        mcc_arc1 = np.array(mcc_arc1)
+        
+        # Arc 2: Corrected trajectory from r_mid_new to r_final
+        mcc_arc2 = []
+        times_arc2 = np.linspace(0, tof_2, n_mcc_pts)
+        for t in times_arc2:
+            r_t, _ = propagate_kepler(r_mid_new, v_mid_dep_L, t)
+            mcc_arc2.append(r_t)
+        mcc_arc2 = np.array(mcc_arc2)
+        
+        # Store solution
+        mcc_solutions.append({
+            'sample': i + 1,
+            'error_ms': dv1_error * 1000,  # Error in m/s
+            'error_pct': dv1_error / dv1_nominal_mag * 100,
+            'dv_init': dv_init_mcc,
+            'dv_mid': dv_mid_mcc,
+            'dv_final': dv_final_mcc,
+            'dv_total': dv_total_mcc,
+            'pos_error': pos_error,
+            'r_mid_new': r_mid_new,
+            'arc1': mcc_arc1,
+            'arc2': mcc_arc2,
+            'color': mcc_colors[i]
+        })
+    
+    # Summary table
+    print(f"\n  --- Summary Table ---")
+    print(f"\n  {'Sample':<8} {'Error':<20} {'ΔV_init':<12} {'ΔV_mid':<12} {'ΔV_final':<12} {'TOTAL':<12} {'Δ from nom':<12}")
+    print(f"  {'-'*8} {'-'*20} {'-'*12} {'-'*12} {'-'*12} {'-'*12} {'-'*12}")
+    print(f"  {'Nominal':<8} {'0.0000 km/s (0.00%)':<20} {dv_init_direct:>8.4f} km/s {dv_mid_direct:>8.4f} km/s {dv_final_direct:>8.4f} km/s {dv_total_direct:>8.4f} km/s {0.0:>+8.4f} km/s")
+    for sol in mcc_solutions:
+        error_str = f"{sol['error_ms']/1000:+.4f} km/s ({sol['error_pct']:+.2f}%)"
+        print(f"  {sol['sample']:<8} {error_str:<20} {sol['dv_init']:>8.4f} km/s {sol['dv_mid']:>8.4f} km/s {sol['dv_final']:>8.4f} km/s {sol['dv_total']:>8.4f} km/s {sol['dv_total']-dv_total_direct:>+8.4f} km/s")
+
     # 3D Plot
     fig = plt.figure(figsize=(12, 10))
     ax = fig.add_subplot(111, projection='3d')
@@ -303,9 +605,29 @@ if __name__ == "__main__":
     ax.plot(traj['initial'][:, 0], traj['initial'][:, 1], traj['initial'][:, 2], 
             'b-', linewidth=1.5, label=f'Initial Orbit (i={inc1}°)')
     ax.plot(traj['transfer'][:, 0], traj['transfer'][:, 1], traj['transfer'][:, 2], 
-            'g-', linewidth=2, label='Transfer')
+            'g-', linewidth=2, label='Nominal Transfer')
     ax.plot(traj['final'][:, 0], traj['final'][:, 1], traj['final'][:, 2], 
             'r-', linewidth=1.5, label=f'Final Orbit (i={inc2}°)')
+    
+    # Plot all MCC trajectories
+    for sol in mcc_solutions:
+        color = sol['color']
+        label_arc1 = f"Sample {sol['sample']} ({sol['error_pct']:+.1f}%)"
+        ax.plot(sol['arc1'][:, 0], sol['arc1'][:, 1], sol['arc1'][:, 2], 
+                color=color, linestyle='--', linewidth=1.5, label=label_arc1)
+        ax.plot(sol['arc2'][:, 0], sol['arc2'][:, 1], sol['arc2'][:, 2], 
+                color=color, linestyle='--', linewidth=1.5)
+        # Mark the MCC point
+        ax.scatter(*sol['r_mid_new'], color=color, s=100, marker='*', zorder=6, edgecolor='black')
+    
+    # Plot transfer nodes: initial (EA=0°), middle (EA=90°), final (EA=180°)
+    r_EA0 = traj['transfer_EA0']['r']
+    r_EA90 = traj['transfer_EA90']['r']
+    r_EA180 = traj['transfer_EA180']['r']
+    
+    ax.scatter(*r_EA0, color='green', s=80, marker='o', zorder=5, label='EA=0° (periapsis)')
+    ax.scatter(*r_EA90, color='green', s=80, marker='s', zorder=5, label='EA=90° (nominal mid)')
+    ax.scatter(*r_EA180, color='green', s=80, marker='o', zorder=5, label='EA=180° (apoapsis)')
     
     # Plot Earth
     u = np.linspace(0, 2*np.pi, 50)
