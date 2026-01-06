@@ -1746,9 +1746,18 @@ def plot_ground_track(
     ax_3d.plot(x_grid, y_grid, z_grid, color=grid_color, linewidth=0.3, alpha=grid_alpha, zorder=1)
   
   # Plot ground track on 3D sphere (projected to surface)
+  x_track_all = []
+  y_track_all = []
+  z_track_all = []
   for lat_seg, lon_seg in zip(lat_segments, lon_segments):
     x_track, y_track, z_track = _latlon_to_xyz(lat_seg, lon_seg, r_earth * 1.01)  # Slightly above surface
     ax_3d.plot(x_track, y_track, z_track, 'b-', linewidth=2.0, zorder=3)
+    x_track_all.extend(x_track)
+    y_track_all.extend(y_track)
+    z_track_all.extend(z_track)
+  x_track_all = np.array(x_track_all)
+  y_track_all = np.array(y_track_all)
+  z_track_all = np.array(z_track_all)
   
   # Mark start and end points on 3D globe
   x_start, y_start, z_start = _latlon_to_xyz(lat[0], lon[0], r_earth * 1.02)
@@ -1763,10 +1772,33 @@ def plot_ground_track(
   ax_3d.set_box_aspect([1, 1, 1])  # type: ignore
   
   # Set equal axis limits for sphere
-  limit = r_earth * 1.3
+  limit = r_earth * 1.8
   ax_3d.set_xlim([-limit, limit])
   ax_3d.set_ylim([-limit, limit])
   ax_3d.set_zlim([-limit, limit])  # type: ignore
+  
+  min_limit = -limit
+  max_limit = limit
+  
+  # Add ground track shadow projections (darker gray)
+  shadow_color = 'dimgray'
+  shadow_alpha = 0.5
+  shadow_lw = 0.5
+  ax_3d.plot(x_track_all, y_track_all, np.full_like(z_track_all, min_limit), color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  ax_3d.plot(x_track_all, np.full_like(y_track_all, max_limit), z_track_all, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  ax_3d.plot(np.full_like(x_track_all, min_limit), y_track_all, z_track_all, color=shadow_color, alpha=shadow_alpha, linewidth=shadow_lw)
+  
+  # Add Earth projection shadows (filled circles on planes - lighter gray)
+  r_disk = np.linspace(0, r_earth, 2)
+  t_disk = np.linspace(0, 2*np.pi, 60)
+  R_disk, T_disk = np.meshgrid(r_disk, t_disk)
+  U_disk = R_disk * np.cos(T_disk)
+  V_disk = R_disk * np.sin(T_disk)
+  earth_shadow_alpha = 0.1
+  
+  ax_3d.plot_surface(U_disk, V_disk, np.full_like(U_disk, min_limit), color='gray', alpha=earth_shadow_alpha, shade=False)  # type: ignore
+  ax_3d.plot_surface(U_disk, np.full_like(U_disk, max_limit), V_disk, color='gray', alpha=earth_shadow_alpha, shade=False)  # type: ignore
+  ax_3d.plot_surface(np.full_like(U_disk, min_limit), U_disk, V_disk, color='gray', alpha=earth_shadow_alpha, shade=False)  # type: ignore
   
   # Set pane colors to white
   ax_3d.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
