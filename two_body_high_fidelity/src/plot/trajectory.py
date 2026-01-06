@@ -1607,13 +1607,58 @@ def plot_3d_trajectories_body_fixed(
   return fig
 
 
+def _get_coastline_coordinates():
+  """
+  Extract coastline coordinates from Natural Earth dataset via cartopy.
+  
+  Returns a list of (lon, lat) arrays for each coastline segment.
+  """
+  coastlines = cfeature.NaturalEarthFeature('physical', 'coastline', '110m')
+  segments = []
+  for geom in coastlines.geometries():
+    if geom.geom_type == 'LineString':
+      coords = np.array(geom.coords)
+      segments.append((coords[:, 0], coords[:, 1]))  # (lon, lat)
+    elif geom.geom_type == 'MultiLineString':
+      for line in geom.geoms:
+        coords = np.array(line.coords)
+        segments.append((coords[:, 0], coords[:, 1]))
+  return segments
+
+
+def _latlon_to_xyz(lat_deg, lon_deg, radius):
+  """
+  Convert latitude/longitude (degrees) to 3D Cartesian coordinates on a sphere.
+  
+  Input:
+  ------
+    lat_deg : array-like
+      Latitude in degrees
+    lon_deg : array-like
+      Longitude in degrees
+    radius : float
+      Sphere radius
+      
+  Output:
+  -------
+    x, y, z : arrays
+      Cartesian coordinates
+  """
+  lat_rad = np.deg2rad(lat_deg)
+  lon_rad = np.deg2rad(lon_deg)
+  x = radius * np.cos(lat_rad) * np.cos(lon_rad)
+  y = radius * np.cos(lat_rad) * np.sin(lon_rad)
+  z = radius * np.sin(lat_rad)
+  return x, y, z
+
+
 def plot_ground_track(
   result       : PropagationResult,
   epoch_dt_utc : Optional[datetime.datetime] = None,
   title_text   : str = "Ground Track",
 ) -> Figure:
   """
-  Plot ground track (latitude vs longitude) on a 2D map projection.
+  Plot ground track with 3D globe (left) and 2D map projection (right).
   
   Input:
   ------
@@ -1627,16 +1672,9 @@ def plot_ground_track(
   Output:
   -------
     fig : matplotlib.figure.Figure
-      Figure object containing the ground track plot.
+      Figure object containing the ground track plots (3D and 2D side by side).
   """
-  fig = plt.figure(figsize=(14, 8))
-  ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
-  ax.set_extent([-180, 180, -90, 90], crs=ccrs.PlateCarree())  # type: ignore
-  ax.add_feature(cfeature.COASTLINE)  # type: ignore
-  ax.add_feature(cfeature.BORDERS, linestyle=':', alpha=0.5)  # type: ignore
-  gl = ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False, alpha=0.5, linestyle='--')  # type: ignore
-  gl.top_labels = False
-  gl.right_labels = False
+  fig = plt.figure(figsize=(22, 9))
   
   # Extract J2000 state vectors
   j2000_state   = result.state
@@ -1671,15 +1709,90 @@ def plot_ground_track(
   lat_segments = np.split(lat, split_indices)
   lon_segments = np.split(lon, split_indices)
   
-  # Plot each segment
-  plot_kwargs = {'transform': ccrs.PlateCarree()}
-
-  for lat_seg, lon_seg in zip(lat_segments, lon_segments):
-    ax.plot(lon_seg, lat_seg, 'b-', linewidth=1.5, **plot_kwargs)
+  # Earth radius for 3D plotting (use equatorial radius for simplicity on globe)
+  r_earth = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
   
-  # Mark start and end points
-  ax.scatter([lon[ 0]], [lat[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Initial', **plot_kwargs)
-  ax.scatter([lon[-1]], [lat[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Final', **plot_kwargs)
+  # ========== LEFT SUBPLOT: 3D Globe ==========
+  ax_3d = fig.add_subplot(1, 2, 1, projection='3d')
+  
+  # Draw Earth sphere (semi-transparent blue)
+  u = np.linspace(0, 2 * np.pi, 50)
+  v = np.linspace(0, np.pi, 25)
+  x_sphere = r_earth * np.outer(np.cos(u), np.sin(v))
+  y_sphere = r_earth * np.outer(np.sin(u), np.sin(v))
+  z_sphere = r_earth * np.outer(np.ones(np.size(u)), np.cos(v))
+  ax_3d.plot_surface(x_sphere, y_sphere, z_sphere, color='lightblue', alpha=0.3, shade=False, zorder=1)  # type: ignore
+  
+  # Draw coastlines on the 3D sphere
+  coastline_segments = _get_coastline_coordinates()
+  for lon_coast, lat_coast in coastline_segments:
+    x_coast, y_coast, z_coast = _latlon_to_xyz(lat_coast, lon_coast, r_earth * 1.001)  # Slightly above surface
+    ax_3d.plot(x_coast, y_coast, z_coast, 'k-', linewidth=0.5, alpha=0.8, zorder=2)
+  
+  # Draw latitude/longitude grid lines
+  grid_alpha = 0.2
+  grid_color = 'gray'
+  # Latitude lines (every 30 degrees)
+  for lat_line in [-60, -30, 0, 30, 60]:
+    lon_grid = np.linspace(-180, 180, 100)
+    lat_grid = np.full_like(lon_grid, lat_line)
+    x_grid, y_grid, z_grid = _latlon_to_xyz(lat_grid, lon_grid, r_earth * 1.002)
+    ax_3d.plot(x_grid, y_grid, z_grid, color=grid_color, linewidth=0.3, alpha=grid_alpha, zorder=1)
+  # Longitude lines (every 30 degrees)
+  for lon_line in range(-180, 180, 30):
+    lat_grid = np.linspace(-90, 90, 50)
+    lon_grid = np.full_like(lat_grid, lon_line)
+    x_grid, y_grid, z_grid = _latlon_to_xyz(lat_grid, lon_grid, r_earth * 1.002)
+    ax_3d.plot(x_grid, y_grid, z_grid, color=grid_color, linewidth=0.3, alpha=grid_alpha, zorder=1)
+  
+  # Plot ground track on 3D sphere (projected to surface)
+  for lat_seg, lon_seg in zip(lat_segments, lon_segments):
+    x_track, y_track, z_track = _latlon_to_xyz(lat_seg, lon_seg, r_earth * 1.01)  # Slightly above surface
+    ax_3d.plot(x_track, y_track, z_track, 'b-', linewidth=2.0, zorder=3)
+  
+  # Mark start and end points on 3D globe
+  x_start, y_start, z_start = _latlon_to_xyz(lat[0], lon[0], r_earth * 1.02)
+  x_end, y_end, z_end = _latlon_to_xyz(lat[-1], lon[-1], r_earth * 1.02)
+  ax_3d.scatter([x_start], [y_start], [z_start], s=400, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=4)  # type: ignore
+  ax_3d.scatter([x_end], [y_end], [z_end], s=400, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=4)  # type: ignore
+  
+  # Set 3D axis properties
+  ax_3d.set_xlabel('X [m]')
+  ax_3d.set_ylabel('Y [m]')
+  ax_3d.set_zlabel('Z [m]')  # type: ignore
+  ax_3d.set_box_aspect([1, 1, 1])  # type: ignore
+  
+  # Set equal axis limits for sphere
+  limit = r_earth * 1.3
+  ax_3d.set_xlim([-limit, limit])
+  ax_3d.set_ylim([-limit, limit])
+  ax_3d.set_zlim([-limit, limit])  # type: ignore
+  
+  # Set pane colors to white
+  ax_3d.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+  ax_3d.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+  ax_3d.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # type: ignore
+  
+  # Set view angle for good visualization
+  ax_3d.view_init(elev=20, azim=-60)  # type: ignore
+  
+  # ========== RIGHT SUBPLOT: 2D Map Projection ==========
+  ax_2d = fig.add_subplot(1, 2, 2, projection=ccrs.PlateCarree())
+  ax_2d.set_extent([-180, 180, -90, 90], crs=ccrs.PlateCarree())  # type: ignore
+  ax_2d.add_feature(cfeature.COASTLINE)  # type: ignore
+  ax_2d.add_feature(cfeature.BORDERS, linestyle=':', alpha=0.5)  # type: ignore
+  gl = ax_2d.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False, alpha=0.5, linestyle='--')  # type: ignore
+  gl.top_labels = False
+  gl.right_labels = False
+  
+  # Plot each segment on 2D map
+  plot_kwargs = {'transform': ccrs.PlateCarree()}
+  for lat_seg, lon_seg in zip(lat_segments, lon_segments):
+    ax_2d.plot(lon_seg, lat_seg, 'b-', linewidth=1.5, **plot_kwargs)
+  
+  # Mark start and end points on 2D map
+  ax_2d.scatter([lon[ 0]], [lat[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Initial', **plot_kwargs)
+  ax_2d.scatter([lon[-1]], [lat[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Final', **plot_kwargs)
   
   # Build info text for bottom of figure (consistent with 3D plots)
   info_text = "Frame: IAU_EARTH (Body-Fixed)"
