@@ -1715,13 +1715,13 @@ def plot_ground_track(
   # ========== LEFT SUBPLOT: 3D Globe ==========
   ax_3d = fig.add_subplot(1, 2, 1, projection='3d')
   
-  # Draw Earth sphere (semi-transparent blue)
-  u = np.linspace(0, 2 * np.pi, 50)
-  v = np.linspace(0, np.pi, 25)
+  # Draw Earth wireframe sphere (black)
+  u = np.linspace(0, 2 * np.pi, 24)
+  v = np.linspace(0, np.pi, 12)
   x_sphere = r_earth * np.outer(np.cos(u), np.sin(v))
   y_sphere = r_earth * np.outer(np.sin(u), np.sin(v))
   z_sphere = r_earth * np.outer(np.ones(np.size(u)), np.cos(v))
-  ax_3d.plot_surface(x_sphere, y_sphere, z_sphere, color='lightblue', alpha=0.3, shade=False, zorder=1)  # type: ignore
+  ax_3d.plot_wireframe(x_sphere, y_sphere, z_sphere, color='black', linewidth=0.3, alpha=0.3, zorder=1)  # type: ignore
   
   # Draw coastlines on the 3D sphere
   coastline_segments = _get_coastline_coordinates()
