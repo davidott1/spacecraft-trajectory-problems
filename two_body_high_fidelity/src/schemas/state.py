@@ -126,8 +126,8 @@ class GeocentricCoordinates:
   Attributes:
     latitude  : Geocentric latitude [rad]
     longitude : Longitude [rad]
-    radius    : Distance from Earth center [m]
+    altitude  : Altitude above spherical Earth [m]
   """
   latitude  : Union[float, np.ndarray]
   longitude : Union[float, np.ndarray]
-  radius    : Union[float, np.ndarray]
+  altitude  : Union[float, np.ndarray]

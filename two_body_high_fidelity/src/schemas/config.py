@@ -21,17 +21,27 @@ class OutputPaths:
   Output file and directory paths.
   
   Attributes:
-    base_folderpath    : Base output folderpath
-    figures_folderpath : Folderpath for figure output
-    logs_folderpath    : Folderpath for log files
-    data_folderpath    : Folderpath for data output
-    log_filepath       : Filepath to log file
+    base_folderpath          : Base output folderpath
+    figures_folderpath       : Folderpath for figure output
+    logs_folderpath          : Folderpath for log files
+    data_folderpath          : Folderpath for data output
+    log_filepath             : Filepath to log file
+    spice_kernels_folderpath : Folderpath for SPICE kernels
+    lsk_filepath             : Filepath to leap seconds kernel
+    jpl_horizons_folderpath  : Folderpath for JPL Horizons ephemeris
+    tles_folderpath          : Folderpath for TLE files
+    state_vectors_folderpath : Folderpath for state vector files
   """
-  base_folderpath    : Path
-  figures_folderpath : Optional[Path] = None
-  logs_folderpath    : Optional[Path] = None
-  data_folderpath    : Optional[Path] = None
-  log_filepath       : Optional[Path] = None
+  base_folderpath          : Path
+  figures_folderpath       : Optional[Path] = None
+  logs_folderpath          : Optional[Path] = None
+  data_folderpath          : Optional[Path] = None
+  log_filepath             : Optional[Path] = None
+  spice_kernels_folderpath : Optional[Path] = None
+  lsk_filepath             : Optional[Path] = None
+  jpl_horizons_folderpath  : Optional[Path] = None
+  tles_folderpath          : Optional[Path] = None
+  state_vectors_folderpath : Optional[Path] = None
   
   def __post_init__(self):
     if self.figures_folderpath is None:
@@ -97,17 +107,24 @@ class SimulationConfig:
     object_name         : Sanitized object name for filenames
     object_name_display : Display name for plots
     auto_download       : Auto-download missing data
+    propagation_config  : Propagation configuration (tolerances, method)
+    tle_line_1          : TLE line 1 (populated after loading)
+    tle_line_2          : TLE line 2 (populated after loading)
+    tle_epoch_dt        : TLE epoch datetime (populated after loading)
   """
   initial_state       : InitialStateConfig
   time_o_dt           : datetime
   time_f_dt           : datetime
   spacecraft          : SpacecraftProperties  = field(default_factory=SpacecraftProperties)
-  gravity             : GravityModelConfig    = None
+  gravity             : Optional[GravityModelConfig] = None
   comparison          : ComparisonConfig      = field(default_factory=ComparisonConfig)
   output_paths        : Optional[OutputPaths] = None
   object_name         : str                   = "object"
   object_name_display : str                   = "Object"
   auto_download       : bool                  = False
+  tle_line_1          : Optional[str]         = None
+  tle_line_2          : Optional[str]         = None
+  tle_epoch_dt        : Optional[datetime]    = None
   
   def __post_init__(self):
     if self.gravity is None:

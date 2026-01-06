@@ -63,16 +63,20 @@ Usage Example:
 --------------
   from src.model.dynamics import Acceleration, GeneralStateEquationsOfMotion
   from src.model.constants import SOLARSYSTEMCONSTANTS
+  from src.schemas.spacecraft import SpacecraftProperties, DragConfig
+  
+  # Create spacecraft with drag enabled
+  spacecraft = SpacecraftProperties(
+      mass = 1000.0,
+      drag = DragConfig(enabled=True, cd=2.2, area=10.0),
+  )
   
   # Initialize acceleration model
   acceleration = Acceleration(
       gp                = SOLARSYSTEMCONSTANTS.EARTH.GP,
+      spacecraft        = spacecraft,
       j2                = SOLARSYSTEMCONSTANTS.EARTH.J2,
       pos_ref           = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR,
-      enable_drag       = True,
-      cd                = 2.2,
-      area_drag         = 10.0,
-      mass              = 1000.0,
       enable_third_body = True,
   )
   
@@ -110,6 +114,8 @@ from typing  import Optional
 
 from src.model.constants       import SOLARSYSTEMCONSTANTS, CONVERTER, NAIFIDS
 from src.model.frame_converter import FrameConverter
+from src.schemas.spacecraft    import SpacecraftProperties, DragConfig, SRPConfig
+from src.schemas.gravity       import GravityModelConfig
 
 
 # Type hint for gravity model (avoid circular import)
@@ -907,6 +913,68 @@ class ThirdBodyGravity:
         )
 
       return acc_vec
+
+
+def _get_harmonic_coefficients(
+  gravity_harmonics_list : list,
+) -> dict:
+  """
+  Map harmonic names to their coefficient values from constants.
+  
+  Input:
+  ------
+    gravity_harmonics_list : list
+      List of harmonic names (e.g., ['J2', 'J3', 'C22', 'S22']).
+      
+  Output:
+  -------
+    coeffs : dict
+      Dictionary mapping parameter names to values.
+  """
+  coeffs = {
+    'j2'  : 0.0,
+    'j3'  : 0.0,
+    'j4'  : 0.0,
+    'j5'  : 0.0,
+    'j6'  : 0.0,
+    'c21' : 0.0,
+    's21' : 0.0,
+    'c22' : 0.0,
+    's22' : 0.0,
+    'c31' : 0.0,
+    's31' : 0.0,
+    'c32' : 0.0,
+    's32' : 0.0,
+    'c33' : 0.0,
+    's33' : 0.0,
+  }
+  
+  # Map harmonic names to constants
+  harmonic_map = {
+    'J2'  : ('j2',  SOLARSYSTEMCONSTANTS.EARTH.J2),
+    'J3'  : ('j3',  SOLARSYSTEMCONSTANTS.EARTH.J3),
+    'J4'  : ('j4',  SOLARSYSTEMCONSTANTS.EARTH.J4),
+    'J5'  : ('j5',  SOLARSYSTEMCONSTANTS.EARTH.J5),
+    'J6'  : ('j6',  SOLARSYSTEMCONSTANTS.EARTH.J6),
+    'C21' : ('c21', SOLARSYSTEMCONSTANTS.EARTH.C21),
+    'S21' : ('s21', SOLARSYSTEMCONSTANTS.EARTH.S21),
+    'C22' : ('c22', SOLARSYSTEMCONSTANTS.EARTH.C22),
+    'S22' : ('s22', SOLARSYSTEMCONSTANTS.EARTH.S22),
+    'C31' : ('c31', SOLARSYSTEMCONSTANTS.EARTH.C31),
+    'S31' : ('s31', SOLARSYSTEMCONSTANTS.EARTH.S31),
+    'C32' : ('c32', SOLARSYSTEMCONSTANTS.EARTH.C32),
+    'S32' : ('s32', SOLARSYSTEMCONSTANTS.EARTH.S32),
+    'C33' : ('c33', SOLARSYSTEMCONSTANTS.EARTH.C33),
+    'S33' : ('s33', SOLARSYSTEMCONSTANTS.EARTH.S33),
+  }
+  
+  for harmonic in gravity_harmonics_list:
+    harmonic_upper = harmonic.upper()
+    if harmonic_upper in harmonic_map:
+      key, value = harmonic_map[harmonic_upper]
+      coeffs[key] = value
+  
+  return coeffs
     
 
 class Gravity:
@@ -923,107 +991,55 @@ class Gravity:
     
     def __init__(
       self,
-      gp                        : float,
-      j2                        : float = 0.0,
-      j3                        : float = 0.0,
-      j4                        : float = 0.0,
-      j5                        : float = 0.0,
-      j6                        : float = 0.0,
-      c21                       : float = 0.0,
-      s21                       : float = 0.0,
-      c22                       : float = 0.0,
-      s22                       : float = 0.0,
-      c31                       : float = 0.0,
-      s31                       : float = 0.0,
-      c32                       : float = 0.0,
-      s32                       : float = 0.0,
-      c33                       : float = 0.0,
-      s33                       : float = 0.0,
-      pos_ref                   : float = 0.0,
-      enable_third_body         : bool  = False,
-      third_body_bodies         : list  = None,
-      spherical_harmonics_model : Optional['SphericalHarmonicsGravity'] = None,
+      gravity_config : GravityModelConfig,
     ):
       """
       Initialize gravity acceleration components.
       
       Input:
       ------
-        gp : float
-          Gravitational parameter of central body [m³/s²].
-        j2 : float
-          J2 harmonic coefficient for oblateness.
-        j3 : float
-          J3 harmonic coefficient for oblateness.
-        j4 : float
-          J4 harmonic coefficient for oblateness.
-        j5 : float
-          J5 harmonic coefficient for oblateness.
-        j6 : float
-          J6 harmonic coefficient for oblateness.
-        c21 : float
-          C21 tesseral harmonic coefficient.
-        s21 : float
-          S21 tesseral harmonic coefficient.
-        c22 : float
-          C22 tesseral harmonic coefficient.
-        s22 : float
-          S22 tesseral harmonic coefficient.
-        c31 : float
-          C31 tesseral harmonic coefficient.
-        s31 : float
-          S31 tesseral harmonic coefficient.
-        c32 : float
-          C32 tesseral harmonic coefficient.
-        s32 : float
-          S32 tesseral harmonic coefficient.
-        c33 : float
-          C33 tesseral harmonic coefficient.
-        s33 : float
-          S33 tesseral harmonic coefficient.
-        pos_ref : float
-          Reference radius for harmonic coefficients [m].
-        enable_third_body : bool
-          Enable Sun/Moon gravitational perturbations.
-        third_body_bodies : list
-          Which bodies to include (default: ['sun', 'moon']).
-        spherical_harmonics_model : SphericalHarmonicsGravity, optional
-          Spherical harmonics gravity model. If provided, replaces 
-          two-body point mass and oblateness terms.
+        gravity_config : GravityModelConfig
+          Gravity model configuration containing:
+          - gp: Gravitational parameter of central body [m³/s²]
+          - spherical_harmonics: SphericalHarmonicsConfig with degree, order, coefficients, model
+          - third_body: ThirdBodyConfig with enabled flag and list of bodies
               
       Output:
       -------
         None
       """
       # Spherical harmonics gravity model (if provided, replaces two-body terms)
-      self.spherical_harmonics_model = spherical_harmonics_model
+      self.spherical_harmonics_model = gravity_config.spherical_harmonics.model
       
       # Two-body gravity (used if no spherical harmonics model provided)
+      # Get harmonic coefficients from the config's coefficient list
+      harmonic_coeffs = _get_harmonic_coefficients(gravity_config.spherical_harmonics.coefficients)
+      
       self.two_body = TwoBodyGravity(
-        gp      = gp,
-        j2      = j2,
-        j3      = j3,
-        j4      = j4,
-        j5      = j5,
-        j6      = j6,
-        c21     = c21,
-        s21     = s21,
-        c22     = c22,
-        s22     = s22,
-        c31     = c31,
-        s31     = s31,
-        c32     = c32,
-        s32     = s32,
-        c33     = c33,
-        s33     = s33,
-        pos_ref = pos_ref,
+        gp      = gravity_config.gp,
+        j2      = harmonic_coeffs['j2'],
+        j3      = harmonic_coeffs['j3'],
+        j4      = harmonic_coeffs['j4'],
+        j5      = harmonic_coeffs['j5'],
+        j6      = harmonic_coeffs['j6'],
+        c21     = harmonic_coeffs['c21'],
+        s21     = harmonic_coeffs['s21'],
+        c22     = harmonic_coeffs['c22'],
+        s22     = harmonic_coeffs['s22'],
+        c31     = harmonic_coeffs['c31'],
+        s31     = harmonic_coeffs['s31'],
+        c32     = harmonic_coeffs['c32'],
+        s32     = harmonic_coeffs['s32'],
+        c33     = harmonic_coeffs['c33'],
+        s33     = harmonic_coeffs['s33'],
+        pos_ref = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR,
       )
         
       # Third-body gravity
-      self.enable_third_body = enable_third_body
+      self.enable_third_body = gravity_config.third_body.enabled
       if self.enable_third_body:
         self.third_body = ThirdBodyGravity(
-          bodies = third_body_bodies,
+          bodies = gravity_config.third_body.bodies,
         )
       else:
         self.third_body = None
@@ -1096,19 +1112,19 @@ class AtmosphericDrag:
     
     def __init__(
       self,
-      cd   : float = 2.2,
-      area : float = 0.0,
-      mass : float = 1.0,
+      drag_config : DragConfig,
+      mass        : float = 1.0,
     ):
       """
       Initialize drag model
       
       Input:
       ------
-        cd : float
-          Drag coefficient.
-        area : float
-          Cross-sectional area [m²].
+        drag_config : DragConfig
+          Drag configuration dataclass containing:
+          - enabled : bool - Whether drag is enabled
+          - cd      : float - Drag coefficient
+          - area    : float - Cross-sectional area [m²]
         mass : float
           Spacecraft mass [kg].
               
@@ -1116,8 +1132,8 @@ class AtmosphericDrag:
       -------
         None
       """
-      self.cd   = cd
-      self.area = area
+      self.cd   = drag_config.cd
+      self.area = drag_config.area
       self.mass = mass
     
     def compute(
@@ -1198,19 +1214,19 @@ class SolarRadiationPressure:
     
     def __init__(
       self,
-      cr   : float = 1.3,
-      area : float = 0.0,
-      mass : float = 1.0,
+      srp_config : SRPConfig,
+      mass       : float = 1.0,
     ):
       """
       Initialize SRP model
       
       Input:
       ------
-        cr : float
-          Radiation pressure coefficient (1.0 = absorbing, 2.0 = reflecting)
-        area : float
-          Cross-sectional area [m²]
+        srp_config : SRPConfig
+          SRP configuration dataclass containing:
+          - enabled : bool - Whether SRP is enabled
+          - cr      : float - Radiation pressure coefficient (1.0 = absorbing, 2.0 = reflecting)
+          - area    : float - Cross-sectional area [m²]
         mass : float
           Spacecraft mass [kg]
               
@@ -1218,8 +1234,8 @@ class SolarRadiationPressure:
       -------
         None
       """
-      self.cr   = cr
-      self.area = area
+      self.cr   = srp_config.cr
+      self.area = srp_config.area
       self.mass = mass
     
     def compute(
@@ -1385,139 +1401,43 @@ class Acceleration:
     
     def __init__(
       self,
-      gp                        : float,
-      j2                        : float = 0.0,
-      j3                        : float = 0.0,
-      j4                        : float = 0.0,
-      j5                        : float = 0.0,
-      j6                        : float = 0.0,
-      c21                       : float = 0.0,
-      s21                       : float = 0.0,
-      c22                       : float = 0.0,
-      s22                       : float = 0.0,
-      c31                       : float = 0.0,
-      s31                       : float = 0.0,
-      c32                       : float = 0.0,
-      s32                       : float = 0.0,
-      c33                       : float = 0.0,
-      s33                       : float = 0.0,
-      pos_ref                   : float = 0.0,
-      mass                      : float = 1.0,
-      enable_drag               : bool  = False,
-      cd                        : float = 0.0,
-      area_drag                 : float = 0.0,
-      enable_third_body         : bool  = False,
-      third_body_bodies         : list  = None,
-      enable_srp                : bool  = False,
-      cr                        : float = 0.0,
-      area_srp                  : float = 0.0,
-      spherical_harmonics_model : Optional['SphericalHarmonicsGravity'] = None,
+      gravity_config : GravityModelConfig,
+      spacecraft     : SpacecraftProperties,
     ):
       """
       Initialize acceleration coordinator
       
       Input:
       ------
-        gp : float
-          Gravitational parameter of central body [m³/s²]
-        j2 : float
-          J2 harmonic coefficient for oblateness
-        j3 : float
-          J3 harmonic coefficient for oblateness
-        j4 : float
-          J4 harmonic coefficient for oblateness
-        j5 : float
-          J5 harmonic coefficient for oblateness
-        j6 : float
-          J6 harmonic coefficient for oblateness
-        c21 : float
-          C21 tesseral harmonic coefficient
-        s21 : float
-          S21 tesseral harmonic coefficient
-        c22 : float
-          C22 tesseral harmonic coefficient
-        s22 : float
-          S22 tesseral harmonic coefficient
-        c31 : float
-          C31 tesseral harmonic coefficient
-        s31 : float
-          S31 tesseral harmonic coefficient
-        c32 : float
-          C32 tesseral harmonic coefficient
-        s32 : float
-          S32 tesseral harmonic coefficient
-        c33 : float
-          C33 tesseral harmonic coefficient
-        s33 : float
-          S33 tesseral harmonic coefficient
-        pos_ref : float
-          Reference radius for harmonic coefficients [m]
-        mass : float
-          Spacecraft mass [kg]
-        enable_drag : bool
-          Enable atmospheric drag
-        cd : float
-          Drag coefficient
-        area_drag : float
-          Cross-sectional area [m²]
-        enable_third_body : bool
-          Enable Sun/Moon gravitational perturbations
-        third_body_bodies : list of str
-          Which bodies to include (default: ['sun', 'moon'])
-        enable_srp : bool
-          Enable solar radiation pressure
-        cr : float
-          Radiation pressure coefficient
-        area_srp : float
-          Cross-sectional area for SRP [m²]
-        spherical_harmonics_model : SphericalHarmonicsGravity, optional
-          Spherical harmonics gravity model. If provided, replaces 
-          two-body point mass and oblateness terms.
+        gravity_config : GravityModelConfig
+          Gravity model configuration containing:
+          - gp: Gravitational parameter of central body [m³/s²]
+          - spherical_harmonics: SphericalHarmonicsConfig with degree, order, coefficients, model
+          - third_body: ThirdBodyConfig with enabled flag and list of bodies
+        spacecraft : SpacecraftProperties
+          Spacecraft properties dataclass containing mass, drag config, and SRP config
               
       Output:
       -------
         None
       """
-      # Create acceleration component instances
-      self.gravity = Gravity(
-        gp                        = gp,
-        j2                        = j2,
-        j3                        = j3,
-        j4                        = j4,
-        j5                        = j5,
-        j6                        = j6,
-        c21                       = c21,
-        s21                       = s21,
-        c22                       = c22,
-        s22                       = s22,
-        c31                       = c31,
-        s31                       = s31,
-        c32                       = c32,
-        s32                       = s32,
-        c33                       = c33,
-        s33                       = s33,
-        pos_ref                   = pos_ref,
-        enable_third_body         = enable_third_body,
-        third_body_bodies         = third_body_bodies,
-        spherical_harmonics_model = spherical_harmonics_model,
-      )
+      # Create gravity component
+      self.gravity = Gravity(gravity_config=gravity_config)
       
-      self.enable_drag = enable_drag
-      if self.enable_drag and cd > 0 and area_drag > 0 and mass > 0:
+      self.enable_drag = spacecraft.drag.enabled
+      if self.enable_drag and spacecraft.drag.is_valid and spacecraft.mass > 0:
         self.drag = AtmosphericDrag(
-          cd   = cd,
-          area = area_drag,
-          mass = mass,
+          drag_config = spacecraft.drag,
+          mass        = spacecraft.mass,
         )
       else:
         self.drag = None
       
-      self.enable_srp = enable_srp
-      if self.enable_srp:
+      self.enable_srp = spacecraft.srp.enabled
+      if self.enable_srp and spacecraft.srp.is_valid and spacecraft.mass > 0:
         self.srp = SolarRadiationPressure(
-          cr   = cr,
-          area = area_srp,
-          mass = mass,
+          srp_config = spacecraft.srp,
+          mass       = spacecraft.mass,
         )
       else:
           self.srp = None

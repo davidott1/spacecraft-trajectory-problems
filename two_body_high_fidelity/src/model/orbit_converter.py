@@ -2,10 +2,14 @@ import warnings
 import numpy    as np
 import spiceypy as spice
 
-from typing import Union
-
-from src.model.constants import SOLARSYSTEMCONSTANTS
-from src.schemas.state   import ClassicalOrbitalElements, ModifiedEquinoctialElements, GeodeticCoordinates, GeocentricCoordinates
+from src.model.constants import SOLARSYSTEMCONSTANTS, CONVERTER
+from src.schemas.state   import (
+  CartesianState,
+  ClassicalOrbitalElements,
+  ModifiedEquinoctialElements,
+  GeodeticCoordinates,
+  GeocentricCoordinates,
+)
 
 class TwoBody_RootSolvers:
   """
@@ -561,7 +565,7 @@ class OrbitConverter:
 
   @staticmethod
   def mee_to_pv(
-    mee : dict,
+    mee : ModifiedEquinoctialElements,
     gp  : float = SOLARSYSTEMCONSTANTS.EARTH.GP,
   ) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -569,15 +573,15 @@ class OrbitConverter:
     
     Input:
     ------
-      mee : dict
-        Dictionary containing modified equinoctial elements:
+      mee : ModifiedEquinoctialElements
+        Modified equinoctial elements dataclass:
         - p : semi-latus rectum [m]
         - f : e*cos(ω + I*Ω) [-]
         - g : e*sin(ω + I*Ω) [-]
         - h : tan(i/2)*cos(Ω) [-] or cot(i/2)*cos(Ω) [-] (retrograde)
         - k : tan(i/2)*sin(Ω) [-] or cot(i/2)*sin(Ω) [-] (retrograde)
         - L : true longitude = ω + I*Ω + ν [rad]
-        - I : retrograde factor (+1 prograde, -1 retrograde), optional (default +1)
+        - I : retrograde factor (+1 prograde, -1 retrograde)
       gp : float
         Gravitational parameter [m³/s²]
     
@@ -599,14 +603,14 @@ class OrbitConverter:
       "A Set of Modified Equinoctial Orbit Elements"
       Celestial Mechanics, Vol. 36, pp. 409-419
     """
-    # Extract elements
-    p = mee['p']
-    f = mee['f']
-    g = mee['g']
-    h = mee['h']
-    k = mee['k']
-    L = mee['L']
-    I = mee.get('I', 1)  # Default to prograde if not specified
+    # Extract elements from dataclass
+    p = mee.p
+    f = mee.f
+    g = mee.g
+    h = mee.h
+    k = mee.k
+    L = mee.L
+    I = mee.I
     
     # Auxiliary quantities
     s_sq = 1 + h**2 + k**2
@@ -632,16 +636,16 @@ class OrbitConverter:
 
   @staticmethod
   def coe_to_mee(
-    coe        : dict,
+    coe        : ClassicalOrbitalElements,
     retrograde : bool = False,
-  ) -> dict:
+  ) -> ModifiedEquinoctialElements:
     """
     Convert Classical Orbital Elements to Modified Equinoctial Elements.
     
     Input:
     ------
-      coe : dict
-        Dictionary containing classical orbital elements:
+      coe : ClassicalOrbitalElements
+        Classical orbital elements dataclass:
         - sma  : semi-major axis [m]
         - ecc  : eccentricity [-]
         - inc  : inclination [rad]
@@ -653,24 +657,24 @@ class OrbitConverter:
         
     Output:
     -------
-      mee : dict
-        Dictionary containing modified equinoctial elements.
+      mee : ModifiedEquinoctialElements
+        Modified equinoctial elements dataclass.
     """
-    # Extract elements
-    sma  = coe['sma']
-    ecc  = coe['ecc']
-    inc  = coe['inc']
-    raan = coe['raan']
-    aop  = coe['aop']
-    ta   = coe['ta']
+    # Extract elements from dataclass
+    sma  = coe.sma
+    ecc  = coe.ecc
+    inc  = coe.inc
+    raan = coe.raan
+    aop  = coe.aop
+    ta   = coe.ta
     
     # Retrograde factor
     I = -1 if retrograde else 1
     
     # Semi-latus rectum
     if np.isinf(sma):
-      # Parabolic case - need slr or periapsis from coe
-      p = coe.get('slr', coe.get('periapsis', 0) * 2)
+      # Parabolic case - compute from eccentricity
+      p = 0  # Cannot determine without additional info
     else:
       p = sma * (1 - ecc**2)
     
@@ -698,54 +702,48 @@ class OrbitConverter:
     # True longitude
     L = (varpi + ta) % (2 * np.pi)
     
-    return {
-      'p' : p,
-      'f' : f,
-      'g' : g,
-      'h' : h,
-      'k' : k,
-      'L' : L,
-      'I' : I,
-    }
+    return ModifiedEquinoctialElements(
+      p = p,
+      f = f,
+      g = g,
+      h = h,
+      k = k,
+      L = L,
+      I = I,
+    )
 
   @staticmethod
   def mee_to_coe(
-    mee : dict,
-  ) -> dict:
+    mee : ModifiedEquinoctialElements,
+  ) -> ClassicalOrbitalElements:
     """
     Convert Modified Equinoctial Elements to Classical Orbital Elements.
     
     Input:
     ------
-      mee : dict
-        Dictionary containing modified equinoctial elements:
+      mee : ModifiedEquinoctialElements
+        Modified equinoctial elements dataclass:
         - p : semi-latus rectum [m]
         - f : e*cos(ω + I*Ω) [-]
         - g : e*sin(ω + I*Ω) [-]
         - h : tan(i/2)*cos(Ω) [-] or cot(i/2)*cos(Ω) [-]
         - k : tan(i/2)*sin(Ω) [-] or cot(i/2)*sin(Ω) [-]
         - L : true longitude [rad]
-        - I : retrograde factor (+1 or -1), optional (default +1)
+        - I : retrograde factor (+1 or -1)
         
     Output:
     -------
-      coe : dict
-        Dictionary containing classical orbital elements:
-        - sma  : semi-major axis [m]
-        - ecc  : eccentricity [-]
-        - inc  : inclination [rad]
-        - raan : right ascension of ascending node [rad]
-        - aop  : argument of periapsis [rad]
-        - ta   : true anomaly [rad]
+      coe : ClassicalOrbitalElements
+        Classical orbital elements dataclass.
     """
-    # Extract elements
-    p = mee['p']
-    f = mee['f']
-    g = mee['g']
-    h = mee['h']
-    k = mee['k']
-    L = mee['L']
-    I = mee.get('I', 1)
+    # Extract elements from dataclass
+    p = mee.p
+    f = mee.f
+    g = mee.g
+    h = mee.h
+    k = mee.k
+    L = mee.L
+    I = mee.I
     
     # Eccentricity
     ecc = np.sqrt(f**2 + g**2)
@@ -785,18 +783,18 @@ class OrbitConverter:
     ta = L - varpi
     ta = ta % (2 * np.pi)
     
-    return {
-      'sma'  : sma,
-      'ecc'  : ecc,
-      'inc'  : inc,
-      'raan' : raan,
-      'aop'  : aop,
-      'ta'   : ta,
-      'ma'   : None,  # Not computed here
-      'ea'   : None,
-      'ha'   : None,
-      'pa'   : None,
-    }
+    return ClassicalOrbitalElements(
+      sma  = sma,
+      ecc  = ecc,
+      inc  = inc,
+      raan = raan,
+      aop  = aop,
+      ta   = ta,
+      ma   = None,  # Not computed here
+      ea   = None,
+      ha   = None,
+      pa   = None,
+    )
 
   @staticmethod
   def pv_to_specific_energy(
@@ -1228,7 +1226,7 @@ class GeographicCoordinateConverter:
   @staticmethod
   def pos_to_geocentric(
     pos_vec : np.ndarray,
-  ) -> dict:
+  ) -> GeocentricCoordinates:
     """
     Convert Cartesian position to geocentric (spherical) coordinates.
     
@@ -1239,11 +1237,11 @@ class GeographicCoordinateConverter:
         
     Output:
     -------
-      coords : dict
-        Dictionary containing:
-        - latitude        : float - Geocentric latitude [rad]
-        - longitude       : float - Longitude [rad]
-        - altitude        : float - Altitude above spherical Earth [m]
+      coords : GeocentricCoordinates
+        Geocentric coordinates dataclass containing:
+        - latitude  : float - Geocentric latitude [rad]
+        - longitude : float - Longitude [rad]
+        - altitude  : float - Altitude above spherical Earth [m]
     """
     pos_vec = np.asarray(pos_vec).flatten()
     pos_x, pos_y, pos_z = pos_vec[0], pos_vec[1], pos_vec[2]
@@ -1253,40 +1251,37 @@ class GeographicCoordinateConverter:
     longitude = np.arctan2(pos_y, pos_x)
     altitude  = pos_mag - SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
     
-    return {
-      'latitude'  : latitude,
-      'longitude' : longitude,
-      'altitude'  : altitude,
-    }
+    return GeocentricCoordinates(
+      latitude  = latitude,
+      longitude = longitude,
+      altitude  = altitude,
+    )
   
   @staticmethod
   def geocentric_to_pos(
-    latitude  : float,
-    longitude : float,
-    altitude  : float,
+    coords : GeocentricCoordinates,
   ) -> np.ndarray:
     """
     Convert geocentric (spherical) coordinates to Cartesian position.
     
     Input:
     ------
-      latitude : float
-        Geocentric latitude [rad].
-      longitude : float
-        Longitude [rad].
-      altitude : float
-        Altitude above spherical Earth [m].
+      coords : GeocentricCoordinates
+        Geocentric coordinates dataclass:
+        - latitude  : float - Geocentric latitude [rad]
+        - longitude : float - Longitude [rad]
+        - altitude  : float - Altitude above spherical Earth [m]
         
     Output:
     -------
       pos_vec : np.ndarray
         Position vector in body-fixed frame [m].
     """
-    pos_mag = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR + altitude
+    pos_mag = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR + coords.altitude
     
-    pos_x = pos_mag * np.cos(latitude) * np.cos(longitude)
-    pos_y = pos_mag * np.cos(latitude) * np.sin(longitude)
-    pos_z = pos_mag * np.sin(latitude)
+    pos_x = pos_mag * np.cos(coords.latitude) * np.cos(coords.longitude)
+    pos_y = pos_mag * np.cos(coords.latitude) * np.sin(coords.longitude)
+    pos_z = pos_mag * np.sin(coords.latitude)
     
     return np.array([pos_x, pos_y, pos_z])
   
@@ -1297,7 +1292,7 @@ class GeographicCoordinateConverter:
   @staticmethod
   def pos_to_geodetic(
     pos_vec : np.ndarray,
-  ) -> dict:
+  ) -> GeodeticCoordinates:
     """
     Convert Cartesian position to geodetic (ellipsoidal) coordinates.
     
@@ -1310,8 +1305,8 @@ class GeographicCoordinateConverter:
         
     Output:
     -------
-      coords : dict
-        Dictionary containing:
+      coords : GeodeticCoordinates
+        Geodetic coordinates dataclass containing:
         - latitude  : float - Geodetic latitude [rad]
         - longitude : float - Longitude [rad]
         - altitude  : float - Altitude above WGS84 ellipsoid [m]
@@ -1331,17 +1326,15 @@ class GeographicCoordinateConverter:
     # Convert alt back to m
     altitude = altitude__km * 1000.0
     
-    return {
-      'latitude'  : latitude,
-      'longitude' : longitude,
-      'altitude'  : altitude,
-    }
+    return GeodeticCoordinates(
+      latitude  = latitude,
+      longitude = longitude,
+      altitude  = altitude,
+    )
   
   @staticmethod
   def geodetic_to_pos(
-    latitude  : float,
-    longitude : float,
-    altitude  : float,
+    coords : GeodeticCoordinates,
   ) -> np.ndarray:
     """
     Convert geodetic (ellipsoidal) coordinates to Cartesian position.
@@ -1350,12 +1343,11 @@ class GeographicCoordinateConverter:
     
     Input:
     ------
-      latitude : float
-        Geodetic latitude [rad].
-      longitude : float
-        Longitude [rad].
-      altitude : float
-        Altitude above WGS84 ellipsoid [m].
+      coords : GeodeticCoordinates
+        Geodetic coordinates dataclass:
+        - latitude  : float - Geodetic latitude [rad]
+        - longitude : float - Longitude [rad]
+        - altitude  : float - Altitude above WGS84 ellipsoid [m]
         
     Output:
     -------
@@ -1363,12 +1355,12 @@ class GeographicCoordinateConverter:
         Position vector in body-fixed frame [m].
     """
     # Convert m to km for SPICE
-    altitude__km = altitude / 1000.0
+    altitude__km = coords.altitude * CONVERTER.KM_PER_M
     
     # SPICE georec expects (lon, lat, alt) in (rad, rad, km)
     pos_vec__km = spice.georec(
-      longitude,
-      latitude,
+      coords.longitude,
+      coords.latitude,
       altitude__km,
       GeographicCoordinateConverter.WGS84_RE,
       GeographicCoordinateConverter.WGS84_F,
@@ -1386,7 +1378,7 @@ class GeographicCoordinateConverter:
   @staticmethod
   def pos_to_geocentric_array(
     pos_vec_array : np.ndarray,
-  ) -> dict:
+  ) -> GeocentricCoordinates:
     """
     Convert array of Cartesian positions to geocentric coordinates.
     
@@ -1397,8 +1389,8 @@ class GeographicCoordinateConverter:
         
     Output:
     -------
-      coords : dict
-        Dictionary containing arrays:
+      coords : GeocentricCoordinates
+        Geocentric coordinates dataclass with array attributes:
         - latitude  : np.ndarray - Geocentric latitudes [rad]
         - longitude : np.ndarray - Longitudes [rad]
         - altitude  : np.ndarray - Altitudes above spherical Earth [m]
@@ -1412,16 +1404,16 @@ class GeographicCoordinateConverter:
     longitude = np.arctan2(pos_y, pos_x)
     altitude  = pos_mag - SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
     
-    return {
-      'latitude'  : latitude,
-      'longitude' : longitude,
-      'altitude'  : altitude,
-    }
+    return GeocentricCoordinates(
+      latitude  = latitude,
+      longitude = longitude,
+      altitude  = altitude,
+    )
   
   @staticmethod
   def pos_to_geodetic_array(
     pos_vec_array : np.ndarray,
-  ) -> dict:
+  ) -> GeodeticCoordinates:
     """
     Convert array of Cartesian positions to geodetic coordinates.
     
@@ -1432,8 +1424,8 @@ class GeographicCoordinateConverter:
         
     Output:
     -------
-      coords : dict
-        Dictionary containing arrays:
+      coords : GeodeticCoordinates
+        Geodetic coordinates dataclass with array attributes:
         - latitude  : np.ndarray - Geodetic latitudes [rad]
         - longitude : np.ndarray - Longitudes [rad]
         - altitude  : np.ndarray - Altitudes above WGS84 ellipsoid [m]
@@ -1446,15 +1438,15 @@ class GeographicCoordinateConverter:
     
     for i in range(n_points):
       coords = GeographicCoordinateConverter.pos_to_geodetic(pos_vec_array[:, i])
-      latitude[i]  = coords['latitude']
-      longitude[i] = coords['longitude']
-      altitude[i]  = coords['altitude']
+      latitude[i]  = coords.latitude
+      longitude[i] = coords.longitude
+      altitude[i]  = coords.altitude
     
-    return {
-      'latitude'  : latitude,
-      'longitude' : longitude,
-      'altitude' : altitude,
-    }
+    return GeodeticCoordinates(
+      latitude  = latitude,
+      longitude = longitude,
+      altitude  = altitude,
+    )
   
   # ----------------------------
   # Conversion between systems
@@ -1462,58 +1454,40 @@ class GeographicCoordinateConverter:
   
   @staticmethod
   def geocentric_to_geodetic(
-    latitude_geocentric : float,
-    longitude           : float,
-    altitude_geocentric : float,
-  ) -> dict:
+    coords : GeocentricCoordinates,
+  ) -> GeodeticCoordinates:
     """
     Convert geocentric coordinates to geodetic coordinates.
     
     Input:
     ------
-      latitude_geocentric : float
-        Geocentric latitude [rad].
-      longitude : float
-        Longitude [rad] (same for both systems).
-      altitude_geocentric : float
-        Altitude above spherical Earth [m].
+      coords : GeocentricCoordinates
+        Geocentric coordinates dataclass.
         
     Output:
     -------
-      coords : dict
-        Dictionary containing:
-        - latitude  : float - Geodetic latitude [rad]
-        - longitude : float - Longitude [rad]
-        - altitude  : float - Altitude above WGS84 ellipsoid [m]
+      GeodeticCoordinates
+        Geodetic coordinates dataclass.
     """
-    pos_vec = GeographicCoordinateConverter.geocentric_to_pos(latitude_geocentric, longitude, altitude_geocentric)
+    pos_vec = GeographicCoordinateConverter.geocentric_to_pos(coords)
     return GeographicCoordinateConverter.pos_to_geodetic(pos_vec)
   
   @staticmethod
   def geodetic_to_geocentric(
-    latitude_geodetic : float,
-    longitude         : float,
-    altitude_geodetic : float,
-  ) -> dict:
+    coords : GeodeticCoordinates,
+  ) -> GeocentricCoordinates:
     """
     Convert geodetic coordinates to geocentric coordinates.
     
     Input:
     ------
-      latitude_geodetic : float
-        Geodetic latitude [rad].
-      longitude : float
-        Longitude [rad] (same for both systems).
-      altitude_geodetic : float
-        Altitude above WGS84 ellipsoid [m].
+      coords : GeodeticCoordinates
+        Geodetic coordinates dataclass.
         
     Output:
     -------
-      coords : dict
-        Dictionary containing:
-        - latitude  : float - Geocentric latitude [rad]
-        - longitude : float - Longitude [rad]
-        - altitude  : float - Altitude above spherical Earth [m]
+      GeocentricCoordinates
+        Geocentric coordinates dataclass.
     """
-    pos_vec = GeographicCoordinateConverter.geodetic_to_pos(latitude_geodetic, longitude, altitude_geodetic)
+    pos_vec = GeographicCoordinateConverter.geodetic_to_pos(coords)
     return GeographicCoordinateConverter.pos_to_geocentric(pos_vec)
