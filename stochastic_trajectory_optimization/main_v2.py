@@ -497,105 +497,209 @@ if __name__ == "__main__":
     print(f"    Arc 2 departure (at mid):   [{v2_dep_L2[0]:10.4f}, {v2_dep_L2[1]:10.4f}, {v2_dep_L2[2]:10.4f}] km/s")
     print(f"    Arc 2 arrival (at final):   [{v2_arr_L2[0]:10.4f}, {v2_arr_L2[1]:10.4f}, {v2_arr_L2[2]:10.4f}] km/s")
     
-    # --- UNOPTIMIZED MCC SOLUTION WITH UNCERTAINTY (3 Samples) ---
-    print(f"\n--- Unoptimized MCC + Fixed Final State, Fixed Flight Times (3 Samples) ---")
+    # --- Monte Carlo Objective Function ---
+    def mc_objective(dv1_mag, dv1_dir, sigma_dv1, N_mc, seed=None):
+        """
+        Run Monte Carlo simulation and return expected total ΔV.
+        
+        Args:
+            dv1_mag: Nominal ΔV1 magnitude (decision variable)
+            dv1_dir: ΔV1 direction unit vector (fixed)
+            sigma_dv1: Standard deviation of ΔV1 error (km/s)
+            N_mc: Number of Monte Carlo samples
+            seed: Random seed for reproducibility
+        
+        Returns:
+            mean_total_dv: Expected total ΔV
+            stats: Dictionary with detailed statistics
+        """
+        if seed is not None:
+            np.random.seed(seed)
+        
+        dv_init_list = []
+        dv_mid_list = []
+        dv_final_list = []
+        dv_total_list = []
+        r_mid_list = []
+        
+        for _ in range(N_mc):
+            # 1. Generate random magnitude error (additive)
+            dv1_error = np.random.normal(0, sigma_dv1)
+            dv1_actual_mag = dv1_mag + dv1_error
+            dv1_actual_vec = dv1_actual_mag * dv1_dir
+            
+            # New velocity after burn 1
+            v1_actual = v_init_orbit + dv1_actual_vec
+            
+            # Check if orbit is elliptic
+            v_mag_sq = np.dot(v1_actual, v1_actual)
+            r_mag = np.linalg.norm(r_init)
+            energy = v_mag_sq / 2 - MU / r_mag
+            if energy >= 0:
+                continue
+            
+            # 2. Propagate to t_mid
+            r_mid_new, v_mid_arrival = propagate_kepler(r_init, v1_actual, tof_1)
+            if np.any(np.isnan(r_mid_new)):
+                continue
+            
+            # 3. Lambert solve r_mid_new -> r_final
+            v_mid_dep_L, v_final_arr_L = lambert_solver(r_mid_new, r_final, tof_2, tm=1)
+            if np.any(np.isnan(v_mid_dep_L)):
+                continue
+            
+            # 4. Calculate ΔVs
+            dv_init = dv1_actual_mag
+            dv_mid = np.linalg.norm(v_mid_dep_L - v_mid_arrival)
+            dv_final = np.linalg.norm(v_final_orbit - v_final_arr_L)
+            dv_total = dv_init + dv_mid + dv_final
+            
+            dv_init_list.append(dv_init)
+            dv_mid_list.append(dv_mid)
+            dv_final_list.append(dv_final)
+            dv_total_list.append(dv_total)
+            r_mid_list.append(r_mid_new)
+        
+        dv_init_arr = np.array(dv_init_list)
+        dv_mid_arr = np.array(dv_mid_list)
+        dv_final_arr = np.array(dv_final_list)
+        dv_total_arr = np.array(dv_total_list)
+        
+        stats = {
+            'n_valid': len(dv_total_arr),
+            'dv_init_mean': np.mean(dv_init_arr),
+            'dv_init_std': np.std(dv_init_arr),
+            'dv_mid_mean': np.mean(dv_mid_arr),
+            'dv_mid_std': np.std(dv_mid_arr),
+            'dv_final_mean': np.mean(dv_final_arr),
+            'dv_final_std': np.std(dv_final_arr),
+            'dv_total_mean': np.mean(dv_total_arr),
+            'dv_total_std': np.std(dv_total_arr),
+            'dv_total_min': np.min(dv_total_arr),
+            'dv_total_max': np.max(dv_total_arr),
+            'r_mid_list': r_mid_list
+        }
+        
+        return np.mean(dv_total_arr), stats
+    
+    # --- UNOPTIMIZED MCC SOLUTION (Initial Guess) ---
+    print(f"\n--- Unoptimized MCC + Fixed Final State, Fixed Flight Times (Monte Carlo) ---")
     
     # Uncertainty parameters
-    np.random.seed(42)
-    N_samples = 3
+    N_samples = 1000
     
-    # Nominal ΔV1 vector and magnitude
+    # Nominal ΔV1 vector and magnitude (Hohmann solution = initial guess)
     dv1_nominal_vec = traj['dv1_vec']
     dv1_nominal_mag = np.linalg.norm(dv1_nominal_vec)
-    dv1_direction = dv1_nominal_vec / dv1_nominal_mag  # Unit vector
+    dv1_direction = dv1_nominal_vec / dv1_nominal_mag  # Unit vector (fixed)
     
     # Compute 1σ as 10% of nominal in absolute units (km/s)
     sigma_dv1_abs = 0.10 * dv1_nominal_mag  # km/s
     
-    print(f"  Nominal ΔV1: {dv1_nominal_mag:.4f} km/s")
-    print(f"  Uncertainty (1σ): {sigma_dv1_abs*1000:.1f} m/s ({sigma_dv1_abs/dv1_nominal_mag*100:.1f}% of nominal)")
+    print(f"  Initial Guess (Hohmann): ΔV1 = {dv1_nominal_mag:.4f} km/s")
+    print(f"  Uncertainty (1σ): {sigma_dv1_abs*1000:.1f} m/s")
+    print(f"  Number of MC samples: {N_samples}")
     
-    # Storage for MCC solutions
-    mcc_solutions = []
+    # Evaluate initial guess
+    mean_dv_init_guess, stats_init = mc_objective(dv1_nominal_mag, dv1_direction, sigma_dv1_abs, N_samples, seed=42)
+    print(f"\n  Initial Guess Results:")
+    print(f"    E[ΔV_total] = {mean_dv_init_guess:.4f} km/s")
+    print(f"    Valid samples: {stats_init['n_valid']}/{N_samples}")
     
-    # Colors for each sample
-    mcc_colors = ['orange', 'magenta', 'cyan']
+    # --- OPTIMIZE nominal ΔV1 to minimize E[ΔV_total] ---
+    print(f"\n--- Optimizing Nominal ΔV1 to Minimize E[ΔV_total] ---")
     
-    for i in range(N_samples):
-        print(f"\n  --- Sample {i+1} ---")
-        
-        # 1. Generate random magnitude error (additive, in km/s)
-        dv1_error = np.random.normal(0, sigma_dv1_abs)  # Error in km/s
-        dv1_actual_mag = dv1_nominal_mag + dv1_error
-        dv1_actual_vec = dv1_actual_mag * dv1_direction
-        
-        print(f"    Error: {dv1_error*1000:+.1f} m/s ({dv1_error/dv1_nominal_mag*100:+.2f}%)")
-        print(f"    Actual ΔV1: {dv1_actual_mag:.4f} km/s")
-        
-        # New velocity after burn 1
-        v1_actual = v_init_orbit + dv1_actual_vec
-        
-        # 2. Propagate to t_mid with perturbed velocity
-        r_mid_new, v_mid_arrival = propagate_kepler(r_init, v1_actual, tof_1)
-        pos_error = np.linalg.norm(r_mid_new - r_mid)
-        print(f"    Position error at mid: {pos_error:.1f} km")
-        
-        # 3. Use Lambert to solve r_mid_new -> r_final with fixed tof_2
-        v_mid_dep_L, v_final_arr_L = lambert_solver(r_mid_new, r_final, tof_2, tm=1)
-        
-        # 4. Calculate ΔVs
-        dv_init_mcc = dv1_actual_mag
-        dv_mid_mcc_vec = v_mid_dep_L - v_mid_arrival
-        dv_mid_mcc = np.linalg.norm(dv_mid_mcc_vec)
-        dv_final_mcc_vec = v_final_orbit - v_final_arr_L
-        dv_final_mcc = np.linalg.norm(dv_final_mcc_vec)
-        dv_total_mcc = dv_init_mcc + dv_mid_mcc + dv_final_mcc
-        
-        print(f"    ΔV_mid: {dv_mid_mcc:.4f} km/s, ΔV_final: {dv_final_mcc:.4f} km/s, TOTAL: {dv_total_mcc:.4f} km/s")
-        
-        # 5. Generate trajectory arcs for plotting
-        n_mcc_pts = 100
-        
-        # Arc 1: Perturbed trajectory from init to r_mid_new
-        mcc_arc1 = []
-        times_arc1 = np.linspace(0, tof_1, n_mcc_pts)
-        for t in times_arc1:
-            r_t, _ = propagate_kepler(r_init, v1_actual, t)
-            mcc_arc1.append(r_t)
-        mcc_arc1 = np.array(mcc_arc1)
-        
-        # Arc 2: Corrected trajectory from r_mid_new to r_final
-        mcc_arc2 = []
-        times_arc2 = np.linspace(0, tof_2, n_mcc_pts)
-        for t in times_arc2:
-            r_t, _ = propagate_kepler(r_mid_new, v_mid_dep_L, t)
-            mcc_arc2.append(r_t)
-        mcc_arc2 = np.array(mcc_arc2)
-        
-        # Store solution
-        mcc_solutions.append({
-            'sample': i + 1,
-            'error_ms': dv1_error * 1000,  # Error in m/s
-            'error_pct': dv1_error / dv1_nominal_mag * 100,
-            'dv_init': dv_init_mcc,
-            'dv_mid': dv_mid_mcc,
-            'dv_final': dv_final_mcc,
-            'dv_total': dv_total_mcc,
-            'pos_error': pos_error,
-            'r_mid_new': r_mid_new,
-            'arc1': mcc_arc1,
-            'arc2': mcc_arc2,
-            'color': mcc_colors[i]
-        })
+    def objective_wrapper(x):
+        """Wrapper for optimizer - returns only the mean total ΔV."""
+        dv1_mag = x[0]
+        mean_total, _ = mc_objective(dv1_mag, dv1_direction, sigma_dv1_abs, N_samples, seed=42)
+        return mean_total
     
-    # Summary table
-    print(f"\n  --- Summary Table ---")
-    print(f"\n  {'Sample':<8} {'Error':<20} {'ΔV_init':<12} {'ΔV_mid':<12} {'ΔV_final':<12} {'TOTAL':<12} {'Δ from nom':<12}")
-    print(f"  {'-'*8} {'-'*20} {'-'*12} {'-'*12} {'-'*12} {'-'*12} {'-'*12}")
-    print(f"  {'Nominal':<8} {'0.0000 km/s (0.00%)':<20} {dv_init_direct:>8.4f} km/s {dv_mid_direct:>8.4f} km/s {dv_final_direct:>8.4f} km/s {dv_total_direct:>8.4f} km/s {0.0:>+8.4f} km/s")
-    for sol in mcc_solutions:
-        error_str = f"{sol['error_ms']/1000:+.4f} km/s ({sol['error_pct']:+.2f}%)"
-        print(f"  {sol['sample']:<8} {error_str:<20} {sol['dv_init']:>8.4f} km/s {sol['dv_mid']:>8.4f} km/s {sol['dv_final']:>8.4f} km/s {sol['dv_total']:>8.4f} km/s {sol['dv_total']-dv_total_direct:>+8.4f} km/s")
+    # Optimization bounds: allow ±50% variation from Hohmann
+    bounds = [(dv1_nominal_mag * 0.5, dv1_nominal_mag * 1.5)]
+    
+    from scipy.optimize import minimize
+    
+    result = minimize(
+        objective_wrapper,
+        x0=[dv1_nominal_mag],
+        method='L-BFGS-B',
+        bounds=bounds,
+        options={'disp': True, 'maxiter': 50}
+    )
+    
+    dv1_optimal_mag = result.x[0]
+    print(f"\n  Optimization Result:")
+    print(f"    Optimal ΔV1 = {dv1_optimal_mag:.4f} km/s")
+    print(f"    Change from Hohmann: {(dv1_optimal_mag - dv1_nominal_mag)*1000:+.1f} m/s ({(dv1_optimal_mag/dv1_nominal_mag - 1)*100:+.2f}%)")
+    
+    # Evaluate optimal solution
+    mean_dv_optimal, stats_opt = mc_objective(dv1_optimal_mag, dv1_direction, sigma_dv1_abs, N_samples, seed=42)
+    
+    # --- Comparison Table ---
+    print(f"\n  --- Comparison: Initial Guess vs Optimized ---")
+    print(f"\n  {'Metric':<20} {'Hohmann (Init)':<18} {'Optimized':<18} {'Improvement':<18}")
+    print(f"  {'-'*20} {'-'*18} {'-'*18} {'-'*18}")
+    print(f"  {'Nominal ΔV1':<20} {dv1_nominal_mag:>14.4f} km/s {dv1_optimal_mag:>14.4f} km/s {(dv1_optimal_mag-dv1_nominal_mag)*1000:>+14.1f} m/s")
+    print(f"  {'E[ΔV_init]':<20} {stats_init['dv_init_mean']:>14.4f} km/s {stats_opt['dv_init_mean']:>14.4f} km/s {(stats_opt['dv_init_mean']-stats_init['dv_init_mean'])*1000:>+14.1f} m/s")
+    print(f"  {'E[ΔV_mid]':<20} {stats_init['dv_mid_mean']:>14.4f} km/s {stats_opt['dv_mid_mean']:>14.4f} km/s {(stats_opt['dv_mid_mean']-stats_init['dv_mid_mean'])*1000:>+14.1f} m/s")
+    print(f"  {'E[ΔV_final]':<20} {stats_init['dv_final_mean']:>14.4f} km/s {stats_opt['dv_final_mean']:>14.4f} km/s {(stats_opt['dv_final_mean']-stats_init['dv_final_mean'])*1000:>+14.1f} m/s")
+    print(f"  {'-'*20} {'-'*18} {'-'*18} {'-'*18}")
+    print(f"  {'E[ΔV_total]':<20} {stats_init['dv_total_mean']:>14.4f} km/s {stats_opt['dv_total_mean']:>14.4f} km/s {(stats_opt['dv_total_mean']-stats_init['dv_total_mean'])*1000:>+14.1f} m/s")
+    print(f"  {'Std[ΔV_total]':<20} {stats_init['dv_total_std']:>14.4f} km/s {stats_opt['dv_total_std']:>14.4f} km/s {(stats_opt['dv_total_std']-stats_init['dv_total_std'])*1000:>+14.1f} m/s")
+    
+    # Store for plotting
+    mc_r_mid = np.array(stats_opt['r_mid_list'])
+    avg_r_mid = np.mean(mc_r_mid, axis=0)
+
+    # --- Bar Plot: ΔV Comparison ---
+    fig_bar, ax_bar = plt.subplots(figsize=(10, 6))
+    
+    # Data for bar plot
+    positions = ['Init', 'Mid', 'Final']
+    x = np.arange(len(positions))
+    width = 0.25
+    
+    # Nominal Hohmann (deterministic)
+    dv_nominal = [dv_init_direct, dv_mid_direct, dv_final_direct]
+    
+    # Hohmann Stochastic (initial guess with MCC)
+    dv_hohmann_stoch = [stats_init['dv_init_mean'], stats_init['dv_mid_mean'], stats_init['dv_final_mean']]
+    
+    # Optimized Stochastic
+    dv_opt_stoch = [stats_opt['dv_init_mean'], stats_opt['dv_mid_mean'], stats_opt['dv_final_mean']]
+    
+    # Create bars
+    bars1 = ax_bar.bar(x - width, dv_nominal, width, label=f'Nominal Hohmann (Total: {sum(dv_nominal):.3f} km/s)', color='green', alpha=0.8)
+    bars2 = ax_bar.bar(x, dv_hohmann_stoch, width, label=f'Hohmann + MCC (E[Total]: {sum(dv_hohmann_stoch):.3f} km/s)', color='orange', alpha=0.8)
+    bars3 = ax_bar.bar(x + width, dv_opt_stoch, width, label=f'Optimized + MCC (E[Total]: {sum(dv_opt_stoch):.3f} km/s)', color='blue', alpha=0.8)
+    
+    # Add value labels on bars
+    def add_labels(bars):
+        for bar in bars:
+            height = bar.get_height()
+            if height > 0.01:  # Only label non-zero bars
+                ax_bar.annotate(f'{height:.3f}',
+                              xy=(bar.get_x() + bar.get_width() / 2, height),
+                              xytext=(0, 3),
+                              textcoords="offset points",
+                              ha='center', va='bottom', fontsize=9)
+    
+    add_labels(bars1)
+    add_labels(bars2)
+    add_labels(bars3)
+    
+    ax_bar.set_xlabel('Burn Location')
+    ax_bar.set_ylabel('ΔV (km/s)')
+    ax_bar.set_title('ΔV Comparison: Nominal vs Stochastic (with MCC)\nPositions pinned to Hohmann transfer nodes')
+    ax_bar.set_xticks(x)
+    ax_bar.set_xticklabels(positions)
+    ax_bar.legend(loc='upper right')
+    ax_bar.set_ylim(0, max(max(dv_nominal), max(dv_hohmann_stoch), max(dv_opt_stoch)) * 1.2)
+    ax_bar.grid(axis='y', alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig('dv_comparison.png', dpi=150)
 
     # 3D Plot
     fig = plt.figure(figsize=(12, 10))
@@ -609,16 +713,13 @@ if __name__ == "__main__":
     ax.plot(traj['final'][:, 0], traj['final'][:, 1], traj['final'][:, 2], 
             'r-', linewidth=1.5, label=f'Final Orbit (i={inc2}°)')
     
-    # Plot all MCC trajectories
-    for sol in mcc_solutions:
-        color = sol['color']
-        label_arc1 = f"Sample {sol['sample']} ({sol['error_pct']:+.1f}%)"
-        ax.plot(sol['arc1'][:, 0], sol['arc1'][:, 1], sol['arc1'][:, 2], 
-                color=color, linestyle='--', linewidth=1.5, label=label_arc1)
-        ax.plot(sol['arc2'][:, 0], sol['arc2'][:, 1], sol['arc2'][:, 2], 
-                color=color, linestyle='--', linewidth=1.5)
-        # Mark the MCC point
-        ax.scatter(*sol['r_mid_new'], color=color, s=100, marker='*', zorder=6, edgecolor='black')
+    # Plot MC mid-point scatter (show spread of r_mid positions)
+    ax.scatter(mc_r_mid[:, 0], mc_r_mid[:, 1], mc_r_mid[:, 2], 
+               color='orange', s=20, alpha=0.5, label=f'MC r_mid ({N_samples} samples)')
+    
+    # Plot average r_mid
+    ax.scatter(*avg_r_mid, color='red', s=150, marker='X', zorder=7, edgecolor='black',
+               label=f'Avg r_mid (MC)')
     
     # Plot transfer nodes: initial (EA=0°), middle (EA=90°), final (EA=180°)
     r_EA0 = traj['transfer_EA0']['r']
