@@ -497,10 +497,11 @@ if __name__ == "__main__":
     print(f"    Arc 2 departure (at mid):   [{v2_dep_L2[0]:10.4f}, {v2_dep_L2[1]:10.4f}, {v2_dep_L2[2]:10.4f}] km/s")
     print(f"    Arc 2 arrival (at final):   [{v2_arr_L2[0]:10.4f}, {v2_arr_L2[1]:10.4f}, {v2_arr_L2[2]:10.4f}] km/s")
     
-    # --- Monte Carlo Objective Function ---
+    # --- Monte Carlo Objective Function (Magnitude Variation) ---
     def mc_objective(dv1_mag, dv1_dir, sigma_dv1, N_mc, seed=None):
         """
         Run Monte Carlo simulation and return expected total ΔV.
+        MAGNITUDE VARIATION ONLY.
         
         Args:
             dv1_mag: Nominal ΔV1 magnitude (decision variable)
@@ -521,6 +522,7 @@ if __name__ == "__main__":
         dv_final_list = []
         dv_total_list = []
         r_mid_list = []
+        mag_error_list = []  # Track magnitude errors
         
         for _ in range(N_mc):
             # 1. Generate random magnitude error (additive)
@@ -559,6 +561,115 @@ if __name__ == "__main__":
             dv_final_list.append(dv_final)
             dv_total_list.append(dv_total)
             r_mid_list.append(r_mid_new)
+            mag_error_list.append(dv1_error)  # Store magnitude error
+        
+        dv_init_arr = np.array(dv_init_list)
+        dv_mid_arr = np.array(dv_mid_list)
+        dv_final_arr = np.array(dv_final_list)
+        dv_total_arr = np.array(dv_total_list)
+        mag_error_arr = np.array(mag_error_list)
+        
+        stats = {
+            'n_valid': len(dv_total_arr),
+            'dv_init_mean': np.mean(dv_init_arr),
+            'dv_init_std': np.std(dv_init_arr),
+            'dv_mid_mean': np.mean(dv_mid_arr),
+            'dv_mid_std': np.std(dv_mid_arr),
+            'dv_final_mean': np.mean(dv_final_arr),
+            'dv_final_std': np.std(dv_final_arr),
+            'dv_total_mean': np.mean(dv_total_arr),
+            'dv_total_std': np.std(dv_total_arr),
+            'dv_total_min': np.min(dv_total_arr),
+            'dv_total_max': np.max(dv_total_arr),
+            'r_mid_list': r_mid_list,
+            'mag_errors': mag_error_arr  # Add magnitude errors to stats
+        }
+        
+        return np.mean(dv_total_arr), stats
+
+    # --- Monte Carlo Objective Function (Magnitude Variation) with FREE MCC timing ---
+    def mc_objective_free_time(dv1_mag, dv1_dir, sigma_dv1, delta_t_mid, N_mc, seed=None):
+        """
+        Run Monte Carlo simulation with FREE MCC timing.
+        Total flight time is fixed, but MCC timing can vary.
+        
+        Args:
+            dv1_mag: Nominal ΔV1 magnitude (decision variable)
+            dv1_dir: ΔV1 direction unit vector (fixed)
+            sigma_dv1: Standard deviation of ΔV1 error (km/s)
+            delta_t_mid: Offset to nominal MCC time (seconds). 
+                         tof_1_new = tof_1 + delta_t_mid
+                         tof_2_new = tof_2 - delta_t_mid (total time conserved)
+            N_mc: Number of Monte Carlo samples
+            seed: Random seed for reproducibility
+        
+        Returns:
+            mean_total_dv: Expected total ΔV
+            stats: Dictionary with detailed statistics
+        """
+        if seed is not None:
+            np.random.seed(seed)
+        
+        # Adjusted flight times
+        tof_1_adj = tof_1 + delta_t_mid
+        tof_2_adj = tof_2 - delta_t_mid
+        
+        # Check validity
+        if tof_1_adj <= 0 or tof_2_adj <= 0:
+            return float('inf'), {}
+        
+        dv_init_list = []
+        dv_mid_list = []
+        dv_final_list = []
+        dv_total_list = []
+        r_mid_list = []
+        
+        for _ in range(N_mc):
+            # 1. Generate random magnitude error (additive)
+            dv1_error = np.random.normal(0, sigma_dv1)
+            dv1_actual_mag = dv1_mag + dv1_error
+            dv1_actual_vec = dv1_actual_mag * dv1_dir
+            
+            # New velocity after burn 1
+            v1_actual = v_init_orbit + dv1_actual_vec
+            
+            # Check if orbit is elliptic
+            v_mag_sq = np.dot(v1_actual, v1_actual)
+            r_mag = np.linalg.norm(r_init)
+            energy = v_mag_sq / 2 - MU / r_mag
+            if energy >= 0:
+                continue
+            
+            # 2. Propagate to adjusted t_mid
+            try:
+                r_mid_new, v_mid_arrival = propagate_kepler(r_init, v1_actual, tof_1_adj)
+                if np.any(np.isnan(r_mid_new)):
+                    continue
+            except:
+                continue
+            
+            # 3. Lambert solve r_mid_new -> r_final with adjusted tof_2
+            try:
+                v_mid_dep_L, v_final_arr_L = lambert_solver(r_mid_new, r_final, tof_2_adj, tm=1)
+                if np.any(np.isnan(v_mid_dep_L)):
+                    continue
+            except:
+                continue
+            
+            # 4. Calculate ΔVs
+            dv_init = dv1_actual_mag
+            dv_mid = np.linalg.norm(v_mid_dep_L - v_mid_arrival)
+            dv_final = np.linalg.norm(v_final_orbit - v_final_arr_L)
+            dv_total = dv_init + dv_mid + dv_final
+            
+            dv_init_list.append(dv_init)
+            dv_mid_list.append(dv_mid)
+            dv_final_list.append(dv_final)
+            dv_total_list.append(dv_total)
+            r_mid_list.append(r_mid_new)
+        
+        if len(dv_total_list) == 0:
+            return float('inf'), {}
         
         dv_init_arr = np.array(dv_init_list)
         dv_mid_arr = np.array(dv_mid_list)
@@ -577,7 +688,295 @@ if __name__ == "__main__":
             'dv_total_std': np.std(dv_total_arr),
             'dv_total_min': np.min(dv_total_arr),
             'dv_total_max': np.max(dv_total_arr),
+            'r_mid_list': r_mid_list,
+            'tof_1_adj': tof_1_adj,
+            'tof_2_adj': tof_2_adj
+        }
+        
+        return np.mean(dv_total_arr), stats
+
+    # --- Helper: Sample Direction with 2D Gaussian Perturbation ---
+    def sample_gaussian_direction(nominal_dir, sigma_deg, N_samples, seed=None):
+        """
+        Sample directions by adding 2D Gaussian perturbations to the nominal direction.
+        
+        Model: v_perturbed = normalize(v_nominal + ε₁*e₁ + ε₂*e₂)
+        where ε₁, ε₂ ~ N(0, σ²) are independent Gaussian errors in two 
+        perpendicular directions.
+        
+        The resulting cone angle approximately follows a Rayleigh distribution.
+        
+        Args:
+            nominal_dir: Unit vector for nominal direction (3,)
+            sigma_deg: Standard deviation of each axis perturbation (degrees)
+                       Converted to radians internally as perturbation magnitude
+            N_samples: Number of samples to generate
+            seed: Random seed
+            
+        Returns:
+            directions: Array of unit direction vectors (N_samples, 3)
+            cone_angles: Array of cone angles in degrees (N_samples,)
+        """
+        if seed is not None:
+            np.random.seed(seed)
+        
+        # Convert sigma from degrees to radians (as a length scale on unit sphere)
+        sigma_rad = np.radians(sigma_deg)
+        
+        # Normalize nominal direction
+        nominal_dir = nominal_dir / np.linalg.norm(nominal_dir)
+        
+        # Build orthonormal basis: e1, e2 perpendicular to nominal_dir
+        if abs(nominal_dir[0]) < 0.9:
+            temp = np.array([1, 0, 0])
+        else:
+            temp = np.array([0, 1, 0])
+        
+        # Gram-Schmidt
+        e1 = temp - np.dot(temp, nominal_dir) * nominal_dir
+        e1 = e1 / np.linalg.norm(e1)
+        e2 = np.cross(nominal_dir, e1)
+        
+        # Sample 2D Gaussian perturbations
+        eps1 = np.random.normal(0, sigma_rad, N_samples)
+        eps2 = np.random.normal(0, sigma_rad, N_samples)
+        
+        directions = np.zeros((N_samples, 3))
+        cone_angles_deg = np.zeros(N_samples)
+        
+        for i in range(N_samples):
+            # Perturbed direction (not normalized yet)
+            v_perturbed = nominal_dir + eps1[i] * e1 + eps2[i] * e2
+            
+            # Normalize to unit sphere
+            v_perturbed = v_perturbed / np.linalg.norm(v_perturbed)
+            directions[i] = v_perturbed
+            
+            # Compute cone angle from nominal
+            cos_angle = np.clip(np.dot(v_perturbed, nominal_dir), -1, 1)
+            cone_angles_deg[i] = np.degrees(np.arccos(cos_angle))
+        
+        return directions, cone_angles_deg
+
+    # --- Monte Carlo Objective Function (Direction Variation Only) ---
+    def mc_objective_direction(dv1_mag, dv1_dir_nominal, sigma_dir_deg, N_mc, seed=None):
+        """
+        Run Monte Carlo simulation with DIRECTION VARIATION ONLY.
+        Magnitude is fixed at dv1_mag.
+        
+        Direction is perturbed using 2D Gaussian in two perpendicular axes.
+        The resulting cone angle follows a Rayleigh distribution.
+        
+        Args:
+            dv1_mag: Fixed ΔV1 magnitude (km/s)
+            dv1_dir_nominal: Nominal ΔV1 direction unit vector
+            sigma_dir_deg: 1σ pointing error per axis (degrees)
+            N_mc: Number of Monte Carlo samples
+            seed: Random seed for reproducibility
+        
+        Returns:
+            mean_total_dv: Expected total ΔV
+            stats: Dictionary with detailed statistics
+        """
+        if seed is not None:
+            np.random.seed(seed)
+        
+        # Sample directions with 2D Gaussian perturbations
+        directions, cone_angles = sample_gaussian_direction(
+            dv1_dir_nominal, sigma_dir_deg, N_mc, seed=None  # Already seeded
+        )
+        
+        dv_init_list = []
+        dv_mid_list = []
+        dv_final_list = []
+        dv_total_list = []
+        r_mid_list = []
+        cone_angle_list = []
+        
+        for i in range(N_mc):
+            # 1. Apply direction perturbation (magnitude fixed)
+            dv1_actual_dir = directions[i]
+            dv1_actual_vec = dv1_mag * dv1_actual_dir
+            
+            # New velocity after burn 1
+            v1_actual = v_init_orbit + dv1_actual_vec
+            
+            # Check if orbit is elliptic
+            v_mag_sq = np.dot(v1_actual, v1_actual)
+            r_mag = np.linalg.norm(r_init)
+            energy = v_mag_sq / 2 - MU / r_mag
+            if energy >= 0:
+                continue
+            
+            # 2. Propagate to t_mid
+            try:
+                r_mid_new, v_mid_arrival = propagate_kepler(r_init, v1_actual, tof_1)
+                if np.any(np.isnan(r_mid_new)):
+                    continue
+            except:
+                continue
+            
+            # 3. Lambert solve r_mid_new -> r_final
+            try:
+                v_mid_dep_L, v_final_arr_L = lambert_solver(r_mid_new, r_final, tof_2, tm=1)
+                if np.any(np.isnan(v_mid_dep_L)):
+                    continue
+            except:
+                continue
+            
+            # 4. Calculate ΔVs
+            dv_init = dv1_mag  # Fixed magnitude
+            dv_mid = np.linalg.norm(v_mid_dep_L - v_mid_arrival)
+            dv_final = np.linalg.norm(v_final_orbit - v_final_arr_L)
+            dv_total = dv_init + dv_mid + dv_final
+            
+            dv_init_list.append(dv_init)
+            dv_mid_list.append(dv_mid)
+            dv_final_list.append(dv_final)
+            dv_total_list.append(dv_total)
+            r_mid_list.append(r_mid_new)
+            cone_angle_list.append(cone_angles[i])
+        
+        dv_init_arr = np.array(dv_init_list)
+        dv_mid_arr = np.array(dv_mid_list)
+        dv_final_arr = np.array(dv_final_list)
+        dv_total_arr = np.array(dv_total_list)
+        cone_angle_arr = np.array(cone_angle_list)
+        
+        stats = {
+            'n_valid': len(dv_total_arr),
+            'dv_init_mean': np.mean(dv_init_arr),
+            'dv_init_std': np.std(dv_init_arr),
+            'dv_mid_mean': np.mean(dv_mid_arr),
+            'dv_mid_std': np.std(dv_mid_arr),
+            'dv_final_mean': np.mean(dv_final_arr),
+            'dv_final_std': np.std(dv_final_arr),
+            'dv_total_mean': np.mean(dv_total_arr),
+            'dv_total_std': np.std(dv_total_arr),
+            'dv_total_min': np.min(dv_total_arr),
+            'dv_total_max': np.max(dv_total_arr),
+            'cone_angle_mean': np.mean(cone_angle_arr),
+            'cone_angle_std': np.std(cone_angle_arr),
+            'cone_angle_max': np.max(cone_angle_arr),
+            'cone_angles': cone_angle_arr,  # Full array of cone angles
             'r_mid_list': r_mid_list
+        }
+        
+        return np.mean(dv_total_arr), stats
+
+    # --- Monte Carlo Objective Function (Direction Variation) with FREE MCC timing ---
+    def mc_objective_direction_free_time(dv1_mag, dv1_dir_nominal, sigma_dir_deg, delta_t_mid, N_mc, seed=None):
+        """
+        Run Monte Carlo simulation with DIRECTION VARIATION and FREE MCC timing.
+        Total flight time is fixed, but MCC timing can vary.
+        
+        Args:
+            dv1_mag: Fixed ΔV1 magnitude (km/s)
+            dv1_dir_nominal: Nominal ΔV1 direction unit vector
+            sigma_dir_deg: 1σ pointing error per axis (degrees)
+            delta_t_mid: Offset to nominal MCC time (seconds)
+            N_mc: Number of Monte Carlo samples
+            seed: Random seed for reproducibility
+        
+        Returns:
+            mean_total_dv: Expected total ΔV
+            stats: Dictionary with detailed statistics
+        """
+        if seed is not None:
+            np.random.seed(seed)
+        
+        # Adjusted flight times
+        tof_1_adj = tof_1 + delta_t_mid
+        tof_2_adj = tof_2 - delta_t_mid
+        
+        # Check validity
+        if tof_1_adj <= 0 or tof_2_adj <= 0:
+            return float('inf'), {}
+        
+        # Sample directions with 2D Gaussian perturbations
+        directions, cone_angles = sample_gaussian_direction(
+            dv1_dir_nominal, sigma_dir_deg, N_mc, seed=None  # Already seeded
+        )
+        
+        dv_init_list = []
+        dv_mid_list = []
+        dv_final_list = []
+        dv_total_list = []
+        r_mid_list = []
+        cone_angle_list = []
+        
+        for i in range(N_mc):
+            # 1. Apply direction perturbation (magnitude fixed)
+            dv1_actual_dir = directions[i]
+            dv1_actual_vec = dv1_mag * dv1_actual_dir
+            
+            # New velocity after burn 1
+            v1_actual = v_init_orbit + dv1_actual_vec
+            
+            # Check if orbit is elliptic
+            v_mag_sq = np.dot(v1_actual, v1_actual)
+            r_mag = np.linalg.norm(r_init)
+            energy = v_mag_sq / 2 - MU / r_mag
+            if energy >= 0:
+                continue
+            
+            # 2. Propagate to adjusted t_mid
+            try:
+                r_mid_new, v_mid_arrival = propagate_kepler(r_init, v1_actual, tof_1_adj)
+                if np.any(np.isnan(r_mid_new)):
+                    continue
+            except:
+                continue
+            
+            # 3. Lambert solve r_mid_new -> r_final with adjusted tof_2
+            try:
+                v_mid_dep_L, v_final_arr_L = lambert_solver(r_mid_new, r_final, tof_2_adj, tm=1)
+                if np.any(np.isnan(v_mid_dep_L)):
+                    continue
+            except:
+                continue
+            
+            # 4. Calculate ΔVs
+            dv_init = dv1_mag  # Fixed magnitude
+            dv_mid = np.linalg.norm(v_mid_dep_L - v_mid_arrival)
+            dv_final = np.linalg.norm(v_final_orbit - v_final_arr_L)
+            dv_total = dv_init + dv_mid + dv_final
+            
+            dv_init_list.append(dv_init)
+            dv_mid_list.append(dv_mid)
+            dv_final_list.append(dv_final)
+            dv_total_list.append(dv_total)
+            r_mid_list.append(r_mid_new)
+            cone_angle_list.append(cone_angles[i])
+        
+        if len(dv_total_list) == 0:
+            return float('inf'), {}
+        
+        dv_init_arr = np.array(dv_init_list)
+        dv_mid_arr = np.array(dv_mid_list)
+        dv_final_arr = np.array(dv_final_list)
+        dv_total_arr = np.array(dv_total_list)
+        cone_angle_arr = np.array(cone_angle_list)
+        
+        stats = {
+            'n_valid': len(dv_total_arr),
+            'dv_init_mean': np.mean(dv_init_arr),
+            'dv_init_std': np.std(dv_init_arr),
+            'dv_mid_mean': np.mean(dv_mid_arr),
+            'dv_mid_std': np.std(dv_mid_arr),
+            'dv_final_mean': np.mean(dv_final_arr),
+            'dv_final_std': np.std(dv_final_arr),
+            'dv_total_mean': np.mean(dv_total_arr),
+            'dv_total_std': np.std(dv_total_arr),
+            'dv_total_min': np.min(dv_total_arr),
+            'dv_total_max': np.max(dv_total_arr),
+            'cone_angle_mean': np.mean(cone_angle_arr),
+            'cone_angle_std': np.std(cone_angle_arr),
+            'cone_angle_max': np.max(cone_angle_arr),
+            'cone_angles': cone_angle_arr,
+            'r_mid_list': r_mid_list,
+            'tof_1_adj': tof_1_adj,
+            'tof_2_adj': tof_2_adj
         }
         
         return np.mean(dv_total_arr), stats
@@ -586,7 +985,7 @@ if __name__ == "__main__":
     print(f"\n--- Unoptimized MCC + Fixed Final State, Fixed Flight Times (Monte Carlo) ---")
     
     # Uncertainty parameters
-    N_samples = 1000
+    N_samples = 100
     
     # Nominal ΔV1 vector and magnitude (Hohmann solution = initial guess)
     dv1_nominal_vec = traj['dv1_vec']
@@ -652,57 +1051,560 @@ if __name__ == "__main__":
     mc_r_mid = np.array(stats_opt['r_mid_list'])
     avg_r_mid = np.mean(mc_r_mid, axis=0)
 
-    # --- Bar Plot: ΔV Comparison ---
-    fig_bar, ax_bar = plt.subplots(figsize=(10, 6))
+    # ===== DIRECTION VARIATION STUDY (Separate from Magnitude) =====
+    print(f"\n" + "="*70)
+    print(f"=== DIRECTION VARIATION STUDY (Magnitude Fixed) ===")
+    print(f"="*70)
     
-    # Data for bar plot
-    positions = ['Init', 'Mid', 'Final']
-    x = np.arange(len(positions))
-    width = 0.25
+    # Parameters - 1σ pointing error per axis
+    sigma_dir_deg = 10.0  # degrees (1σ per axis)
+    N_dir_samples = 1000
     
-    # Nominal Hohmann (deterministic)
-    dv_nominal = [dv_init_direct, dv_mid_direct, dv_final_direct]
+    print(f"\n  Direction Error Model:")
+    print(f"    Distribution: 2D Gaussian on direction vector")
+    print(f"    1σ per axis: {sigma_dir_deg}°")
+    print(f"    Cone angle follows Rayleigh distribution (mode ≈ σ)")
+    print(f"    Magnitude: FIXED at Hohmann value ({dv1_nominal_mag:.4f} km/s)")
+    print(f"    Number of MC samples: {N_dir_samples}")
     
-    # Hohmann Stochastic (initial guess with MCC)
-    dv_hohmann_stoch = [stats_init['dv_init_mean'], stats_init['dv_mid_mean'], stats_init['dv_final_mean']]
+    # Run direction variation study
+    mean_dv_dir, stats_dir = mc_objective_direction(
+        dv1_nominal_mag, dv1_direction, sigma_dir_deg, N_dir_samples, seed=42
+    )
     
-    # Optimized Stochastic
-    dv_opt_stoch = [stats_opt['dv_init_mean'], stats_opt['dv_mid_mean'], stats_opt['dv_final_mean']]
+    print(f"\n  Direction Variation Results:")
+    print(f"    Valid samples: {stats_dir['n_valid']}/{N_dir_samples}")
+    print(f"    Cone angle stats: mean = {stats_dir['cone_angle_mean']:.2f}°, "
+          f"std = {stats_dir['cone_angle_std']:.2f}°, max = {stats_dir['cone_angle_max']:.2f}°")
     
-    # Create bars
-    bars1 = ax_bar.bar(x - width, dv_nominal, width, label=f'Nominal Hohmann (Total: {sum(dv_nominal):.3f} km/s)', color='green', alpha=0.8)
-    bars2 = ax_bar.bar(x, dv_hohmann_stoch, width, label=f'Hohmann + MCC (E[Total]: {sum(dv_hohmann_stoch):.3f} km/s)', color='orange', alpha=0.8)
-    bars3 = ax_bar.bar(x + width, dv_opt_stoch, width, label=f'Optimized + MCC (E[Total]: {sum(dv_opt_stoch):.3f} km/s)', color='blue', alpha=0.8)
+    print(f"\n  --- Comparison: Nominal vs Direction Variation ---")
+    print(f"\n  {'Metric':<20} {'Nominal (no error)':<18} {'Direction Var':<18} {'Change':<18}")
+    print(f"  {'-'*20} {'-'*18} {'-'*18} {'-'*18}")
+    print(f"  {'ΔV_init':<20} {dv_init_direct:>14.4f} km/s {stats_dir['dv_init_mean']:>14.4f} km/s {(stats_dir['dv_init_mean']-dv_init_direct)*1000:>+14.1f} m/s")
+    print(f"  {'E[ΔV_mid]':<20} {dv_mid_direct:>14.4f} km/s {stats_dir['dv_mid_mean']:>14.4f} km/s {(stats_dir['dv_mid_mean']-dv_mid_direct)*1000:>+14.1f} m/s")
+    print(f"  {'E[ΔV_final]':<20} {dv_final_direct:>14.4f} km/s {stats_dir['dv_final_mean']:>14.4f} km/s {(stats_dir['dv_final_mean']-dv_final_direct)*1000:>+14.1f} m/s")
+    print(f"  {'-'*20} {'-'*18} {'-'*18} {'-'*18}")
+    print(f"  {'E[ΔV_total]':<20} {dv_total_direct:>14.4f} km/s {stats_dir['dv_total_mean']:>14.4f} km/s {(stats_dir['dv_total_mean']-dv_total_direct)*1000:>+14.1f} m/s")
+    print(f"  {'Std[ΔV_total]':<20} {'N/A':>14}      {stats_dir['dv_total_std']:>14.4f} km/s")
+    print(f"  {'Min[ΔV_total]':<20} {dv_total_direct:>14.4f} km/s {stats_dir['dv_total_min']:>14.4f} km/s")
+    print(f"  {'Max[ΔV_total]':<20} {dv_total_direct:>14.4f} km/s {stats_dir['dv_total_max']:>14.4f} km/s")
+    
+    # Compare magnitude vs direction variation
+    print(f"\n  --- Comparison: Magnitude vs Direction Variation ---")
+    print(f"\n  {'Variation Type':<20} {'E[ΔV_mid]':<18} {'E[ΔV_final]':<18} {'E[ΔV_total]':<18}")
+    print(f"  {'-'*20} {'-'*18} {'-'*18} {'-'*18}")
+    print(f"  {'None (Nominal)':<20} {dv_mid_direct:>14.4f} km/s {dv_final_direct:>14.4f} km/s {dv_total_direct:>14.4f} km/s")
+    print(f"  {'Magnitude (10%)':<20} {stats_init['dv_mid_mean']:>14.4f} km/s {stats_init['dv_final_mean']:>14.4f} km/s {stats_init['dv_total_mean']:>14.4f} km/s")
+    print(f"  {f'Direction (σ={sigma_dir_deg}°)':<20} {stats_dir['dv_mid_mean']:>14.4f} km/s {stats_dir['dv_final_mean']:>14.4f} km/s {stats_dir['dv_total_mean']:>14.4f} km/s")
+    
+    # --- OPTIMIZE nominal ΔV1 DIRECTION to minimize E[ΔV_total] under DIRECTION errors ---
+    print(f"\n--- Optimizing Nominal ΔV1 Direction to Minimize E[ΔV_total] (Direction Errors) ---")
+    print(f"    Decision variable: Nominal direction (2 perturbations in perpendicular axes)")
+    print(f"    Fixed: Magnitude = {dv1_nominal_mag:.4f} km/s (Hohmann)")
+    
+    # Build orthonormal basis for direction parameterization
+    # dv1_direction is the nominal Hohmann direction
+    nominal_dir = dv1_direction / np.linalg.norm(dv1_direction)
+    if abs(nominal_dir[0]) < 0.9:
+        temp = np.array([1, 0, 0])
+    else:
+        temp = np.array([0, 1, 0])
+    e1_opt = temp - np.dot(temp, nominal_dir) * nominal_dir
+    e1_opt = e1_opt / np.linalg.norm(e1_opt)
+    e2_opt = np.cross(nominal_dir, e1_opt)
+    
+    def perturb_direction_from_nominal(nom_dir, delta1_deg, delta2_deg):
+        """
+        Perturb any nominal direction by adding offsets in perpendicular directions.
+        Builds local orthonormal basis around nom_dir and applies perturbations.
+        """
+        nom = nom_dir / np.linalg.norm(nom_dir)
+        if abs(nom[0]) < 0.9:
+            temp_vec = np.array([1, 0, 0])
+        else:
+            temp_vec = np.array([0, 1, 0])
+        e1_local = temp_vec - np.dot(temp_vec, nom) * nom
+        e1_local = e1_local / np.linalg.norm(e1_local)
+        e2_local = np.cross(nom, e1_local)
+        
+        delta1_rad = np.radians(delta1_deg)
+        delta2_rad = np.radians(delta2_deg)
+        
+        d_perturbed = nom + np.tan(delta1_rad) * e1_local + np.tan(delta2_rad) * e2_local
+        d_perturbed = d_perturbed / np.linalg.norm(d_perturbed)
+        return d_perturbed
+    
+    print(f"    Nominal direction: [{nominal_dir[0]:.6f}, {nominal_dir[1]:.6f}, {nominal_dir[2]:.6f}]")
+    print(f"    e1 (perpendicular): [{e1_opt[0]:.6f}, {e1_opt[1]:.6f}, {e1_opt[2]:.6f}]")
+    print(f"    e2 (perpendicular): [{e2_opt[0]:.6f}, {e2_opt[1]:.6f}, {e2_opt[2]:.6f}]")
+    
+    def perturb_to_direction(delta1_deg, delta2_deg):
+        """
+        Perturb nominal direction by adding offsets in perpendicular directions.
+        
+        d_new = normalize(nominal + tan(delta1)*e1 + tan(delta2)*e2)
+        
+        For small angles, tan(delta) ≈ delta in radians.
+        """
+        delta1_rad = np.radians(delta1_deg)
+        delta2_rad = np.radians(delta2_deg)
+        
+        # Add perturbations and renormalize
+        d_perturbed = nominal_dir + np.tan(delta1_rad) * e1_opt + np.tan(delta2_rad) * e2_opt
+        d_perturbed = d_perturbed / np.linalg.norm(d_perturbed)
+        return d_perturbed
+    
+    def objective_wrapper_dir(x):
+        """Wrapper for optimizer - optimizes nominal direction, magnitude fixed."""
+        delta1_deg, delta2_deg = x
+        dv1_dir_opt = perturb_to_direction(delta1_deg, delta2_deg)
+        mean_total, _ = mc_objective_direction(dv1_nominal_mag, dv1_dir_opt, sigma_dir_deg, N_dir_samples, seed=42)
+        return mean_total
+    
+    # Test at nominal first
+    mean_at_nominal, _ = mc_objective_direction(dv1_nominal_mag, nominal_dir, sigma_dir_deg, N_dir_samples, seed=42)
+    print(f"\n    E[ΔV_total] at nominal (0,0): {mean_at_nominal:.4f} km/s")
+    
+    # Test a few points to verify function works
+    for d1, d2 in [(5, 0), (0, 5), (-5, 0), (0, -5)]:
+        test_dir = perturb_to_direction(d1, d2)
+        mean_test, _ = mc_objective_direction(dv1_nominal_mag, test_dir, sigma_dir_deg, N_dir_samples, seed=42)
+        angle_from_nom = np.degrees(np.arccos(np.clip(np.dot(test_dir, nominal_dir), -1, 1)))
+        print(f"    E[ΔV_total] at ({d1:+.0f}°, {d2:+.0f}°): {mean_test:.4f} km/s  (angle from nom: {angle_from_nom:.1f}°)")
+    
+    # Optimization bounds: allow ±20° deviation from nominal direction
+    bounds_dir = [(-20.0, 20.0), (-20.0, 20.0)]  # [delta1, delta2] in degrees
+    
+    result_dir = minimize(
+        objective_wrapper_dir,
+        x0=[0.0, 0.0],  # Start at nominal Hohmann direction
+        method='L-BFGS-B',
+        bounds=bounds_dir,
+        options={'disp': True, 'maxiter': 50}
+    )
+    
+    opt_delta1, opt_delta2 = result_dir.x
+    dv1_optimal_dir = perturb_to_direction(opt_delta1, opt_delta2)
+    
+    # Compute angular offset from nominal
+    cos_offset = np.clip(np.dot(dv1_optimal_dir, nominal_dir), -1, 1)
+    optimal_offset_deg = np.degrees(np.arccos(cos_offset))
+    
+    print(f"\n  Optimization Result (Direction Variation):")
+    print(f"    Optimal perturbation: δ1 = {opt_delta1:.2f}°, δ2 = {opt_delta2:.2f}°")
+    print(f"    Total angular offset from Hohmann: {optimal_offset_deg:.2f}°")
+    print(f"    Optimal direction: [{dv1_optimal_dir[0]:.6f}, {dv1_optimal_dir[1]:.6f}, {dv1_optimal_dir[2]:.6f}]")
+    
+    # Evaluate optimal solution for direction variation
+    mean_dv_opt_dir, stats_opt_dir = mc_objective_direction(dv1_nominal_mag, dv1_optimal_dir, sigma_dir_deg, N_dir_samples, seed=42)
+    
+    print(f"    E[ΔV_total] at optimal: {mean_dv_opt_dir:.4f} km/s")
+    print(f"    Improvement over nominal: {(mean_dv_opt_dir - mean_at_nominal)*1000:.1f} m/s")
+    
+    # Store direction variation r_mid for plotting
+    mc_r_mid_dir = np.array(stats_dir['r_mid_list'])
+
+    # ===== CASES 6-9: FREE MCC TIMING (Total flight time fixed) =====
+    print(f"\n" + "="*90)
+    print(f"=== CASES 6-9: FREE MCC TIMING (Total flight time = {tof:.1f} s fixed) ===")
+    print(f"="*90)
+    
+    # Time bounds: MCC can occur between 10% and 90% of total flight time
+    delta_t_min = -tof_1 * 0.8  # Can't go below 20% of nominal tof_1
+    delta_t_max = tof_2 * 0.8   # Can't exceed 80% of tof_2
+    
+    print(f"\n  Nominal MCC timing: tof_1 = {tof_1:.1f} s, tof_2 = {tof_2:.1f} s")
+    print(f"  Allowed delta_t range: [{delta_t_min:.1f}, {delta_t_max:.1f}] s")
+    
+    # --- Case 6: Hohmann + MCC (mag var) + free time ---
+    print(f"\n--- Case 6: Hohmann + MCC (mag var) + Free MCC Timing ---")
+    
+    def objective_case6(x):
+        delta_t = x[0]
+        mean_dv, _ = mc_objective_free_time(dv1_nominal_mag, dv1_direction, sigma_dv1_abs, delta_t, N_samples, seed=42)
+        return mean_dv
+    
+    # Evaluate at nominal timing first
+    mean_case6_nom, _ = mc_objective_free_time(dv1_nominal_mag, dv1_direction, sigma_dv1_abs, 0.0, N_samples, seed=42)
+    print(f"    E[ΔV_total] at Δt=0: {mean_case6_nom:.4f} km/s")
+    
+    result_case6 = minimize(
+        objective_case6,
+        x0=[0.0],
+        method='L-BFGS-B',
+        bounds=[(delta_t_min, delta_t_max)],
+        options={'disp': True, 'maxiter': 50}
+    )
+    
+    delta_t_opt_case6 = result_case6.x[0]
+    mean_case6, stats_case6 = mc_objective_free_time(dv1_nominal_mag, dv1_direction, sigma_dv1_abs, delta_t_opt_case6, N_samples, seed=42)
+    print(f"    Optimal Δt = {delta_t_opt_case6:.1f} s")
+    print(f"    New tof_1 = {tof_1 + delta_t_opt_case6:.1f} s, tof_2 = {tof_2 - delta_t_opt_case6:.1f} s")
+    print(f"    E[ΔV_total] = {mean_case6:.4f} km/s")
+    
+    # --- Case 7: Optimized mag + MCC (mag var) + free time ---
+    print(f"\n--- Case 7: Optimized Mag + MCC (mag var) + Free MCC Timing ---")
+    
+    def objective_case7(x):
+        dv1_mag, delta_t = x
+        mean_dv, _ = mc_objective_free_time(dv1_mag, dv1_direction, sigma_dv1_abs, delta_t, N_samples, seed=42)
+        return mean_dv
+    
+    # Use Case 6's optimal timing as initial guess (not 0!)
+    result_case7 = minimize(
+        objective_case7,
+        x0=[dv1_nominal_mag, delta_t_opt_case6],  # Start from Case 6's optimal timing
+        method='L-BFGS-B',
+        bounds=[(dv1_nominal_mag * 0.5, dv1_nominal_mag * 1.5), (delta_t_min, delta_t_max)],
+        options={'disp': True, 'maxiter': 50}
+    )
+    
+    dv1_opt_case7, delta_t_opt_case7 = result_case7.x
+    mean_case7, stats_case7 = mc_objective_free_time(dv1_opt_case7, dv1_direction, sigma_dv1_abs, delta_t_opt_case7, N_samples, seed=42)
+    print(f"    Optimal ΔV1 = {dv1_opt_case7:.4f} km/s, Δt = {delta_t_opt_case7:.1f} s")
+    print(f"    New tof_1 = {tof_1 + delta_t_opt_case7:.1f} s, tof_2 = {tof_2 - delta_t_opt_case7:.1f} s")
+    print(f"    E[ΔV_total] = {mean_case7:.4f} km/s")
+    
+    # --- Case 8: Hohmann + MCC (dir var) + free time ---
+    print(f"\n--- Case 8: Hohmann + MCC (dir var) + Free MCC Timing ---")
+    
+    def objective_case8(x):
+        delta_t = x[0]
+        mean_dv, _ = mc_objective_direction_free_time(dv1_nominal_mag, dv1_direction, sigma_dir_deg, delta_t, N_dir_samples, seed=42)
+        return mean_dv
+    
+    # Evaluate at nominal timing first
+    mean_case8_nom, _ = mc_objective_direction_free_time(dv1_nominal_mag, dv1_direction, sigma_dir_deg, 0.0, N_dir_samples, seed=42)
+    print(f"    E[ΔV_total] at Δt=0: {mean_case8_nom:.4f} km/s")
+    
+    # Test a few timing values to find a good starting point
+    test_dt_vals = [0.0, delta_t_min/2, delta_t_min, delta_t_max/4]
+    best_dt_init = 0.0
+    best_val = mean_case8_nom
+    for dt_test in test_dt_vals:
+        val, _ = mc_objective_direction_free_time(dv1_nominal_mag, dv1_direction, sigma_dir_deg, dt_test, N_dir_samples, seed=42)
+        print(f"    E[ΔV_total] at Δt={dt_test:.0f}: {val:.4f} km/s")
+        if val < best_val:
+            best_val = val
+            best_dt_init = dt_test
+    
+    result_case8 = minimize(
+        objective_case8,
+        x0=[best_dt_init],  # Start from best test point
+        method='L-BFGS-B',
+        bounds=[(delta_t_min, delta_t_max)],
+        options={'disp': True, 'maxiter': 50}
+    )
+    
+    delta_t_opt_case8 = result_case8.x[0]
+    mean_case8, stats_case8 = mc_objective_direction_free_time(dv1_nominal_mag, dv1_direction, sigma_dir_deg, delta_t_opt_case8, N_dir_samples, seed=42)
+    print(f"    Optimal Δt = {delta_t_opt_case8:.1f} s")
+    print(f"    New tof_1 = {tof_1 + delta_t_opt_case8:.1f} s, tof_2 = {tof_2 - delta_t_opt_case8:.1f} s")
+    print(f"    E[ΔV_total] = {mean_case8:.4f} km/s")
+    
+    # --- Case 9: Optimized dir + MCC (dir var) + free time ---
+    print(f"\n--- Case 9: Optimized Dir + MCC (dir var) + Free MCC Timing ---")
+    
+    def objective_case9(x):
+        delta1_deg, delta2_deg, delta_t = x
+        dv1_dir_opt = perturb_to_direction(delta1_deg, delta2_deg)
+        mean_dv, _ = mc_objective_direction_free_time(dv1_nominal_mag, dv1_dir_opt, sigma_dir_deg, delta_t, N_dir_samples, seed=42)
+        return mean_dv
+    
+    # Use Case 5's optimal direction and Case 8's optimal timing as starting point
+    result_case9 = minimize(
+        objective_case9,
+        x0=[opt_delta1, opt_delta2, delta_t_opt_case8],  # Start from Case 5 direction + Case 8 timing
+        method='L-BFGS-B',
+        bounds=[(-20.0, 20.0), (-20.0, 20.0), (delta_t_min, delta_t_max)],
+        options={'disp': True, 'maxiter': 50}
+    )
+    
+    opt_d1_case9, opt_d2_case9, delta_t_opt_case9 = result_case9.x
+    dv1_optimal_dir_case9 = perturb_to_direction(opt_d1_case9, opt_d2_case9)
+    cos_offset_case9 = np.clip(np.dot(dv1_optimal_dir_case9, nominal_dir), -1, 1)
+    optimal_offset_deg_case9 = np.degrees(np.arccos(cos_offset_case9))
+    
+    mean_case9, stats_case9 = mc_objective_direction_free_time(dv1_nominal_mag, dv1_optimal_dir_case9, sigma_dir_deg, delta_t_opt_case9, N_dir_samples, seed=42)
+    print(f"    Optimal dir offset: δ1={opt_d1_case9:.2f}°, δ2={opt_d2_case9:.2f}° ({optimal_offset_deg_case9:.2f}° total)")
+    print(f"    Optimal Δt = {delta_t_opt_case9:.1f} s")
+    print(f"    New tof_1 = {tof_1 + delta_t_opt_case9:.1f} s, tof_2 = {tof_2 - delta_t_opt_case9:.1f} s")
+    print(f"    E[ΔV_total] = {mean_case9:.4f} km/s")
+
+    # ===== SUMMARY TABLE: ALL 9 CASES =====
+    print(f"\n" + "="*110)
+    print(f"=== SUMMARY: ALL 9 CASES ===")
+    print(f"="*110)
+    
+    # Case 1: Hohmann (no randomness)
+    case1_init = dv_init_direct
+    case1_mid = dv_mid_direct
+    case1_final = dv_final_direct
+    case1_total = dv_total_direct
+    
+    # Case 2: Hohmann + MCC due to mag var
+    case2_init = stats_init['dv_init_mean']
+    case2_mid = stats_init['dv_mid_mean']
+    case2_final = stats_init['dv_final_mean']
+    case2_total = stats_init['dv_total_mean']
+    
+    # Case 3: Hohmann + MCC due to mag var + optim
+    case3_init = stats_opt['dv_init_mean']
+    case3_mid = stats_opt['dv_mid_mean']
+    case3_final = stats_opt['dv_final_mean']
+    case3_total = stats_opt['dv_total_mean']
+    
+    # Case 4: Hohmann + MCC due to dir var
+    case4_init = stats_dir['dv_init_mean']
+    case4_mid = stats_dir['dv_mid_mean']
+    case4_final = stats_dir['dv_final_mean']
+    case4_total = stats_dir['dv_total_mean']
+    
+    # Case 5: Hohmann + MCC due to dir var + optim
+    case5_init = stats_opt_dir['dv_init_mean']
+    case5_mid = stats_opt_dir['dv_mid_mean']
+    case5_final = stats_opt_dir['dv_final_mean']
+    case5_total = stats_opt_dir['dv_total_mean']
+    
+    # Case 6: Hohmann + MCC (mag var) + free time
+    case6_init = stats_case6['dv_init_mean']
+    case6_mid = stats_case6['dv_mid_mean']
+    case6_final = stats_case6['dv_final_mean']
+    case6_total = stats_case6['dv_total_mean']
+    
+    # Case 7: Optimized + MCC (mag var) + free time
+    case7_init = stats_case7['dv_init_mean']
+    case7_mid = stats_case7['dv_mid_mean']
+    case7_final = stats_case7['dv_final_mean']
+    case7_total = stats_case7['dv_total_mean']
+    
+    # Case 8: Hohmann + MCC (dir var) + free time
+    case8_init = stats_case8['dv_init_mean']
+    case8_mid = stats_case8['dv_mid_mean']
+    case8_final = stats_case8['dv_final_mean']
+    case8_total = stats_case8['dv_total_mean']
+    
+    # Case 9: Optimized + MCC (dir var) + free time
+    case9_init = stats_case9['dv_init_mean']
+    case9_mid = stats_case9['dv_mid_mean']
+    case9_final = stats_case9['dv_final_mean']
+    case9_total = stats_case9['dv_total_mean']
+    
+    print(f"\n  {'Case':<55} {'ΔV_init':>10} {'ΔV_mid':>10} {'ΔV_final':>10} {'ΔV_total':>10} {'Δt_mid':>12}")
+    print(f"  {'-'*55} {'-'*10} {'-'*10} {'-'*10} {'-'*10} {'-'*12}")
+    print(f"  {'1. Hohmann (deterministic)':<55} {case1_init:>8.4f}   {case1_mid:>8.4f}   {case1_final:>8.4f}   {case1_total:>8.4f}   {'N/A':>10}")
+    print(f"  {'--- Fixed MCC timing (tof_1, tof_2 fixed) ---':<55}")
+    print(f"  {'2. Hohmann + MCC (mag var σ=10%)':<55} {case2_init:>8.4f}   {case2_mid:>8.4f}   {case2_final:>8.4f}   {case2_total:>8.4f}   {0:>10.1f} s")
+    print(f"  {'3. Opt mag + MCC (mag var σ=10%)':<55} {case3_init:>8.4f}   {case3_mid:>8.4f}   {case3_final:>8.4f}   {case3_total:>8.4f}   {0:>10.1f} s")
+    print(f"  {f'4. Hohmann + MCC (dir var σ={sigma_dir_deg}°)':<55} {case4_init:>8.4f}   {case4_mid:>8.4f}   {case4_final:>8.4f}   {case4_total:>8.4f}   {0:>10.1f} s")
+    print(f"  {f'5. Opt dir + MCC (dir var σ={sigma_dir_deg}°)':<55} {case5_init:>8.4f}   {case5_mid:>8.4f}   {case5_final:>8.4f}   {case5_total:>8.4f}   {0:>10.1f} s")
+    print(f"  {'--- Free MCC timing (total tof fixed) ---':<55}")
+    print(f"  {'6. Hohmann + MCC (mag var) + free time':<55} {case6_init:>8.4f}   {case6_mid:>8.4f}   {case6_final:>8.4f}   {case6_total:>8.4f}   {delta_t_opt_case6:>+10.1f} s")
+    print(f"  {'7. Opt mag + MCC (mag var) + free time':<55} {case7_init:>8.4f}   {case7_mid:>8.4f}   {case7_final:>8.4f}   {case7_total:>8.4f}   {delta_t_opt_case7:>+10.1f} s")
+    print(f"  {f'8. Hohmann + MCC (dir var σ={sigma_dir_deg}°) + free time':<55} {case8_init:>8.4f}   {case8_mid:>8.4f}   {case8_final:>8.4f}   {case8_total:>8.4f}   {delta_t_opt_case8:>+10.1f} s")
+    print(f"  {f'9. Opt dir + MCC (dir var σ={sigma_dir_deg}°) + free time':<55} {case9_init:>8.4f}   {case9_mid:>8.4f}   {case9_final:>8.4f}   {case9_total:>8.4f}   {delta_t_opt_case9:>+10.1f} s")
+    print(f"  {'-'*55} {'-'*10} {'-'*10} {'-'*10} {'-'*10} {'-'*12}")
+    
+    # Savings summary
+    print(f"\n  Optimization Savings (ΔV_total):")
+    print(f"    Fixed timing:")
+    print(f"      Mag var: Case 3 vs Case 2 = {(case3_total - case2_total)*1000:+.1f} m/s ({(case3_total/case2_total - 1)*100:+.2f}%)")
+    print(f"      Dir var: Case 5 vs Case 4 = {(case5_total - case4_total)*1000:+.1f} m/s ({(case5_total/case4_total - 1)*100:+.2f}%)")
+    print(f"    Free timing:")
+    print(f"      Mag var: Case 7 vs Case 6 = {(case7_total - case6_total)*1000:+.1f} m/s ({(case7_total/case6_total - 1)*100:+.2f}%)")
+    print(f"      Dir var: Case 9 vs Case 8 = {(case9_total - case8_total)*1000:+.1f} m/s ({(case9_total/case8_total - 1)*100:+.2f}%)")
+    print(f"    Free time benefit (at Hohmann):")
+    print(f"      Mag var: Case 6 vs Case 2 = {(case6_total - case2_total)*1000:+.1f} m/s ({(case6_total/case2_total - 1)*100:+.2f}%)")
+    print(f"      Dir var: Case 8 vs Case 4 = {(case8_total - case4_total)*1000:+.1f} m/s ({(case8_total/case4_total - 1)*100:+.2f}%)")
+    
+    print(f"\n  Optimal Decision Variables:")
+    print(f"    Cases 3,7 (Mag var): ΔV1 = {dv1_optimal_mag:.4f} km/s (fixed), {dv1_opt_case7:.4f} km/s (free time)")
+    print(f"    Cases 5,9 (Dir var): offset = {optimal_offset_deg:.2f}° (fixed), {optimal_offset_deg_case9:.2f}° (free time)")
+    print(f"    Optimal Δt_mid: Case 6={delta_t_opt_case6:.1f}s, Case 7={delta_t_opt_case7:.1f}s, Case 8={delta_t_opt_case8:.1f}s, Case 9={delta_t_opt_case9:.1f}s")
+
+    # --- Bar Plot: ΔV Total Comparison (All 9 cases) ---
+    fig_bar, ax_bar = plt.subplots(figsize=(14, 6))
+    
+    # Total ΔV for all 9 cases
+    cases = ['1\nHohmann', '2\nMag', '3\nMag+Opt', '4\nDir', '5\nDir+Opt', 
+             '6\nMag+FT', '7\nMag+Opt+FT', '8\nDir+FT', '9\nDir+Opt+FT']
+    dv_totals = [case1_total, case2_total, case3_total, case4_total, case5_total,
+                 case6_total, case7_total, case8_total, case9_total]
+    
+    colors = ['green', 'orange', 'darkorange', 'purple', 'darkviolet',
+              'lightsalmon', 'coral', 'plum', 'mediumorchid']
+    
+    bars = ax_bar.bar(cases, dv_totals, color=colors, edgecolor='black', alpha=0.8)
     
     # Add value labels on bars
-    def add_labels(bars):
-        for bar in bars:
-            height = bar.get_height()
-            if height > 0.01:  # Only label non-zero bars
-                ax_bar.annotate(f'{height:.3f}',
-                              xy=(bar.get_x() + bar.get_width() / 2, height),
-                              xytext=(0, 3),
-                              textcoords="offset points",
-                              ha='center', va='bottom', fontsize=9)
+    for bar, dv in zip(bars, dv_totals):
+        height = bar.get_height()
+        ax_bar.annotate(f'{height:.3f}',
+                      xy=(bar.get_x() + bar.get_width() / 2, height),
+                      xytext=(0, 3),
+                      textcoords="offset points",
+                      ha='center', va='bottom', fontsize=9, fontweight='bold')
     
-    add_labels(bars1)
-    add_labels(bars2)
-    add_labels(bars3)
+    # Add horizontal line for Hohmann reference
+    ax_bar.axhline(y=case1_total, color='green', linestyle='--', linewidth=1.5, alpha=0.7, label='Hohmann')
     
-    ax_bar.set_xlabel('Burn Location')
-    ax_bar.set_ylabel('ΔV (km/s)')
-    ax_bar.set_title('ΔV Comparison: Nominal vs Stochastic (with MCC)\nPositions pinned to Hohmann transfer nodes')
-    ax_bar.set_xticks(x)
-    ax_bar.set_xticklabels(positions)
-    ax_bar.legend(loc='upper right')
-    ax_bar.set_ylim(0, max(max(dv_nominal), max(dv_hohmann_stoch), max(dv_opt_stoch)) * 1.2)
+    ax_bar.set_xlabel('Case')
+    ax_bar.set_ylabel('E[ΔV_total] (km/s)')
+    ax_bar.set_title(f'Total ΔV Comparison: All 9 Cases\n(Mag var σ=10%, Dir var σ={sigma_dir_deg}°/axis, FT=Free MCC Timing)')
+    ax_bar.set_ylim(0, max(dv_totals) * 1.15)
     ax_bar.grid(axis='y', alpha=0.3)
+    ax_bar.legend(loc='upper right')
     
     plt.tight_layout()
     plt.savefig('dv_comparison.png', dpi=150)
 
+    # --- Histogram Plot: Error Distributions ---
+    fig_hist, axes = plt.subplots(1, 2, figsize=(12, 5))
+    
+    # Left: Magnitude Error Distribution
+    ax1 = axes[0]
+    mag_errors_ms = stats_init['mag_errors'] * 1000  # Convert to m/s
+    n_bins = 30
+    
+    # Plot histogram
+    n, bins, patches = ax1.hist(mag_errors_ms, bins=n_bins, density=True, alpha=0.7, 
+                                 color='orange', edgecolor='black', label='Sampled')
+    
+    # Overlay theoretical Gaussian
+    x_gauss = np.linspace(mag_errors_ms.min(), mag_errors_ms.max(), 100)
+    sigma_ms = sigma_dv1_abs * 1000
+    gaussian_pdf = (1 / (sigma_ms * np.sqrt(2*np.pi))) * np.exp(-x_gauss**2 / (2*sigma_ms**2))
+    ax1.plot(x_gauss, gaussian_pdf, 'k-', linewidth=2, label=f'Gaussian (σ={sigma_ms:.1f} m/s)')
+    
+    ax1.axvline(0, color='green', linestyle='--', linewidth=1.5, label='Nominal')
+    ax1.axvline(np.mean(mag_errors_ms), color='red', linestyle='-', linewidth=1.5, 
+                label=f'Mean = {np.mean(mag_errors_ms):.1f} m/s')
+    
+    ax1.set_xlabel('Magnitude Error (m/s)')
+    ax1.set_ylabel('Probability Density')
+    ax1.set_title(f'ΔV₁ Magnitude Error Distribution\n(Gaussian, σ = {sigma_ms:.1f} m/s)')
+    ax1.legend(loc='upper right')
+    ax1.grid(alpha=0.3)
+    
+    # Right: Direction Angle Distribution (Cone Angle) - Rayleigh
+    ax2 = axes[1]
+    cone_angles = stats_dir['cone_angles']
+    
+    # Plot histogram
+    n2, bins2, patches2 = ax2.hist(cone_angles, bins=n_bins, density=True, alpha=0.7,
+                                    color='purple', edgecolor='black', label='Sampled')
+    
+    # Overlay theoretical Rayleigh distribution
+    # For 2D Gaussian with sigma_deg per axis, cone angle follows Rayleigh(sigma_deg)
+    # PDF: p(θ) = (θ/σ²) * exp(-θ²/(2σ²))
+    x_theta = np.linspace(0, np.max(cone_angles) * 1.1, 100)
+    rayleigh_pdf = (x_theta / sigma_dir_deg**2) * np.exp(-x_theta**2 / (2 * sigma_dir_deg**2))
+    ax2.plot(x_theta, rayleigh_pdf, 'k-', linewidth=2, 
+             label=f'Rayleigh (σ={sigma_dir_deg}°)')
+    
+    ax2.axvline(np.mean(cone_angles), color='red', linestyle='-', linewidth=1.5,
+                label=f'Mean = {np.mean(cone_angles):.1f}°')
+    ax2.axvline(sigma_dir_deg, color='green', linestyle='--', linewidth=1.5,
+                label=f'Mode = σ = {sigma_dir_deg}°')
+    
+    ax2.set_xlabel('Cone Angle (degrees)')
+    ax2.set_ylabel('Probability Density')
+    ax2.set_title(f'ΔV₁ Direction Error Distribution\n(2D Gaussian → Rayleigh cone angle, σ = {sigma_dir_deg}°/axis)')
+    ax2.legend(loc='upper right')
+    ax2.grid(alpha=0.3)
+    ax2.set_xlim(0, np.max(cone_angles) * 1.1)
+    
+    plt.tight_layout()
+    plt.savefig('error_distributions.png', dpi=150)
+
+    # --- Unit Sphere Plot: Direction Variation ---
+    fig_sphere = plt.figure(figsize=(10, 10))
+    ax_sphere = fig_sphere.add_subplot(111, projection='3d')
+    
+    # Get sampled directions from direction variation study
+    # Re-sample to get the actual direction vectors
+    np.random.seed(42)
+    sampled_directions, _ = sample_gaussian_direction(dv1_direction, sigma_dir_deg, N_dir_samples)
+    
+    # Plot unit sphere (wireframe)
+    u_sphere = np.linspace(0, 2 * np.pi, 30)
+    v_sphere = np.linspace(0, np.pi, 20)
+    x_sphere = np.outer(np.cos(u_sphere), np.sin(v_sphere))
+    y_sphere = np.outer(np.sin(u_sphere), np.sin(v_sphere))
+    z_sphere = np.outer(np.ones(np.size(u_sphere)), np.cos(v_sphere))
+    ax_sphere.plot_wireframe(x_sphere, y_sphere, z_sphere, color='lightgray', alpha=0.3, linewidth=0.5)
+    
+    # Plot sampled directions as scatter points on unit sphere
+    ax_sphere.scatter(sampled_directions[:, 0], sampled_directions[:, 1], sampled_directions[:, 2],
+                      c='purple', s=10, alpha=0.5, label='Sampled directions')
+    
+    # Plot nominal Hohmann direction
+    ax_sphere.scatter(*dv1_direction, color='green', s=200, marker='*', zorder=10,
+                      edgecolor='black', linewidth=1.5, label='Nominal Hohmann')
+    
+    # Plot optimal direction (from direction optimization)
+    ax_sphere.scatter(*dv1_optimal_dir, color='red', s=200, marker='*', zorder=10,
+                      edgecolor='black', linewidth=1.5, label=f'Optimal ({optimal_offset_deg:.1f}° from nom)')
+    
+    # Draw line connecting nominal to optimal
+    ax_sphere.plot([dv1_direction[0], dv1_optimal_dir[0]], 
+                   [dv1_direction[1], dv1_optimal_dir[1]], 
+                   [dv1_direction[2], dv1_optimal_dir[2]], 
+                   'k--', linewidth=2, alpha=0.7)
+    
+    # Build orthonormal basis for drawing circles
+    nominal_dir = dv1_direction / np.linalg.norm(dv1_direction)
+    if abs(nominal_dir[0]) < 0.9:
+        temp = np.array([1, 0, 0])
+    else:
+        temp = np.array([0, 1, 0])
+    e1 = temp - np.dot(temp, nominal_dir) * nominal_dir
+    e1 = e1 / np.linalg.norm(e1)
+    e2 = np.cross(nominal_dir, e1)
+    
+    # Draw circles at 1σ, 2σ, 3σ cone angles
+    phi_circle = np.linspace(0, 2*np.pi, 100)
+    sigma_levels = [1, 2, 3]
+    colors_sigma = ['blue', 'orange', 'red']
+    
+    for sigma_mult, color in zip(sigma_levels, colors_sigma):
+        theta_rad = np.radians(sigma_mult * sigma_dir_deg)
+        sin_theta = np.sin(theta_rad)
+        cos_theta = np.cos(theta_rad)
+        
+        # Circle on unit sphere at cone angle theta from nominal direction
+        circle_x = sin_theta * np.cos(phi_circle)
+        circle_y = sin_theta * np.sin(phi_circle)
+        circle_z = cos_theta * np.ones_like(phi_circle)
+        
+        # Transform to global coordinates
+        circle_points = np.zeros((len(phi_circle), 3))
+        for i in range(len(phi_circle)):
+            circle_points[i] = circle_x[i] * e1 + circle_y[i] * e2 + circle_z[i] * nominal_dir
+        
+        ax_sphere.plot(circle_points[:, 0], circle_points[:, 1], circle_points[:, 2],
+                       color=color, linewidth=2, label=f'{sigma_mult}σ = {sigma_mult * sigma_dir_deg}°')
+    
+    ax_sphere.set_xlabel('X')
+    ax_sphere.set_ylabel('Y')
+    ax_sphere.set_zlabel('Z')
+    ax_sphere.set_title(f'Direction Variation on Unit Sphere\n(σ = {sigma_dir_deg}°/axis, Optimal offset = {optimal_offset_deg:.1f}°)')
+    ax_sphere.legend(loc='upper left')
+    
+    # Equal aspect ratio
+    ax_sphere.set_xlim([-1.1, 1.1])
+    ax_sphere.set_ylim([-1.1, 1.1])
+    ax_sphere.set_zlim([-1.1, 1.1])
+    ax_sphere.set_box_aspect([1, 1, 1])
+    
+    # Set view angle to see the distribution well
+    ax_sphere.view_init(elev=20, azim=45)
+    
+    plt.tight_layout()
+    plt.savefig('direction_sphere.png', dpi=150)
+
     # 3D Plot
-    fig = plt.figure(figsize=(12, 10))
+    fig = plt.figure(figsize=(14, 10))
     ax = fig.add_subplot(111, projection='3d')
     
     # Plot orbits
@@ -713,13 +1615,17 @@ if __name__ == "__main__":
     ax.plot(traj['final'][:, 0], traj['final'][:, 1], traj['final'][:, 2], 
             'r-', linewidth=1.5, label=f'Final Orbit (i={inc2}°)')
     
-    # Plot MC mid-point scatter (show spread of r_mid positions)
+    # Plot MC mid-point scatter - Magnitude variation (orange)
     ax.scatter(mc_r_mid[:, 0], mc_r_mid[:, 1], mc_r_mid[:, 2], 
-               color='orange', s=20, alpha=0.5, label=f'MC r_mid ({N_samples} samples)')
+               color='orange', s=15, alpha=0.4, label=f'Mag Var r_mid')
+    
+    # Plot MC mid-point scatter - Direction variation (purple)
+    ax.scatter(mc_r_mid_dir[:, 0], mc_r_mid_dir[:, 1], mc_r_mid_dir[:, 2], 
+               color='purple', s=15, alpha=0.4, label=f'Dir Var r_mid')
     
     # Plot average r_mid
     ax.scatter(*avg_r_mid, color='red', s=150, marker='X', zorder=7, edgecolor='black',
-               label=f'Avg r_mid (MC)')
+               label=f'Avg r_mid (Mag Var)')
     
     # Plot transfer nodes: initial (EA=0°), middle (EA=90°), final (EA=180°)
     r_EA0 = traj['transfer_EA0']['r']
@@ -771,4 +1677,147 @@ if __name__ == "__main__":
     
     plt.tight_layout()
     plt.savefig('hohmann_transfer.png', dpi=150)
+    
+    # ==========================================================================
+    # NEW: Cases 6-9 Free-time trajectory visualization
+    # ==========================================================================
+    print("\n" + "="*80)
+    print("=== PLOTTING CASES 6-9: FREE MCC TIMING ===")
+    print("="*80)
+    
+    # Compute nominal MCC positions for each case
+    v1_nominal = dv1_nominal_mag * dv1_direction
+    v_after_burn1 = v_init_orbit + v1_nominal  # Velocity after burn 1
+    
+    # Case 6 & 7: Same timing (Δt = delta_t_opt_case6), magnitude variation
+    tof_1_case6 = tof_1 + delta_t_opt_case6
+    r_mid_case6, _ = propagate_kepler(r_init, v_after_burn1, tof_1_case6)
+    
+    # Case 7: Optimized magnitude
+    dv1_opt_case7 = result_case7.x[0]
+    v1_case7 = dv1_opt_case7 * dv1_direction
+    v_after_burn1_case7 = v_init_orbit + v1_case7
+    tof_1_case7 = tof_1 + delta_t_opt_case7
+    r_mid_case7, _ = propagate_kepler(r_init, v_after_burn1_case7, tof_1_case7)
+    
+    # Case 8: Same timing as Case 6, direction variation (Hohmann direction)
+    tof_1_case8 = tof_1 + delta_t_opt_case8
+    r_mid_case8, _ = propagate_kepler(r_init, v_after_burn1, tof_1_case8)
+    
+    # Case 9: Optimized direction and timing
+    dv1_dir_opt_case9 = perturb_to_direction(opt_d1_case9, opt_d2_case9)
+    v1_case9 = dv1_nominal_mag * dv1_dir_opt_case9
+    v_after_burn1_case9 = v_init_orbit + v1_case9
+    tof_1_case9 = tof_1 + delta_t_opt_case9
+    r_mid_case9, _ = propagate_kepler(r_init, v_after_burn1_case9, tof_1_case9)
+    
+    print(f"  Case 6: tof_1 = {tof_1_case6:.1f} s, r_mid = {r_mid_case6}")
+    print(f"  Case 7: tof_1 = {tof_1_case7:.1f} s, r_mid = {r_mid_case7}")
+    print(f"  Case 8: tof_1 = {tof_1_case8:.1f} s, r_mid = {r_mid_case8}")
+    print(f"  Case 9: tof_1 = {tof_1_case9:.1f} s, r_mid = {r_mid_case9}")
+    
+    # Generate partial transfer arcs for Cases 6-9
+    # These show the trajectory from LEO to the new MCC position
+    n_arc_pts = 100
+    
+    # Case 6 arc (Hohmann ΔV1, early MCC)
+    arc_case6 = []
+    for t in np.linspace(0, tof_1_case6, n_arc_pts):
+        r_t, _ = propagate_kepler(r_init, v_after_burn1, t)
+        arc_case6.append(r_t)
+    arc_case6 = np.array(arc_case6)
+    
+    # Case 7 arc (Optimized ΔV1, early MCC)
+    arc_case7 = []
+    for t in np.linspace(0, tof_1_case7, n_arc_pts):
+        r_t, _ = propagate_kepler(r_init, v_after_burn1_case7, t)
+        arc_case7.append(r_t)
+    arc_case7 = np.array(arc_case7)
+    
+    # Case 9 arc (Optimized direction, intermediate MCC)
+    arc_case9 = []
+    for t in np.linspace(0, tof_1_case9, n_arc_pts):
+        r_t, _ = propagate_kepler(r_init, v_after_burn1_case9, t)
+        arc_case9.append(r_t)
+    arc_case9 = np.array(arc_case9)
+    
+    # ==========================================================================
+    # 3D Plot: Cases 6-9 comparison
+    # ==========================================================================
+    fig = plt.figure(figsize=(16, 12))
+    ax = fig.add_subplot(111, projection='3d')
+    
+    # Plot orbits
+    ax.plot(traj['initial'][:, 0], traj['initial'][:, 1], traj['initial'][:, 2], 
+            'b-', linewidth=1, alpha=0.5, label=f'LEO (i={inc1}°)')
+    ax.plot(traj['transfer'][:, 0], traj['transfer'][:, 1], traj['transfer'][:, 2], 
+            'gray', linewidth=1.5, linestyle='--', alpha=0.5, label='Nominal Transfer (EA=90°)')
+    ax.plot(traj['final'][:, 0], traj['final'][:, 1], traj['final'][:, 2], 
+            'r-', linewidth=1, alpha=0.5, label=f'GEO (i={inc2}°)')
+    
+    # Plot arcs to new MCC positions
+    ax.plot(arc_case6[:, 0], arc_case6[:, 1], arc_case6[:, 2], 
+            'orange', linewidth=2.5, label=f'Case 6: Δt={delta_t_opt_case6:.0f}s')
+    ax.plot(arc_case7[:, 0], arc_case7[:, 1], arc_case7[:, 2], 
+            'red', linewidth=2.5, linestyle='--', label=f'Case 7: Δt={delta_t_opt_case7:.0f}s, ΔV1={dv1_opt_case7:.3f}')
+    ax.plot(arc_case9[:, 0], arc_case9[:, 1], arc_case9[:, 2], 
+            'purple', linewidth=2.5, label=f'Case 9: Δt={delta_t_opt_case9:.0f}s, dir offset={np.sqrt(opt_d1_case9**2+opt_d2_case9**2):.1f}°')
+    
+    # Plot MCC positions
+    ax.scatter(*r_EA90, color='green', s=150, marker='s', zorder=10, edgecolor='black', linewidth=2,
+               label=f'Nominal MCC (EA=90°, tof_1={tof_1:.0f}s)')
+    ax.scatter(*r_mid_case6, color='orange', s=150, marker='^', zorder=10, edgecolor='black', linewidth=2,
+               label=f'Case 6/7/8 MCC (tof_1={tof_1_case6:.0f}s)')
+    ax.scatter(*r_mid_case9, color='purple', s=150, marker='D', zorder=10, edgecolor='black', linewidth=2,
+               label=f'Case 9 MCC (tof_1={tof_1_case9:.0f}s)')
+    
+    # Plot key positions
+    ax.scatter(*r_EA0, color='blue', s=100, marker='o', zorder=5, edgecolor='black',
+               label='Departure (periapsis)')
+    ax.scatter(*r_EA180, color='red', s=100, marker='o', zorder=5, edgecolor='black',
+               label='Arrival (apoapsis)')
+    
+    # Plot Earth
+    u = np.linspace(0, 2*np.pi, 50)
+    v = np.linspace(0, np.pi, 50)
+    R_earth = 6371
+    x = R_earth * np.outer(np.cos(u), np.sin(v))
+    y = R_earth * np.outer(np.sin(u), np.sin(v))
+    z = R_earth * np.outer(np.ones(np.size(u)), np.cos(v))
+    ax.plot_surface(x, y, z, color='lightblue', alpha=0.6)
+    
+    ax.set_xlabel('X (km)')
+    ax.set_ylabel('Y (km)')
+    ax.set_zlabel('Z (km)')
+    ax.set_title('Cases 6-9: Free MCC Timing Optimization\n'
+                 f'Nominal tof_1={tof_1:.0f}s → Optimized: Case 6/7/8={tof_1_case6:.0f}s, Case 9={tof_1_case9:.0f}s')
+    ax.legend(loc='upper left', fontsize=9)
+    
+    # Equal aspect ratio
+    max_range = sma2 * 0.7
+    ax.set_xlim([-max_range, max_range])
+    ax.set_ylim([-max_range, max_range])
+    ax.set_zlim([-max_range/2, max_range/2])
+    ax.set_box_aspect([1, 1, 0.5])
+    
+    ax.view_init(elev=30, azim=-60)
+    
+    plt.tight_layout()
+    plt.savefig('cases_6_9_free_time.png', dpi=150)
+    
+    # ==========================================================================
+    # Summary: MCC position comparison
+    # ==========================================================================
+    print("\n  MCC Position Comparison:")
+    print(f"  {'Case':<12} {'tof_1 (s)':<12} {'|r_mid| (km)':<15} {'r_mid (km)':<45}")
+    print(f"  {'-'*12} {'-'*12} {'-'*15} {'-'*45}")
+    print(f"  {'Nominal':<12} {tof_1:<12.1f} {np.linalg.norm(r_EA90):<15.1f} {str(np.round(r_EA90, 1)):<45}")
+    print(f"  {'Case 6/7/8':<12} {tof_1_case6:<12.1f} {np.linalg.norm(r_mid_case6):<15.1f} {str(np.round(r_mid_case6, 1)):<45}")
+    print(f"  {'Case 9':<12} {tof_1_case9:<12.1f} {np.linalg.norm(r_mid_case9):<15.1f} {str(np.round(r_mid_case9, 1)):<45}")
+    
+    print(f"\n  Key Insight: Earlier MCC (smaller tof_1) means:")
+    print(f"    - Spacecraft closer to Earth (smaller |r_mid|)")
+    print(f"    - Higher velocity → corrections cost less ΔV per km of position error")
+    print(f"    - Case 9 finds intermediate optimum balancing timing and direction bias")
+    
     plt.show()
