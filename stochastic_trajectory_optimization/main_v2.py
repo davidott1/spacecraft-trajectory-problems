@@ -253,6 +253,148 @@ def propagate_kepler(r0, v0, dt):
     return r, v
 
 
+def compute_stm(r0, v0, dt, eps=1e-6):
+    """
+    Compute the State Transition Matrix (STM) numerically using finite differences.
+    
+    The STM Φ(t, t₀) maps perturbations in initial state to final state:
+    [δr(t)]   [Φ_rr  Φ_rv] [δr₀]
+    [δv(t)] = [Φ_vr  Φ_vv] [δv₀]
+    
+    Args:
+        r0: Initial position vector (3,)
+        v0: Initial velocity vector (3,)
+        dt: Time of flight
+        eps: Finite difference step size
+    
+    Returns:
+        STM: 6x6 State Transition Matrix
+        Phi_rr, Phi_rv, Phi_vr, Phi_vv: 3x3 submatrices
+    """
+    STM = np.zeros((6, 6))
+    
+    # Nominal final state
+    r_nom, v_nom = propagate_kepler(r0, v0, dt)
+    
+    # Perturb each initial state component
+    for i in range(6):
+        # Create perturbed initial state
+        if i < 3:
+            r0_pert = r0.copy()
+            r0_pert[i] += eps
+            v0_pert = v0.copy()
+        else:
+            r0_pert = r0.copy()
+            v0_pert = v0.copy()
+            v0_pert[i-3] += eps
+        
+        # Propagate perturbed state
+        r_pert, v_pert = propagate_kepler(r0_pert, v0_pert, dt)
+        
+        # Finite difference
+        STM[0:3, i] = (r_pert - r_nom) / eps
+        STM[3:6, i] = (v_pert - v_nom) / eps
+    
+    # Extract submatrices
+    Phi_rr = STM[0:3, 0:3]  # ∂r/∂r₀
+    Phi_rv = STM[0:3, 3:6]  # ∂r/∂v₀  (position sensitivity to velocity)
+    Phi_vr = STM[3:6, 0:3]  # ∂v/∂r₀
+    Phi_vv = STM[3:6, 3:6]  # ∂v/∂v₀
+    
+    return STM, Phi_rr, Phi_rv, Phi_vr, Phi_vv
+
+
+def stochastic_stm_analysis(r0, v0, v_nominal, dt, sigma_mag, sigma_dir_deg):
+    """
+    Perform stochastic analysis using the STM.
+    
+    Computes:
+    1. Position covariance at MCC due to magnitude and direction errors
+    2. Sensitivity of position error to each error source
+    3. Expected ΔV_mid based on position dispersion
+    
+    Args:
+        r0: Initial position (at burn 1)
+        v0: Initial orbit velocity (before burn 1)
+        v_nominal: Nominal post-burn velocity
+        dt: Time of flight to MCC
+        sigma_mag: 1σ magnitude error (km/s)
+        sigma_dir_deg: 1σ direction error per axis (degrees)
+    
+    Returns:
+        dict with covariance analysis results
+    """
+    # Compute STM
+    _, Phi_rr, Phi_rv, Phi_vr, Phi_vv = compute_stm(r0, v_nominal, dt)
+    
+    # --- Velocity covariance due to MAGNITUDE error ---
+    # δv = δ|v| * v_hat, so Σ_v = σ²_mag * v_hat ⊗ v_hat
+    v_hat = v_nominal / np.linalg.norm(v_nominal)
+    Sigma_v_mag = sigma_mag**2 * np.outer(v_hat, v_hat)
+    
+    # --- Velocity covariance due to DIRECTION error ---
+    # Direction errors are perpendicular to v_hat
+    # Build orthonormal basis
+    if abs(v_hat[0]) < 0.9:
+        temp = np.array([1, 0, 0])
+    else:
+        temp = np.array([0, 1, 0])
+    e1 = temp - np.dot(temp, v_hat) * v_hat
+    e1 = e1 / np.linalg.norm(e1)
+    e2 = np.cross(v_hat, e1)
+    
+    # Direction error in velocity: δv = |v| * (tan(δθ₁)*e1 + tan(δθ₂)*e2)
+    # For small angles: δv ≈ |v| * (δθ₁*e1 + δθ₂*e2) where δθ in radians
+    v_mag = np.linalg.norm(v_nominal)
+    sigma_dir_rad = np.radians(sigma_dir_deg)
+    
+    # Covariance: Σ_v = |v|² * σ²_dir * (e1⊗e1 + e2⊗e2)
+    Sigma_v_dir = v_mag**2 * sigma_dir_rad**2 * (np.outer(e1, e1) + np.outer(e2, e2))
+    
+    # --- Propagate covariance to MCC position ---
+    # P_r(t) = Φ_rv * Σ_v * Φ_rv^T  (for velocity-only initial uncertainty)
+    P_r_mag = Phi_rv @ Sigma_v_mag @ Phi_rv.T
+    P_r_dir = Phi_rv @ Sigma_v_dir @ Phi_rv.T
+    P_r_total = P_r_mag + P_r_dir
+    
+    # Position standard deviations (sqrt of diagonal)
+    sigma_r_mag = np.sqrt(np.diag(P_r_mag))
+    sigma_r_dir = np.sqrt(np.diag(P_r_dir))
+    sigma_r_total = np.sqrt(np.diag(P_r_total))
+    
+    # RMS position error (trace)
+    rms_r_mag = np.sqrt(np.trace(P_r_mag))
+    rms_r_dir = np.sqrt(np.trace(P_r_dir))
+    rms_r_total = np.sqrt(np.trace(P_r_total))
+    
+    # --- Velocity covariance at MCC ---
+    P_v_mag = Phi_vv @ Sigma_v_mag @ Phi_vv.T
+    P_v_dir = Phi_vv @ Sigma_v_dir @ Phi_vv.T
+    
+    # --- Estimate ΔV_mid from position dispersion ---
+    # ΔV_mid ≈ ||δr|| / t_remaining * correction_factor
+    # More precisely: solve Lambert from perturbed r_mid to r_final
+    # For linear estimate: ΔV ∝ position_error / time_remaining
+    
+    return {
+        'STM_Phi_rv': Phi_rv,
+        'STM_Phi_vv': Phi_vv,
+        'Sigma_v_mag': Sigma_v_mag,
+        'Sigma_v_dir': Sigma_v_dir,
+        'P_r_mag': P_r_mag,
+        'P_r_dir': P_r_dir,
+        'P_r_total': P_r_total,
+        'sigma_r_mag': sigma_r_mag,
+        'sigma_r_dir': sigma_r_dir,
+        'sigma_r_total': sigma_r_total,
+        'rms_r_mag': rms_r_mag,
+        'rms_r_dir': rms_r_dir,
+        'rms_r_total': rms_r_total,
+        'P_v_mag': P_v_mag,
+        'P_v_dir': P_v_dir,
+    }
+
+
 def generate_trajectory(r1, r2, inc1_rad, delta_inc1, delta_inc2, n_points=200):
     """
     Generate the full transfer trajectory.
@@ -1422,6 +1564,88 @@ if __name__ == "__main__":
     print(f"    Cases 5,9 (Dir var): offset = {optimal_offset_deg:.2f}° (fixed), {optimal_offset_deg_case9:.2f}° (free time)")
     print(f"    Optimal Δt_mid: Case 6={delta_t_opt_case6:.1f}s, Case 7={delta_t_opt_case7:.1f}s, Case 8={delta_t_opt_case8:.1f}s, Case 9={delta_t_opt_case9:.1f}s")
 
+    # ==========================================================================
+    # STOCHASTIC STM ANALYSIS
+    # ==========================================================================
+    print("\n" + "="*100)
+    print("=== STOCHASTIC STM ANALYSIS: Sensitivity of Position Error to ΔV1 Errors ===")
+    print("="*100)
+    
+    # Compute STM analysis for different MCC timings
+    v_after_burn1 = v_init_orbit + dv1_nominal_mag * dv1_direction
+    
+    print(f"\n  Initial state (after burn 1):")
+    print(f"    r₀ = {r_init} km")
+    print(f"    v₀ = {v_after_burn1} km/s")
+    print(f"    |v₀| = {np.linalg.norm(v_after_burn1):.4f} km/s")
+    
+    # Analyze at three different MCC timings
+    timing_cases = [
+        ("Nominal (EA=90°)", tof_1, 0.0),
+        ("Case 6/7/8 (early)", tof_1 + delta_t_opt_case6, delta_t_opt_case6),
+        ("Case 9 (intermediate)", tof_1 + delta_t_opt_case9, delta_t_opt_case9),
+    ]
+    
+    print(f"\n  Covariance Analysis at Different MCC Timings:")
+    print(f"  (σ_mag = {sigma_dv1_abs*1000:.1f} m/s, σ_dir = {sigma_dir_deg}°/axis)")
+    print(f"\n  {'Timing':<25} {'tof_1 (s)':<12} {'σ_r_mag (km)':<14} {'σ_r_dir (km)':<14} {'σ_r_total (km)':<14}")
+    print(f"  {'-'*25} {'-'*12} {'-'*14} {'-'*14} {'-'*14}")
+    
+    stm_results = {}
+    for name, dt, delta_t in timing_cases:
+        result = stochastic_stm_analysis(r_init, v_init_orbit, v_after_burn1, dt, 
+                                         sigma_dv1_abs, sigma_dir_deg)
+        stm_results[name] = result
+        print(f"  {name:<25} {dt:<12.1f} {result['rms_r_mag']:<14.2f} {result['rms_r_dir']:<14.2f} {result['rms_r_total']:<14.2f}")
+    
+    # Detailed analysis for nominal timing
+    print(f"\n  --- Detailed STM Analysis at Nominal Timing (tof_1 = {tof_1:.1f} s) ---")
+    nom_result = stm_results["Nominal (EA=90°)"]
+    
+    print(f"\n  Φ_rv (Position sensitivity to velocity):")
+    print(f"    Maps δv₀ to δr(t)")
+    for i in range(3):
+        print(f"    [{nom_result['STM_Phi_rv'][i,0]:12.4f} {nom_result['STM_Phi_rv'][i,1]:12.4f} {nom_result['STM_Phi_rv'][i,2]:12.4f}]")
+    
+    print(f"\n  Position Covariance P_r (km²):")
+    print(f"    From magnitude error:")
+    for i in range(3):
+        print(f"    [{nom_result['P_r_mag'][i,0]:12.2f} {nom_result['P_r_mag'][i,1]:12.2f} {nom_result['P_r_mag'][i,2]:12.2f}]")
+    print(f"    From direction error:")
+    for i in range(3):
+        print(f"    [{nom_result['P_r_dir'][i,0]:12.2f} {nom_result['P_r_dir'][i,1]:12.2f} {nom_result['P_r_dir'][i,2]:12.2f}]")
+    
+    print(f"\n  Position 1σ Dispersion (km):")
+    print(f"    {'Component':<10} {'Mag Error':<14} {'Dir Error':<14} {'Total':<14}")
+    print(f"    {'-'*10} {'-'*14} {'-'*14} {'-'*14}")
+    print(f"    {'X':<10} {nom_result['sigma_r_mag'][0]:<14.2f} {nom_result['sigma_r_dir'][0]:<14.2f} {nom_result['sigma_r_total'][0]:<14.2f}")
+    print(f"    {'Y':<10} {nom_result['sigma_r_mag'][1]:<14.2f} {nom_result['sigma_r_dir'][1]:<14.2f} {nom_result['sigma_r_total'][1]:<14.2f}")
+    print(f"    {'Z':<10} {nom_result['sigma_r_mag'][2]:<14.2f} {nom_result['sigma_r_dir'][2]:<14.2f} {nom_result['sigma_r_total'][2]:<14.2f}")
+    print(f"    {'RMS':<10} {nom_result['rms_r_mag']:<14.2f} {nom_result['rms_r_dir']:<14.2f} {nom_result['rms_r_total']:<14.2f}")
+    
+    # Compare variance contributions
+    var_mag = nom_result['rms_r_mag']**2
+    var_dir = nom_result['rms_r_dir']**2
+    var_total = var_mag + var_dir
+    
+    print(f"\n  Variance Contribution:")
+    print(f"    Magnitude error: {var_mag:.1f} km² ({var_mag/var_total*100:.1f}%)")
+    print(f"    Direction error: {var_dir:.1f} km² ({var_dir/var_total*100:.1f}%)")
+    
+    # --- Timing sensitivity ---
+    print(f"\n  --- Sensitivity to MCC Timing ---")
+    dt_test = np.linspace(500, tof_1 + 2000, 20)
+    rms_r_vs_dt = []
+    for dt in dt_test:
+        res = stochastic_stm_analysis(r_init, v_init_orbit, v_after_burn1, dt, 
+                                      sigma_dv1_abs, sigma_dir_deg)
+        rms_r_vs_dt.append(res['rms_r_total'])
+    
+    # Find minimum (though Lambert cost isn't just position error)
+    min_idx = np.argmin(rms_r_vs_dt)
+    print(f"    Minimum RMS position error at tof_1 = {dt_test[min_idx]:.0f} s (σ_r = {rms_r_vs_dt[min_idx]:.1f} km)")
+    print(f"    Note: This differs from optimal ΔV timing because Lambert cost ≠ position error")
+    
     # --- Bar Plot: ΔV Total Comparison (All 9 cases) ---
     fig_bar, ax_bar = plt.subplots(figsize=(14, 6))
     
@@ -1456,6 +1680,52 @@ if __name__ == "__main__":
     ax_bar.legend(loc='upper right')
     
     plt.tight_layout()
+    
+    # --- STM Position Error vs Timing Plot ---
+    fig_stm, (ax_stm1, ax_stm2) = plt.subplots(1, 2, figsize=(14, 5))
+    
+    # Compute for full range
+    dt_range = np.linspace(200, tof, 50)
+    rms_mag_vs_dt = []
+    rms_dir_vs_dt = []
+    for dt in dt_range:
+        res = stochastic_stm_analysis(r_init, v_init_orbit, v_after_burn1, dt, 
+                                      sigma_dv1_abs, sigma_dir_deg)
+        rms_mag_vs_dt.append(res['rms_r_mag'])
+        rms_dir_vs_dt.append(res['rms_r_dir'])
+    
+    # Plot 1: Position dispersion vs timing
+    ax_stm1.plot(dt_range/60, rms_mag_vs_dt, 'orange', linewidth=2, label=f'Magnitude (σ={sigma_dv1_abs*1000:.0f} m/s)')
+    ax_stm1.plot(dt_range/60, rms_dir_vs_dt, 'purple', linewidth=2, label=f'Direction (σ={sigma_dir_deg}°/axis)')
+    ax_stm1.plot(dt_range/60, np.sqrt(np.array(rms_mag_vs_dt)**2 + np.array(rms_dir_vs_dt)**2), 
+                 'k--', linewidth=2, label='Total')
+    
+    # Mark key timings
+    ax_stm1.axvline(tof_1/60, color='green', linestyle=':', linewidth=1.5, alpha=0.7, label=f'Nominal MCC ({tof_1/60:.1f} min)')
+    ax_stm1.axvline((tof_1 + delta_t_opt_case6)/60, color='red', linestyle=':', linewidth=1.5, alpha=0.7, 
+                   label=f'Case 6/7/8 MCC ({(tof_1+delta_t_opt_case6)/60:.1f} min)')
+    ax_stm1.axvline((tof_1 + delta_t_opt_case9)/60, color='blue', linestyle=':', linewidth=1.5, alpha=0.7,
+                   label=f'Case 9 MCC ({(tof_1+delta_t_opt_case9)/60:.1f} min)')
+    
+    ax_stm1.set_xlabel('Time to MCC (min)')
+    ax_stm1.set_ylabel('RMS Position Dispersion (km)')
+    ax_stm1.set_title('Position Dispersion at MCC vs Timing\n(STM Covariance Propagation)')
+    ax_stm1.legend(fontsize=8)
+    ax_stm1.grid(alpha=0.3)
+    ax_stm1.set_xlim([0, tof/60])
+    
+    # Plot 2: Variance contribution pie chart at nominal timing
+    labels = ['Magnitude Error', 'Direction Error']
+    sizes = [var_mag, var_dir]
+    colors_pie = ['orange', 'purple']
+    explode = (0.02, 0.02)
+    
+    ax_stm2.pie(sizes, explode=explode, labels=labels, colors=colors_pie, autopct='%1.1f%%',
+                shadow=True, startangle=90)
+    ax_stm2.set_title(f'Position Variance Contribution at Nominal MCC\n(tof_1 = {tof_1:.0f} s)')
+    
+    plt.tight_layout()
+    plt.savefig('stm_analysis.png', dpi=150)
     plt.savefig('dv_comparison.png', dpi=150)
 
     # --- Histogram Plot: Error Distributions ---
