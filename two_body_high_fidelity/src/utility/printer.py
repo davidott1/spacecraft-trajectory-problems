@@ -1,7 +1,3 @@
-import numpy as np
-
-from typing import Optional
-
 from src.model.time_converter import et_to_utc
 from src.model.constants      import CONVERTER
 

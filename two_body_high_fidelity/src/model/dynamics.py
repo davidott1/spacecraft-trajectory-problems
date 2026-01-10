@@ -109,19 +109,10 @@ Sources:
 import numpy    as np
 import spiceypy as spice
 
-from pathlib import Path
-from typing  import Optional
-
 from src.model.constants       import SOLARSYSTEMCONSTANTS, CONVERTER, NAIFIDS
 from src.model.frame_converter import FrameConverter
 from src.schemas.spacecraft    import SpacecraftProperties, DragConfig, SRPConfig
 from src.schemas.gravity       import GravityModelConfig
-
-
-# Type hint for gravity model (avoid circular import)
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-  from src.model.gravity_field import SphericalHarmonicsGravity
 
 
 # =============================================================================

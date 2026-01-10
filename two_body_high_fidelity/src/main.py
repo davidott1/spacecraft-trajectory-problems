@@ -63,7 +63,6 @@ from src.input.cli                     import parse_command_line_arguments
 from src.input.configuration           import build_config, print_configuration, extract_tle_to_config
 from src.propagation.state_initializer import get_initial_state
 from src.utility.logger                import start_logging, stop_logging
-from src.schemas.spacecraft            import SpacecraftProperties, DragConfig, SRPConfig
 from src.schemas.propagation           import PropagationConfig, PropagationResult
 from src.schemas.state                 import TLEData
 
