@@ -33,8 +33,10 @@ Usage:
 import pytest
 import numpy as np
 
-from src.model.dynamics  import TwoBodyGravity, AtmosphericDrag, Acceleration
-from src.model.constants import SOLARSYSTEMCONSTANTS
+from src.model.dynamics     import TwoBodyGravity, AtmosphericDrag, Acceleration
+from src.model.constants    import SOLARSYSTEMCONSTANTS
+from src.schemas.gravity    import GravityModelConfig
+from src.schemas.spacecraft import SpacecraftProperties, DragConfig
 
 
 class TestTwoBodyGravity:
@@ -145,7 +147,8 @@ class TestAtmosphericDrag:
     """
     Drag acceleration should oppose velocity direction.
     """
-    drag = AtmosphericDrag(cd=2.2, area=10.0, mass=1000.0)
+    drag_config = DragConfig(enabled=True, cd=2.2, area=10.0)
+    drag = AtmosphericDrag(drag_config=drag_config, mass=1000.0)
     
     pos_vec = np.array([6778e3, 0.0, 0.0])  # LEO altitude
     vel_vec = np.array([0.0, 7500.0, 0.0])  # Prograde velocity
@@ -160,7 +163,8 @@ class TestAtmosphericDrag:
     """
     Drag should increase at lower altitudes.
     """
-    drag = AtmosphericDrag(cd=2.2, area=10.0, mass=1000.0)
+    drag_config = DragConfig(enabled=True, cd=2.2, area=10.0)
+    drag = AtmosphericDrag(drag_config=drag_config, mass=1000.0)
     
     vel_vec = np.array([0.0, 7500.0, 0.0])
     
@@ -176,7 +180,8 @@ class TestAtmosphericDrag:
     """
     Drag should be negligible at high altitudes.
     """
-    drag = AtmosphericDrag(cd=2.2, area=10.0, mass=1000.0)
+    drag_config = DragConfig(enabled=True, cd=2.2, area=10.0)
+    drag = AtmosphericDrag(drag_config=drag_config, mass=1000.0)
     
     pos_vec = np.array([42164e3, 0.0, 0.0])  # GEO altitude
     vel_vec = np.array([0.0, 3075.0, 0.0])
@@ -196,11 +201,9 @@ class TestAccelerationCoordinator:
     """
     Test acceleration with only gravity enabled.
     """
-    accel = Acceleration(
-      gp          = SOLARSYSTEMCONSTANTS.EARTH.GP,
-      enable_drag = False,
-      enable_srp  = False,
-    )
+    gravity_config = GravityModelConfig(gp=SOLARSYSTEMCONSTANTS.EARTH.GP)
+    spacecraft     = SpacecraftProperties(mass=1000.0)
+    accel          = Acceleration(gravity_config=gravity_config, spacecraft=spacecraft)
     
     pos_vec = np.array([7000e3, 0.0, 0.0])
     vel_vec = np.array([0.0, 7500.0, 0.0])
@@ -215,18 +218,19 @@ class TestAccelerationCoordinator:
     """
     Test that drag is added to gravity when enabled.
     """
-    accel_no_drag = Acceleration(
-      gp          = SOLARSYSTEMCONSTANTS.EARTH.GP,
-      enable_drag = False,
+    gravity_config = GravityModelConfig(gp=SOLARSYSTEMCONSTANTS.EARTH.GP)
+    
+    spacecraft_no_drag = SpacecraftProperties(
+      mass = 1000.0,
+      drag = DragConfig(enabled=False),
+    )
+    spacecraft_with_drag = SpacecraftProperties(
+      mass = 1000.0,
+      drag = DragConfig(enabled=True, cd=2.2, area=10.0),
     )
     
-    accel_with_drag = Acceleration(
-      gp          = SOLARSYSTEMCONSTANTS.EARTH.GP,
-      enable_drag = True,
-      cd          = 2.2,
-      area_drag   = 10.0,
-      mass        = 1000.0,
-    )
+    accel_no_drag   = Acceleration(gravity_config=gravity_config, spacecraft=spacecraft_no_drag)
+    accel_with_drag = Acceleration(gravity_config=gravity_config, spacecraft=spacecraft_with_drag)
     
     pos_vec = np.array([6578e3, 0.0, 0.0])  # Low altitude for drag
     vel_vec = np.array([0.0, 7800.0, 0.0])

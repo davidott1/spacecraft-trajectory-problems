@@ -31,6 +31,8 @@ from scipy.integrate import solve_ivp
 from src.model.dynamics        import Acceleration, GeneralStateEquationsOfMotion
 from src.model.orbit_converter import OrbitConverter
 from src.model.constants       import SOLARSYSTEMCONSTANTS, CONVERTER
+from src.schemas.gravity       import GravityModelConfig, SphericalHarmonicsConfig
+from src.schemas.spacecraft    import SpacecraftProperties
 
 
 class TestKeplerianPropagation:
@@ -56,8 +58,10 @@ class TestKeplerianPropagation:
     period = 2 * np.pi * np.sqrt(sma**3 / gp)
     
     # Create acceleration model (point mass only)
-    accel = Acceleration(gp=gp)
-    eom   = GeneralStateEquationsOfMotion(accel)
+    gravity_config = GravityModelConfig(gp=gp)
+    spacecraft     = SpacecraftProperties(mass=1000.0)
+    accel          = Acceleration(gravity_config=gravity_config, spacecraft=spacecraft)
+    eom            = GeneralStateEquationsOfMotion(accel)
     
     # Propagate for one period
     sol = solve_ivp(
@@ -101,8 +105,10 @@ class TestKeplerianPropagation:
     specific_energy_o = _specific_energy(state_o)
 
     # Initialize propagation
-    accel = Acceleration(gp=gp)
-    eom   = GeneralStateEquationsOfMotion(accel)
+    gravity_config = GravityModelConfig(gp=gp)
+    spacecraft     = SpacecraftProperties(mass=1000.0)
+    accel          = Acceleration(gravity_config=gravity_config, spacecraft=spacecraft)
+    eom            = GeneralStateEquationsOfMotion(accel)
     
     period = 2 * np.pi * np.sqrt(sma**3 / gp)
     
@@ -140,8 +146,10 @@ class TestKeplerianPropagation:
     ang_mom_mag_o = _angular_momentum(state_o)
     
     # Intialize propagation
-    accel = Acceleration(gp=gp)
-    eom   = GeneralStateEquationsOfMotion(accel)
+    gravity_config = GravityModelConfig(gp=gp)
+    spacecraft     = SpacecraftProperties(mass=1000.0)
+    accel          = Acceleration(gravity_config=gravity_config, spacecraft=spacecraft)
+    eom            = GeneralStateEquationsOfMotion(accel)
     
     pos_mag = np.linalg.norm(state_o[0:3])
     vel_mag = np.linalg.norm(state_o[3:6])
@@ -191,9 +199,19 @@ class TestJ2Perturbation:
     
     coe_o = OrbitConverter.pv_to_coe(state_o[0:3], state_o[3:6], gp)
     
-    # Initialize propagation
-    accel = Acceleration(gp=gp, j2=j2, pos_ref=earth_rad_eq)
-    eom   = GeneralStateEquationsOfMotion(accel)
+    # Initialize propagation with J2
+    spherical_harmonics = SphericalHarmonicsConfig(
+      coefficients = ['J2'],
+      gp           = gp,
+      radius       = earth_rad_eq,
+    )
+    gravity_config = GravityModelConfig(
+      gp                  = gp,
+      spherical_harmonics = spherical_harmonics,
+    )
+    spacecraft = SpacecraftProperties(mass=1000.0)
+    accel      = Acceleration(gravity_config=gravity_config, spacecraft=spacecraft)
+    eom        = GeneralStateEquationsOfMotion(accel)
     
     period = 2 * np.pi * np.sqrt(sma**3 / gp)
     
@@ -212,7 +230,7 @@ class TestJ2Perturbation:
     
     # For prograde orbit, RAAN should decrease (regress westward)
     # Handle angle wrapping
-    delta_raan = coe_f['raan'] - coe_o['raan']
+    delta_raan = coe_f.raan - coe_o.raan
     if delta_raan > np.pi:
       delta_raan -= 2 * np.pi
     elif delta_raan < -np.pi:
@@ -238,8 +256,18 @@ class TestJ2Perturbation:
     # Initialize propagation
     state_o = np.array([sma, 0.0, 0.0, 0.0, vel_mag * np.cos(inc), vel_mag * np.sin(inc)])
     
-    accel = Acceleration(gp=gp, j2=j2, pos_ref=earth_rad_eq)
-    eom   = GeneralStateEquationsOfMotion(accel)
+    spherical_harmonics = SphericalHarmonicsConfig(
+      coefficients = ['J2'],
+      gp           = gp,
+      radius       = earth_rad_eq,
+    )
+    gravity_config = GravityModelConfig(
+      gp                  = gp,
+      spherical_harmonics = spherical_harmonics,
+    )
+    spacecraft = SpacecraftProperties(mass=1000.0)
+    accel      = Acceleration(gravity_config=gravity_config, spacecraft=spacecraft)
+    eom        = GeneralStateEquationsOfMotion(accel)
     
     period = 2 * np.pi * np.sqrt(sma**3 / gp)
     
@@ -259,7 +287,7 @@ class TestJ2Perturbation:
     for t in np.linspace(0, period, 100):
       state = sol.sol(t)
       coe   = OrbitConverter.pv_to_coe(state[0:3], state[3:6], gp)
-      sma_values.append(coe['sma'])
+      sma_values.append(coe.sma)
     
     sma_values = np.array(sma_values)
     

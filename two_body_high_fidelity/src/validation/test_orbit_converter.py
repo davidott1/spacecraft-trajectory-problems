@@ -30,6 +30,7 @@ import numpy as np
 
 from src.model.orbit_converter import OrbitConverter
 from src.model.constants       import SOLARSYSTEMCONSTANTS, CONVERTER
+from src.schemas.state         import ClassicalOrbitalElements
 
 
 class TestCartesianToKeplerian:
@@ -50,9 +51,9 @@ class TestCartesianToKeplerian:
     
     coe = OrbitConverter.pv_to_coe(pos_vec, vel_vec, gp)
     
-    assert np.isclose(coe['sma'], pos_mag, rtol=1e-10)
-    assert np.isclose(coe['ecc'],     0.0, atol=1e-10)
-    assert np.isclose(coe['inc'],     0.0, atol=1e-10)
+    assert np.isclose(coe.sma, pos_mag, rtol=1e-10)
+    assert np.isclose(coe.ecc,     0.0, atol=1e-10)
+    assert np.isclose(coe.inc,     0.0, atol=1e-10)
   
   def test_known_solution_elliptical_orbit(self):
     """
@@ -73,9 +74,9 @@ class TestCartesianToKeplerian:
     
     coe = OrbitConverter.pv_to_coe(pos_vec, vel_vec, gp)
     
-    assert np.isclose(coe['sma'], sma, rtol=1e-10)
-    assert np.isclose(coe['ecc'], ecc, rtol=1e-10)
-    assert np.isclose(coe[ 'ta'], 0.0, atol=1e-10) 
+    assert np.isclose(coe.sma, sma, rtol=1e-10)
+    assert np.isclose(coe.ecc, ecc, rtol=1e-10)
+    assert np.isclose(coe.ta,  0.0, atol=1e-10) 
   
   def test_known_solution_inclined_orbit(self):
     """
@@ -91,7 +92,7 @@ class TestCartesianToKeplerian:
     
     coe = OrbitConverter.pv_to_coe(pos_vec, vel_vec, gp)
     
-    assert np.isclose(coe['inc'], inc, rtol=1e-10)
+    assert np.isclose(coe.inc, inc, rtol=1e-10)
   
   def test_roundtrip_pv_to_coe_to_pv(self):
     """
@@ -133,13 +134,14 @@ class TestKeplerianToCartesian:
     aop  = 0.0
     ta   = 0.0
     
-    coe = {}
-    coe[ 'sma'] = sma
-    coe[ 'ecc'] = ecc
-    coe[ 'inc'] = inc
-    coe['raan'] = raan
-    coe[ 'aop'] = aop
-    coe[  'ta'] = ta
+    coe = ClassicalOrbitalElements(
+      sma  = sma,
+      ecc  = ecc,
+      inc  = inc,
+      raan = raan,
+      aop  = aop,
+      ta   = ta,
+    )
 
     pos_vec, vel_vec = OrbitConverter.coe_to_pv(
       coe = coe,
@@ -157,13 +159,14 @@ class TestKeplerianToCartesian:
     gp  = SOLARSYSTEMCONSTANTS.EARTH.GP
     sma = 7000e3
     
-    coe = {}
-    coe[ 'sma'] = sma
-    coe[ 'ecc'] = 0.0
-    coe[ 'inc'] = 0.0
-    coe['raan'] = 0.0
-    coe[ 'aop'] = 0.0
-    coe[  'ta'] = 0.0
+    coe = ClassicalOrbitalElements(
+      sma  = sma,
+      ecc  = 0.0,
+      inc  = 0.0,
+      raan = 0.0,
+      aop  = 0.0,
+      ta   = 0.0,
+    )
 
     pos_vec, vel_vec = OrbitConverter.coe_to_pv(
       coe = coe, 
@@ -197,8 +200,8 @@ class TestAnomalyConversions:
     coe = OrbitConverter.pv_to_coe(pos_vec, vel_vec, gp)
     
     # For circular orbit, all anomalies should be equal
-    assert np.isclose(coe['ta'], coe['ea'], atol=1e-8)
-    assert np.isclose(coe['ta'], coe['ma'], atol=1e-8)
+    assert np.isclose(coe.ta, coe.ea, atol=1e-8)
+    assert np.isclose(coe.ta, coe.ma, atol=1e-8)
   
   def test_known_solution_anomalies_at_periapsis(self):
     """
@@ -217,9 +220,9 @@ class TestAnomalyConversions:
     
     coe = OrbitConverter.pv_to_coe(pos_vec, vel_vec, gp)
     
-    assert np.isclose(coe['ta'], 0.0, atol=1e-10)
-    assert np.isclose(coe['ea'], 0.0, atol=1e-10)
-    assert np.isclose(coe['ma'], 0.0, atol=1e-10)
+    assert np.isclose(coe.ta, 0.0, atol=1e-10)
+    assert np.isclose(coe.ea, 0.0, atol=1e-10)
+    assert np.isclose(coe.ma, 0.0, atol=1e-10)
   
   def test_known_solution_anomalies_at_apoapsis(self):
     """
@@ -238,9 +241,9 @@ class TestAnomalyConversions:
     
     coe = OrbitConverter.pv_to_coe(pos_vec, vel_vec, gp)
     
-    assert np.isclose(coe['ta'], np.pi, atol=1e-10)
-    assert np.isclose(coe['ea'], np.pi, atol=1e-10)
-    assert np.isclose(coe['ma'], np.pi, atol=1e-10)
+    assert np.isclose(coe.ta, np.pi, atol=1e-10)
+    assert np.isclose(coe.ea, np.pi, atol=1e-10)
+    assert np.isclose(coe.ma, np.pi, atol=1e-10)
 
 
 if __name__ == "__main__":
