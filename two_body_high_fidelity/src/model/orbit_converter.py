@@ -4,7 +4,6 @@ import spiceypy as spice
 
 from src.model.constants import SOLARSYSTEMCONSTANTS, CONVERTER
 from src.schemas.state   import (
-  CartesianState,
   ClassicalOrbitalElements,
   ModifiedEquinoctialElements,
   GeodeticCoordinates,

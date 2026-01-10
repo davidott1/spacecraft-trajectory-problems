@@ -5,9 +5,9 @@ Propagation Schemas
 Dataclasses for propagation inputs, outputs, and configuration.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime    import datetime
-from typing      import Optional, TYPE_CHECKING
+from typing      import Optional
 import numpy as np
 
 from src.schemas.state import ClassicalOrbitalElements, ModifiedEquinoctialElements
