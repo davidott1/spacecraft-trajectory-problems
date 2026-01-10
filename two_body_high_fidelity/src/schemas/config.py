@@ -115,16 +115,16 @@ class SimulationConfig:
   initial_state       : InitialStateConfig
   time_o_dt           : datetime
   time_f_dt           : datetime
-  spacecraft          : SpacecraftProperties  = field(default_factory=SpacecraftProperties)
+  spacecraft          : SpacecraftProperties         = field(default_factory=SpacecraftProperties)
   gravity             : Optional[GravityModelConfig] = None
-  comparison          : ComparisonConfig      = field(default_factory=ComparisonConfig)
-  output_paths        : Optional[OutputPaths] = None
-  object_name         : str                   = "object"
-  object_name_display : str                   = "Object"
-  auto_download       : bool                  = False
-  tle_line_1          : Optional[str]         = None
-  tle_line_2          : Optional[str]         = None
-  tle_epoch_dt        : Optional[datetime]    = None
+  comparison          : ComparisonConfig             = field(default_factory=ComparisonConfig)
+  output_paths        : Optional[OutputPaths]        = None
+  object_name         : str                          = "object"
+  object_name_display : str                          = "Object"
+  auto_download       : bool                         = False
+  tle_line_1          : Optional[str]                = None
+  tle_line_2          : Optional[str]                = None
+  tle_epoch_dt        : Optional[datetime]           = None
   
   def __post_init__(self):
     if self.gravity is None:

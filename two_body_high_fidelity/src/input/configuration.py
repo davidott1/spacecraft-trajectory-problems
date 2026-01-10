@@ -10,7 +10,7 @@ from src.schemas.config        import OutputPaths, SimulationConfig, InitialStat
 from src.schemas.gravity       import GravityModelConfig, SphericalHarmonicsConfig, ThirdBodyConfig
 from src.schemas.spacecraft    import SpacecraftProperties, DragConfig, SRPConfig
 from src.schemas.propagation   import PropagationConfig
-from src.schemas.ephemeris     import TLEData
+from src.schemas.state         import TLEData
 from src.model.constants       import SOLARSYSTEMCONSTANTS
 from src.input.loader          import load_supported_objects
 from src.utility.string_helper import sanitize_filename

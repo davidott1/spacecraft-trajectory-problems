@@ -3,10 +3,11 @@ State Representation Schemas
 ============================
 
 Dataclasses for orbital state representations including Cartesian,
-classical orbital elements, and modified equinoctial elements.
+classical orbital elements, modified equinoctial elements, and TLE data.
 """
 
 from dataclasses import dataclass, field
+from datetime    import datetime
 from typing      import Optional, Union
 import numpy as np
 
@@ -131,3 +132,43 @@ class GeocentricCoordinates:
   latitude  : Union[float, np.ndarray]
   longitude : Union[float, np.ndarray]
   altitude  : Union[float, np.ndarray]
+
+
+@dataclass
+class TLEData:
+  """
+  Two-Line Element set data.
+  
+  Attributes:
+    line_1              : TLE line 1
+    line_2              : TLE line 2
+    epoch_dt            : TLE epoch as datetime (UTC)
+    norad_id            : NORAD catalog ID
+    object_name         : Satellite name
+    bstar               : B* drag term [1/Earth radii]
+    inclination         : Inclination [rad]
+    raan                : Right ascension of ascending node [rad]
+    eccentricity        : Eccentricity [-]
+    argument_of_perigee : Argument of perigee [rad]
+    mean_anomaly        : Mean anomaly [rad]
+    mean_motion         : Mean motion [rev/day]
+  """
+  line_1              : str
+  line_2              : str
+  epoch_dt            : datetime
+  norad_id            : Optional[str]   = None
+  object_name         : Optional[str]   = None
+  bstar               : Optional[float] = None
+  inclination         : Optional[float] = None
+  raan                : Optional[float] = None
+  eccentricity        : Optional[float] = None
+  argument_of_perigee : Optional[float] = None
+  mean_anomaly        : Optional[float] = None
+  mean_motion         : Optional[float] = None
+  
+  @property
+  def tle_lines(self) -> tuple:
+    """
+    Return both TLE lines as tuple.
+    """
+    return (self.line_1, self.line_2)

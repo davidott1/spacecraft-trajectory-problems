@@ -12,16 +12,12 @@ from src.schemas.state import (
   ModifiedEquinoctialElements,
   GeodeticCoordinates,
   GeocentricCoordinates,
+  TLEData,
 )
 from src.schemas.propagation import (
   PropagationResult,
   PropagationConfig,
   TimeGrid,
-)
-from src.schemas.ephemeris import (
-  EphemerisResult,
-  TLEData,
-  HorizonsEphemeris,
 )
 from src.schemas.gravity import (
   GravityModelConfig,
@@ -45,14 +41,11 @@ __all__ = [
   'ModifiedEquinoctialElements',
   'GeodeticCoordinates',
   'GeocentricCoordinates',
+  'TLEData',
   # Propagation
   'PropagationResult',
   'PropagationConfig',
   'TimeGrid',
-  # Ephemeris
-  'EphemerisResult',
-  'TLEData',
-  'HorizonsEphemeris',
   # Gravity
   'GravityModelConfig',
   'SphericalHarmonicsConfig',
