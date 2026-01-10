@@ -19,7 +19,7 @@ from src.model.frame_converter import VectorConverter
 from src.utility.tle_helper    import modify_tle_bstar, get_tle_satellite_and_tle_epoch
 from src.schemas.gravity       import GravityModelConfig
 from src.schemas.spacecraft    import SpacecraftProperties
-from src.schemas.propagation   import PropagationConfig, PropagationResult
+from src.schemas.propagation   import PropagationConfig, PropagationResult, TimeGrid
 from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoctialElements
 
 
@@ -617,6 +617,12 @@ def run_high_fidelity_propagation(
     result_high_fidelity.integ_time_et = result_high_fidelity.time
     # Create plotting time array (seconds from time_o)
     result_high_fidelity.plot_time_s = result_high_fidelity.time - time_et_o
+    # Create time grid for skyplot and other uses
+    result_high_fidelity.time_grid = TimeGrid(
+      epoch_dt = propagation_config.time_o_dt,
+      epoch_et = time_et_o,
+      time_s   = result_high_fidelity.plot_time_s,
+    )
     
     # If comparing to Horizons, interpolate to ephemeris times and store separately
     if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:

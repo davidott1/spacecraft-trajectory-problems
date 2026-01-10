@@ -1,4 +1,4 @@
-name              : equatorial                                                                # name of the object
+name              : equatorial                                                               # name of the object
 frame             : J2000                                                                    # reference frame of the state vector
 epoch             : 2025-10-01T00:00:00Z                                                     # epoch of the state vector in ISO format
 coordinate_system : cartesian                                                                # coordinate system of the state vector

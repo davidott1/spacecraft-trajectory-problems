@@ -31,6 +31,7 @@ class OutputPaths:
     jpl_horizons_folderpath  : Folderpath for JPL Horizons ephemeris
     tles_folderpath          : Folderpath for TLE files
     state_vectors_folderpath : Folderpath for state vector files
+    tracker_filepath         : Filepath to tracker YAML file
   """
   base_folderpath          : Path
   figures_folderpath       : Optional[Path] = None
@@ -42,6 +43,7 @@ class OutputPaths:
   jpl_horizons_folderpath  : Optional[Path] = None
   tles_folderpath          : Optional[Path] = None
   state_vectors_folderpath : Optional[Path] = None
+  tracker_filepath         : Optional[Path] = None
   
   def __post_init__(self):
     if self.figures_folderpath is None:

@@ -2434,6 +2434,7 @@ def generate_plots(
   compare_tle                      : bool = False,
   object_name                      : str  = "object",
   object_name_display              : str  = "Object",
+  tracker_filepath                 : Optional[Path] = None,
 ) -> None:
   """
   Generate and save all simulation plots.
