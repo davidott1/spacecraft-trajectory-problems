@@ -577,6 +577,9 @@ def setup_paths(
   # Horizons ephemeris folder (loader will search for compatible files)
   jpl_horizons_folderpath = data_folderpath / 'ephems'
   
+  # Tracker filepath
+  tracker_filepath = data_folderpath / 'trackers' / 'trackers.yaml'
+  
   # Define output folderpath
   timestamp_str        = datetime.now().strftime("%Y%m%d_%H%M%S")
   output_folderpath    = project_root / 'output'
@@ -584,10 +587,11 @@ def setup_paths(
   
   # Initialize OutputPaths
   output_paths = OutputPaths(
-    base_folderpath = timestamp_folderpath,
-    logs_folderpath = timestamp_folderpath / 'files',
-    log_filepath    = timestamp_folderpath / 'files' / 'output.log',
-    data_folderpath = data_folderpath,
+    base_folderpath  = timestamp_folderpath,
+    logs_folderpath  = timestamp_folderpath / 'files',
+    log_filepath     = timestamp_folderpath / 'files' / 'output.log',
+    data_folderpath  = data_folderpath,
+    tracker_filepath = tracker_filepath,
   )
   output_paths.ensure_directories()
 
@@ -606,6 +610,7 @@ def setup_paths(
     'state_vectors_folderpath'     : state_vectors_folderpath,
     'custom_state_vector_filepath' : custom_state_vector_filepath,
     'lsk_filepath'                 : lsk_filepath,
+    'tracker_filepath'             : tracker_filepath,
   }
 
 

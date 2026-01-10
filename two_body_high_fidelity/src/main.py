@@ -339,6 +339,7 @@ def main(
     compare_tle                      = config.comparison.compare_tle,
     object_name                      = config.object_name,
     object_name_display              = config.object_name_display,
+    tracker_filepath                 = config.output_paths.tracker_filepath,
   )
   
   # Unload all files (SPICE kernels)
