@@ -65,7 +65,7 @@ from src.propagation.state_initializer import get_initial_state
 from src.utility.logger                import start_logging, stop_logging
 from src.schemas.spacecraft            import SpacecraftProperties, DragConfig, SRPConfig
 from src.schemas.propagation           import PropagationConfig, PropagationResult
-from src.schemas.ephemeris             import TLEData
+from src.schemas.state                 import TLEData
 
 
 def check_data_availability(

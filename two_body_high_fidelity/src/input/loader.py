@@ -13,8 +13,7 @@ from src.model.constants       import PRINTFORMATTER, SOLARSYSTEMCONSTANTS
 from src.input.cli             import parse_time
 from src.utility.tle_helper    import get_tle_satellite_and_tle_epoch
 from src.schemas.propagation   import PropagationResult, TimeGrid
-from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoctialElements
-from src.schemas.ephemeris     import TLEData
+from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoctialElements, TLEData
 
 
 def load_supported_objects() -> dict:
