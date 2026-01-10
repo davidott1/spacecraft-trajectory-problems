@@ -67,7 +67,7 @@ class TestRegressionEndToEnd:
       initial_state_source   = 'jpl_horizons',
     )
     
-    assert result.get('success', False), f"Propagation failed: {result.get('message', 'Unknown error')}"
+    assert result.success, f"Propagation failed: {result.message}"
   
   def test_regression_propagation_with_j2_completes(self):
     """
@@ -97,7 +97,7 @@ class TestRegressionEndToEnd:
       initial_state_source   = 'jpl_horizons',
     )
     
-    assert result.get('success', False)
+    assert result.success
   
   def test_regression_propagation_with_full_forces_completes(self):
     """
@@ -130,7 +130,7 @@ class TestRegressionEndToEnd:
       initial_state_source   = 'jpl_horizons',
     )
     
-    assert result.get('success', False)
+    assert result.success
 
   def test_regression_full_forces_with_comparisons(self):
     """
@@ -173,7 +173,7 @@ class TestRegressionEndToEnd:
       initial_state_source   = 'jpl_horizons',
     )
     
-    assert result.get('success', False), f"Propagation failed: {result.get('message', 'Unknown error')}"
+    assert result.success, f"Propagation failed: {getattr(result, 'message', 'Unknown error')}"
 
 
 class TestCLIIntegration:

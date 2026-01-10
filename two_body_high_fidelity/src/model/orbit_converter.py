@@ -530,7 +530,7 @@ class OrbitConverter:
       p = sma * (1 - ecc**2)
     
     # Position in orbital plane
-    pqw_pos_vec = p * (1 - ecc) / (1 - ecc * np.cos(ta)) * np.array([ np.cos(ta), np.sin(ta), 0])
+    pqw_pos_vec = p / (1 + ecc * np.cos(ta)) * np.array([np.cos(ta), np.sin(ta), 0])
     
     # Velocity in orbital plane
     if np.isinf(sma):
@@ -538,7 +538,7 @@ class OrbitConverter:
       pqw_vel_vec = np.sqrt(gp / (2 * np.linalg.norm(pqw_pos_vec))) * np.array([ -np.sin(ta), ecc - np.cos(ta), 0 ])
     else:
       # Elliptic case
-      pqw_vel_vec = np.sqrt(gp / sma) * (1 - ecc * np.cos(ta)) * np.array([ -np.sin(ta), ecc - np.cos(ta), 0 ])
+      pqw_vel_vec = np.sqrt(gp / p) * np.array([-np.sin(ta), ecc + np.cos(ta), 0])
     
     # Precompute trigonometric functions
     cos_raan = np.cos(raan)

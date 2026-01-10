@@ -233,6 +233,7 @@ def load_files(
   # Option 2: Full spherical harmonics file with degree/order
   elif (gravity_model_filename is not None and 
         gravity_model_degree is not None and 
+        gravity_model_degree > 0 and
         gravity_model_order is not None and
         gravity_model_folderpath is not None):
     spherical_harmonics_model = load_gravity_field_model(
