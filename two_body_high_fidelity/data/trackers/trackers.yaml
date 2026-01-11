@@ -1,0 +1,4 @@
+name           : "GOES-16 - GOES-R"    # name of the tracking station
+latitude__deg  : 0.0                   # latitude of the tracking station [deg]
+longitude__deg : -104.7                # longitude of the tracking station [deg]
+altitude__m    : 0.0                   # altitude of the tracking station [m]

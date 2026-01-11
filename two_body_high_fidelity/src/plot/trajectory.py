@@ -2442,21 +2442,17 @@ def plot_skyplot(
   if in_segment:
     segment_ends.append(len(visible_mask))
   
-  # Color map for time progression
-  cmap = plt.cm.viridis  # type: ignore
-  
   # Plot each visible segment
   for seg_start, seg_end in zip(segment_starts, segment_ends):
     seg_theta = theta[seg_start:seg_end]
     seg_radius = radius[seg_start:seg_end]
     seg_time = time_s[seg_start:seg_end]
     
-    # Create color array based on time
+    # Plot trajectory
     if len(seg_time) > 0:
       
-      # Plot as scatter for color gradient
-      ax.scatter(seg_theta, seg_radius, c=seg_time, cmap='viridis', s=2, alpha=0.8,
-                vmin=time_s[0], vmax=time_s[-1])
+      # Plot as scatter points
+      ax.scatter(seg_theta, seg_radius, c='blue', s=16, alpha=0.8)
       
       # Also plot as line for continuity
       ax.plot(seg_theta, seg_radius, 'b-', linewidth=0.5, alpha=0.3)
@@ -2495,15 +2491,15 @@ def plot_skyplot(
   max_el_idx = np.argmax(el_deg)
   if visible_mask[max_el_idx]:
     ax.scatter([theta[max_el_idx]], [radius[max_el_idx]], s=150, marker='^', 
-              facecolors='gold', edgecolors='darkorange', linewidths=2, zorder=10,
+              facecolors='silver', edgecolors='black', linewidths=2, zorder=10,
               label=f'Max Elevation ({el_deg[max_el_idx]:.1f}°)')
     if epoch_dt_utc is not None:
       tca_dt = epoch_dt_utc + timedelta(seconds=time_s[max_el_idx])
       tca_label = tca_dt.strftime('%Y-%m-%d %H:%M:%S')
       ax.annotate(f'Max Elevation\n{tca_label}', (theta[max_el_idx], radius[max_el_idx]),
                  textcoords='offset points', xytext=(-12, 8), fontsize=8,
-                 color='darkorange', fontweight='bold',
-                 bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='orange', alpha=0.8))
+                 color='black', fontweight='normal',
+                 bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='gray', alpha=0.8))
   
   # Add cardinal direction labels (set ticks first to avoid warning)
   ax.set_xticks(np.linspace(0, 2*np.pi, 8, endpoint=False))
@@ -2527,15 +2523,12 @@ def plot_skyplot(
   max_elevation = np.max(el_deg)
   info_text += f"\nVisibility: {visibility_pct:.1f}%  |  Max Elevation: {max_elevation:.2f}°"
   
-  # Add legend
-  ax.legend(loc='upper left', bbox_to_anchor=(1.15, 1.0), fontsize=9)
-  
   # Add info text below plot
   fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=10, color='black',
            bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', alpha=0.9))
   
   ax.set_title(title_text, fontsize=14, pad=20)
-  plt.tight_layout(rect=(0.0, 0.10, 0.95, 0.95))
+  plt.tight_layout(rect=(0.0, 0.10, 1.0, 0.95))
   return fig
 
 
@@ -2766,7 +2759,8 @@ def generate_plots(
       tracker = load_tracker_station(tracker_filepath)
       print(f"    Tracker : {tracker.name}")
       
-      name_lower = object_name.lower()
+      name_lower = object_name.lower().replace(' ', '_').replace('-', '_')
+      tracker_name_sanitized = tracker.name.lower().replace(' ', '_').replace('-', '_')
       
       # Generate skyplot for high-fidelity propagation
       if result_high_fidelity_propagation.success:
@@ -2777,7 +2771,7 @@ def generate_plots(
           epoch_dt_utc = time_o_dt,
           title_text   = skyplot_title,
         )
-        filename = f'skyplot_high_fidelity_{name_lower}.png'
+        filename = f'skyplot_{tracker_name_sanitized}_high_fidelity_{name_lower}.png'
         fig_skyplot.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
         print(f"    High-Fidelity : <figures_folderpath>/{filename}")
         plt.close(fig_skyplot)
@@ -2791,7 +2785,7 @@ def generate_plots(
           epoch_dt_utc = time_o_dt,
           title_text   = skyplot_title,
         )
-        filename = f'skyplot_sgp4_{name_lower}.png'
+        filename = f'skyplot_{tracker_name_sanitized}_sgp4_{name_lower}.png'
         fig_skyplot_sgp4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
         print(f"    SGP4          : <figures_folderpath>/{filename}")
         plt.close(fig_skyplot_sgp4)
