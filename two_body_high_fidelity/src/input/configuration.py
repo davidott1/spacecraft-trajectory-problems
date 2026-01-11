@@ -250,6 +250,7 @@ def build_config(
   gravity_model_filename         : Optional[str]  = None,
   atol                           : float          = 1e-15,
   rtol                           : float          = 1e-12,
+  tracker_file                   : Optional[str]  = None,
 ) -> SimulationConfig:
   """
   Parse, validate, and set up input parameters for orbit propagation.
@@ -334,6 +335,7 @@ def build_config(
     initial_state_source   = initial_state_source,
     initial_state_filename = initial_state_filename,
     gravity_model_filename = gravity_model_filename,
+    tracker_file           = tracker_file,
   )
 
   # Initialize variables
@@ -436,7 +438,7 @@ def build_config(
     object_name = sanitize_filename(object_name_display)
     
     # Update paths with correct name
-    paths = setup_paths()
+    paths = setup_paths(tracker_file=tracker_file)
   
   # Create SpacecraftProperties object
   spacecraft = SpacecraftProperties(
@@ -518,6 +520,7 @@ def setup_paths(
   initial_state_source   : Optional[str] = None,
   initial_state_filename : Optional[str] = None,
   gravity_model_filename : Optional[str] = None,
+  tracker_file           : Optional[str] = None,
 ) -> dict:
   """
   Set up all required folder paths and file names for the propagation.
@@ -530,6 +533,8 @@ def setup_paths(
       Filename of custom state vector.
     gravity_model_filename : str | None
       Filename of gravity model. If None, defaults to EGM2008.gfc.
+    tracker_file : str | None
+      Path to tracker YAML file for skyplot generation.
       
   Output:
   -------
@@ -577,8 +582,14 @@ def setup_paths(
   # Horizons ephemeris folder (loader will search for compatible files)
   jpl_horizons_folderpath = data_folderpath / 'ephems'
   
-  # Tracker filepath
-  tracker_filepath = data_folderpath / 'trackers' / 'trackers.yaml'
+  # Tracker filepath - use provided path or default
+  if tracker_file is not None:
+    tracker_filepath = Path(tracker_file)
+    # If relative path, resolve relative to project root
+    if not tracker_filepath.is_absolute():
+      tracker_filepath = project_root / tracker_filepath
+  else:
+    tracker_filepath = None
   
   # Define output folderpath
   timestamp_str        = datetime.now().strftime("%Y%m%d_%H%M%S")

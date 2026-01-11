@@ -13,7 +13,8 @@ from src.model.constants       import PRINTFORMATTER, SOLARSYSTEMCONSTANTS
 from src.input.cli             import parse_time
 from src.utility.tle_helper    import get_tle_satellite_and_tle_epoch
 from src.schemas.propagation   import PropagationResult, TimeGrid
-from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoctialElements, TLEData
+from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoctialElements, TLEData, TrackerStation
+from src.model.constants       import CONVERTER
 
 
 def load_supported_objects() -> dict:
@@ -38,6 +39,53 @@ def load_supported_objects() -> dict:
     
   with open(config_path, 'r') as f:
     return yaml.safe_load(f)
+
+
+def load_tracker_station(
+  tracker_filepath : Path,
+) -> TrackerStation:
+  """
+  Load tracking station data from YAML configuration file.
+  
+  Input:
+  ------
+    tracker_filepath : Path
+      Path to the tracker YAML file.
+  
+  Output:
+  -------
+    tracker : TrackerStation
+      Tracker station dataclass with name, latitude, longitude, and altitude.
+      
+  Raises:
+  -------
+    FileNotFoundError
+      If the tracker file is not found.
+    ValueError
+      If required fields are missing from the YAML file.
+  """
+  if not tracker_filepath.exists():
+    raise FileNotFoundError(f"Tracker file not found: {tracker_filepath}")
+  
+  with open(tracker_filepath, 'r') as f:
+    data = yaml.safe_load(f)
+  
+  # Validate required fields
+  required_fields = ['name', 'latitude__deg', 'longitude__deg', 'altitude__m']
+  for field in required_fields:
+    if field not in data:
+      raise ValueError(f"Tracker file missing required field: {field}")
+  
+  # Convert degrees to radians
+  latitude_rad  = data['latitude__deg']  * CONVERTER.RAD_PER_DEG
+  longitude_rad = data['longitude__deg'] * CONVERTER.RAD_PER_DEG
+  
+  return TrackerStation(
+    name      = data['name'],
+    latitude  = latitude_rad,
+    longitude = longitude_rad,
+    altitude  = data['altitude__m'],
+  )
 
 
 def load_gravity_field_model(

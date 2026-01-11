@@ -172,3 +172,35 @@ class TLEData:
     Return both TLE lines as tuple.
     """
     return (self.line_1, self.line_2)
+
+
+@dataclass
+class TrackerStation:
+  """
+  Ground tracking station data.
+  
+  Attributes:
+    name      : Station name/identifier
+    latitude  : Geodetic latitude [rad]
+    longitude : Longitude [rad]
+    altitude  : Height above ellipsoid [m]
+  """
+  name      : str
+  latitude  : float
+  longitude : float
+  altitude  : float
+
+
+@dataclass
+class TopocentricCoordinates:
+  """
+  Topocentric coordinates (azimuth, elevation, range) from a ground station.
+  
+  Attributes:
+    azimuth   : Azimuth angle [rad] (0 = North, π/2 = East)
+    elevation : Elevation angle [rad] (0 = horizon, π/2 = zenith)
+    range     : Slant range to target [m]
+  """
+  azimuth   : Union[float, np.ndarray]
+  elevation : Union[float, np.ndarray]
+  range     : Union[float, np.ndarray]

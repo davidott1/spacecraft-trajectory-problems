@@ -149,6 +149,7 @@ def main(
   gravity_model_filename         : Optional[str]  = None,
   atol                           : float          = 1e-15,
   rtol                           : float          = 1e-12,
+  tracker_file                   : Optional[str]  = None,
 ) -> PropagationResult:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -211,6 +212,7 @@ def main(
     gravity_model_filename,
     atol,
     rtol,
+    tracker_file,
   )
 
   # Start logging to file
@@ -373,4 +375,5 @@ if __name__ == "__main__":
     args.gravity_model_filename,
     args.atol,
     args.rtol,
+    args.tracker_file,
   )
