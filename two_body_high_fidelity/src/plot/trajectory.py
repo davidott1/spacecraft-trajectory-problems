@@ -18,6 +18,7 @@ from src.model.frame_converter import FrameConverter
 from src.model.time_converter  import utc_to_et
 from src.model.orbit_converter import GeographicCoordinateConverter, OrbitConverter
 from src.schemas.propagation   import PropagationResult
+from src.schemas.state         import TrackerStation, TopocentricCoordinates
 
 
 def project_to_bounds(origin, direction, ax):
@@ -2276,6 +2277,268 @@ def generate_error_plots(
   
 
 
+def compute_topocentric_coordinates(
+  result       : PropagationResult,
+  tracker      : TrackerStation,
+  epoch_dt_utc : Optional[datetime.datetime] = None,
+) -> TopocentricCoordinates:
+  """
+  Compute topocentric coordinates (azimuth, elevation, range) from a ground station.
+  
+  Input:
+  ------
+    result : PropagationResult
+      Propagation result containing 'state' (6xN array) and 'plot_time_s'.
+    tracker : TrackerStation
+      Ground tracking station with latitude, longitude, altitude.
+    epoch_dt_utc : datetime, optional
+      Reference epoch (start time) for time conversion to ET.
+      
+  Output:
+  -------
+    topo : TopocentricCoordinates
+      Topocentric coordinates (azimuth, elevation, range) arrays.
+  """
+  # Extract J2000 state vectors
+  j2000_state   = result.state
+  j2000_pos_vec = j2000_state[0:3, :]
+  time_s        = result.plot_time_s
+  n_points      = j2000_state.shape[1]
+  
+  # Convert epoch to ET
+  if epoch_dt_utc is not None:
+    epoch_et = utc_to_et(epoch_dt_utc)
+  else:
+    epoch_et = 0.0
+  
+  # Compute tracker position in IAU_EARTH frame (body-fixed)
+  # Use SPICE's georec for geodetic to Cartesian conversion
+  tracker_pos_iau_earth__km = spice.georec(
+    tracker.longitude,
+    tracker.latitude,
+    tracker.altitude / 1000.0,  # Convert m to km
+    GeographicCoordinateConverter.WGS84_RE,
+    GeographicCoordinateConverter.WGS84_F,
+  )
+  tracker_pos_iau_earth = np.array(tracker_pos_iau_earth__km) * 1000.0  # Convert km to m
+  
+  # Initialize output arrays
+  azimuth   = np.zeros(n_points)
+  elevation = np.zeros(n_points)
+  slant_range = np.zeros(n_points)
+  
+  for i in range(n_points):
+    # Current ephemeris time
+    epoch_et_i = epoch_et + time_s[i]
+    
+    # Transform satellite position from J2000 to IAU_EARTH
+    rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(epoch_et_i)
+    sat_pos_iau_earth = rot_mat_j2000_to_iau_earth @ j2000_pos_vec[:, i]
+    
+    # Compute relative position vector (satellite - tracker)
+    rel_pos_iau_earth = sat_pos_iau_earth - tracker_pos_iau_earth
+    slant_range[i] = np.linalg.norm(rel_pos_iau_earth)
+    
+    # Build local topocentric frame (ENU - East, North, Up) at tracker location
+    # Up vector: surface normal at geodetic location
+    sin_lat = np.sin(tracker.latitude)
+    cos_lat = np.cos(tracker.latitude)
+    sin_lon = np.sin(tracker.longitude)
+    cos_lon = np.cos(tracker.longitude)
+    
+    # East unit vector
+    e_east = np.array([-sin_lon, cos_lon, 0.0])
+    
+    # North unit vector
+    e_north = np.array([-sin_lat * cos_lon, -sin_lat * sin_lon, cos_lat])
+    
+    # Up unit vector (geodetic normal)
+    e_up = np.array([cos_lat * cos_lon, cos_lat * sin_lon, sin_lat])
+    
+    # Project relative position onto local ENU frame
+    east  = np.dot(rel_pos_iau_earth, e_east)
+    north = np.dot(rel_pos_iau_earth, e_north)
+    up    = np.dot(rel_pos_iau_earth, e_up)
+    
+    # Compute azimuth (from North, clockwise positive)
+    azimuth[i] = np.arctan2(east, north)
+    
+    # Compute elevation (angle above horizon)
+    horizontal_range = np.sqrt(east**2 + north**2)
+    elevation[i] = np.arctan2(up, horizontal_range)
+  
+  return TopocentricCoordinates(
+    azimuth   = azimuth,
+    elevation = elevation,
+    range     = slant_range,
+  )
+
+
+def plot_skyplot(
+  result       : PropagationResult,
+  tracker      : TrackerStation,
+  epoch_dt_utc : Optional[datetime.datetime] = None,
+  title_text   : str = "Skyplot",
+) -> Figure:
+  """
+  Plot a skyplot (polar plot of azimuth vs elevation) from a ground station.
+  
+  Input:
+  ------
+    result : PropagationResult
+      Propagation result containing 'state' (6xN array) and 'plot_time_s'.
+    tracker : TrackerStation
+      Ground tracking station with latitude, longitude, altitude.
+    epoch_dt_utc : datetime, optional
+      Reference epoch (start time) for time conversion to ET.
+    title_text : str
+      Base title for the plot.
+      
+  Output:
+  -------
+    fig : matplotlib.figure.Figure
+      Figure object containing the skyplot.
+  """
+  fig = plt.figure(figsize=(12, 10))
+  
+  # Compute topocentric coordinates
+  topo = compute_topocentric_coordinates(result, tracker, epoch_dt_utc)
+  
+  # Convert to degrees for display
+  az_deg  = topo.azimuth   * CONVERTER.DEG_PER_RAD
+  el_deg  = topo.elevation * CONVERTER.DEG_PER_RAD
+  time_s  = result.plot_time_s
+  
+  # For polar plot: radius = 90 - elevation (so zenith is at center)
+  # theta = azimuth
+  radius = 90.0 - el_deg
+  theta  = np.deg2rad(az_deg)
+  
+  # Create polar subplot
+  ax = fig.add_subplot(111, projection='polar')
+  
+  # Configure polar plot for skyplot convention
+  ax.set_theta_zero_location('N')  # North at top
+  ax.set_theta_direction(-1)       # Clockwise
+  ax.set_rlim(0, 90)               # 0 to 90 degrees from zenith
+  ax.set_rticks([0, 15, 30, 45, 60, 75, 90])
+  ax.set_yticklabels(['90°', '75°', '60°', '45°', '30°', '15°', '0°'])  # Elevation labels
+  
+  # Split track where satellite goes below horizon
+  visible_mask = el_deg >= 0
+  
+  # Find segments where satellite is visible
+  segment_starts = []
+  segment_ends = []
+  in_segment = False
+  
+  for i in range(len(visible_mask)):
+    if visible_mask[i] and not in_segment:
+      segment_starts.append(i)
+      in_segment = True
+    elif not visible_mask[i] and in_segment:
+      segment_ends.append(i)
+      in_segment = False
+  if in_segment:
+    segment_ends.append(len(visible_mask))
+  
+  # Color map for time progression
+  cmap = plt.cm.viridis  # type: ignore
+  
+  # Plot each visible segment
+  for seg_start, seg_end in zip(segment_starts, segment_ends):
+    seg_theta = theta[seg_start:seg_end]
+    seg_radius = radius[seg_start:seg_end]
+    seg_time = time_s[seg_start:seg_end]
+    
+    # Create color array based on time
+    if len(seg_time) > 0:
+      
+      # Plot as scatter for color gradient
+      ax.scatter(seg_theta, seg_radius, c=seg_time, cmap='viridis', s=2, alpha=0.8,
+                vmin=time_s[0], vmax=time_s[-1])
+      
+      # Also plot as line for continuity
+      ax.plot(seg_theta, seg_radius, 'b-', linewidth=0.5, alpha=0.3)
+      
+      # Add entry marker and UTC time label
+      ax.scatter([seg_theta[0]], [seg_radius[0]], s=120, marker='s', facecolors='white', 
+                edgecolors='black', linewidths=2, zorder=10)
+      if epoch_dt_utc is not None:
+        entry_dt = epoch_dt_utc + timedelta(seconds=seg_time[0])
+        entry_label = entry_dt.strftime('%Y-%m-%d %H:%M:%S')
+        ax.annotate(f'Entry\n{entry_label}', (seg_theta[0], seg_radius[0]), 
+                   textcoords='offset points', xytext=(8, 8), fontsize=8,
+                   color='black', fontweight='normal',
+                   bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='black', alpha=0.8))
+      
+      # Add exit marker and UTC time label
+      ax.scatter([seg_theta[-1]], [seg_radius[-1]], s=120, marker='s', facecolors='white',
+                edgecolors='black', linewidths=2, zorder=10)
+      if epoch_dt_utc is not None:
+        exit_dt = epoch_dt_utc + timedelta(seconds=seg_time[-1])
+        exit_label = exit_dt.strftime('%Y-%m-%d %H:%M:%S')
+        ax.annotate(f'Exit\n{exit_label}', (seg_theta[-1], seg_radius[-1]),
+                   textcoords='offset points', xytext=(8, -12), fontsize=8,
+                   color='black', fontweight='normal',
+                   bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='black', alpha=0.8))
+  
+  # Mark start and end of simulation (different from pass entry/exit)
+  if visible_mask[0]:
+    ax.scatter([theta[0]], [radius[0]], s=200, marker='o', facecolors='lime', 
+              edgecolors='darkgreen', linewidths=2, zorder=10, label='AOS (Acquisition)')
+  if visible_mask[-1]:
+    ax.scatter([theta[-1]], [radius[-1]], s=200, marker='s', facecolors='red',
+              edgecolors='darkred', linewidths=2, zorder=10, label='LOS (Loss)')
+  
+  # Find and mark maximum elevation with UTC time
+  max_el_idx = np.argmax(el_deg)
+  if visible_mask[max_el_idx]:
+    ax.scatter([theta[max_el_idx]], [radius[max_el_idx]], s=150, marker='^', 
+              facecolors='gold', edgecolors='darkorange', linewidths=2, zorder=10,
+              label=f'Max Elevation ({el_deg[max_el_idx]:.1f}°)')
+    if epoch_dt_utc is not None:
+      tca_dt = epoch_dt_utc + timedelta(seconds=time_s[max_el_idx])
+      tca_label = tca_dt.strftime('%Y-%m-%d %H:%M:%S')
+      ax.annotate(f'Max Elevation\n{tca_label}', (theta[max_el_idx], radius[max_el_idx]),
+                 textcoords='offset points', xytext=(-12, 8), fontsize=8,
+                 color='darkorange', fontweight='bold',
+                 bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='orange', alpha=0.8))
+  
+  # Add cardinal direction labels (set ticks first to avoid warning)
+  ax.set_xticks(np.linspace(0, 2*np.pi, 8, endpoint=False))
+  ax.set_xticklabels(['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'])
+  
+  # Build info text
+  tracker_lat_deg = tracker.latitude  * CONVERTER.DEG_PER_RAD
+  tracker_lon_deg = tracker.longitude * CONVERTER.DEG_PER_RAD
+  info_text = f"Station: {tracker.name}  |  Lat: {tracker_lat_deg:.4f}°  |  Lon: {tracker_lon_deg:.4f}°  |  Alt: {tracker.altitude:.1f} m"
+  
+  if epoch_dt_utc is not None:
+    start_time_iso_utc = epoch_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
+    end_time_dt_utc    = epoch_dt_utc + timedelta(seconds=time_s[-1])
+    end_time_iso_utc   = end_time_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
+    info_text += f"\nInitial: {start_time_iso_utc}  |  Final: {end_time_iso_utc}"
+  
+  # Add visibility statistics
+  n_visible = np.sum(visible_mask)
+  n_total = len(visible_mask)
+  visibility_pct = 100.0 * n_visible / n_total if n_total > 0 else 0.0
+  max_elevation = np.max(el_deg)
+  info_text += f"\nVisibility: {visibility_pct:.1f}%  |  Max Elevation: {max_elevation:.2f}°"
+  
+  # Add legend
+  ax.legend(loc='upper left', bbox_to_anchor=(1.15, 1.0), fontsize=9)
+  
+  # Add info text below plot
+  fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=10, color='black',
+           bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', alpha=0.9))
+  
+  ax.set_title(title_text, fontsize=14, pad=20)
+  plt.tight_layout(rect=(0.0, 0.10, 0.95, 0.95))
+  return fig
+
+
 def generate_3d_and_time_series_plots(
   result_jpl_horizons_ephemeris    : Optional[PropagationResult],
   result_high_fidelity_propagation : PropagationResult,
@@ -2493,3 +2756,45 @@ def generate_plots(
       object_name                      = object_name,
       object_name_display              = object_name_display,
     )
+  
+  # Generate skyplot if tracker filepath is provided
+  if tracker_filepath is not None:
+    from src.input.loader import load_tracker_station
+    
+    print("  Generate Skyplot")
+    try:
+      tracker = load_tracker_station(tracker_filepath)
+      print(f"    Tracker : {tracker.name}")
+      
+      name_lower = object_name.lower()
+      
+      # Generate skyplot for high-fidelity propagation
+      if result_high_fidelity_propagation.success:
+        skyplot_title = f'Skyplot - {object_name_display} - High-Fidelity'
+        fig_skyplot = plot_skyplot(
+          result       = result_high_fidelity_propagation,
+          tracker      = tracker,
+          epoch_dt_utc = time_o_dt,
+          title_text   = skyplot_title,
+        )
+        filename = f'skyplot_high_fidelity_{name_lower}.png'
+        fig_skyplot.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+        print(f"    High-Fidelity : <figures_folderpath>/{filename}")
+        plt.close(fig_skyplot)
+      
+      # Generate skyplot for SGP4 if available
+      if compare_tle and result_sgp4_propagation and result_sgp4_propagation.success:
+        skyplot_title = f'Skyplot - {object_name_display} - SGP4'
+        fig_skyplot_sgp4 = plot_skyplot(
+          result       = result_sgp4_propagation,
+          tracker      = tracker,
+          epoch_dt_utc = time_o_dt,
+          title_text   = skyplot_title,
+        )
+        filename = f'skyplot_sgp4_{name_lower}.png'
+        fig_skyplot_sgp4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+        print(f"    SGP4          : <figures_folderpath>/{filename}")
+        plt.close(fig_skyplot_sgp4)
+        
+    except Exception as e:
+      print(f"    [WARNING] Failed to generate skyplot: {e}")

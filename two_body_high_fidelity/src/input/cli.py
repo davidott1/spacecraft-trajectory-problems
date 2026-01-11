@@ -156,6 +156,14 @@ def parse_command_line_arguments(
     help    = "Relative tolerance for numerical integration (default: 1e-12).",
   )
   
+  parser.add_argument(
+    '--tracker-file',
+    dest     = 'tracker_file',
+    type     = str,
+    required = False,
+    help     = 'Path to tracker station YAML file for skyplot generation (e.g., data/trackers/trackers.yaml).',
+  )
+  
   # Parse arguments
   args = parser.parse_args()
   
