@@ -2427,6 +2427,26 @@ def plot_skyplot(
   # Split track where satellite goes below horizon
   visible_mask = el_deg >= 0
   
+  # Get range values
+  range_m = topo.range
+  
+  # Compute marker sizes based on VISIBLE range only (closer = larger, further = smaller)
+  visible_range = range_m[visible_mask]
+  if len(visible_range) > 0:
+    range_min = np.min(visible_range)
+    range_max = np.max(visible_range)
+  else:
+    range_min = np.min(range_m)
+    range_max = np.max(range_m)
+  
+  marker_size_min = 2
+  marker_size_max = 100
+  # Linear scale: closer (smaller range) -> larger marker
+  if range_max > range_min:
+    marker_sizes = marker_size_max - (range_m - range_min) / (range_max - range_min) * (marker_size_max - marker_size_min)
+  else:
+    marker_sizes = np.full_like(range_m, (marker_size_min + marker_size_max) / 2)
+  
   # Find segments where satellite is visible
   segment_starts = []
   segment_ends = []
@@ -2447,15 +2467,17 @@ def plot_skyplot(
     seg_theta = theta[seg_start:seg_end]
     seg_radius = radius[seg_start:seg_end]
     seg_time = time_s[seg_start:seg_end]
+    seg_marker_sizes = marker_sizes[seg_start:seg_end]
+    seg_range = range_m[seg_start:seg_end]
     
     # Plot trajectory
     if len(seg_time) > 0:
       
-      # Plot as scatter points
-      ax.scatter(seg_theta, seg_radius, c='blue', s=16, alpha=0.8)
+      # Plot as scatter points with size based on range
+      ax.scatter(seg_theta, seg_radius, c='blue', s=seg_marker_sizes, alpha=1.0)
       
       # Also plot as line for continuity
-      ax.plot(seg_theta, seg_radius, 'b-', linewidth=0.5, alpha=0.3)
+      ax.plot(seg_theta, seg_radius, 'b-', linewidth=2.0, alpha=0.5)
       
       # Add entry marker and UTC time label
       ax.scatter([seg_theta[0]], [seg_radius[0]], s=120, marker='s', facecolors='white', 
@@ -2521,14 +2543,53 @@ def plot_skyplot(
   n_total = len(visible_mask)
   visibility_pct = 100.0 * n_visible / n_total if n_total > 0 else 0.0
   max_elevation = np.max(el_deg)
-  info_text += f"\nVisibility: {visibility_pct:.1f}%  |  Max Elevation: {max_elevation:.2f}°"
+  
+  # Compute time step between points
+  if len(time_s) > 1:
+    dt_step = time_s[1] - time_s[0]
+  else:
+    dt_step = 0.0
+  
+  info_text += f"\nVisibility: {visibility_pct:.1f}%  |  Max Elevation: {max_elevation:.2f}°  |  Δt: {dt_step:.1f} s"
   
   # Add info text below plot
   fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=10, color='black',
            bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', alpha=0.9))
   
+  # Add range-size legend box on the right side
+  range_mid = (range_min + range_max) / 2.0
+  range_min_km = range_min / 1000.0
+  range_max_km = range_max / 1000.0
+  range_mid_km = range_mid / 1000.0
+  
+  # Create a separate axes for the legend
+  legend_ax = fig.add_axes([0.75, 0.40, 0.12, 0.18])  # [left, bottom, width, height]
+  legend_ax.set_xlim(0, 8)
+  legend_ax.set_ylim(0, 10)
+  legend_ax.axis('off')
+  
+  # Draw dots and range labels (closer = larger dot)
+  legend_ax.scatter([1.2], [7], s=marker_size_max, c='blue', alpha=0.8)
+  legend_ax.text(2.2, 7, f'{range_min_km:.0f} km, min', va='center', fontsize=9)
+  
+  legend_ax.scatter([1.2], [5], s=(marker_size_min + marker_size_max) / 2, c='blue', alpha=0.8)
+  legend_ax.text(2.2, 5, f'{range_mid_km:.0f} km', va='center', fontsize=9)
+  
+  legend_ax.scatter([1.2], [3], s=marker_size_min, c='blue', alpha=0.8)
+  legend_ax.text(2.2, 3, f'{range_max_km:.0f} km, max', va='center', fontsize=9)
+  
+  legend_ax.text(4, 8.5, 'Range', ha='center', fontsize=10, fontweight='bold')
+  
+  # Add border box
+  legend_ax.add_patch(plt.Rectangle((0, 1.5), 8, 8, fill=True, facecolor='None', 
+                                     edgecolor='black', alpha=1.0, linewidth=1))
+  legend_ax.set_zorder(0)
+  for child in legend_ax.get_children():
+    if hasattr(child, 'set_zorder'):
+      child.set_zorder(1)
+  
   ax.set_title(title_text, fontsize=14, pad=20)
-  plt.tight_layout(rect=(0.0, 0.10, 1.0, 0.95))
+  plt.tight_layout(rect=(0.0, 0.10, 0.82, 0.95))
   return fig
 
 
