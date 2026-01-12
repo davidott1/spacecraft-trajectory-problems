@@ -2480,7 +2480,7 @@ def plot_skyplot(
       ax.plot(seg_theta, seg_radius, 'b-', linewidth=2.0, alpha=0.5)
       
       # Add entry marker and UTC time label
-      ax.scatter([seg_theta[0]], [seg_radius[0]], s=120, marker='s', facecolors='white', 
+      ax.scatter([seg_theta[0]], [seg_radius[0]], s=120, marker='s', facecolors='none', 
                 edgecolors='black', linewidths=2, zorder=10)
       if epoch_dt_utc is not None:
         entry_dt = epoch_dt_utc + timedelta(seconds=seg_time[0])
@@ -2491,7 +2491,7 @@ def plot_skyplot(
                    bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='black', alpha=0.8))
       
       # Add exit marker and UTC time label
-      ax.scatter([seg_theta[-1]], [seg_radius[-1]], s=120, marker='s', facecolors='white',
+      ax.scatter([seg_theta[-1]], [seg_radius[-1]], s=120, marker='s', facecolors='none',
                 edgecolors='black', linewidths=2, zorder=10)
       if epoch_dt_utc is not None:
         exit_dt = epoch_dt_utc + timedelta(seconds=seg_time[-1])
@@ -2512,14 +2512,32 @@ def plot_skyplot(
   # Find and mark maximum elevation with UTC time
   max_el_idx = np.argmax(el_deg)
   if visible_mask[max_el_idx]:
-    ax.scatter([theta[max_el_idx]], [radius[max_el_idx]], s=150, marker='^', 
-              facecolors='silver', edgecolors='black', linewidths=2, zorder=10,
+    ax.scatter([theta[max_el_idx]], [radius[max_el_idx]], s=marker_size_max * 3.0, marker='s', 
+              facecolors='none', edgecolors='black', linewidths=2, zorder=11,
               label=f'Max Elevation ({el_deg[max_el_idx]:.1f}°)')
     if epoch_dt_utc is not None:
       tca_dt = epoch_dt_utc + timedelta(seconds=time_s[max_el_idx])
       tca_label = tca_dt.strftime('%Y-%m-%d %H:%M:%S')
       ax.annotate(f'Max Elevation\n{tca_label}', (theta[max_el_idx], radius[max_el_idx]),
-                 textcoords='offset points', xytext=(-12, 8), fontsize=8,
+                 textcoords='offset points', xytext=(12, 13), fontsize=8,
+                 color='black', fontweight='normal',
+                 bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='gray', alpha=0.8))
+  
+  # Find and mark minimum range (closest approach) with UTC time
+  visible_indices = np.where(visible_mask)[0]
+  if len(visible_indices) > 0:
+    visible_ranges = range_m[visible_indices]
+    min_range_visible_idx = np.argmin(visible_ranges)
+    min_range_idx = visible_indices[min_range_visible_idx]
+    min_range_km = range_m[min_range_idx] / 1000.0
+    ax.scatter([theta[min_range_idx]], [radius[min_range_idx]], s=marker_size_max * 3.0, marker='s', 
+              facecolors='none', edgecolors='black', linewidths=2, zorder=11,
+              label=f'Min Range ({min_range_km:.0f} km)')
+    if epoch_dt_utc is not None:
+      min_range_dt = epoch_dt_utc + timedelta(seconds=time_s[min_range_idx])
+      min_range_label = min_range_dt.strftime('%Y-%m-%d %H:%M:%S')
+      ax.annotate(f'Min Range\n{min_range_label}', (theta[min_range_idx], radius[min_range_idx]),
+                 textcoords='offset points', xytext=(13, -27), fontsize=8,
                  color='black', fontweight='normal',
                  bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='gray', alpha=0.8))
   
@@ -2573,7 +2591,7 @@ def plot_skyplot(
   legend_ax.text(2.2, 7, f'{range_min_km:.0f} km, min', va='center', fontsize=9)
   
   legend_ax.scatter([1.2], [5], s=(marker_size_min + marker_size_max) / 2, c='blue', alpha=0.8)
-  legend_ax.text(2.2, 5, f'{range_mid_km:.0f} km', va='center', fontsize=9)
+  legend_ax.text(2.2, 5, f'{range_mid_km:.0f} km, mid', va='center', fontsize=9)
   
   legend_ax.scatter([1.2], [3], s=marker_size_min, c='blue', alpha=0.8)
   legend_ax.text(2.2, 3, f'{range_max_km:.0f} km, max', va='center', fontsize=9)
