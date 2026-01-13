@@ -2425,29 +2425,70 @@ def plot_skyplot(
   ax.set_rticks([0, 15, 30, 45, 60, 75, 90])
   ax.set_yticklabels(['90°', '75°', '60°', '45°', '30°', '15°', '0°'])  # Elevation labels
 
-  # Add gray shaded region for elevation constraints
-  if tracker.performance and tracker.performance.elevation:
-    el_min_deg = tracker.performance.elevation.min * CONVERTER.DEG_PER_RAD
-    el_max_deg = tracker.performance.elevation.max * CONVERTER.DEG_PER_RAD
+  # Add gray shaded regions for elevation and azimuth constraints
+  if tracker.performance:
 
-    # Convert elevation to radius (radius = 90 - elevation)
-    radius_max_constraint = 90.0 - el_min_deg  # Outer boundary (low elevation limit)
-    radius_min_constraint = 90.0 - el_max_deg  # Inner boundary (high elevation limit)
+    # Elevation constraints (circular boundaries)
+    if tracker.performance.elevation:
+      el_min_deg = tracker.performance.elevation.min * CONVERTER.DEG_PER_RAD
+      el_max_deg = tracker.performance.elevation.max * CONVERTER.DEG_PER_RAD
 
-    # Create full circle for constraint visualization
-    theta_circle = np.linspace(0, 2 * np.pi, 360)
+      # Convert elevation to radius (radius = 90 - elevation)
+      radius_max_constraint = 90.0 - el_min_deg  # Outer boundary (low elevation limit)
+      radius_min_constraint = 90.0 - el_max_deg  # Inner boundary (high elevation limit)
 
-    # Shade region outside valid elevation range (below minimum elevation)
-    if el_min_deg > 0:
-      # Fill from outer edge (90 deg from zenith = horizon) to minimum elevation
-      ax.fill_between(theta_circle, radius_max_constraint, 90,
-                      color='gray', alpha=0.3, label=f'Below Min El ({el_min_deg:.0f}°)')
+      # Create full circle for constraint visualization
+      theta_circle = np.linspace(0, 2 * np.pi, 360)
 
-    # Shade region above maximum elevation (if max < 90 deg)
-    if el_max_deg < 90:
-      # Fill from zenith (0 deg from zenith) to maximum elevation
-      ax.fill_between(theta_circle, 0, radius_min_constraint,
-                      color='gray', alpha=0.3, label=f'Above Max El ({el_max_deg:.0f}°)')
+      # Shade region outside valid elevation range (below minimum elevation)
+      if el_min_deg > 0:
+        # Fill from outer edge (90 deg from zenith = horizon) to minimum elevation
+        ax.fill_between(theta_circle, radius_max_constraint, 90,
+                        color='gray', alpha=0.1, label=f'Below Min El ({el_min_deg:.0f}°)')
+
+      # Shade region above maximum elevation (if max < 90 deg)
+      if el_max_deg < 90:
+        # Fill from zenith (0 deg from zenith) to maximum elevation
+        ax.fill_between(theta_circle, 0, radius_min_constraint,
+                        color='gray', alpha=0.1, label=f'Above Max El ({el_max_deg:.0f}°)')
+
+    # Azimuth constraints (wedge-shaped boundaries)
+    if tracker.performance.azimuth:
+      az_min_deg = tracker.performance.azimuth.min * CONVERTER.DEG_PER_RAD
+      az_max_deg = tracker.performance.azimuth.max * CONVERTER.DEG_PER_RAD
+
+      # Convert azimuth to theta (polar angle in radians)
+      az_min_rad = np.deg2rad(az_min_deg)
+      az_max_rad = np.deg2rad(az_max_deg)
+
+      # Check if the valid azimuth range wraps around (e.g., 350° to 10° crosses 0°)
+      wraps_around = az_max_deg < az_min_deg
+
+      if not wraps_around:
+        # Normal case: valid range doesn't cross 0°
+        # Shade two wedges: [0, az_min] and [az_max, 360]
+
+        # Shade before minimum azimuth (0° to az_min)
+        if az_min_deg > 0:
+          theta_wedge_1 = np.linspace(0, az_min_rad, 100)
+          radius_full = np.full_like(theta_wedge_1, 90)
+          ax.fill_between(theta_wedge_1, 0, radius_full,
+                          color='gray', alpha=0.1, label=f'Az < {az_min_deg:.0f}°')
+
+        # Shade after maximum azimuth (az_max to 360°)
+        if az_max_deg < 360:
+          theta_wedge_2 = np.linspace(az_max_rad, 2 * np.pi, 100)
+          radius_full = np.full_like(theta_wedge_2, 90)
+          ax.fill_between(theta_wedge_2, 0, radius_full,
+                          color='gray', alpha=0.1, label=f'Az > {az_max_deg:.0f}°')
+      else:
+        # Wraps around 0°: valid range is [az_min, 360] + [0, az_max]
+        # Shade the middle wedge [az_max, az_min]
+        theta_wedge = np.linspace(az_max_rad, az_min_rad, 100)
+        radius_full = np.full_like(theta_wedge, 90)
+        ax.fill_between(theta_wedge, 0, radius_full,
+                        color='gray', alpha=0.1,
+                        label=f'Az {az_max_deg:.0f}° to {az_min_deg:.0f}° (Invalid)')
 
   # Split track where satellite goes below horizon
   visible_mask = el_deg >= 0
