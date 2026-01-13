@@ -2871,6 +2871,20 @@ def generate_plots(
         fig_skyplot_sgp4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
         print(f"    SGP4          : <figures_folderpath>/{filename}")
         plt.close(fig_skyplot_sgp4)
-        
+
+      # Generate skyplot for JPL Horizons if available
+      if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
+        skyplot_title = f'Skyplot - {object_name_display} - JPL Horizons'
+        fig_skyplot_horizons = plot_skyplot(
+          result       = result_jpl_horizons_ephemeris,
+          tracker      = tracker,
+          epoch_dt_utc = time_o_dt,
+          title_text   = skyplot_title,
+        )
+        filename = f'skyplot_{tracker_name_sanitized}_jpl_horizons_{name_lower}.png'
+        fig_skyplot_horizons.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+        print(f"    JPL Horizons  : <figures_folderpath>/{filename}")
+        plt.close(fig_skyplot_horizons)
+
     except Exception as e:
       print(f"    [WARNING] Failed to generate skyplot: {e}")
