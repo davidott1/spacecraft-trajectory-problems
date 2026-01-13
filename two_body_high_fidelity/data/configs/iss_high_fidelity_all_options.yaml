@@ -1,18 +1,16 @@
 # High-Fidelity ISS Propagation Configuration
-# This configuration uses EGM2008 gravity model (degree/order 20x20),
-# atmospheric drag, solar radiation pressure, and generates tracker skyplots.
+#   This configuration uses EGM2008 gravity model (degree/order 20x20),
+#   atmospheric drag, solar radiation pressure, and generates tracker skyplots.
 
 # Initial state configuration
 initial_state_source: jpl_horizons
 initial_state_norad_id: 25544  # ISS
 
 # Time span for propagation
-timespan:
-  start: 2025-12-20T00:00:00
-  end: 2025-12-21T00:00:00
+timespan: 2025-12-20T00:00:00 2025-12-21T00:00:00
 
 # Gravity model configuration
-gravity_harmonics_degree_order: [20, 20]
+gravity_harmonics_degree_order: 20, 20
 gravity_harmonics_filename: EGM2008.gfc
 
 # Perturbation forces

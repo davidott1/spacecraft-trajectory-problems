@@ -86,23 +86,47 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
     current_value = getattr(args, arg_name, None)
 
     # Special handling for different argument types
-    if arg_name == 'timespan' and isinstance(config_value, dict):
-      # Convert timespan dict to list of datetime objects
+    if arg_name == 'timespan':
       if current_value is None:
-        start_val = config_value.get('start')
-        end_val = config_value.get('end')
-        if start_val and end_val:
-          # Handle both string and datetime objects from YAML
-          from datetime import datetime
-          if isinstance(start_val, datetime):
-            start = start_val
-          else:
-            start = parse_time(start_val)
+        from datetime import datetime
 
-          if isinstance(end_val, datetime):
-            end = end_val
+        # Handle dict format: {start: ..., end: ...}
+        if isinstance(config_value, dict):
+          start_val = config_value.get('start')
+          end_val = config_value.get('end')
+          if start_val and end_val:
+            # Handle both string and datetime objects from YAML
+            if isinstance(start_val, datetime):
+              start = start_val
+            else:
+              start = parse_time(start_val)
+
+            if isinstance(end_val, datetime):
+              end = end_val
+            else:
+              end = parse_time(end_val)
+
+            setattr(args, arg_name, [start, end])
+
+        # Handle string format: "start end"
+        elif isinstance(config_value, str):
+          time_parts = config_value.split()
+          if len(time_parts) == 2:
+            start = parse_time(time_parts[0])
+            end = parse_time(time_parts[1])
+            setattr(args, arg_name, [start, end])
+
+        # Handle list format: [start, end]
+        elif isinstance(config_value, (list, tuple)) and len(config_value) == 2:
+          if isinstance(config_value[0], datetime):
+            start = config_value[0]
           else:
-            end = parse_time(end_val)
+            start = parse_time(config_value[0])
+
+          if isinstance(config_value[1], datetime):
+            end = config_value[1]
+          else:
+            end = parse_time(config_value[1])
 
           setattr(args, arg_name, [start, end])
 
