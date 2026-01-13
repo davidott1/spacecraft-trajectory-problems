@@ -463,7 +463,10 @@ def run_high_fidelity_propagation(
   gravity_harmonics_list    = two_body_gravity_model.spherical_harmonics.coefficients
 
   # Print header
-  print("\nHigh-Fidelity Model")
+  title = "High-Fidelity Model"
+  print("\n" + "-" * len(title))
+  print(title)
+  print("-" * len(title))
 
   # Calculate Ephemeris Times (ET) for integration
   time_et_o    = utc_to_et(propagation_config.time_o_dt)
@@ -474,6 +477,7 @@ def run_high_fidelity_propagation(
   spherical_harmonics_model = two_body_gravity_model.spherical_harmonics.model
 
   # Print configuration
+  print()
   print(f"  Configuration")
   print(f"    Timespan")
   print(f"      Initial  : {propagation_config.time_o_dt} UTC / {time_et_o:.6f} ET")

@@ -265,7 +265,7 @@ def load_gravity_field_model(
   from src.model.gravity_field import load_gravity_field
   
   # Display gravity field info
-  print("  Gravity Field Model")
+  print("    Gravity Field Model")
 
   # Build full path to gravity file
   gravity_model_filepath = gravity_model_folderpath / gravity_model_filename
@@ -278,33 +278,32 @@ def load_gravity_field_model(
     formatted_path = str(gravity_model_filepath)
 
   if not gravity_model_filepath.exists():
-    print(f"    Filepath   : {formatted_path} (NOT FOUND)")
-    print(f"    Status     : Failed - file not found")
+    print(f"      Filepath   : {formatted_path} (NOT FOUND)")
+    print(f"      Status     : Failed - file not found")
     return None
 
-  print(f"    Filepath   : {formatted_path}")
-  print(f"    Degree     : {gravity_model_degree}")
-  print(f"    Order      : {gravity_model_order}")
-  
+  print(f"      Filepath   : {formatted_path}")
+  print(f"      Degree     : {gravity_model_degree}")
+  print(f"      Order      : {gravity_model_order}")
+
   try:
     spherical_harmonics_model = load_gravity_field(
       filepath = gravity_model_filepath,
       degree   = gravity_model_degree,
       order    = gravity_model_order,
     )
-    
+
     # Extract gp and radius from the loaded model
     gp     = spherical_harmonics_model.gp
     radius = spherical_harmonics_model.radius
-    
-    print(f"    Status     : Loaded successfully")
-    print(f"    GP         : {gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
-    print(f"    Radius     : {radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
-    
+
+    print(f"      GP         : {gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
+    print(f"      Radius     : {radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
+
     return spherical_harmonics_model
   except Exception as e:
-    print(f"    Status     : Failed - {e}")
-    return None
+    print(f"\n      [ERROR] Failed to load gravity field model: {e}")
+    raise
 
 
 def load_gravity_model_from_coefficients(
@@ -330,34 +329,34 @@ def load_gravity_model_from_coefficients(
       Gravity model with only the specified coefficients, or None if failed.
   """
   from src.model.gravity_field import create_gravity_model_from_coefficients
-  
-  print("  Gravity Field Model (Explicit Coefficients)")
-  print(f"    Coefficients : {', '.join(coefficient_names)}")
-  
+
+  print("    Gravity Field Model (Explicit Coefficients)")
+  print(f"      Coefficients : {', '.join(coefficient_names)}")
+
   # Build gravity file path if folder is provided
   gravity_file_path = None
   if gravity_model_folderpath is not None and gravity_model_filename is not None:
     gravity_file_path = gravity_model_folderpath / gravity_model_filename
     if gravity_file_path.exists():
-      print(f"    Source File  : {gravity_model_filename}")
+      print(f"      Source File  : {gravity_model_filename}")
     else:
-      print(f"    Source File  : {gravity_model_filename} (NOT FOUND - using defaults)")
+      print(f"      Source File  : {gravity_model_filename} (NOT FOUND - using defaults)")
       gravity_file_path = None
   else:
-    print(f"    Source File  : None (using hardcoded defaults)")
-  
+    print(f"      Source File  : None (using hardcoded defaults)")
+
   try:
     model = create_gravity_model_from_coefficients(
       coefficient_names = coefficient_names,
       gravity_file_path = gravity_file_path,
     )
-    print(f"    GP           : {model.gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
-    print(f"    Radius       : {model.radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
-    print(f"    Max Degree   : {model.degree}")
-    print(f"    Max Order    : {model.order}")
+    print(f"      GP           : {model.gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
+    print(f"      Radius       : {model.radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
+    print(f"      Max Degree   : {model.degree}")
+    print(f"      Max Order    : {model.order}")
     return model
   except Exception as e:
-    print(f"    Status       : Failed - {e}")
+    print(f"      Status       : Failed - {e}")
     return None
 
 
@@ -406,15 +405,31 @@ def load_files(
     ValueError
       If gravity model was requested but failed to load.
   """
-  print("\nLoad Files")
-  print(f"  Project Folderpath : {Path.cwd()}")
+  title = "Load Files"
+  print("\n" + "-" * len(title))
+  print(title)
+  print("-" * len(title))
+  print()
+
+  # Progress subsection
+  print("  Progress")
+  print("    Load SPICE kernel files")
+  print("    Load gravity field model")
+  if tracker_filepath is not None:
+    print("    Load tracker station configuration")
+    print("    Normalize tracker azimuth constraints")
+  print()
+
+  # Summary subsection
+  print("  Summary")
+  print(f"    Project Folderpath : {Path.cwd()}")
 
   # Load SPICE files
   load_spice_files(spice_kernels_folderpath, lsk_filepath)
 
   # Load gravity model
   spherical_harmonics_model = None
-  
+
   # Option 1: Explicit coefficient names (e.g., ['J2', 'J3', 'C22', 'S22'])
   if gravity_coefficient_names is not None and len(gravity_coefficient_names) > 0:
     spherical_harmonics_model = load_gravity_model_from_coefficients(
@@ -426,10 +441,10 @@ def load_files(
       raise ValueError(
         "--gravity-harmonics-coefficients was specified but model creation failed."
       )
-  
+
   # Option 2: Full spherical harmonics file with degree/order
-  elif (gravity_model_filename is not None and 
-        gravity_model_degree is not None and 
+  elif (gravity_model_filename is not None and
+        gravity_model_degree is not None and
         gravity_model_degree > 0 and
         gravity_model_order is not None and
         gravity_model_folderpath is not None):
@@ -444,25 +459,29 @@ def load_files(
         "--gravity-harmonics-degree-order was specified but gravity model failed to load. "
         "Please check the gravity model file exists and is valid."
       )
-  
+
   # Load tracker stations
   trackers = None
   if tracker_filepath is not None:
     trackers = load_tracker_station(tracker_filepath)
+
     # Format filepath relative to project root
     try:
       relative_path = tracker_filepath.relative_to(Path.cwd())
       formatted_path = f"<project_folderpath>/{relative_path}"
     except ValueError:
       formatted_path = str(tracker_filepath)
-    print(f"  Tracker Stations ({len(trackers)})")
-    print(f"    Filepath : {formatted_path}")
+    print(f"    Tracker Stations")
+    print(f"      Filepath   : {formatted_path}")
     for i, tracker in enumerate(trackers, 1):
-      print(f"    Tracker {i}: {tracker.name}")
-      print(f"      Position : {tracker.position.latitude * CONVERTER.DEG_PER_RAD:.1f}° lat, {tracker.position.longitude * CONVERTER.DEG_PER_RAD:.1f}° lon, {tracker.position.altitude:.1f} m alt")
+      print(f"      Tracker {i}  :")
+      print(f"        Name     : {tracker.name}")
+      print(f"        Position :")
+      print(f"          Lat    : {tracker.position.latitude * CONVERTER.DEG_PER_RAD:.1f}°")
+      print(f"          Lon    : {tracker.position.longitude * CONVERTER.DEG_PER_RAD:.1f}°")
+      print(f"          Alt    : {tracker.position.altitude:.1f} m")
 
-  # Normalize values from loaded files
-  if trackers is not None:
+    # Normalize values from loaded files
     trackers = [normalize_tracker_azimuth(t) for t in trackers]
 
   # Return loaded model and trackers (or None if not requested)
@@ -559,9 +578,9 @@ def load_spice_files(
   except ValueError:
     display_path = spice_kernels_folderpath
 
-  print(f"  Spice Kernels")
-  print(f"    Folderpath : {display_path}")
-  
+  print(f"    Spice Kernels")
+  print(f"      Folderpath : {display_path}")
+
   # Load leap seconds kernel first (minimal kernel set for time conversion)
   spice.furnsh(str(lsk_filepath))
 
@@ -571,7 +590,7 @@ def load_spice_files(
   if spk_files:
     for spk_file in spk_files:
       spice.furnsh(str(spk_file))
-      print(f"    Loaded SPK : {spk_file.name}")
+      print(f"      Loaded SPK : {spk_file.name}")
   else:
     raise FileNotFoundError(f"No SPK files (de*.bsp) found in {spice_kernels_folderpath}")
 
@@ -580,7 +599,7 @@ def load_spice_files(
   if pck_files:
     for pck_file in pck_files:
       spice.furnsh(str(pck_file))
-      print(f"    Loaded PCK : {pck_file.name}")
+      print(f"      Loaded PCK : {pck_file.name}")
   else:
     raise FileNotFoundError(f"No PCK files (pck*.tpc) found in {spice_kernels_folderpath}")
 
@@ -778,8 +797,8 @@ def get_horizons_ephemeris(
   except ValueError:
     display_path = jpl_horizons_folderpath
 
-  print("  JPL Horizons Ephemeris")
-  print(f"    Folderpath : {display_path}")
+  print("    JPL Horizons Ephemeris")
+  print(f"      Folderpath : {display_path}")
   
   # Search for compatible file
   compatible_file = find_compatible_horizons_file(
@@ -829,7 +848,7 @@ def get_horizons_ephemeris(
   
   # Check if we have a compatible file after potential download
   if compatible_file is None:
-    print(f"    Filepath   : None (no compatible file available)")
+    print(f"      Filepath   : None (no compatible file available)")
     return PropagationResult(success=False, message='No JPL Horizons ephemeris file available')
   # Display the file being loaded
   try:
@@ -837,11 +856,11 @@ def get_horizons_ephemeris(
     display_path = f"<project_folderpath>/{rel_path}"
   except ValueError:
     display_path = compatible_file
-  print(f"    Filepath   : {display_path}")
+  print(f"      Filepath   : {display_path}")
 
   # Print timespan info
-  print(f"    Timespan")
-  print(f"      Desired")
+  print(f"      Timespan")
+  print(f"        Desired")
   try:
     start_et = utc_to_et(desired_time_o_dt)
     end_et   = utc_to_et(desired_time_f_dt)
@@ -851,9 +870,9 @@ def get_horizons_ephemeris(
     start_time_str = f"{desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / N/A ET"
     end_time_str   = f"{desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / N/A ET"
   duration_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
-  print(f"        Initial  : {start_time_str}")
-  print(f"        Final    : {end_time_str}")
-  print(f"        Duration : {duration_s:.1f} s")
+  print(f"          Initial  : {start_time_str}")
+  print(f"          Final    : {end_time_str}")
+  print(f"          Duration : {duration_s:.1f} s")
   
   # Load Horizons data
   result_horizons = load_horizons_ephemeris(
@@ -942,11 +961,11 @@ def process_horizons_result(
 
     duration_s = result_horizons['delta_time'][-1] - result_horizons['delta_time'][0]
 
-    print(f"      Actual")
-    print(f"        Initial  : {start_time_str}")
-    print(f"        Final    : {end_time_str}")
-    print(f"        Duration : {duration_s:.1f} s")
-    print(f"        Grid     : {len(result_horizons['delta_time'])} points")
+    print(f"        Actual")
+    print(f"          Initial  : {start_time_str}")
+    print(f"          Final    : {end_time_str}")
+    print(f"          Duration : {duration_s:.1f} s")
+    print(f"          Grid     : {len(result_horizons['delta_time'])} points")
 
     # Create plot_time_s for seconds-based, zero-start plotting time
     result_horizons['plot_time_s'] = result_horizons['delta_time'] - result_horizons['delta_time'][0]

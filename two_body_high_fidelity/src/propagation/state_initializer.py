@@ -45,8 +45,11 @@ def get_initial_state(
     initial_state : np.ndarray
       Initial state vector [pos_x, pos_y, pos_z, vel_x, vel_y, vel_z] in m and m/s.
   """
-  print("\nInitial State")
-  
+  title = "Initial State"
+  print("\n" + "-" * len(title))
+  print(title)
+  print("-" * len(title))
+
   # Custom State Vector
   if initial_state_source == 'custom_state_vector':
     if custom_state_vector is None:
@@ -66,6 +69,7 @@ def get_initial_state(
       gp      = SOLARSYSTEMCONSTANTS.EARTH.GP,
     )
 
+    print()
     print(f"  Source : Custom State Vector File")
     print(f"  File   : {initial_state_filename}")
     print(f"  Epoch  : {time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC{et_str}")
@@ -114,6 +118,7 @@ def get_initial_state(
     )
 
     # Display Horizons-derived initial state
+    print()
     print(f"  Source : JPL Horizons")
     print(f"  Epoch  : {epoch_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC{et_str}")
     print(f"  Frame  : J2000")
@@ -126,9 +131,16 @@ def get_initial_state(
     print(f"    INC  :  {coe.inc  * CONVERTER.DEG_PER_RAD:19.12e} deg")
     print(f"    RAAN :  {coe.raan * CONVERTER.DEG_PER_RAD:19.12e} deg")
     print(f"    AOP  :  {coe.aop  * CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    TA   :  {coe.ta   * CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    EA   :  {coe.ea   * CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    MA   :  {coe.ma   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    if coe.ta is not None:
+      print(f"    TA   :  {coe.ta   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    if coe.ea is not None:
+      print(f"    EA   :  {coe.ea   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    if coe.ma is not None:
+      print(f"    MA   :  {coe.ma   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    if coe.ha is not None:
+      print(f"    HA   :  {coe.ha   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    if coe.pa is not None:
+      print(f"    PA   :  {coe.pa:19.12e} -")
     return horizons_initial_state
 
   # Fallback to TLE
@@ -178,6 +190,7 @@ def get_initial_state(
   )
 
   # Display TLE-derived initial state
+  print()
   print(f"  Source : Celestrak TLE")
   print(f"  Epoch  : {time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC{et_str}")
   print(f"  Frame  : J2000")
