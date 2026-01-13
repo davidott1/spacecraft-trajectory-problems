@@ -98,9 +98,17 @@ def load_tracker_station(
   if 'performance' in data:
     perf = data['performance']
 
-    azimuth_limits = None
+    # Default values for performance limits
+    default_azimuth_min_deg   = -180.0
+    default_azimuth_max_deg   = 180.0
+    default_elevation_min_deg = 0.0
+    default_elevation_max_deg = 90.0
+    default_range_min_m       = 0.0
+    default_range_max_m       = 5.0e6
+
+    azimuth_limits   = None
     elevation_limits = None
-    range_limits = None
+    range_limits     = None
 
     # Parse azimuth limits
     if 'azimuth_min_max__deg' in perf:
@@ -153,13 +161,31 @@ def load_tracker_station(
           max = rg_limits[1],
         )
 
-    # Create performance object if any limits were defined
-    if azimuth_limits or elevation_limits or range_limits:
-      tracker_performance = TrackerPerformance(
-        azimuth   = azimuth_limits,
-        elevation = elevation_limits,
-        range     = range_limits,
+    # Apply defaults for any unspecified limits
+    if azimuth_limits is None:
+      azimuth_limits = AzimuthLimits(
+        min = default_azimuth_min_deg * CONVERTER.RAD_PER_DEG,
+        max = default_azimuth_max_deg * CONVERTER.RAD_PER_DEG,
       )
+
+    if elevation_limits is None:
+      elevation_limits = ElevationLimits(
+        min = default_elevation_min_deg * CONVERTER.RAD_PER_DEG,
+        max = default_elevation_max_deg * CONVERTER.RAD_PER_DEG,
+      )
+
+    if range_limits is None:
+      range_limits = RangeLimits(
+        min = default_range_min_m,
+        max = default_range_max_m,
+      )
+
+    # Create performance object
+    tracker_performance = TrackerPerformance(
+      azimuth   = azimuth_limits,
+      elevation = elevation_limits,
+      range     = range_limits,
+    )
 
   return TrackerStation(
     name        = data['name'],
