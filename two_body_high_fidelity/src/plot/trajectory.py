@@ -2424,7 +2424,31 @@ def plot_skyplot(
   ax.set_rlim(0, 90)               # 0 to 90 degrees from zenith
   ax.set_rticks([0, 15, 30, 45, 60, 75, 90])
   ax.set_yticklabels(['90°', '75°', '60°', '45°', '30°', '15°', '0°'])  # Elevation labels
-  
+
+  # Add gray shaded region for elevation constraints
+  if tracker.performance and tracker.performance.elevation:
+    el_min_deg = tracker.performance.elevation.min * CONVERTER.DEG_PER_RAD
+    el_max_deg = tracker.performance.elevation.max * CONVERTER.DEG_PER_RAD
+
+    # Convert elevation to radius (radius = 90 - elevation)
+    radius_max_constraint = 90.0 - el_min_deg  # Outer boundary (low elevation limit)
+    radius_min_constraint = 90.0 - el_max_deg  # Inner boundary (high elevation limit)
+
+    # Create full circle for constraint visualization
+    theta_circle = np.linspace(0, 2 * np.pi, 360)
+
+    # Shade region outside valid elevation range (below minimum elevation)
+    if el_min_deg > 0:
+      # Fill from outer edge (90 deg from zenith = horizon) to minimum elevation
+      ax.fill_between(theta_circle, radius_max_constraint, 90,
+                      color='gray', alpha=0.3, label=f'Below Min El ({el_min_deg:.0f}°)')
+
+    # Shade region above maximum elevation (if max < 90 deg)
+    if el_max_deg < 90:
+      # Fill from zenith (0 deg from zenith) to maximum elevation
+      ax.fill_between(theta_circle, 0, radius_min_constraint,
+                      color='gray', alpha=0.3, label=f'Above Max El ({el_max_deg:.0f}°)')
+
   # Split track where satellite goes below horizon
   visible_mask = el_deg >= 0
   
