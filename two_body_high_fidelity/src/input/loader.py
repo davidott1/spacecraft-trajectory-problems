@@ -46,17 +46,17 @@ def load_tracker_station(
 ) -> TrackerStation:
   """
   Load tracking station data from YAML configuration file.
-  
+
   Input:
   ------
     tracker_filepath : Path
       Path to the tracker YAML file.
-  
+
   Output:
   -------
     tracker : TrackerStation
-      Tracker station dataclass with name, latitude, longitude, and altitude.
-      
+      Tracker station dataclass with name, position, and performance limits.
+
   Raises:
   -------
     FileNotFoundError
@@ -66,25 +66,106 @@ def load_tracker_station(
   """
   if not tracker_filepath.exists():
     raise FileNotFoundError(f"Tracker file not found: {tracker_filepath}")
-  
+
   with open(tracker_filepath, 'r') as f:
     data = yaml.safe_load(f)
-  
+
   # Validate required fields
-  required_fields = ['name', 'latitude__deg', 'longitude__deg', 'altitude__m']
-  for field in required_fields:
-    if field not in data:
-      raise ValueError(f"Tracker file missing required field: {field}")
-  
+  if 'name' not in data:
+    raise ValueError(f"Tracker file missing required field: name")
+  if 'position' not in data:
+    raise ValueError(f"Tracker file missing required section: position")
+
+  position = data['position']
+  if 'latitude__deg' not in position or 'longitude__deg' not in position or 'altitude__m' not in position:
+    raise ValueError(f"Tracker 'position' section missing required fields")
+
+  # Import nested dataclasses
+  from src.schemas.state import TrackerPosition, TrackerPerformance, AzimuthLimits, ElevationLimits, RangeLimits
+
   # Convert degrees to radians
-  latitude_rad  = data['latitude__deg']  * CONVERTER.RAD_PER_DEG
-  longitude_rad = data['longitude__deg'] * CONVERTER.RAD_PER_DEG
-  
-  return TrackerStation(
-    name      = data['name'],
+  latitude_rad = position['latitude__deg'] * CONVERTER.RAD_PER_DEG
+  longitude_rad = position['longitude__deg'] * CONVERTER.RAD_PER_DEG
+
+  # Create position object
+  tracker_position = TrackerPosition(
     latitude  = latitude_rad,
     longitude = longitude_rad,
-    altitude  = data['altitude__m'],
+    altitude  = position['altitude__m'],
+  )
+
+  # Parse performance limits (optional)
+  tracker_performance = None
+  if 'performance' in data:
+    perf = data['performance']
+
+    azimuth_limits = None
+    elevation_limits = None
+    range_limits = None
+
+    # Parse azimuth limits
+    if 'azimuth_min_max__deg' in perf:
+      az_limits = perf['azimuth_min_max__deg']
+      # Handle both string "min, max" and list/tuple [min, max]
+      if isinstance(az_limits, str):
+        az_values = [float(x.strip()) for x in az_limits.split(',')]
+        if len(az_values) == 2:
+          azimuth_limits = AzimuthLimits(
+            min = az_values[0] * CONVERTER.RAD_PER_DEG,
+            max = az_values[1] * CONVERTER.RAD_PER_DEG,
+          )
+      elif isinstance(az_limits, (list, tuple)) and len(az_limits) == 2:
+        azimuth_limits = AzimuthLimits(
+          min = az_limits[0] * CONVERTER.RAD_PER_DEG,
+          max = az_limits[1] * CONVERTER.RAD_PER_DEG,
+        )
+
+    # Parse elevation limits
+    if 'elevation_min_max__deg' in perf:
+      el_limits = perf['elevation_min_max__deg']
+      # Handle both string "min, max" and list/tuple [min, max]
+      if isinstance(el_limits, str):
+        el_values = [float(x.strip()) for x in el_limits.split(',')]
+        if len(el_values) == 2:
+          elevation_limits = ElevationLimits(
+            min = el_values[0] * CONVERTER.RAD_PER_DEG,
+            max = el_values[1] * CONVERTER.RAD_PER_DEG,
+          )
+      elif isinstance(el_limits, (list, tuple)) and len(el_limits) == 2:
+        elevation_limits = ElevationLimits(
+          min = el_limits[0] * CONVERTER.RAD_PER_DEG,
+          max = el_limits[1] * CONVERTER.RAD_PER_DEG,
+        )
+
+    # Parse range limits
+    if 'range_min_max__m' in perf:
+      rg_limits = perf['range_min_max__m']
+      # Handle both string "min, max" and list/tuple [min, max]
+      if isinstance(rg_limits, str):
+        rg_values = [float(x.strip()) for x in rg_limits.split(',')]
+        if len(rg_values) == 2:
+          range_limits = RangeLimits(
+            min = rg_values[0],
+            max = rg_values[1],
+          )
+      elif isinstance(rg_limits, (list, tuple)) and len(rg_limits) == 2:
+        range_limits = RangeLimits(
+          min = rg_limits[0],
+          max = rg_limits[1],
+        )
+
+    # Create performance object if any limits were defined
+    if azimuth_limits or elevation_limits or range_limits:
+      tracker_performance = TrackerPerformance(
+        azimuth   = azimuth_limits,
+        elevation = elevation_limits,
+        range     = range_limits,
+      )
+
+  return TrackerStation(
+    name        = data['name'],
+    position    = tracker_position,
+    performance = tracker_performance,
   )
 
 
