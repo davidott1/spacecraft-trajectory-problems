@@ -152,6 +152,7 @@ def main(
   include_tracker_skyplots       : bool           = False,
   tracker_filename               : Optional[str]  = None,
   tracker_filepath               : Optional[str]  = None,
+  include_tracker_on_body        : bool           = False,
 ) -> PropagationResult:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -217,6 +218,7 @@ def main(
     include_tracker_skyplots,
     tracker_filename,
     tracker_filepath,
+    include_tracker_on_body,
   )
 
   # Start logging to file
@@ -348,6 +350,7 @@ def main(
     object_name                      = config.object_name,
     object_name_display              = config.object_name_display,
     tracker                          = tracker,
+    include_tracker_on_body          = include_tracker_on_body,
   )
   
   # Unload all files (SPICE kernels)
@@ -384,4 +387,5 @@ if __name__ == "__main__":
     args.include_tracker_skyplots,
     args.tracker_filename,
     args.tracker_filepath,
+    args.include_tracker_on_body,
   )

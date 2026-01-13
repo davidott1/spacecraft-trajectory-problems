@@ -73,6 +73,7 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
     'include_tracker_skyplots': 'include_tracker_skyplots',
     'tracker_filename': 'tracker_filename',
     'tracker_filepath': 'tracker_filepath',
+    'include_tracker_on_body': 'include_tracker_on_body',
   }
 
   # Process each config key
@@ -353,7 +354,15 @@ def parse_command_line_arguments(
     required = False,
     help     = 'Absolute path to tracker station YAML file.',
   )
-  
+
+  parser.add_argument(
+    '--include-tracker-on-body',
+    dest    = 'include_tracker_on_body',
+    action  = 'store_true',
+    default = False,
+    help    = 'Show tracker location on ground track and 3D body-fixed plots (disabled by default).',
+  )
+
   # Parse arguments
   args = parser.parse_args()
 

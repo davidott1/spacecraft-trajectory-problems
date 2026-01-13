@@ -385,6 +385,10 @@ def load_files(
   tracker = None
   if tracker_filepath is not None:
     tracker = load_tracker_station(tracker_filepath)
+    print(f"  Tracker Station")
+    print(f"    Filepath : {tracker_filepath}")
+    print(f"    Name     : {tracker.name}")
+    print(f"    Position : {tracker.position.latitude * CONVERTER.DEG_PER_RAD:.1f}° lat, {tracker.position.longitude * CONVERTER.DEG_PER_RAD:.1f}° lon, {tracker.position.altitude:.1f} m alt")
 
   # Normalize values from loaded files
   if tracker is not None:
