@@ -157,11 +157,28 @@ def parse_command_line_arguments(
   )
   
   parser.add_argument(
-    '--tracker-file',
-    dest     = 'tracker_file',
+    '--include-tracker-skyplots',
+    '--skyplots',
+    dest    = 'include_tracker_skyplots',
+    action  = 'store_true',
+    default = False,
+    help    = 'Enable skyplot generation (disabled by default). Uses tracker file from data/trackers/.',
+  )
+  
+  parser.add_argument(
+    '--tracker-filename',
+    dest     = 'tracker_filename',
     type     = str,
     required = False,
-    help     = 'Path to tracker station YAML file for skyplot generation (e.g., data/trackers/trackers.yaml).',
+    help     = 'Tracker station YAML filename (assumes data/trackers/ folder). E.g., trackers.yaml',
+  )
+  
+  parser.add_argument(
+    '--tracker-filepath',
+    dest     = 'tracker_filepath',
+    type     = str,
+    required = False,
+    help     = 'Absolute path to tracker station YAML file.',
   )
   
   # Parse arguments

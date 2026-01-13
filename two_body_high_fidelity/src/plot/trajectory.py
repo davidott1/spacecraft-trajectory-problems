@@ -1,4 +1,5 @@
 import datetime
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy             as np
@@ -2607,7 +2608,9 @@ def plot_skyplot(
       child.set_zorder(1)
   
   ax.set_title(title_text, fontsize=14, pad=20)
-  plt.tight_layout(rect=(0.0, 0.10, 0.82, 0.95))
+  with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message=".*tight_layout.*")
+    plt.tight_layout(rect=(0.0, 0.10, 0.82, 0.95))
   return fig
 
 
@@ -2833,10 +2836,10 @@ def generate_plots(
   if tracker_filepath is not None:
     from src.input.loader import load_tracker_station
     
-    print("  Generate Skyplot")
+    print("\n  Generate Skyplot")
     try:
       tracker = load_tracker_station(tracker_filepath)
-      print(f"    Tracker : {tracker.name}")
+      print(f"    Tracker       : {tracker.name}")
       
       name_lower = object_name.lower().replace(' ', '_').replace('-', '_')
       tracker_name_sanitized = tracker.name.lower().replace(' ', '_').replace('-', '_')
