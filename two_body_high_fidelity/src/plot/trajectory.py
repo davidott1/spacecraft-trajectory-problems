@@ -2409,6 +2409,9 @@ def plot_skyplot(
   az_deg  = topo.azimuth   * CONVERTER.DEG_PER_RAD
   el_deg  = topo.elevation * CONVERTER.DEG_PER_RAD
   time_s  = result.plot_time_s
+
+  # Normalize azimuth to 0-360° range (SPICE returns -180 to +180)
+  az_deg = az_deg % 360.0
   
   # For polar plot: radius = 90 - elevation (so zenith is at center)
   # theta = azimuth
@@ -2454,6 +2457,7 @@ def plot_skyplot(
 
     # Azimuth constraints (wedge-shaped boundaries)
     if tracker.performance.azimuth:
+      # Azimuth values are already normalized to 0-360° in the loader
       az_min_deg = tracker.performance.azimuth.min * CONVERTER.DEG_PER_RAD
       az_max_deg = tracker.performance.azimuth.max * CONVERTER.DEG_PER_RAD
 
@@ -2461,7 +2465,7 @@ def plot_skyplot(
       az_min_rad = np.deg2rad(az_min_deg)
       az_max_rad = np.deg2rad(az_max_deg)
 
-      # Check if the valid azimuth range wraps around (e.g., 350° to 10° crosses 0°)
+      # Check if the valid azimuth range wraps around (e.g., 270° to 90° crosses 0°)
       wraps_around = az_max_deg < az_min_deg
 
       if not wraps_around:
@@ -2492,7 +2496,30 @@ def plot_skyplot(
 
   # Split track where satellite goes below horizon
   visible_mask = el_deg >= 0
-  
+
+  # Check which points satisfy tracker performance constraints
+  constraint_valid_mask = np.ones(len(el_deg), dtype=bool)
+
+  if tracker.performance:
+    # Check elevation constraints
+    if tracker.performance.elevation:
+      el_min_deg = tracker.performance.elevation.min * CONVERTER.DEG_PER_RAD
+      el_max_deg = tracker.performance.elevation.max * CONVERTER.DEG_PER_RAD
+      constraint_valid_mask &= (el_deg >= el_min_deg) & (el_deg <= el_max_deg)
+
+    # Check azimuth constraints
+    if tracker.performance.azimuth:
+      az_min_deg = tracker.performance.azimuth.min * CONVERTER.DEG_PER_RAD
+      az_max_deg = tracker.performance.azimuth.max * CONVERTER.DEG_PER_RAD
+
+      # Check if range wraps around 0°/360°
+      if az_max_deg < az_min_deg:
+        # Wraps around: valid range is [az_min, 360] OR [0, az_max]
+        constraint_valid_mask &= (az_deg >= az_min_deg) | (az_deg <= az_max_deg)
+      else:
+        # Normal case: valid range is [az_min, az_max]
+        constraint_valid_mask &= (az_deg >= az_min_deg) & (az_deg <= az_max_deg)
+
   # Get range values
   range_m = topo.range
   
@@ -2535,15 +2562,40 @@ def plot_skyplot(
     seg_time = time_s[seg_start:seg_end]
     seg_marker_sizes = marker_sizes[seg_start:seg_end]
     seg_range = range_m[seg_start:seg_end]
-    
+    seg_constraint_valid = constraint_valid_mask[seg_start:seg_end]
+    seg_el_deg = el_deg[seg_start:seg_end]
+    seg_az_deg = az_deg[seg_start:seg_end]
+
     # Plot trajectory
     if len(seg_time) > 0:
-      
-      # Plot as scatter points with size based on range
-      ax.scatter(seg_theta, seg_radius, c='blue', s=seg_marker_sizes, alpha=1.0)
-      
-      # Also plot as line for continuity
-      ax.plot(seg_theta, seg_radius, 'b-', linewidth=2.0, alpha=0.5)
+
+      # Split segment into valid and invalid portions based on constraints
+      for i in range(len(seg_theta)):
+        if seg_constraint_valid[i]:
+          # Valid region - plot in blue
+          color = 'blue'
+          alpha_scatter = 1.0
+          alpha_line = 0.5
+        else:
+          # Invalid region (violates constraints) - plot in gray
+          color = 'gray'
+          alpha_scatter = 0.4
+          alpha_line = 0.3
+
+        # Plot individual points
+        ax.scatter([seg_theta[i]], [seg_radius[i]], c=color, s=seg_marker_sizes[i], alpha=alpha_scatter)
+
+      # Plot line segments with appropriate colors
+      for i in range(len(seg_theta) - 1):
+        if seg_constraint_valid[i] and seg_constraint_valid[i+1]:
+          # Both points valid - blue line
+          ax.plot(seg_theta[i:i+2], seg_radius[i:i+2], 'b-', linewidth=2.0, alpha=0.5)
+        elif not seg_constraint_valid[i] and not seg_constraint_valid[i+1]:
+          # Both points invalid - gray line
+          ax.plot(seg_theta[i:i+2], seg_radius[i:i+2], color='gray', linewidth=2.0, alpha=0.3)
+        else:
+          # Transition point - use dashed line
+          ax.plot(seg_theta[i:i+2], seg_radius[i:i+2], 'k--', linewidth=1.5, alpha=0.5)
       
       # Add entry marker and UTC time label
       ax.scatter([seg_theta[0]], [seg_radius[0]], s=120, marker='s', facecolors='none', 
@@ -2837,11 +2889,11 @@ def generate_plots(
   compare_tle                      : bool = False,
   object_name                      : str  = "object",
   object_name_display              : str  = "Object",
-  tracker_filepath                 : Optional[Path] = None,
+  tracker                          : Optional['TrackerStation'] = None,
 ) -> None:
   """
   Generate and save all simulation plots.
-  
+
   Input:
   ------
     result_horizons : PropagationResult | None
@@ -2862,7 +2914,9 @@ def generate_plots(
       Sanitized name of the object for filenames.
     object_name_display : str
       Original name of the object for plot titles.
-      
+    tracker : TrackerStation | None
+      Tracker station object with normalized azimuth values.
+
   Output:
   -------
     None
@@ -2898,12 +2952,9 @@ def generate_plots(
     )
   
   # Generate skyplot if tracker filepath is provided
-  if tracker_filepath is not None:
-    from src.input.loader import load_tracker_station
-    
+  if tracker is not None:
     print("\n  Generate Skyplot")
     try:
-      tracker = load_tracker_station(tracker_filepath)
       print(f"    Tracker       : {tracker.name}")
       
       name_lower = object_name.lower().replace(' ', '_').replace('-', '_')
