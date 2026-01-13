@@ -49,9 +49,16 @@ def get_initial_state(
   print("\n" + "-" * len(title))
   print(title)
   print("-" * len(title))
+  print()
+
+  # Progress subsection
+  print("  Progress")
 
   # Custom State Vector
   if initial_state_source == 'custom_state_vector':
+    print("    Extract initial state from custom state vector file")
+    print("    Convert to classical orbital elements for display")
+    print()
     if custom_state_vector is None:
       raise ValueError("Custom state vector source selected but no vector provided.")
 
@@ -69,24 +76,32 @@ def get_initial_state(
       gp      = SOLARSYSTEMCONSTANTS.EARTH.GP,
     )
 
-    print()
-    print(f"  Source : Custom State Vector File")
-    print(f"  File   : {initial_state_filename}")
-    print(f"  Epoch  : {time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC{et_str}")
-    print(f"  Frame  : J2000 (Assumed)")
-    print(f"  Cartesian State")
-    print(f"    Position :  {custom_state_vector[0]:>19.12e}  {custom_state_vector[1]:>19.12e}  {custom_state_vector[2]:>19.12e} m")
-    print(f"    Velocity :  {custom_state_vector[3]:>19.12e}  {custom_state_vector[4]:>19.12e}  {custom_state_vector[5]:>19.12e} m/s")
-    print(f"  Classical Orbital Elements")
-    print(f"    SMA  :  {coe.sma:19.12e} m")
-    print(f"    ECC  :  {coe.ecc:19.12e} -")
-    print(f"    INC  :  {coe.inc  * CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    RAAN :  {coe.raan * CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    AOP  :  {coe.aop  * CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    TA   :  {coe.ta   * CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    EA   :  {coe.ea   * CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    MA   :  {coe.ma   * CONVERTER.DEG_PER_RAD:19.12e} deg")
-    
+    # Summary subsection
+    print("  Summary")
+    print(f"    Source : Custom State Vector File")
+    print(f"    File   : {initial_state_filename}")
+    print(f"    Epoch  : {time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC{et_str}")
+    print(f"    Frame  : J2000 (Assumed)")
+    print(f"    Cartesian State")
+    print(f"      Position :  {custom_state_vector[0]:>19.12e}  {custom_state_vector[1]:>19.12e}  {custom_state_vector[2]:>19.12e} m")
+    print(f"      Velocity :  {custom_state_vector[3]:>19.12e}  {custom_state_vector[4]:>19.12e}  {custom_state_vector[5]:>19.12e} m/s")
+    print(f"    Classical Orbital Elements")
+    print(f"      SMA  :  {coe.sma:19.12e} m")
+    print(f"      ECC  :  {coe.ecc:19.12e} -")
+    print(f"      INC  :  {coe.inc  * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"      RAAN :  {coe.raan * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"      AOP  :  {coe.aop  * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    if coe.ta is not None:
+      print(f"      TA   :  {coe.ta   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    if coe.ea is not None:
+      print(f"      EA   :  {coe.ea   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    if coe.ma is not None:
+      print(f"      MA   :  {coe.ma   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    if coe.ha is not None:
+      print(f"      HA   :  {coe.ha   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    if coe.pa is not None:
+      print(f"      PA   :  {coe.pa:19.12e} -")
+
     return custom_state_vector
 
   # Determine if we should use Horizons
@@ -94,6 +109,9 @@ def get_initial_state(
 
   # Use Horizons if available and requested
   if use_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
+    print("    Extract initial state from JPL Horizons ephemeris")
+    print("    Convert to classical orbital elements for display")
+    print()
     # Use the first available state from the ephemeris (not interpolated)
     horizons_initial_state = result_jpl_horizons_ephemeris.state[:, 0]
     
@@ -118,33 +136,37 @@ def get_initial_state(
     )
 
     # Display Horizons-derived initial state
-    print()
-    print(f"  Source : JPL Horizons")
-    print(f"  Epoch  : {epoch_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC{et_str}")
-    print(f"  Frame  : J2000")
-    print(f"  Cartesian State" )
-    print(f"    Position :  {horizons_initial_state[0]:>19.12e}  {horizons_initial_state[1]:>19.12e}  {horizons_initial_state[2]:>19.12e} m")
-    print(f"    Velocity :  {horizons_initial_state[3]:>19.12e}  {horizons_initial_state[4]:>19.12e}  {horizons_initial_state[5]:>19.12e} m/s")
-    print(f"  Classical Orbital Elements")
-    print(f"    SMA  :  {coe.sma                         :19.12e} m")
-    print(f"    ECC  :  {coe.ecc                         :19.12e} -")
-    print(f"    INC  :  {coe.inc  * CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    RAAN :  {coe.raan * CONVERTER.DEG_PER_RAD:19.12e} deg")
-    print(f"    AOP  :  {coe.aop  * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    # Summary subsection
+    print("  Summary")
+    print(f"    Source : JPL Horizons")
+    print(f"    Epoch  : {epoch_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC{et_str}")
+    print(f"    Frame  : J2000")
+    print(f"    Cartesian State" )
+    print(f"      Position :  {horizons_initial_state[0]:>19.12e}  {horizons_initial_state[1]:>19.12e}  {horizons_initial_state[2]:>19.12e} m")
+    print(f"      Velocity :  {horizons_initial_state[3]:>19.12e}  {horizons_initial_state[4]:>19.12e}  {horizons_initial_state[5]:>19.12e} m/s")
+    print(f"    Classical Orbital Elements")
+    print(f"      SMA  :  {coe.sma                         :19.12e} m")
+    print(f"      ECC  :  {coe.ecc                         :19.12e} -")
+    print(f"      INC  :  {coe.inc  * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"      RAAN :  {coe.raan * CONVERTER.DEG_PER_RAD:19.12e} deg")
+    print(f"      AOP  :  {coe.aop  * CONVERTER.DEG_PER_RAD:19.12e} deg")
     if coe.ta is not None:
-      print(f"    TA   :  {coe.ta   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+      print(f"      TA   :  {coe.ta   * CONVERTER.DEG_PER_RAD:19.12e} deg")
     if coe.ea is not None:
-      print(f"    EA   :  {coe.ea   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+      print(f"      EA   :  {coe.ea   * CONVERTER.DEG_PER_RAD:19.12e} deg")
     if coe.ma is not None:
-      print(f"    MA   :  {coe.ma   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+      print(f"      MA   :  {coe.ma   * CONVERTER.DEG_PER_RAD:19.12e} deg")
     if coe.ha is not None:
-      print(f"    HA   :  {coe.ha   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+      print(f"      HA   :  {coe.ha   * CONVERTER.DEG_PER_RAD:19.12e} deg")
     if coe.pa is not None:
-      print(f"    PA   :  {coe.pa:19.12e} -")
+      print(f"      PA   :  {coe.pa:19.12e} -")
     return horizons_initial_state
 
   # Fallback to TLE
-  
+  print("    Propagate TLE to desired epoch")
+  print("    Convert to classical orbital elements for display")
+  print()
+
   # Validate TLE lines are available
   if tle_line_1 is None or tle_line_2 is None:
     raise ValueError("TLE source selected but TLE lines are not available.")
@@ -190,21 +212,29 @@ def get_initial_state(
   )
 
   # Display TLE-derived initial state
-  print()
-  print(f"  Source : Celestrak TLE")
-  print(f"  Epoch  : {time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC{et_str}")
-  print(f"  Frame  : J2000")
-  print(f"  Cartesian State")
-  print(f"    Position :  {tle_initial_state[0]:>19.12e}  {tle_initial_state[1]:>19.12e}  {tle_initial_state[2]:>19.12e} m")
-  print(f"    Velocity :  {tle_initial_state[3]:>19.12e}  {tle_initial_state[4]:>19.12e}  {tle_initial_state[5]:>19.12e} m/s")
-  print(f"  Classical Orbital Elements")
-  print(f"    SMA  :  {coe.sma:19.12e} m")
-  print(f"    ECC  :  {coe.ecc:19.12e} -")
-  print(f"    INC  :  {coe.inc *CONVERTER.DEG_PER_RAD:19.12e} deg")
-  print(f"    RAAN :  {coe.raan*CONVERTER.DEG_PER_RAD:19.12e} deg")
-  print(f"    AOP  :  {coe.aop *CONVERTER.DEG_PER_RAD:19.12e} deg")
-  print(f"    TA   :  {coe.ta  *CONVERTER.DEG_PER_RAD:19.12e} deg")
-  print(f"    EA   :  {coe.ea  *CONVERTER.DEG_PER_RAD:19.12e} deg")
-  print(f"    MA   :  {coe.ma  *CONVERTER.DEG_PER_RAD:19.12e} deg")
+  # Summary subsection
+  print("  Summary")
+  print(f"    Source : Celestrak TLE")
+  print(f"    Epoch  : {time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC{et_str}")
+  print(f"    Frame  : J2000")
+  print(f"    Cartesian State")
+  print(f"      Position :  {tle_initial_state[0]:>19.12e}  {tle_initial_state[1]:>19.12e}  {tle_initial_state[2]:>19.12e} m")
+  print(f"      Velocity :  {tle_initial_state[3]:>19.12e}  {tle_initial_state[4]:>19.12e}  {tle_initial_state[5]:>19.12e} m/s")
+  print(f"    Classical Orbital Elements")
+  print(f"      SMA  :  {coe.sma:19.12e} m")
+  print(f"      ECC  :  {coe.ecc:19.12e} -")
+  print(f"      INC  :  {coe.inc *CONVERTER.DEG_PER_RAD:19.12e} deg")
+  print(f"      RAAN :  {coe.raan*CONVERTER.DEG_PER_RAD:19.12e} deg")
+  print(f"      AOP  :  {coe.aop *CONVERTER.DEG_PER_RAD:19.12e} deg")
+  if coe.ta is not None:
+    print(f"      TA   :  {coe.ta  *CONVERTER.DEG_PER_RAD:19.12e} deg")
+  if coe.ea is not None:
+    print(f"      EA   :  {coe.ea  *CONVERTER.DEG_PER_RAD:19.12e} deg")
+  if coe.ma is not None:
+    print(f"      MA   :  {coe.ma  *CONVERTER.DEG_PER_RAD:19.12e} deg")
+  if coe.ha is not None:
+    print(f"      HA   :  {coe.ha  *CONVERTER.DEG_PER_RAD:19.12e} deg")
+  if coe.pa is not None:
+    print(f"      PA   :  {coe.pa:19.12e} -")
 
   return tle_initial_state
