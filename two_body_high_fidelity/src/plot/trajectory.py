@@ -2627,13 +2627,13 @@ def plot_skyplot(
   el_deg  = topo.elevation * CONVERTER.DEG_PER_RAD
   time_s  = result.plot_time_s
 
-  # Normalize azimuth to 0-360° range (SPICE returns -180 to +180)
-  az_deg = az_deg % 360.0
-  
+  # Normalize azimuth to -180° to +180° range
+  az_deg = ((az_deg + 180.0) % 360.0) - 180.0
+
   # For polar plot: radius = 90 - elevation (so zenith is at center)
-  # theta = azimuth
+  # theta = azimuth (convert negative angles to positive for polar plotting: 0 to 2π)
   radius = 90.0 - el_deg
-  theta  = np.deg2rad(az_deg)
+  theta  = np.deg2rad(np.where(az_deg >= 0, az_deg, az_deg + 360.0))
   
   # Create polar subplot
   ax = fig.add_subplot(111, projection='polar')
@@ -2674,36 +2674,38 @@ def plot_skyplot(
 
     # Azimuth constraints (wedge-shaped boundaries)
     if tracker.performance.azimuth:
-      # Azimuth values are already normalized to 0-360° in the loader
+      # Azimuth values are already normalized to -180° to +180° in the loader
       az_min_deg = tracker.performance.azimuth.min * CONVERTER.DEG_PER_RAD
       az_max_deg = tracker.performance.azimuth.max * CONVERTER.DEG_PER_RAD
 
       # Convert azimuth to theta (polar angle in radians)
-      az_min_rad = np.deg2rad(az_min_deg)
-      az_max_rad = np.deg2rad(az_max_deg)
+      # Note: polar plots use 0-2π, but our azimuth is in -180° to +180°
+      # Convert negative angles to positive for polar plotting
+      az_min_rad = np.deg2rad(az_min_deg if az_min_deg >= 0 else az_min_deg + 360.0)
+      az_max_rad = np.deg2rad(az_max_deg if az_max_deg >= 0 else az_max_deg + 360.0)
 
-      # Check if the valid azimuth range wraps around (e.g., 270° to 90° crosses 0°)
+      # Check if the valid azimuth range wraps around (e.g., 120° to -120° crosses ±180°)
       wraps_around = az_max_deg < az_min_deg
 
       if not wraps_around:
-        # Normal case: valid range doesn't cross 0°
-        # Shade two wedges: [0, az_min] and [az_max, 360]
+        # Normal case: valid range doesn't cross ±180°
+        # Shade two wedges: [0, az_min] and [az_max, 2π]
 
         # Shade before minimum azimuth (0° to az_min)
-        if az_min_deg > 0:
+        if az_min_rad > 0:
           theta_wedge_1 = np.linspace(0, az_min_rad, 100)
           radius_full = np.full_like(theta_wedge_1, 90)
           ax.fill_between(theta_wedge_1, 0, radius_full,
                           color='gray', alpha=0.1, label=f'Az < {az_min_deg:.0f}°')
 
         # Shade after maximum azimuth (az_max to 360°)
-        if az_max_deg < 360:
+        if az_max_rad < 2 * np.pi:
           theta_wedge_2 = np.linspace(az_max_rad, 2 * np.pi, 100)
           radius_full = np.full_like(theta_wedge_2, 90)
           ax.fill_between(theta_wedge_2, 0, radius_full,
                           color='gray', alpha=0.1, label=f'Az > {az_max_deg:.0f}°')
       else:
-        # Wraps around 0°: valid range is [az_min, 360] + [0, az_max]
+        # Wraps around ±180°: valid range is [az_min, 180] + [-180, az_max]
         # Shade the middle wedge [az_max, az_min]
         theta_wedge = np.linspace(az_max_rad, az_min_rad, 100)
         radius_full = np.full_like(theta_wedge, 90)
