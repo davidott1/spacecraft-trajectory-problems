@@ -140,7 +140,17 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
     elif arg_name in ['third_bodies', 'gravity_harmonics_coefficients', 'gravity_harmonics_degree_order']:
       # List arguments - only override if CLI didn't provide values
       if current_value is None or (isinstance(current_value, list) and len(current_value) == 0):
-        setattr(args, arg_name, config_value)
+        # Handle string "val1, val2" format
+        if isinstance(config_value, str):
+          # Parse comma-separated string
+          parsed_values = [x.strip() for x in config_value.split(',')]
+          # Convert to appropriate type
+          if arg_name == 'gravity_harmonics_degree_order':
+            # Convert to integers for degree/order
+            parsed_values = [int(x) for x in parsed_values]
+          setattr(args, arg_name, parsed_values)
+        else:
+          setattr(args, arg_name, config_value)
 
     elif arg_name in ['include_drag', 'include_srp', 'compare_tle', 'compare_jpl_horizons',
                       'auto_download', 'include_tracker_skyplots']:

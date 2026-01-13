@@ -5,5 +5,5 @@ position                 :
   altitude__m            : 0.0
 performance              :
   azimuth_min_max__deg   : 0.0, 360.0
-  elevation_min_max__deg : 0.0, 90.0
+  elevation_min_max__deg : 30.0, 90.0
   range_min_max__m       : 0.0, 500000.0
