@@ -250,7 +250,9 @@ def build_config(
   gravity_model_filename         : Optional[str]  = None,
   atol                           : float          = 1e-15,
   rtol                           : float          = 1e-12,
-  tracker_file                   : Optional[str]  = None,
+  include_tracker_skyplots       : bool           = False,
+  tracker_filename               : Optional[str]  = None,
+  tracker_filepath               : Optional[str]  = None,
 ) -> SimulationConfig:
   """
   Parse, validate, and set up input parameters for orbit propagation.
@@ -298,6 +300,10 @@ def build_config(
     gravity_harmonics,
   )
   
+  # Validate: skyplot arguments
+  if (tracker_filename is not None or tracker_filepath is not None) and not include_tracker_skyplots:
+    raise ValueError("--tracker-filename or --tracker-filepath requires --include-tracker-skyplots to be set.")
+  
   # Validate: cannot use both gravity harmonics options
   has_coefficients = gravity_harmonics_list is not None and len(gravity_harmonics_list) > 0
   has_degree_order = gravity_harmonics_degree_order is not None
@@ -332,10 +338,12 @@ def build_config(
   
   # Set up foldernames, folderpaths, filenames, and filepaths
   paths = setup_paths(
-    initial_state_source   = initial_state_source,
-    initial_state_filename = initial_state_filename,
-    gravity_model_filename = gravity_model_filename,
-    tracker_file           = tracker_file,
+    initial_state_source      = initial_state_source,
+    initial_state_filename    = initial_state_filename,
+    gravity_model_filename    = gravity_model_filename,
+    include_tracker_skyplots  = include_tracker_skyplots,
+    tracker_filename          = tracker_filename,
+    tracker_filepath          = tracker_filepath,
   )
 
   # Initialize variables
@@ -438,7 +446,11 @@ def build_config(
     object_name = sanitize_filename(object_name_display)
     
     # Update paths with correct name
-    paths = setup_paths(tracker_file=tracker_file)
+    paths = setup_paths(
+      include_tracker_skyplots = include_tracker_skyplots,
+      tracker_filename         = tracker_filename,
+      tracker_filepath         = tracker_filepath,
+    )
   
   # Create SpacecraftProperties object
   spacecraft = SpacecraftProperties(
@@ -517,10 +529,12 @@ def build_config(
 
 
 def setup_paths(
-  initial_state_source   : Optional[str] = None,
-  initial_state_filename : Optional[str] = None,
-  gravity_model_filename : Optional[str] = None,
-  tracker_file           : Optional[str] = None,
+  initial_state_source     : Optional[str]  = None,
+  initial_state_filename   : Optional[str]  = None,
+  gravity_model_filename   : Optional[str]  = None,
+  include_tracker_skyplots : bool           = False,
+  tracker_filename         : Optional[str]  = None,
+  tracker_filepath         : Optional[str]  = None,
 ) -> dict:
   """
   Set up all required folder paths and file names for the propagation.
@@ -533,8 +547,12 @@ def setup_paths(
       Filename of custom state vector.
     gravity_model_filename : str | None
       Filename of gravity model. If None, defaults to EGM2008.gfc.
-    tracker_file : str | None
-      Path to tracker YAML file for skyplot generation.
+    include_tracker_skyplots : bool
+      Flag to enable skyplot generation.
+    tracker_filename : str | None
+      Tracker YAML filename (assumes data/trackers/ folder).
+    tracker_filepath : str | None
+      Absolute path to tracker YAML file.
       
   Output:
   -------
@@ -582,14 +600,27 @@ def setup_paths(
   # Horizons ephemeris folder (loader will search for compatible files)
   jpl_horizons_folderpath = data_folderpath / 'ephems'
   
-  # Tracker filepath - use provided path or default
-  if tracker_file is not None:
-    tracker_filepath = Path(tracker_file)
-    # If relative path, resolve relative to project root
-    if not tracker_filepath.is_absolute():
-      tracker_filepath = project_root / tracker_filepath
-  else:
-    tracker_filepath = None
+  # Tracker filepath - determine based on skyplot settings
+  trackers_folderpath = data_folderpath / 'trackers'
+  resolved_tracker_filepath = None
+  
+  if include_tracker_skyplots:
+    if tracker_filepath is not None:
+      # Absolute path provided
+      resolved_tracker_filepath = Path(tracker_filepath)
+    elif tracker_filename is not None:
+      # Relative filename provided - look in data/trackers/
+      resolved_tracker_filepath = trackers_folderpath / tracker_filename
+    else:
+      # No path specified - find first .yaml in data/trackers/
+      if trackers_folderpath.exists():
+        yaml_files = list(trackers_folderpath.glob('*.yaml'))
+        if yaml_files:
+          resolved_tracker_filepath = yaml_files[0]
+        else:
+          print(f"[WARNING] --include-tracker-skyplots enabled but no .yaml files found in {trackers_folderpath}")
+      else:
+        print(f"[WARNING] --include-tracker-skyplots enabled but trackers folder not found: {trackers_folderpath}")
   
   # Define output folderpath
   timestamp_str        = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -602,7 +633,7 @@ def setup_paths(
     logs_folderpath  = timestamp_folderpath / 'files',
     log_filepath     = timestamp_folderpath / 'files' / 'output.log',
     data_folderpath  = data_folderpath,
-    tracker_filepath = tracker_filepath,
+    tracker_filepath = resolved_tracker_filepath,
   )
   output_paths.ensure_directories()
 
