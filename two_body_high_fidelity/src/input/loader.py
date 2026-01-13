@@ -40,47 +40,37 @@ def load_supported_objects() -> dict:
     return yaml.safe_load(f)
 
 
-def load_tracker_station(
-  tracker_filepath : Path,
-) -> TrackerStation:
+def _parse_single_tracker(data: dict) -> 'TrackerStation':
   """
-  Load tracking station data from YAML configuration file.
+  Parse a single tracker from dictionary data.
 
   Input:
   ------
-    tracker_filepath : Path
-      Path to the tracker YAML file.
+    data : dict
+      Dictionary containing tracker data from YAML.
 
   Output:
   -------
     tracker : TrackerStation
-      Tracker station dataclass with name, position, and performance limits.
+      Parsed tracker station.
 
   Raises:
   -------
-    FileNotFoundError
-      If the tracker file is not found.
     ValueError
-      If required fields are missing from the YAML file.
+      If required fields are missing.
   """
-  if not tracker_filepath.exists():
-    raise FileNotFoundError(f"Tracker file not found: {tracker_filepath}")
-
-  with open(tracker_filepath, 'r') as f:
-    data = yaml.safe_load(f)
+  # Import nested dataclasses
+  from src.schemas.state import TrackerStation, TrackerPosition, TrackerPerformance, AzimuthLimits, ElevationLimits, RangeLimits
 
   # Validate required fields
   if 'name' not in data:
-    raise ValueError(f"Tracker file missing required field: name")
+    raise ValueError(f"Tracker data missing required field: name")
   if 'position' not in data:
-    raise ValueError(f"Tracker file missing required section: position")
+    raise ValueError(f"Tracker data missing required section: position")
 
   position = data['position']
   if 'latitude__deg' not in position or 'longitude__deg' not in position or 'altitude__m' not in position:
     raise ValueError(f"Tracker 'position' section missing required fields")
-
-  # Import nested dataclasses
-  from src.schemas.state import TrackerPosition, TrackerPerformance, AzimuthLimits, ElevationLimits, RangeLimits
 
   # Convert degrees to radians
   latitude_rad = position['latitude__deg'] * CONVERTER.RAD_PER_DEG
@@ -192,6 +182,54 @@ def load_tracker_station(
     position    = tracker_position,
     performance = tracker_performance,
   )
+
+
+def load_tracker_station(
+  tracker_filepath : Path,
+) -> list['TrackerStation']:
+  """
+  Load tracking station data from YAML configuration file.
+
+  Supports both single tracker (dict) and multiple trackers (list of dicts).
+
+  Input:
+  ------
+    tracker_filepath : Path
+      Path to the tracker YAML file.
+
+  Output:
+  -------
+    trackers : list[TrackerStation]
+      List of tracker station dataclasses with name, position, and performance limits.
+
+  Raises:
+  -------
+    FileNotFoundError
+      If the tracker file is not found.
+    ValueError
+      If required fields are missing from the YAML file.
+  """
+  if not tracker_filepath.exists():
+    raise FileNotFoundError(f"Tracker file not found: {tracker_filepath}")
+
+  with open(tracker_filepath, 'r') as f:
+    data = yaml.safe_load(f)
+
+  # Handle both list of trackers and single tracker
+  if isinstance(data, list):
+    # Multiple trackers
+    trackers = []
+    for i, tracker_data in enumerate(data):
+      try:
+        tracker = _parse_single_tracker(tracker_data)
+        trackers.append(tracker)
+      except ValueError as e:
+        raise ValueError(f"Error parsing tracker {i}: {e}")
+    return trackers
+  else:
+    # Single tracker - wrap in list
+    tracker = _parse_single_tracker(data)
+    return [tracker]
 
 
 def load_gravity_field_model(
@@ -360,8 +398,8 @@ def load_files(
   -------
     spherical_harmonics_model : SphericalHarmonicsGravity | None
       Loaded gravity model or None if not requested/failed.
-    tracker : TrackerStation | None
-      Loaded tracker station or None if not requested/failed.
+    trackers : list[TrackerStation] | None
+      List of loaded tracker stations or None if not requested/failed.
 
   Raises:
   -------
@@ -407,27 +445,28 @@ def load_files(
         "Please check the gravity model file exists and is valid."
       )
   
-  # Load tracker station
-  tracker = None
+  # Load tracker stations
+  trackers = None
   if tracker_filepath is not None:
-    tracker = load_tracker_station(tracker_filepath)
+    trackers = load_tracker_station(tracker_filepath)
     # Format filepath relative to project root
     try:
       relative_path = tracker_filepath.relative_to(Path.cwd())
       formatted_path = f"<project_folderpath>/{relative_path}"
     except ValueError:
       formatted_path = str(tracker_filepath)
-    print(f"  Tracker Station")
+    print(f"  Tracker Stations ({len(trackers)})")
     print(f"    Filepath : {formatted_path}")
-    print(f"    Name     : {tracker.name}")
-    print(f"    Position : {tracker.position.latitude * CONVERTER.DEG_PER_RAD:.1f}° lat, {tracker.position.longitude * CONVERTER.DEG_PER_RAD:.1f}° lon, {tracker.position.altitude:.1f} m alt")
+    for i, tracker in enumerate(trackers, 1):
+      print(f"    Tracker {i}: {tracker.name}")
+      print(f"      Position : {tracker.position.latitude * CONVERTER.DEG_PER_RAD:.1f}° lat, {tracker.position.longitude * CONVERTER.DEG_PER_RAD:.1f}° lon, {tracker.position.altitude:.1f} m alt")
 
   # Normalize values from loaded files
-  if tracker is not None:
-    tracker = normalize_tracker_azimuth(tracker)
+  if trackers is not None:
+    trackers = [normalize_tracker_azimuth(t) for t in trackers]
 
-  # Return loaded model and tracker (or None if not requested)
-  return spherical_harmonics_model, tracker
+  # Return loaded model and trackers (or None if not requested)
+  return spherical_harmonics_model, trackers
 
 
 def normalize_tracker_azimuth(tracker):

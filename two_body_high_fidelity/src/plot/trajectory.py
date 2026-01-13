@@ -782,7 +782,7 @@ def plot_time_series_error(
 def plot_3d_trajectories_body_fixed(
   result                  : PropagationResult,
   epoch_dt_utc            : Optional[datetime.datetime] = None,
-  tracker                 : Optional['TrackerStation'] = None,
+  trackers                : Optional[list['TrackerStation']] = None,
   include_tracker_on_body : bool = False,
 ) -> Figure:
   """
@@ -852,19 +852,20 @@ def plot_3d_trajectories_body_fixed(
   ax1.scatter([pos_x[ 0]], [pos_y[ 0]], [pos_z[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
   ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
 
-  # Mark tracker location on 3D body-fixed plot (red dot) and show field of view
-  if include_tracker_on_body and tracker is not None:
-    # Tracker position is stored in radians, convert to degrees for _latlon_to_xyz
-    tracker_lat_deg = tracker.position.latitude * CONVERTER.DEG_PER_RAD
-    tracker_lon_deg = tracker.position.longitude * CONVERTER.DEG_PER_RAD
-    # Use Earth's equatorial radius for consistency
-    x_tracker, y_tracker, z_tracker = _latlon_to_xyz(tracker_lat_deg, tracker_lon_deg, r_eq * 1.02)
-    ax1.scatter([x_tracker], [y_tracker], [z_tracker], s=200, c='red', marker='o', edgecolors='darkred', linewidths=2, zorder=5)  # type: ignore
+  # Mark tracker locations on 3D body-fixed plot (red dots) and show field of view
+  if include_tracker_on_body and trackers is not None:
+    for tracker in trackers:
+      # Tracker position is stored in radians, convert to degrees for _latlon_to_xyz
+      tracker_lat_deg = tracker.position.latitude * CONVERTER.DEG_PER_RAD
+      tracker_lon_deg = tracker.position.longitude * CONVERTER.DEG_PER_RAD
+      # Use Earth's equatorial radius for consistency
+      x_tracker, y_tracker, z_tracker = _latlon_to_xyz(tracker_lat_deg, tracker_lon_deg, r_eq * 1.02)
+      ax1.scatter([x_tracker], [y_tracker], [z_tracker], s=200, c='red', marker='o', edgecolors='darkred', linewidths=2, zorder=5)  # type: ignore
 
-    # Draw field of view hemisphere (use tracker's max range)
-    fov_radius_m = tracker.performance.range.max
-    x_fov, y_fov, z_fov = _create_tracker_fov_hemisphere(tracker_lat_deg, tracker_lon_deg, r_eq, fov_radius_m, resolution=30)
-    ax1.plot_surface(x_fov, y_fov, z_fov, color='red', alpha=0.2, edgecolor='none', zorder=2)  # type: ignore
+      # Draw field of view hemisphere (use tracker's max range)
+      fov_radius_m = tracker.performance.range.max
+      x_fov, y_fov, z_fov = _create_tracker_fov_hemisphere(tracker_lat_deg, tracker_lon_deg, r_eq, fov_radius_m, resolution=30)
+      ax1.plot_surface(x_fov, y_fov, z_fov, color='red', alpha=0.2, edgecolor='none', zorder=2)  # type: ignore
 
   ax1.set_xlabel('Pos-X [m]')
   ax1.set_ylabel('Pos-Y [m]')
@@ -1479,7 +1480,7 @@ def plot_time_series_error(
 def plot_3d_trajectories_body_fixed(
   result                  : PropagationResult,
   epoch_dt_utc            : Optional[datetime.datetime] = None,
-  tracker                 : Optional['TrackerStation'] = None,
+  trackers                : Optional[list['TrackerStation']] = None,
   include_tracker_on_body : bool = False,
 ) -> Figure:
   """
@@ -1549,19 +1550,20 @@ def plot_3d_trajectories_body_fixed(
   ax1.scatter([pos_x[ 0]], [pos_y[ 0]], [pos_z[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
   ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
 
-  # Mark tracker location on 3D body-fixed plot (red dot) and show field of view
-  if include_tracker_on_body and tracker is not None:
-    # Tracker position is stored in radians, convert to degrees for _latlon_to_xyz
-    tracker_lat_deg = tracker.position.latitude * CONVERTER.DEG_PER_RAD
-    tracker_lon_deg = tracker.position.longitude * CONVERTER.DEG_PER_RAD
-    # Use Earth's equatorial radius for consistency
-    x_tracker, y_tracker, z_tracker = _latlon_to_xyz(tracker_lat_deg, tracker_lon_deg, r_eq * 1.02)
-    ax1.scatter([x_tracker], [y_tracker], [z_tracker], s=200, c='red', marker='o', edgecolors='darkred', linewidths=2, zorder=5)  # type: ignore
+  # Mark tracker locations on 3D body-fixed plot (red dots) and show field of view
+  if include_tracker_on_body and trackers is not None:
+    for tracker in trackers:
+      # Tracker position is stored in radians, convert to degrees for _latlon_to_xyz
+      tracker_lat_deg = tracker.position.latitude * CONVERTER.DEG_PER_RAD
+      tracker_lon_deg = tracker.position.longitude * CONVERTER.DEG_PER_RAD
+      # Use Earth's equatorial radius for consistency
+      x_tracker, y_tracker, z_tracker = _latlon_to_xyz(tracker_lat_deg, tracker_lon_deg, r_eq * 1.02)
+      ax1.scatter([x_tracker], [y_tracker], [z_tracker], s=200, c='red', marker='o', edgecolors='darkred', linewidths=2, zorder=5)  # type: ignore
 
-    # Draw field of view hemisphere (use tracker's max range)
-    fov_radius_m = tracker.performance.range.max
-    x_fov, y_fov, z_fov = _create_tracker_fov_hemisphere(tracker_lat_deg, tracker_lon_deg, r_eq, fov_radius_m, resolution=30)
-    ax1.plot_surface(x_fov, y_fov, z_fov, color='red', alpha=0.2, edgecolor='none', zorder=2)  # type: ignore
+      # Draw field of view hemisphere (use tracker's max range)
+      fov_radius_m = tracker.performance.range.max
+      x_fov, y_fov, z_fov = _create_tracker_fov_hemisphere(tracker_lat_deg, tracker_lon_deg, r_eq, fov_radius_m, resolution=30)
+      ax1.plot_surface(x_fov, y_fov, z_fov, color='red', alpha=0.2, edgecolor='none', zorder=2)  # type: ignore
 
   ax1.set_xlabel('Pos-X [m]')
   ax1.set_ylabel('Pos-Y [m]')
@@ -1838,7 +1840,7 @@ def plot_ground_track(
   result                  : PropagationResult,
   epoch_dt_utc            : Optional[datetime.datetime] = None,
   title_text              : str = "Ground Track",
-  tracker                 : Optional['TrackerStation'] = None,
+  trackers                : Optional[list['TrackerStation']] = None,
   include_tracker_on_body : bool = False,
 ) -> Figure:
   """
@@ -1949,23 +1951,24 @@ def plot_ground_track(
   ax_3d.scatter([x_start], [y_start], [z_start], s=400, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=4)  # type: ignore
   ax_3d.scatter([x_end], [y_end], [z_end], s=400, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=4)  # type: ignore
 
-  # Mark tracker location on 3D globe (red dot) and show field of view
-  if include_tracker_on_body and tracker is not None:
-    # Tracker position is stored in radians, convert to degrees for _latlon_to_xyz
-    tracker_lat_deg = tracker.position.latitude * CONVERTER.DEG_PER_RAD
-    tracker_lon_deg = tracker.position.longitude * CONVERTER.DEG_PER_RAD
-    x_tracker, y_tracker, z_tracker = _latlon_to_xyz(tracker_lat_deg, tracker_lon_deg, r_earth * 1.02)
-    ax_3d.scatter([x_tracker], [y_tracker], [z_tracker], s=200, c='red', marker='o', edgecolors='darkred', linewidths=2, zorder=5)  # type: ignore
+  # Mark tracker locations on 3D globe (red dots) and show field of view
+  if include_tracker_on_body and trackers is not None:
+    for tracker in trackers:
+      # Tracker position is stored in radians, convert to degrees for _latlon_to_xyz
+      tracker_lat_deg = tracker.position.latitude * CONVERTER.DEG_PER_RAD
+      tracker_lon_deg = tracker.position.longitude * CONVERTER.DEG_PER_RAD
+      x_tracker, y_tracker, z_tracker = _latlon_to_xyz(tracker_lat_deg, tracker_lon_deg, r_earth * 1.02)
+      ax_3d.scatter([x_tracker], [y_tracker], [z_tracker], s=200, c='red', marker='o', edgecolors='darkred', linewidths=2, zorder=5)  # type: ignore
 
-    # Draw field of view hemisphere (use tracker's max range)
-    fov_radius_m = tracker.performance.range.max
-    x_fov, y_fov, z_fov = _create_tracker_fov_hemisphere(tracker_lat_deg, tracker_lon_deg, r_earth, fov_radius_m, resolution=30)
-    ax_3d.plot_surface(x_fov, y_fov, z_fov, color='red', alpha=0.2, edgecolor='none', zorder=2)  # type: ignore
+      # Draw field of view hemisphere (use tracker's max range)
+      fov_radius_m = tracker.performance.range.max
+      x_fov, y_fov, z_fov = _create_tracker_fov_hemisphere(tracker_lat_deg, tracker_lon_deg, r_earth, fov_radius_m, resolution=30)
+      ax_3d.plot_surface(x_fov, y_fov, z_fov, color='red', alpha=0.2, edgecolor='none', zorder=2)  # type: ignore
 
-    # Draw FOV ground track circle on Earth's surface
-    lat_circle, lon_circle = _calculate_hemisphere_ground_track(tracker_lat_deg, tracker_lon_deg, r_earth, fov_radius_m, num_points=100)
-    x_circle, y_circle, z_circle = _latlon_to_xyz(lat_circle, lon_circle, r_earth * 1.01)
-    ax_3d.plot(x_circle, y_circle, z_circle, 'r--', linewidth=2, zorder=3)  # type: ignore
+      # Draw FOV ground track circle on Earth's surface
+      lat_circle, lon_circle = _calculate_hemisphere_ground_track(tracker_lat_deg, tracker_lon_deg, r_earth, fov_radius_m, num_points=100)
+      x_circle, y_circle, z_circle = _latlon_to_xyz(lat_circle, lon_circle, r_earth * 1.01)
+      ax_3d.plot(x_circle, y_circle, z_circle, 'r--', linewidth=2, zorder=3)  # type: ignore
 
   # Set 3D axis properties
   ax_3d.set_xlabel('X [m]')
@@ -2028,18 +2031,19 @@ def plot_ground_track(
   ax_2d.scatter([lon[ 0]], [lat[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Initial', **plot_kwargs)
   ax_2d.scatter([lon[-1]], [lat[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Final', **plot_kwargs)
 
-  # Mark tracker location on 2D map (red dot) and show FOV ground track
-  if include_tracker_on_body and tracker is not None:
-    # Tracker position is stored in radians, convert to degrees for plotting
-    tracker_lat_deg = tracker.position.latitude * CONVERTER.DEG_PER_RAD
-    tracker_lon_deg = tracker.position.longitude * CONVERTER.DEG_PER_RAD
-    ax_2d.scatter([tracker_lon_deg], [tracker_lat_deg], s=200, c='red', marker='o', edgecolors='darkred', linewidths=2, zorder=6, **plot_kwargs)
+  # Mark tracker locations on 2D map (red dots) and show FOV ground tracks
+  if include_tracker_on_body and trackers is not None:
+    for tracker in trackers:
+      # Tracker position is stored in radians, convert to degrees for plotting
+      tracker_lat_deg = tracker.position.latitude * CONVERTER.DEG_PER_RAD
+      tracker_lon_deg = tracker.position.longitude * CONVERTER.DEG_PER_RAD
+      ax_2d.scatter([tracker_lon_deg], [tracker_lat_deg], s=200, c='red', marker='o', edgecolors='darkred', linewidths=2, zorder=6, **plot_kwargs)
 
-    # Draw FOV ground track circle (use tracker's max range)
-    fov_radius_m = tracker.performance.range.max
-    r_earth = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
-    lat_circle, lon_circle = _calculate_hemisphere_ground_track(tracker_lat_deg, tracker_lon_deg, r_earth, fov_radius_m, num_points=100)
-    ax_2d.plot(lon_circle, lat_circle, 'r--', linewidth=2, zorder=5, **plot_kwargs)
+      # Draw FOV ground track circle (use tracker's max range)
+      fov_radius_m = tracker.performance.range.max
+      r_earth = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
+      lat_circle, lon_circle = _calculate_hemisphere_ground_track(tracker_lat_deg, tracker_lon_deg, r_earth, fov_radius_m, num_points=100)
+      ax_2d.plot(lon_circle, lat_circle, 'r--', linewidth=2, zorder=5, **plot_kwargs)
 
   # Build info text for bottom of figure (consistent with 3D plots)
   info_text = "Frame: IAU_EARTH (Body-Fixed)"
@@ -2735,6 +2739,12 @@ def plot_skyplot(
 
   # Get range values
   range_m = topo.range
+
+  # Check range constraints
+  if tracker.performance and tracker.performance.range:
+    range_min_m = tracker.performance.range.min
+    range_max_m = tracker.performance.range.max
+    constraint_valid_mask &= (range_m >= range_min_m) & (range_m <= range_max_m)
   
   # Compute marker sizes based on VISIBLE range only (closer = larger, further = smaller)
   visible_range = range_m[visible_mask]
@@ -2954,7 +2964,7 @@ def generate_3d_and_time_series_plots(
   compare_tle                      : bool,
   object_name                      : str = "object",
   object_name_display              : str = "Object",
-  tracker                          : Optional['TrackerStation'] = None,
+  trackers                         : Optional[list['TrackerStation']] = None,
   include_tracker_on_body          : bool = False,
 ) -> None:
   """
@@ -3009,7 +3019,7 @@ def generate_3d_and_time_series_plots(
     plt.close(fig2)
     
     # Body-fixed 3D plot for Horizons
-    fig_ef = plot_3d_trajectories_body_fixed(result_jpl_horizons_ephemeris, epoch_dt_utc=time_o_dt, tracker=tracker, include_tracker_on_body=include_tracker_on_body)
+    fig_ef = plot_3d_trajectories_body_fixed(result_jpl_horizons_ephemeris, epoch_dt_utc=time_o_dt, trackers=trackers, include_tracker_on_body=include_tracker_on_body)
     fig_ef.suptitle(f'3D Body-Fixed - {object_name_display} - JPL Horizons', fontsize=16)
     filename = f'3d_iau_earth_jpl_horizons_{name_lower}.png'
     fig_ef.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
@@ -3018,7 +3028,7 @@ def generate_3d_and_time_series_plots(
     
     # Ground track plot for Horizons
     gt_title = f'Ground Track - {object_name_display} - JPL Horizons'
-    fig_gt = plot_ground_track(result_jpl_horizons_ephemeris, epoch_dt_utc=time_o_dt, title_text=gt_title, tracker=tracker, include_tracker_on_body=include_tracker_on_body)
+    fig_gt = plot_ground_track(result_jpl_horizons_ephemeris, epoch_dt_utc=time_o_dt, title_text=gt_title, trackers=trackers, include_tracker_on_body=include_tracker_on_body)
     filename = f'groundtrack_jpl_horizons_{name_lower}.png'
     fig_gt.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      Ground Track   : <figures_folderpath>/{filename}")
@@ -3043,7 +3053,7 @@ def generate_3d_and_time_series_plots(
     plt.close(fig4)
     
     # Body-fixed 3D plot
-    fig_ef = plot_3d_trajectories_body_fixed(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt, tracker=tracker, include_tracker_on_body=include_tracker_on_body)
+    fig_ef = plot_3d_trajectories_body_fixed(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt, trackers=trackers, include_tracker_on_body=include_tracker_on_body)
     fig_ef.suptitle(f'3D Body-Fixed - {object_name_display} - High-Fidelity', fontsize=16)
     filename = f'3d_iau_earth_high_fidelity_{name_lower}.png'
     fig_ef.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
@@ -3052,7 +3062,7 @@ def generate_3d_and_time_series_plots(
     
     # Ground track plot
     gt_title = f'Ground Track - {object_name_display} - High-Fidelity'
-    fig_gt = plot_ground_track(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt, title_text=gt_title, tracker=tracker, include_tracker_on_body=include_tracker_on_body)
+    fig_gt = plot_ground_track(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt, title_text=gt_title, trackers=trackers, include_tracker_on_body=include_tracker_on_body)
     filename = f'groundtrack_high_fidelity_{name_lower}.png'
     fig_gt.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      Ground Track   : <figures_folderpath>/{filename}")
@@ -3088,7 +3098,7 @@ def generate_3d_and_time_series_plots(
 
     # Ground track plot for SGP4
     gt_title = f'Ground Track - {object_name_display} - SGP4'
-    fig_gt_sgp4 = plot_ground_track(result_sgp4_propagation, epoch_dt_utc=time_o_dt, title_text=gt_title, tracker=tracker, include_tracker_on_body=include_tracker_on_body)
+    fig_gt_sgp4 = plot_ground_track(result_sgp4_propagation, epoch_dt_utc=time_o_dt, title_text=gt_title, trackers=trackers, include_tracker_on_body=include_tracker_on_body)
     filename = f'groundtrack_sgp4_{name_lower}.png'
     fig_gt_sgp4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      Ground Track   : <figures_folderpath>/{filename}")
@@ -3104,7 +3114,7 @@ def generate_plots(
   compare_tle                      : bool = False,
   object_name                      : str  = "object",
   object_name_display              : str  = "Object",
-  tracker                          : Optional['TrackerStation'] = None,
+  trackers                         : Optional[list['TrackerStation']] = None,
   include_tracker_on_body          : bool = False,
 ) -> None:
   """
@@ -3153,7 +3163,7 @@ def generate_plots(
     compare_tle                      = compare_tle,
     object_name                      = object_name,
     object_name_display              = object_name_display,
-    tracker                          = tracker,
+    trackers                         = trackers,
     include_tracker_on_body          = include_tracker_on_body,
   )
     
@@ -3171,56 +3181,58 @@ def generate_plots(
       object_name_display              = object_name_display,
     )
   
-  # Generate skyplot if tracker filepath is provided
-  if tracker is not None:
-    print("\n  Generate Skyplot")
-    try:
-      print(f"    Tracker       : {tracker.name}")
-      
-      name_lower = object_name.lower().replace(' ', '_').replace('-', '_')
-      tracker_name_sanitized = tracker.name.lower().replace(' ', '_').replace('-', '_')
-      
-      # Generate skyplot for high-fidelity propagation
-      if result_high_fidelity_propagation.success:
-        skyplot_title = f'Skyplot - {object_name_display} - High-Fidelity'
-        fig_skyplot = plot_skyplot(
-          result       = result_high_fidelity_propagation,
-          tracker      = tracker,
-          epoch_dt_utc = time_o_dt,
-          title_text   = skyplot_title,
-        )
-        filename = f'skyplot_{tracker_name_sanitized}_high_fidelity_{name_lower}.png'
-        fig_skyplot.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-        print(f"    High-Fidelity : <figures_folderpath>/{filename}")
-        plt.close(fig_skyplot)
-      
-      # Generate skyplot for SGP4 if available
-      if compare_tle and result_sgp4_propagation and result_sgp4_propagation.success:
-        skyplot_title = f'Skyplot - {object_name_display} - SGP4'
-        fig_skyplot_sgp4 = plot_skyplot(
-          result       = result_sgp4_propagation,
-          tracker      = tracker,
-          epoch_dt_utc = time_o_dt,
-          title_text   = skyplot_title,
-        )
-        filename = f'skyplot_{tracker_name_sanitized}_sgp4_{name_lower}.png'
-        fig_skyplot_sgp4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-        print(f"    SGP4          : <figures_folderpath>/{filename}")
-        plt.close(fig_skyplot_sgp4)
+  # Generate skyplots for each tracker
+  if trackers is not None and len(trackers) > 0:
+    print("\n  Generate Skyplots")
 
-      # Generate skyplot for JPL Horizons if available
-      if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
-        skyplot_title = f'Skyplot - {object_name_display} - JPL Horizons'
-        fig_skyplot_horizons = plot_skyplot(
-          result       = result_jpl_horizons_ephemeris,
-          tracker      = tracker,
-          epoch_dt_utc = time_o_dt,
-          title_text   = skyplot_title,
-        )
-        filename = f'skyplot_{tracker_name_sanitized}_jpl_horizons_{name_lower}.png'
-        fig_skyplot_horizons.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-        print(f"    JPL Horizons  : <figures_folderpath>/{filename}")
-        plt.close(fig_skyplot_horizons)
+    name_lower = object_name.lower().replace(' ', '_').replace('-', '_')
 
-    except Exception as e:
-      print(f"    [WARNING] Failed to generate skyplot: {e}")
+    for tracker in trackers:
+      try:
+        print(f"    Tracker       : {tracker.name}")
+        tracker_name_sanitized = tracker.name.lower().replace(' ', '_').replace('-', '_')
+
+        # Generate skyplot for high-fidelity propagation
+        if result_high_fidelity_propagation.success:
+          skyplot_title = f'Skyplot - {object_name_display} - High-Fidelity - {tracker.name}'
+          fig_skyplot = plot_skyplot(
+            result       = result_high_fidelity_propagation,
+            tracker      = tracker,
+            epoch_dt_utc = time_o_dt,
+            title_text   = skyplot_title,
+          )
+          filename = f'skyplot_{tracker_name_sanitized}_high_fidelity_{name_lower}.png'
+          fig_skyplot.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+          print(f"      High-Fidelity : <figures_folderpath>/{filename}")
+          plt.close(fig_skyplot)
+
+        # Generate skyplot for SGP4 if available
+        if compare_tle and result_sgp4_propagation and result_sgp4_propagation.success:
+          skyplot_title = f'Skyplot - {object_name_display} - SGP4 - {tracker.name}'
+          fig_skyplot_sgp4 = plot_skyplot(
+            result       = result_sgp4_propagation,
+            tracker      = tracker,
+            epoch_dt_utc = time_o_dt,
+            title_text   = skyplot_title,
+          )
+          filename = f'skyplot_{tracker_name_sanitized}_sgp4_{name_lower}.png'
+          fig_skyplot_sgp4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+          print(f"      SGP4          : <figures_folderpath>/{filename}")
+          plt.close(fig_skyplot_sgp4)
+
+        # Generate skyplot for JPL Horizons if available
+        if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
+          skyplot_title = f'Skyplot - {object_name_display} - JPL Horizons - {tracker.name}'
+          fig_skyplot_horizons = plot_skyplot(
+            result       = result_jpl_horizons_ephemeris,
+            tracker      = tracker,
+            epoch_dt_utc = time_o_dt,
+            title_text   = skyplot_title,
+          )
+          filename = f'skyplot_{tracker_name_sanitized}_jpl_horizons_{name_lower}.png'
+          fig_skyplot_horizons.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+          print(f"      JPL Horizons  : <figures_folderpath>/{filename}")
+          plt.close(fig_skyplot_horizons)
+
+      except Exception as e:
+        print(f"    [WARNING] Failed to generate skyplot: {e}")
