@@ -471,10 +471,10 @@ def load_files(
 
 def normalize_tracker_azimuth(tracker):
   """
-  Normalize tracker azimuth constraints to 0-360° range.
+  Normalize tracker azimuth constraints to -180° to +180° range.
 
-  Modifies the tracker object in-place by converting negative azimuth values
-  to their equivalent positive values (e.g., -90° → 270°).
+  Modifies the tracker object in-place by converting azimuth values outside
+  the -180° to +180° range to their equivalent values within that range.
 
   Input:
   ------
@@ -496,11 +496,10 @@ def normalize_tracker_azimuth(tracker):
     az_min_deg = tracker.performance.azimuth.min * CONVERTER.DEG_PER_RAD
     az_max_deg = tracker.performance.azimuth.max * CONVERTER.DEG_PER_RAD
 
-    # Normalize negative azimuths to 0-360° range
-    if az_min_deg < 0:
-      az_min_deg = az_min_deg % 360.0
-    if az_max_deg < 0:
-      az_max_deg = az_max_deg % 360.0
+    # Normalize to -180° to +180° range
+    # Use (value + 180) % 360 - 180 to map to [-180, 180]
+    az_min_deg = ((az_min_deg + 180.0) % 360.0) - 180.0
+    az_max_deg = ((az_max_deg + 180.0) % 360.0) - 180.0
 
     # Update the tracker with normalized values (convert back to radians)
     tracker.performance.azimuth = AzimuthLimits(
