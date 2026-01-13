@@ -201,24 +201,24 @@ def load_gravity_field_model(
   from src.model.gravity_field import load_gravity_field
   
   # Display gravity field info
-  try:
-    rel_folderpath     = gravity_model_folderpath.relative_to(Path.cwd())
-    display_folderpath = f"<project_folderpath>/{rel_folderpath}"
-  except ValueError:
-    display_folderpath = gravity_model_folderpath
-
   print("  Gravity Field Model")
-  print(f"    Folderpath : {display_folderpath}")
-  
+
   # Build full path to gravity file
   gravity_model_filepath = gravity_model_folderpath / gravity_model_filename
-  
+
+  # Format filepath relative to project root
+  try:
+    relative_path = gravity_model_filepath.relative_to(Path.cwd())
+    formatted_path = f"<project_folderpath>/{relative_path}"
+  except ValueError:
+    formatted_path = str(gravity_model_filepath)
+
   if not gravity_model_filepath.exists():
-    print(f"    Filepath   : {gravity_model_filename} (NOT FOUND)")
+    print(f"    Filepath   : {formatted_path} (NOT FOUND)")
     print(f"    Status     : Failed - file not found")
     return None
-  
-  print(f"    Filepath   : {gravity_model_filename}")
+
+  print(f"    Filepath   : {formatted_path}")
   print(f"    Degree     : {gravity_model_degree}")
   print(f"    Order      : {gravity_model_order}")
   
@@ -385,8 +385,14 @@ def load_files(
   tracker = None
   if tracker_filepath is not None:
     tracker = load_tracker_station(tracker_filepath)
+    # Format filepath relative to project root
+    try:
+      relative_path = tracker_filepath.relative_to(Path.cwd())
+      formatted_path = f"<project_folderpath>/{relative_path}"
+    except ValueError:
+      formatted_path = str(tracker_filepath)
     print(f"  Tracker Station")
-    print(f"    Filepath : {tracker_filepath}")
+    print(f"    Filepath : {formatted_path}")
     print(f"    Name     : {tracker.name}")
     print(f"    Position : {tracker.position.latitude * CONVERTER.DEG_PER_RAD:.1f}° lat, {tracker.position.longitude * CONVERTER.DEG_PER_RAD:.1f}° lon, {tracker.position.altitude:.1f} m alt")
 

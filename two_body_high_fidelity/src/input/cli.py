@@ -154,7 +154,7 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
           setattr(args, arg_name, config_value)
 
     elif arg_name in ['include_drag', 'include_srp', 'compare_tle', 'compare_jpl_horizons',
-                      'auto_download', 'include_tracker_skyplots']:
+                      'auto_download', 'include_tracker_skyplots', 'include_tracker_on_body']:
       # Boolean flags - only override if CLI kept the default False
       if not current_value:
         setattr(args, arg_name, config_value)
