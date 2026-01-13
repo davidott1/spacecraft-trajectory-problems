@@ -255,6 +255,7 @@ def build_config(
   include_tracker_skyplots       : bool           = False,
   tracker_filename               : Optional[str]  = None,
   tracker_filepath               : Optional[str]  = None,
+  include_tracker_on_body        : bool           = False,
 ) -> SimulationConfig:
   """
   Parse, validate, and set up input parameters for orbit propagation.

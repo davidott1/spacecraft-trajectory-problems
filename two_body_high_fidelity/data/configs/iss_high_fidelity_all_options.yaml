@@ -24,6 +24,7 @@ compare_tle: true
 # Visualization options
 include_tracker_skyplots: true
 tracker_filename: trackers_set1.yaml
+include_tracker_on_body: true
 
 # Download options
 auto_download: true

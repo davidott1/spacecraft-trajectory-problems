@@ -104,7 +104,7 @@ def plot_3d_trajectories(
   y_earth = r_eq * np.outer(np.sin(u), np.sin(v))
   z_earth = r_pol * np.outer(np.ones(np.size(u)), np.cos(v))
   ax1.plot_wireframe(x_earth, y_earth, z_earth, color='black', linewidth=0.5, alpha=1.0) # type: ignore
-  
+
   ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=2.0)
   ax1.scatter([pos_x[ 0]], [pos_y[ 0]], [pos_z[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
   ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
@@ -780,8 +780,10 @@ def plot_time_series_error(
 
 
 def plot_3d_trajectories_body_fixed(
-  result       : PropagationResult,
-  epoch_dt_utc : Optional[datetime.datetime] = None,
+  result                  : PropagationResult,
+  epoch_dt_utc            : Optional[datetime.datetime] = None,
+  tracker                 : Optional['TrackerStation'] = None,
+  include_tracker_on_body : bool = False,
 ) -> Figure:
   """
   Plot 3D position and velocity trajectories in body-fixed (IAU_EARTH) frame.
@@ -849,6 +851,16 @@ def plot_3d_trajectories_body_fixed(
   ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=2.0)
   ax1.scatter([pos_x[ 0]], [pos_y[ 0]], [pos_z[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
   ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
+
+  # Mark tracker location on 3D body-fixed plot (red dot)
+  if include_tracker_on_body and tracker is not None:
+    # Tracker position is stored in radians, convert to degrees for _latlon_to_xyz
+    tracker_lat_deg = tracker.position.latitude * CONVERTER.DEG_PER_RAD
+    tracker_lon_deg = tracker.position.longitude * CONVERTER.DEG_PER_RAD
+    # Use Earth's equatorial radius for consistency
+    x_tracker, y_tracker, z_tracker = _latlon_to_xyz(tracker_lat_deg, tracker_lon_deg, r_eq * 1.02)
+    ax1.scatter([x_tracker], [y_tracker], [z_tracker], s=200, c='red', marker='o', edgecolors='darkred', linewidths=2, zorder=5)  # type: ignore
+
   ax1.set_xlabel('Pos-X [m]')
   ax1.set_ylabel('Pos-Y [m]')
   ax1.set_zlabel('Pos-Z [m]') # type: ignore
@@ -1460,8 +1472,10 @@ def plot_time_series_error(
 
 
 def plot_3d_trajectories_body_fixed(
-  result       : PropagationResult,
-  epoch_dt_utc : Optional[datetime.datetime] = None,
+  result                  : PropagationResult,
+  epoch_dt_utc            : Optional[datetime.datetime] = None,
+  tracker                 : Optional['TrackerStation'] = None,
+  include_tracker_on_body : bool = False,
 ) -> Figure:
   """
   Plot 3D position and velocity trajectories in body-fixed (IAU_EARTH) frame.
@@ -1529,6 +1543,16 @@ def plot_3d_trajectories_body_fixed(
   ax1.plot(pos_x, pos_y, pos_z, 'b-', linewidth=2.0)
   ax1.scatter([pos_x[ 0]], [pos_y[ 0]], [pos_z[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
   ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
+
+  # Mark tracker location on 3D body-fixed plot (red dot)
+  if include_tracker_on_body and tracker is not None:
+    # Tracker position is stored in radians, convert to degrees for _latlon_to_xyz
+    tracker_lat_deg = tracker.position.latitude * CONVERTER.DEG_PER_RAD
+    tracker_lon_deg = tracker.position.longitude * CONVERTER.DEG_PER_RAD
+    # Use Earth's equatorial radius for consistency
+    x_tracker, y_tracker, z_tracker = _latlon_to_xyz(tracker_lat_deg, tracker_lon_deg, r_eq * 1.02)
+    ax1.scatter([x_tracker], [y_tracker], [z_tracker], s=200, c='red', marker='o', edgecolors='darkred', linewidths=2, zorder=5)  # type: ignore
+
   ax1.set_xlabel('Pos-X [m]')
   ax1.set_ylabel('Pos-Y [m]')
   ax1.set_zlabel('Pos-Z [m]') # type: ignore
@@ -1655,9 +1679,11 @@ def _latlon_to_xyz(lat_deg, lon_deg, radius):
 
 
 def plot_ground_track(
-  result       : PropagationResult,
-  epoch_dt_utc : Optional[datetime.datetime] = None,
-  title_text   : str = "Ground Track",
+  result                  : PropagationResult,
+  epoch_dt_utc            : Optional[datetime.datetime] = None,
+  title_text              : str = "Ground Track",
+  tracker                 : Optional['TrackerStation'] = None,
+  include_tracker_on_body : bool = False,
 ) -> Figure:
   """
   Plot ground track with 3D globe (left) and 2D map projection (right).
@@ -1766,7 +1792,15 @@ def plot_ground_track(
   x_end, y_end, z_end = _latlon_to_xyz(lat[-1], lon[-1], r_earth * 1.02)
   ax_3d.scatter([x_start], [y_start], [z_start], s=400, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=4)  # type: ignore
   ax_3d.scatter([x_end], [y_end], [z_end], s=400, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=4)  # type: ignore
-  
+
+  # Mark tracker location on 3D globe (red dot)
+  if include_tracker_on_body and tracker is not None:
+    # Tracker position is stored in radians, convert to degrees for _latlon_to_xyz
+    tracker_lat_deg = tracker.position.latitude * CONVERTER.DEG_PER_RAD
+    tracker_lon_deg = tracker.position.longitude * CONVERTER.DEG_PER_RAD
+    x_tracker, y_tracker, z_tracker = _latlon_to_xyz(tracker_lat_deg, tracker_lon_deg, r_earth * 1.02)
+    ax_3d.scatter([x_tracker], [y_tracker], [z_tracker], s=200, c='red', marker='o', edgecolors='darkred', linewidths=2, zorder=5)  # type: ignore
+
   # Set 3D axis properties
   ax_3d.set_xlabel('X [m]')
   ax_3d.set_ylabel('Y [m]')
@@ -1827,7 +1861,14 @@ def plot_ground_track(
   # Mark start and end points on 2D map
   ax_2d.scatter([lon[ 0]], [lat[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Initial', **plot_kwargs)
   ax_2d.scatter([lon[-1]], [lat[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Final', **plot_kwargs)
-  
+
+  # Mark tracker location on 2D map (red dot)
+  if include_tracker_on_body and tracker is not None:
+    # Tracker position is stored in radians, convert to degrees for plotting
+    tracker_lat_deg = tracker.position.latitude * CONVERTER.DEG_PER_RAD
+    tracker_lon_deg = tracker.position.longitude * CONVERTER.DEG_PER_RAD
+    ax_2d.scatter([tracker_lon_deg], [tracker_lat_deg], s=200, c='red', marker='o', edgecolors='darkred', linewidths=2, zorder=6, **plot_kwargs)
+
   # Build info text for bottom of figure (consistent with 3D plots)
   info_text = "Frame: IAU_EARTH (Body-Fixed)"
   if epoch_dt_utc is not None:
@@ -2741,6 +2782,8 @@ def generate_3d_and_time_series_plots(
   compare_tle                      : bool,
   object_name                      : str = "object",
   object_name_display              : str = "Object",
+  tracker                          : Optional['TrackerStation'] = None,
+  include_tracker_on_body          : bool = False,
 ) -> None:
   """
   Generate and save 3D trajectory and time series plots.
@@ -2794,7 +2837,7 @@ def generate_3d_and_time_series_plots(
     plt.close(fig2)
     
     # Body-fixed 3D plot for Horizons
-    fig_ef = plot_3d_trajectories_body_fixed(result_jpl_horizons_ephemeris, epoch_dt_utc=time_o_dt)
+    fig_ef = plot_3d_trajectories_body_fixed(result_jpl_horizons_ephemeris, epoch_dt_utc=time_o_dt, tracker=tracker, include_tracker_on_body=include_tracker_on_body)
     fig_ef.suptitle(f'3D Body-Fixed - {object_name_display} - JPL Horizons', fontsize=16)
     filename = f'3d_iau_earth_jpl_horizons_{name_lower}.png'
     fig_ef.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
@@ -2803,7 +2846,7 @@ def generate_3d_and_time_series_plots(
     
     # Ground track plot for Horizons
     gt_title = f'Ground Track - {object_name_display} - JPL Horizons'
-    fig_gt = plot_ground_track(result_jpl_horizons_ephemeris, epoch_dt_utc=time_o_dt, title_text=gt_title)
+    fig_gt = plot_ground_track(result_jpl_horizons_ephemeris, epoch_dt_utc=time_o_dt, title_text=gt_title, tracker=tracker, include_tracker_on_body=include_tracker_on_body)
     filename = f'groundtrack_jpl_horizons_{name_lower}.png'
     fig_gt.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      Ground Track   : <figures_folderpath>/{filename}")
@@ -2828,7 +2871,7 @@ def generate_3d_and_time_series_plots(
     plt.close(fig4)
     
     # Body-fixed 3D plot
-    fig_ef = plot_3d_trajectories_body_fixed(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt)
+    fig_ef = plot_3d_trajectories_body_fixed(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt, tracker=tracker, include_tracker_on_body=include_tracker_on_body)
     fig_ef.suptitle(f'3D Body-Fixed - {object_name_display} - High-Fidelity', fontsize=16)
     filename = f'3d_iau_earth_high_fidelity_{name_lower}.png'
     fig_ef.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
@@ -2837,7 +2880,7 @@ def generate_3d_and_time_series_plots(
     
     # Ground track plot
     gt_title = f'Ground Track - {object_name_display} - High-Fidelity'
-    fig_gt = plot_ground_track(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt, title_text=gt_title)
+    fig_gt = plot_ground_track(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt, title_text=gt_title, tracker=tracker, include_tracker_on_body=include_tracker_on_body)
     filename = f'groundtrack_high_fidelity_{name_lower}.png'
     fig_gt.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      Ground Track   : <figures_folderpath>/{filename}")
@@ -2873,7 +2916,7 @@ def generate_3d_and_time_series_plots(
 
     # Ground track plot for SGP4
     gt_title = f'Ground Track - {object_name_display} - SGP4'
-    fig_gt_sgp4 = plot_ground_track(result_sgp4_propagation, epoch_dt_utc=time_o_dt, title_text=gt_title)
+    fig_gt_sgp4 = plot_ground_track(result_sgp4_propagation, epoch_dt_utc=time_o_dt, title_text=gt_title, tracker=tracker, include_tracker_on_body=include_tracker_on_body)
     filename = f'groundtrack_sgp4_{name_lower}.png'
     fig_gt_sgp4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     print(f"      Ground Track   : <figures_folderpath>/{filename}")
@@ -2890,6 +2933,7 @@ def generate_plots(
   object_name                      : str  = "object",
   object_name_display              : str  = "Object",
   tracker                          : Optional['TrackerStation'] = None,
+  include_tracker_on_body          : bool = False,
 ) -> None:
   """
   Generate and save all simulation plots.
@@ -2916,6 +2960,8 @@ def generate_plots(
       Original name of the object for plot titles.
     tracker : TrackerStation | None
       Tracker station object with normalized azimuth values.
+    include_tracker_on_body : bool
+      Flag to show tracker location on ground track and 3D body-fixed plots.
 
   Output:
   -------
@@ -2935,6 +2981,8 @@ def generate_plots(
     compare_tle                      = compare_tle,
     object_name                      = object_name,
     object_name_display              = object_name_display,
+    tracker                          = tracker,
+    include_tracker_on_body          = include_tracker_on_body,
   )
     
   # Generate error plots only if a comparison was requested
