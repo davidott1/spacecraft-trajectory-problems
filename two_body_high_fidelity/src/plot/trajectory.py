@@ -2315,9 +2315,9 @@ def compute_topocentric_coordinates(
   # Compute tracker position in IAU_EARTH frame (body-fixed)
   # Use SPICE's georec for geodetic to Cartesian conversion
   tracker_pos_iau_earth__km = spice.georec(
-    tracker.longitude,
-    tracker.latitude,
-    tracker.altitude / 1000.0,  # Convert m to km
+    tracker.position.longitude,
+    tracker.position.latitude,
+    tracker.position.altitude / 1000.0,  # Convert m to km
     GeographicCoordinateConverter.WGS84_RE,
     GeographicCoordinateConverter.WGS84_F,
   )
@@ -2342,10 +2342,10 @@ def compute_topocentric_coordinates(
     
     # Build local topocentric frame (ENU - East, North, Up) at tracker location
     # Up vector: surface normal at geodetic location
-    sin_lat = np.sin(tracker.latitude)
-    cos_lat = np.cos(tracker.latitude)
-    sin_lon = np.sin(tracker.longitude)
-    cos_lon = np.cos(tracker.longitude)
+    sin_lat = np.sin(tracker.position.latitude)
+    cos_lat = np.cos(tracker.position.latitude)
+    sin_lon = np.sin(tracker.position.longitude)
+    cos_lon = np.cos(tracker.position.longitude)
     
     # East unit vector
     e_east = np.array([-sin_lon, cos_lon, 0.0])
@@ -2547,9 +2547,9 @@ def plot_skyplot(
   ax.set_xticklabels(['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'])
   
   # Build info text
-  tracker_lat_deg = tracker.latitude  * CONVERTER.DEG_PER_RAD
-  tracker_lon_deg = tracker.longitude * CONVERTER.DEG_PER_RAD
-  info_text = f"Station: {tracker.name}  |  Lat: {tracker_lat_deg:.4f}°  |  Lon: {tracker_lon_deg:.4f}°  |  Alt: {tracker.altitude:.1f} m"
+  tracker_lat_deg = tracker.position.latitude  * CONVERTER.DEG_PER_RAD
+  tracker_lon_deg = tracker.position.longitude * CONVERTER.DEG_PER_RAD
+  info_text = f"Station: {tracker.name}  |  Lat: {tracker_lat_deg:.4f}°  |  Lon: {tracker_lon_deg:.4f}°  |  Alt: {tracker.position.altitude:.1f} m"
   
   if epoch_dt_utc is not None:
     start_time_iso_utc = epoch_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')

@@ -175,20 +175,87 @@ class TLEData:
 
 
 @dataclass
-class TrackerStation:
+class TrackerPosition:
   """
-  Ground tracking station data.
-  
+  Tracker station geodetic position.
+
   Attributes:
-    name      : Station name/identifier
     latitude  : Geodetic latitude [rad]
     longitude : Longitude [rad]
     altitude  : Height above ellipsoid [m]
   """
-  name      : str
   latitude  : float
   longitude : float
   altitude  : float
+
+
+@dataclass
+class AzimuthLimits:
+  """
+  Azimuth angle limits.
+
+  Attributes:
+    min : Minimum azimuth [rad]
+    max : Maximum azimuth [rad]
+  """
+  min : float
+  max : float
+
+
+@dataclass
+class ElevationLimits:
+  """
+  Elevation angle limits.
+
+  Attributes:
+    min : Minimum elevation [rad]
+    max : Maximum elevation [rad]
+  """
+  min : float
+  max : float
+
+
+@dataclass
+class RangeLimits:
+  """
+  Range distance limits.
+
+  Attributes:
+    min : Minimum range [m]
+    max : Maximum range [m]
+  """
+  min : float
+  max : float
+
+
+@dataclass
+class TrackerPerformance:
+  """
+  Tracker station performance limits.
+
+  Attributes:
+    azimuth   : Azimuth angle limits (optional)
+    elevation : Elevation angle limits (optional)
+    range     : Range distance limits (optional)
+  """
+  azimuth   : Optional[AzimuthLimits] = None
+  elevation : Optional[ElevationLimits] = None
+  range     : Optional[RangeLimits] = None
+
+
+@dataclass
+class TrackerStation:
+  """
+  Ground tracking station data.
+
+  Attributes:
+    name        : Station name/identifier
+    position    : Geodetic position (latitude, longitude, altitude)
+    performance : Performance limits (azimuth, elevation, range) (optional)
+  """
+  name        : str
+  position    : TrackerPosition
+  performance : Optional[TrackerPerformance] = None
 
 
 @dataclass
