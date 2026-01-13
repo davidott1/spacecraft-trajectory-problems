@@ -3151,7 +3151,11 @@ def generate_plots(
   -------
     None
   """
-  print("\nGenerate and Save Plots")
+  title = "Generate and Save Plots"
+  print("\n" + "-" * len(title))
+  print(title)
+  print("-" * len(title))
+  print()
   print(f"  Figure Folderpath : {figures_folderpath}\n")
   
   # Generate 3D and time series plots

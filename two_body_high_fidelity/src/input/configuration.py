@@ -60,7 +60,18 @@ def print_input_configuration(
   -------
     None
   """
+  # Print header
+  title = "Input Configuration"
+  print("\n" + "-" * len(title))
+  print(title)
+  print("-" * len(title))
+  print()
+
+  # Progress subsection
+  print("  Progress")
+
   # Define defaults for comparison
+  print("    Define default configuration values")
   defaults = {
     'initial_state_source'       : 'jpl_horizons',
     'initial_state_norad_id'     : None,
@@ -77,14 +88,16 @@ def print_input_configuration(
     'compare_tle'                : False,
     'auto_download'              : False,
   }
-  
+
   # Format values for display
+  print("    Format configuration values for display")
   timespan_str     = f"{desired_timespan[0]} {desired_timespan[1]}" if desired_timespan else "None"
   harmonics_str    = ' '.join(gravity_harmonics_list) if gravity_harmonics_list else "None"
   gh_deg_order_str = f"{two_body_gravity_model.spherical_harmonics.degree} {two_body_gravity_model.spherical_harmonics.order}" if two_body_gravity_model.spherical_harmonics.degree is not None else "None"
   third_str        = ' '.join(third_bodies_list) if third_bodies_list else "None"
-  
+
   # Build configuration entries: (name, value, default, user_set)
+  print("    Build configuration table entries")
   entries = [
     ('initial_state_source',   initial_state_source,       defaults['initial_state_source'],       initial_state_source       != defaults['initial_state_source']),
     ('initial_state_norad_id', initial_state_norad_id,     defaults['initial_state_norad_id'],     initial_state_norad_id     is not None),
@@ -100,8 +113,9 @@ def print_input_configuration(
     ('compare_tle',            compare_tle,                defaults['compare_tle'],                compare_tle                != defaults['compare_tle']),
     ('auto_download',          auto_download,              defaults['auto_download'],              auto_download              != defaults['auto_download']),
   ]
-  
+
   # Convert entries to strings for width calculation
+  print("    Calculate table column widths")
   headers = ['Argument', 'Value', 'Default', 'User Set']
   rows = []
   for name, value, default, user_set in entries:
@@ -111,7 +125,7 @@ def print_input_configuration(
       str(default) if default is not None else "None",
       str(user_set),
     ])
-  
+
   # Calculate column widths: max of header and all values, plus 4 for spacing
   min_spacing = 4
   col_widths = []
@@ -120,16 +134,17 @@ def print_input_configuration(
     for row in rows:
       max_len = max(max_len, len(row[col_idx]))
     col_widths.append(max_len + min_spacing)
-  
-  # Print table
-  print("\nInput Configuration")
-  header_line = "  " + "".join(h.ljust(col_widths[i]) for i, h in enumerate(headers))
+  print()
+
+  # Summary subsection
+  print("  Summary")
+  header_line = "    " + "".join(h.ljust(col_widths[i]) for i, h in enumerate(headers))
   print(header_line)
-  separator_line = "  " + "".join(("-" * (col_widths[i] - min_spacing)).ljust(col_widths[i]) for i in range(len(headers)))
+  separator_line = "    " + "".join(("-" * (col_widths[i] - min_spacing)).ljust(col_widths[i]) for i in range(len(headers)))
   print(separator_line)
-  
+
   for row in rows:
-    row_line = "  " + "".join(row[col_idx].ljust(col_widths[col_idx]) for col_idx in range(len(row)))
+    row_line = "    " + "".join(row[col_idx].ljust(col_widths[col_idx]) for col_idx in range(len(row)))
     print(row_line)
 
 
@@ -148,21 +163,32 @@ def print_paths(
   -------
     None
   """
+  title = "Paths and Files Setup"
+  print("\n" + "-" * len(title))
+  print(title)
+  print("-" * len(title))
+  print()
+
+  # Progress subsection
+  print("  Progress")
+  print("    Calculate data folder path")
   data_folderpath = config.output_paths.spice_kernels_folderpath.parent
-  
-  print("\nPaths and Files Setup")
-  print(f"  Output Folderpath          : {config.output_paths.base_folderpath.parent}")
-  print(f"    Timestamp Folderpath     : <output_folderpath>/{config.output_paths.base_folderpath.name}")
-  print(f"    Figures Folderpath       : <output_folderpath>/{config.output_paths.base_folderpath.name}/{config.output_paths.figures_folderpath.name}")
-  print(f"    Files Folderpath         : <output_folderpath>/{config.output_paths.base_folderpath.name}/{config.output_paths.logs_folderpath.name}")
-  print(f"    Log Filepath             : <output_folderpath>/{config.output_paths.base_folderpath.name}/{config.output_paths.logs_folderpath.name}/{config.output_paths.log_filepath.name}")
-  print(f"  Data Folderpath            : {data_folderpath}")
-  print(f"    SPICE Kernels Folderpath : <data_folderpath>/{config.output_paths.spice_kernels_folderpath.relative_to(data_folderpath)}")
-  print(f"    LSK Filepath             : <data_folderpath>/{config.output_paths.lsk_filepath.relative_to(data_folderpath)}")
-  print(f"    Gravity Folderpath       : <data_folderpath>/{config.gravity.folderpath.relative_to(data_folderpath)}")
-  print(f"    JPL Horizons Folderpath  : <data_folderpath>/{config.output_paths.jpl_horizons_folderpath.relative_to(data_folderpath)}")
-  print(f"    TLEs Folderpath          : <data_folderpath>/{config.output_paths.tles_folderpath.relative_to(data_folderpath)}")
-  print(f"    State Vectors Folderpath : <data_folderpath>/{config.output_paths.state_vectors_folderpath.relative_to(data_folderpath)}")
+  print()
+
+  # Summary subsection
+  print("  Summary")
+  print(f"    Output Folderpath          : {config.output_paths.base_folderpath.parent}")
+  print(f"      Timestamp Folderpath     : <output_folderpath>/{config.output_paths.base_folderpath.name}")
+  print(f"      Figures Folderpath       : <output_folderpath>/{config.output_paths.base_folderpath.name}/{config.output_paths.figures_folderpath.name}")
+  print(f"      Files Folderpath         : <output_folderpath>/{config.output_paths.base_folderpath.name}/{config.output_paths.logs_folderpath.name}")
+  print(f"      Log Filepath             : <output_folderpath>/{config.output_paths.base_folderpath.name}/{config.output_paths.logs_folderpath.name}/{config.output_paths.log_filepath.name}")
+  print(f"    Data Folderpath            : {data_folderpath}")
+  print(f"      SPICE Kernels Folderpath : <data_folderpath>/{config.output_paths.spice_kernels_folderpath.relative_to(data_folderpath)}")
+  print(f"      LSK Filepath             : <data_folderpath>/{config.output_paths.lsk_filepath.relative_to(data_folderpath)}")
+  print(f"      Gravity Folderpath       : <data_folderpath>/{config.gravity.folderpath.relative_to(data_folderpath)}")
+  print(f"      JPL Horizons Folderpath  : <data_folderpath>/{config.output_paths.jpl_horizons_folderpath.relative_to(data_folderpath)}")
+  print(f"      TLEs Folderpath          : <data_folderpath>/{config.output_paths.tles_folderpath.relative_to(data_folderpath)}")
+  print(f"      State Vectors Folderpath : <data_folderpath>/{config.output_paths.state_vectors_folderpath.relative_to(data_folderpath)}")
 
 
 def print_configuration(

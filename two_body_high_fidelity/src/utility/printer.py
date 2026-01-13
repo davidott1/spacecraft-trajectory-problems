@@ -19,7 +19,10 @@ def print_results_summary(
   -------
     None
   """
-  print("\nResults Summary")
+  title = "Results Summary"
+  print("\n" + "-" * len(title))
+  print(title)
+  print("-" * len(title))
   
   # Print final Cartesian state and classical orbital elements (high-fidelity)
   if result_high_fidelity.success:
@@ -42,6 +45,7 @@ def print_results_summary(
     ea   = coe.ea[-1] * CONVERTER.DEG_PER_RAD
     ma   = coe.ma[-1] * CONVERTER.DEG_PER_RAD
 
+    print()
     print(f"  Final State (High-Fidelity)")
     print(f"    Epoch : {time_utc_f_str}")
     print(f"    Frame : J2000")
