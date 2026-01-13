@@ -852,7 +852,7 @@ def plot_3d_trajectories_body_fixed(
   ax1.scatter([pos_x[ 0]], [pos_y[ 0]], [pos_z[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
   ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
 
-  # Mark tracker location on 3D body-fixed plot (red dot)
+  # Mark tracker location on 3D body-fixed plot (red dot) and show field of view
   if include_tracker_on_body and tracker is not None:
     # Tracker position is stored in radians, convert to degrees for _latlon_to_xyz
     tracker_lat_deg = tracker.position.latitude * CONVERTER.DEG_PER_RAD
@@ -860,6 +860,11 @@ def plot_3d_trajectories_body_fixed(
     # Use Earth's equatorial radius for consistency
     x_tracker, y_tracker, z_tracker = _latlon_to_xyz(tracker_lat_deg, tracker_lon_deg, r_eq * 1.02)
     ax1.scatter([x_tracker], [y_tracker], [z_tracker], s=200, c='red', marker='o', edgecolors='darkred', linewidths=2, zorder=5)  # type: ignore
+
+    # Draw field of view hemisphere (use tracker's max range)
+    fov_radius_m = tracker.performance.range.max
+    x_fov, y_fov, z_fov = _create_tracker_fov_hemisphere(tracker_lat_deg, tracker_lon_deg, r_eq, fov_radius_m, resolution=30)
+    ax1.plot_surface(x_fov, y_fov, z_fov, color='red', alpha=0.2, edgecolor='none', zorder=2)  # type: ignore
 
   ax1.set_xlabel('Pos-X [m]')
   ax1.set_ylabel('Pos-Y [m]')
@@ -1544,7 +1549,7 @@ def plot_3d_trajectories_body_fixed(
   ax1.scatter([pos_x[ 0]], [pos_y[ 0]], [pos_z[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
   ax1.scatter([pos_x[-1]], [pos_y[-1]], [pos_z[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2)  # type: ignore
 
-  # Mark tracker location on 3D body-fixed plot (red dot)
+  # Mark tracker location on 3D body-fixed plot (red dot) and show field of view
   if include_tracker_on_body and tracker is not None:
     # Tracker position is stored in radians, convert to degrees for _latlon_to_xyz
     tracker_lat_deg = tracker.position.latitude * CONVERTER.DEG_PER_RAD
@@ -1552,6 +1557,11 @@ def plot_3d_trajectories_body_fixed(
     # Use Earth's equatorial radius for consistency
     x_tracker, y_tracker, z_tracker = _latlon_to_xyz(tracker_lat_deg, tracker_lon_deg, r_eq * 1.02)
     ax1.scatter([x_tracker], [y_tracker], [z_tracker], s=200, c='red', marker='o', edgecolors='darkred', linewidths=2, zorder=5)  # type: ignore
+
+    # Draw field of view hemisphere (use tracker's max range)
+    fov_radius_m = tracker.performance.range.max
+    x_fov, y_fov, z_fov = _create_tracker_fov_hemisphere(tracker_lat_deg, tracker_lon_deg, r_eq, fov_radius_m, resolution=30)
+    ax1.plot_surface(x_fov, y_fov, z_fov, color='red', alpha=0.2, edgecolor='none', zorder=2)  # type: ignore
 
   ax1.set_xlabel('Pos-X [m]')
   ax1.set_ylabel('Pos-Y [m]')
@@ -1678,6 +1688,152 @@ def _latlon_to_xyz(lat_deg, lon_deg, radius):
   return x, y, z
 
 
+def _create_tracker_fov_hemisphere(tracker_lat_deg, tracker_lon_deg, earth_radius_m, fov_radius_m, resolution=30):
+  """
+  Create a half-sphere representing the tracker's field of view.
+
+  The hemisphere is tangent to the Earth's surface at the tracker location and
+  extends outward with the specified radius.
+
+  Input:
+  ------
+    tracker_lat_deg : float
+      Tracker latitude in degrees
+    tracker_lon_deg : float
+      Tracker longitude in degrees
+    earth_radius_m : float
+      Earth radius in meters
+    fov_radius_m : float
+      Field of view hemisphere radius in meters
+    resolution : int
+      Resolution for the hemisphere mesh (default: 30)
+
+  Output:
+  -------
+    x, y, z : 2D arrays
+      Cartesian coordinates of the hemisphere surface
+  """
+  # Get the tracker position on Earth's surface
+  x_tracker, y_tracker, z_tracker = _latlon_to_xyz(tracker_lat_deg, tracker_lon_deg, earth_radius_m)
+
+  # Calculate the outward normal vector (from Earth center to tracker)
+  normal = np.array([x_tracker, y_tracker, z_tracker])
+  normal = normal / np.linalg.norm(normal)
+
+  # Create hemisphere centered at origin first (pointing in +z direction)
+  u = np.linspace(0, 2 * np.pi, resolution)
+  v = np.linspace(0, np.pi / 2, resolution // 2)  # Only upper hemisphere (0 to π/2)
+  u_grid, v_grid = np.meshgrid(u, v)
+
+  x_sphere = fov_radius_m * np.sin(v_grid) * np.cos(u_grid)
+  y_sphere = fov_radius_m * np.sin(v_grid) * np.sin(u_grid)
+  z_sphere = fov_radius_m * np.cos(v_grid)
+
+  # Rotation matrix to align +z axis with normal vector
+  # Using Rodrigues' rotation formula
+  z_axis = np.array([0, 0, 1])
+  rotation_axis = np.cross(z_axis, normal)
+  rotation_axis_norm = np.linalg.norm(rotation_axis)
+
+  if rotation_axis_norm > 1e-10:  # Not parallel
+    rotation_axis = rotation_axis / rotation_axis_norm
+    angle = np.arccos(np.clip(np.dot(z_axis, normal), -1.0, 1.0))
+
+    # Rodrigues' rotation matrix
+    K = np.array([
+      [0, -rotation_axis[2], rotation_axis[1]],
+      [rotation_axis[2], 0, -rotation_axis[0]],
+      [-rotation_axis[1], rotation_axis[0], 0]
+    ])
+    R = np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * np.dot(K, K)
+  else:
+    # Parallel or anti-parallel
+    if np.dot(z_axis, normal) > 0:
+      R = np.eye(3)  # No rotation needed
+    else:
+      R = -np.eye(3)  # Flip
+      R[2, 2] = 1  # Keep z positive
+
+  # Apply rotation to all points
+  points = np.stack([x_sphere.flatten(), y_sphere.flatten(), z_sphere.flatten()])
+  rotated_points = R @ points
+
+  # Translate to tracker position
+  x_fov = rotated_points[0].reshape(x_sphere.shape) + x_tracker
+  y_fov = rotated_points[1].reshape(y_sphere.shape) + y_tracker
+  z_fov = rotated_points[2].reshape(z_sphere.shape) + z_tracker
+
+  return x_fov, y_fov, z_fov
+
+
+def _calculate_hemisphere_ground_track(tracker_lat_deg, tracker_lon_deg, earth_radius_m, fov_radius_m, num_points=100):
+  """
+  Calculate the ground track (lat/lon circle) where the hemisphere's base intersects Earth's surface.
+
+  The base of the hemisphere forms a circle on Earth's surface at a fixed angular distance
+  from the tracker location.
+
+  Input:
+  ------
+    tracker_lat_deg : float
+      Tracker latitude in degrees
+    tracker_lon_deg : float
+      Tracker longitude in degrees
+    earth_radius_m : float
+      Earth radius in meters
+    fov_radius_m : float
+      Field of view hemisphere radius in meters
+    num_points : int
+      Number of points to generate around the circle (default: 100)
+
+  Output:
+  -------
+    lat_circle : array
+      Latitudes of the circle points in degrees
+    lon_circle : array
+      Longitudes of the circle points in degrees
+  """
+  # Calculate the angular radius of the FOV circle on Earth's surface
+  # This is the angle subtended at Earth's center by the FOV radius
+  angular_radius_rad = fov_radius_m / earth_radius_m
+
+  # Convert tracker position to radians
+  tracker_lat_rad = np.deg2rad(tracker_lat_deg)
+  tracker_lon_rad = np.deg2rad(tracker_lon_deg)
+
+  # Generate points around the circle using spherical geometry
+  # We'll use the haversine formula to generate points at a fixed angular distance
+  azimuths = np.linspace(0, 2 * np.pi, num_points)
+
+  lat_circle = []
+  lon_circle = []
+
+  for az in azimuths:
+    # Use spherical trigonometry to find point at angular_radius_rad distance
+    # along azimuth az from the tracker location
+    lat_rad = np.arcsin(
+      np.sin(tracker_lat_rad) * np.cos(angular_radius_rad) +
+      np.cos(tracker_lat_rad) * np.sin(angular_radius_rad) * np.cos(az)
+    )
+
+    lon_rad = tracker_lon_rad + np.arctan2(
+      np.sin(az) * np.sin(angular_radius_rad) * np.cos(tracker_lat_rad),
+      np.cos(angular_radius_rad) - np.sin(tracker_lat_rad) * np.sin(lat_rad)
+    )
+
+    lat_circle.append(np.rad2deg(lat_rad))
+    lon_circle.append(np.rad2deg(lon_rad))
+
+  # Convert to arrays and ensure longitude wraps properly
+  lat_circle = np.array(lat_circle)
+  lon_circle = np.array(lon_circle)
+
+  # Wrap longitude to [-180, 180]
+  lon_circle = np.mod(lon_circle + 180, 360) - 180
+
+  return lat_circle, lon_circle
+
+
 def plot_ground_track(
   result                  : PropagationResult,
   epoch_dt_utc            : Optional[datetime.datetime] = None,
@@ -1793,13 +1949,23 @@ def plot_ground_track(
   ax_3d.scatter([x_start], [y_start], [z_start], s=400, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=4)  # type: ignore
   ax_3d.scatter([x_end], [y_end], [z_end], s=400, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=4)  # type: ignore
 
-  # Mark tracker location on 3D globe (red dot)
+  # Mark tracker location on 3D globe (red dot) and show field of view
   if include_tracker_on_body and tracker is not None:
     # Tracker position is stored in radians, convert to degrees for _latlon_to_xyz
     tracker_lat_deg = tracker.position.latitude * CONVERTER.DEG_PER_RAD
     tracker_lon_deg = tracker.position.longitude * CONVERTER.DEG_PER_RAD
     x_tracker, y_tracker, z_tracker = _latlon_to_xyz(tracker_lat_deg, tracker_lon_deg, r_earth * 1.02)
     ax_3d.scatter([x_tracker], [y_tracker], [z_tracker], s=200, c='red', marker='o', edgecolors='darkred', linewidths=2, zorder=5)  # type: ignore
+
+    # Draw field of view hemisphere (use tracker's max range)
+    fov_radius_m = tracker.performance.range.max
+    x_fov, y_fov, z_fov = _create_tracker_fov_hemisphere(tracker_lat_deg, tracker_lon_deg, r_earth, fov_radius_m, resolution=30)
+    ax_3d.plot_surface(x_fov, y_fov, z_fov, color='red', alpha=0.2, edgecolor='none', zorder=2)  # type: ignore
+
+    # Draw FOV ground track circle on Earth's surface
+    lat_circle, lon_circle = _calculate_hemisphere_ground_track(tracker_lat_deg, tracker_lon_deg, r_earth, fov_radius_m, num_points=100)
+    x_circle, y_circle, z_circle = _latlon_to_xyz(lat_circle, lon_circle, r_earth * 1.01)
+    ax_3d.plot(x_circle, y_circle, z_circle, 'r--', linewidth=2, zorder=3)  # type: ignore
 
   # Set 3D axis properties
   ax_3d.set_xlabel('X [m]')
@@ -1862,12 +2028,18 @@ def plot_ground_track(
   ax_2d.scatter([lon[ 0]], [lat[ 0]], s=600, marker=r'$\blacksquare_{\text{o}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Initial', **plot_kwargs)
   ax_2d.scatter([lon[-1]], [lat[-1]], s=600, marker=r'$\blacksquare_{\text{f}}$', facecolors='white', edgecolors='b', linewidths=2, zorder=5, label='Final', **plot_kwargs)
 
-  # Mark tracker location on 2D map (red dot)
+  # Mark tracker location on 2D map (red dot) and show FOV ground track
   if include_tracker_on_body and tracker is not None:
     # Tracker position is stored in radians, convert to degrees for plotting
     tracker_lat_deg = tracker.position.latitude * CONVERTER.DEG_PER_RAD
     tracker_lon_deg = tracker.position.longitude * CONVERTER.DEG_PER_RAD
     ax_2d.scatter([tracker_lon_deg], [tracker_lat_deg], s=200, c='red', marker='o', edgecolors='darkred', linewidths=2, zorder=6, **plot_kwargs)
+
+    # Draw FOV ground track circle (use tracker's max range)
+    fov_radius_m = tracker.performance.range.max
+    r_earth = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
+    lat_circle, lon_circle = _calculate_hemisphere_ground_track(tracker_lat_deg, tracker_lon_deg, r_earth, fov_radius_m, num_points=100)
+    ax_2d.plot(lon_circle, lat_circle, 'r--', linewidth=2, zorder=5, **plot_kwargs)
 
   # Build info text for bottom of figure (consistent with 3D plots)
   info_text = "Frame: IAU_EARTH (Body-Fixed)"
