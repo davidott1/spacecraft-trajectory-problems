@@ -1,17 +1,147 @@
 import sys
 import argparse
+import yaml
+from pathlib import Path
 from src.utility.time_helper import parse_time
+
+
+def load_config_file(config_path: str) -> dict:
+  """
+  Load configuration from a YAML file.
+
+  Input:
+  ------
+    config_path : str
+      Path to the YAML config file. Can be:
+      - Just filename (looks in data/configs/)
+      - Relative or absolute path
+
+  Output:
+  -------
+    config : dict
+      Configuration dictionary loaded from YAML.
+  """
+  path = Path(config_path)
+
+  # If just a filename, look in data/configs/
+  if not path.is_absolute() and path.parent == Path('.'):
+    path = Path(__file__).parent.parent.parent / 'data' / 'configs' / config_path
+
+  if not path.exists():
+    raise FileNotFoundError(f"Config file not found: {path}")
+
+  with open(path, 'r') as f:
+    config = yaml.safe_load(f)
+
+  return config if config else {}
+
+
+def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.Namespace:
+  """
+  Merge configuration file with command-line arguments.
+  CLI arguments take precedence over config file values.
+
+  Input:
+  ------
+    config : dict
+      Configuration dictionary from YAML file.
+    args : argparse.Namespace
+      Parsed command-line arguments.
+
+  Output:
+  -------
+    args : argparse.Namespace
+      Merged arguments with CLI overriding config file.
+  """
+  # Map config keys to argparse attribute names
+  config_mapping = {
+    'initial_state_source': 'initial_state_source',
+    'initial_state_norad_id': 'initial_state_norad_id',
+    'initial_state_filename': 'initial_state_filename',
+    'timespan': 'timespan',
+    'third_bodies': 'third_bodies',
+    'gravity_harmonics_coefficients': 'gravity_harmonics_coefficients',
+    'gravity_harmonics_degree_order': 'gravity_harmonics_degree_order',
+    'gravity_harmonics_filename': 'gravity_model_filename',
+    'include_drag': 'include_drag',
+    'include_srp': 'include_srp',
+    'compare_tle': 'compare_tle',
+    'compare_jpl_horizons': 'compare_jpl_horizons',
+    'auto_download': 'auto_download',
+    'atol': 'atol',
+    'rtol': 'rtol',
+    'include_tracker_skyplots': 'include_tracker_skyplots',
+    'tracker_filename': 'tracker_filename',
+    'tracker_filepath': 'tracker_filepath',
+  }
+
+  # Process each config key
+  for config_key, arg_name in config_mapping.items():
+    if config_key not in config:
+      continue
+
+    config_value = config[config_key]
+
+    # Get the current argument value
+    current_value = getattr(args, arg_name, None)
+
+    # Special handling for different argument types
+    if arg_name == 'timespan' and isinstance(config_value, dict):
+      # Convert timespan dict to list of datetime objects
+      if current_value is None:
+        start_val = config_value.get('start')
+        end_val = config_value.get('end')
+        if start_val and end_val:
+          # Handle both string and datetime objects from YAML
+          from datetime import datetime
+          if isinstance(start_val, datetime):
+            start = start_val
+          else:
+            start = parse_time(start_val)
+
+          if isinstance(end_val, datetime):
+            end = end_val
+          else:
+            end = parse_time(end_val)
+
+          setattr(args, arg_name, [start, end])
+
+    elif arg_name in ['initial_state_source', 'initial_state_norad_id', 'initial_state_filename',
+                      'gravity_model_filename', 'tracker_filename', 'tracker_filepath']:
+      # String arguments - only override if CLI didn't provide a value
+      if current_value is None or (arg_name == 'initial_state_source' and current_value == 'horizons'):
+        # Convert to string (YAML may parse NORAD ID as int)
+        setattr(args, arg_name, str(config_value) if config_value is not None else None)
+
+    elif arg_name in ['third_bodies', 'gravity_harmonics_coefficients', 'gravity_harmonics_degree_order']:
+      # List arguments - only override if CLI didn't provide values
+      if current_value is None or (isinstance(current_value, list) and len(current_value) == 0):
+        setattr(args, arg_name, config_value)
+
+    elif arg_name in ['include_drag', 'include_srp', 'compare_tle', 'compare_jpl_horizons',
+                      'auto_download', 'include_tracker_skyplots']:
+      # Boolean flags - only override if CLI kept the default False
+      if not current_value:
+        setattr(args, arg_name, config_value)
+
+    elif arg_name in ['atol', 'rtol']:
+      # Float arguments - use config if CLI kept defaults
+      default_vals = {'atol': 1e-15, 'rtol': 1e-12}
+      if current_value == default_vals[arg_name]:
+        setattr(args, arg_name, config_value)
+
+  return args
 
 
 def parse_command_line_arguments(
 ) -> argparse.Namespace:
   """
   Parse command-line arguments for the orbit propagator.
-  
+
   Input:
   ------
     None (reads from sys.argv)
-      
+
   Output:
   -------
     args : argparse.Namespace
@@ -21,12 +151,21 @@ def parse_command_line_arguments(
     description = 'High-fidelity orbit propagator',
     formatter_class = argparse.RawDescriptionHelpFormatter,
   )
-  
+
   # If no arguments provided, print help and exit
   if len(sys.argv) == 1:
     parser.print_help(sys.stderr)
     sys.exit(1)
-  
+
+  # Configuration file argument
+  parser.add_argument(
+    '--config',
+    dest    = 'config',
+    type    = str,
+    default = None,
+    help    = 'Path to YAML configuration file. If just a filename, looks in data/configs/. CLI arguments override config file values.',
+  )
+
   # Initial state arguments
   parser.add_argument(
     '--initial-state-source',
@@ -60,8 +199,9 @@ def parse_command_line_arguments(
     type     = parse_time,
     nargs    = 2,
     metavar  = ('TIME_START', 'TIME_END'),
-    required = True,
-    help     = "Start and end time for propagation in ISO format (e.g., '2025-10-01T00:00:00 2025-10-02T00:00:00').",
+    required = False,
+    default  = None,
+    help     = "Start and end time for propagation in ISO format (e.g., '2025-10-01T00:00:00 2025-10-02T00:00:00'). Required unless provided in config file.",
   )
   
   parser.add_argument(
@@ -158,7 +298,6 @@ def parse_command_line_arguments(
   
   parser.add_argument(
     '--include-tracker-skyplots',
-    '--skyplots',
     dest    = 'include_tracker_skyplots',
     action  = 'store_true',
     default = False,
@@ -183,5 +322,10 @@ def parse_command_line_arguments(
   
   # Parse arguments
   args = parser.parse_args()
-  
+
+  # Load and merge config file if provided
+  if args.config:
+    config = load_config_file(args.config)
+    args = merge_config_with_args(config, args)
+
   return args
