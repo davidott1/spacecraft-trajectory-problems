@@ -20,3 +20,6 @@ __pycache__/
 .pytest_cache/
 .env
 .vscode/
+
+# Ignore scripts directory
+scripts/
