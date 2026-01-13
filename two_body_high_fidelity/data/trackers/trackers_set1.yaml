@@ -1,4 +1,9 @@
-name           : "GOES-16 - GOES-R"    # name of the tracking station
-latitude__deg  : 0.0                   # latitude of the tracking station [deg]
-longitude__deg : -104.7                # longitude of the tracking station [deg]
-altitude__m    : 0.0                   # altitude of the tracking station [m]
+name                     : "GOES-16 - GOES-R"
+position                 :
+  latitude__deg          : 0.0
+  longitude__deg         : -104.7
+  altitude__m            : 0.0
+performance              :
+  azimuth_min_max__deg   : 0.0, 360.0
+  elevation_min_max__deg : 0.0, 90.0
+  range_min_max__m       : 0.0, 500000.0
