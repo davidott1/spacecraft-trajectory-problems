@@ -16,7 +16,6 @@ from src.schemas.propagation   import PropagationResult, TimeGrid
 from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoctialElements, TLEData, TrackerStation
 from src.model.constants       import CONVERTER
 
-
 def load_supported_objects() -> dict:
   """
   Load supported objects from YAML configuration file.
@@ -306,10 +305,11 @@ def load_files(
   gravity_model_degree      : Optional[int]  = None,
   gravity_model_order       : Optional[int]  = None,
   gravity_coefficient_names : Optional[list] = None,
+  tracker_filepath          : Optional[Path] = None,
 ):
   """
-  Load necessary files for the simulation, including SPICE kernels and gravity model.
-  
+  Load necessary files for the simulation, including SPICE kernels, gravity model, and tracker.
+
   Input:
   ------
     spice_kernels_folderpath : Path
@@ -327,12 +327,16 @@ def load_files(
     gravity_coefficient_names : list, optional
       List of explicit coefficient names (e.g., ['J2', 'J3', 'C22']).
       If provided, creates a model with only these coefficients.
-      
+    tracker_filepath : Path, optional
+      Path to tracker station YAML file.
+
   Output:
   -------
-    result : SphericalHarmonicsGravity | None
+    spherical_harmonics_model : SphericalHarmonicsGravity | None
       Loaded gravity model or None if not requested/failed.
-      
+    tracker : TrackerStation | None
+      Loaded tracker station or None if not requested/failed.
+
   Raises:
   -------
     ValueError
@@ -377,8 +381,59 @@ def load_files(
         "Please check the gravity model file exists and is valid."
       )
   
-  # Return loaded model (or None if not requested)
-  return spherical_harmonics_model
+  # Load tracker station
+  tracker = None
+  if tracker_filepath is not None:
+    tracker = load_tracker_station(tracker_filepath)
+
+  # Normalize values from loaded files
+  if tracker is not None:
+    tracker = normalize_tracker_azimuth(tracker)
+
+  # Return loaded model and tracker (or None if not requested)
+  return spherical_harmonics_model, tracker
+
+
+def normalize_tracker_azimuth(tracker):
+  """
+  Normalize tracker azimuth constraints to 0-360° range.
+
+  Modifies the tracker object in-place by converting negative azimuth values
+  to their equivalent positive values (e.g., -90° → 270°).
+
+  Input:
+  ------
+    tracker : TrackerStation | None
+      Tracker station object to normalize. If None, returns None.
+
+  Output:
+  -------
+    tracker : TrackerStation | None
+      Same tracker object with normalized azimuth values (modified in-place).
+  """
+  if tracker is None:
+    return None
+
+  if tracker.performance and tracker.performance.azimuth:
+    from src.schemas.state import AzimuthLimits
+
+    # Convert radians to degrees for normalization
+    az_min_deg = tracker.performance.azimuth.min * CONVERTER.DEG_PER_RAD
+    az_max_deg = tracker.performance.azimuth.max * CONVERTER.DEG_PER_RAD
+
+    # Normalize negative azimuths to 0-360° range
+    if az_min_deg < 0:
+      az_min_deg = az_min_deg % 360.0
+    if az_max_deg < 0:
+      az_max_deg = az_max_deg % 360.0
+
+    # Update the tracker with normalized values (convert back to radians)
+    tracker.performance.azimuth = AzimuthLimits(
+      min = az_min_deg * CONVERTER.RAD_PER_DEG,
+      max = az_max_deg * CONVERTER.RAD_PER_DEG,
+    )
+
+  return tracker
 
 
 def unload_files() -> None:

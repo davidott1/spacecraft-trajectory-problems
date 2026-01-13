@@ -227,8 +227,9 @@ def main(
   # Print input configuration and paths
   print_configuration(config)
 
-  # Load files: SPICE, spherical harmonics coefficients
-  spherical_harmonics_model = load_files(
+  # Load files: SPICE, spherical harmonics coefficients, tracker
+  # Note: Tracker azimuth normalization happens inside load_files()
+  spherical_harmonics_model, tracker = load_files(
     spice_kernels_folderpath  = config.output_paths.spice_kernels_folderpath,
     lsk_filepath              = config.output_paths.lsk_filepath,
     gravity_model_folderpath  = config.gravity.folderpath,
@@ -236,8 +237,9 @@ def main(
     gravity_model_degree      = config.gravity.spherical_harmonics.degree,
     gravity_model_order       = config.gravity.spherical_harmonics.order,
     gravity_coefficient_names = config.gravity.spherical_harmonics.coefficients if config.gravity.spherical_harmonics.enabled else None,
+    tracker_filepath          = config.output_paths.tracker_filepath,
   )
-  
+
   # Update gravity model with loaded values
   if spherical_harmonics_model is not None:
     config.gravity.spherical_harmonics.model  = spherical_harmonics_model
@@ -345,7 +347,7 @@ def main(
     compare_tle                      = config.comparison.compare_tle,
     object_name                      = config.object_name,
     object_name_display              = config.object_name_display,
-    tracker_filepath                 = config.output_paths.tracker_filepath,
+    tracker                          = tracker,
   )
   
   # Unload all files (SPICE kernels)
