@@ -1228,12 +1228,12 @@ class GeographicCoordinateConverter:
   ) -> GeocentricCoordinates:
     """
     Convert Cartesian position to geocentric (spherical) coordinates.
-    
+
     Input:
     ------
       pos_vec : np.ndarray
         Position vector in body-fixed frame [m].
-        
+
     Output:
     -------
       coords : GeocentricCoordinates
@@ -1242,18 +1242,14 @@ class GeographicCoordinateConverter:
         - longitude : float - Longitude [rad]
         - altitude  : float - Altitude above spherical Earth [m]
     """
-    pos_vec = np.asarray(pos_vec).flatten()
-    pos_x, pos_y, pos_z = pos_vec[0], pos_vec[1], pos_vec[2]
-    
-    pos_mag   = np.linalg.norm(pos_vec)
-    latitude  = np.arcsin(pos_z / pos_mag)
-    longitude = np.arctan2(pos_y, pos_x)
-    altitude  = pos_mag - SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
-    
+    # Delegate to array version with single position
+    pos_vec = np.asarray(pos_vec).flatten().reshape(3, 1)
+    coords_array = GeographicCoordinateConverter.pos_to_geocentric_array(pos_vec)
+
     return GeocentricCoordinates(
-      latitude  = latitude,
-      longitude = longitude,
-      altitude  = altitude,
+      latitude  = float(coords_array.latitude[0]),
+      longitude = float(coords_array.longitude[0]),
+      altitude  = float(coords_array.altitude[0]),
     )
   
   @staticmethod
@@ -1294,14 +1290,14 @@ class GeographicCoordinateConverter:
   ) -> GeodeticCoordinates:
     """
     Convert Cartesian position to geodetic (ellipsoidal) coordinates.
-    
+
     Uses SPICE's recgeo function with WGS84 ellipsoid parameters.
-    
+
     Input:
     ------
       pos_vec : np.ndarray
         Position vector in IAU_EARTH frame [m].
-        
+
     Output:
     -------
       coords : GeodeticCoordinates
@@ -1310,25 +1306,14 @@ class GeographicCoordinateConverter:
         - longitude : float - Longitude [rad]
         - altitude  : float - Altitude above WGS84 ellipsoid [m]
     """
-    pos_vec = np.asarray(pos_vec).flatten()
-    
-    # Convert m to km for SPICE
-    pos_vec__km = pos_vec / 1000.0
-    
-    # SPICE recgeo returns (lon, lat, alt) in (rad, rad, km)
-    longitude, latitude, altitude__km = spice.recgeo(
-      pos_vec__km,
-      GeographicCoordinateConverter.WGS84_RE,
-      GeographicCoordinateConverter.WGS84_F,
-    )
-    
-    # Convert alt back to m
-    altitude = altitude__km * 1000.0
-    
+    # Delegate to array version with single position
+    pos_vec = np.asarray(pos_vec).flatten().reshape(3, 1)
+    coords_array = GeographicCoordinateConverter.pos_to_geodetic_array(pos_vec)
+
     return GeodeticCoordinates(
-      latitude  = latitude,
-      longitude = longitude,
-      altitude  = altitude,
+      latitude  = float(coords_array.latitude[0]),
+      longitude = float(coords_array.longitude[0]),
+      altitude  = float(coords_array.altitude[0]),
     )
   
   @staticmethod
@@ -1415,12 +1400,12 @@ class GeographicCoordinateConverter:
   ) -> GeodeticCoordinates:
     """
     Convert array of Cartesian positions to geodetic coordinates.
-    
+
     Input:
     ------
       pos_vec_array : np.ndarray
         Position vectors in body-fixed frame [m]. Shape (3, N).
-        
+
     Output:
     -------
       coords : GeodeticCoordinates
@@ -1430,17 +1415,26 @@ class GeographicCoordinateConverter:
         - altitude  : np.ndarray - Altitudes above WGS84 ellipsoid [m]
     """
     n_points = pos_vec_array.shape[1]
-    
+
     latitude  = np.zeros(n_points)
     longitude = np.zeros(n_points)
     altitude  = np.zeros(n_points)
-    
+
+    # SPICE recgeo doesn't support vectorized calls, so we must loop
     for i in range(n_points):
-      coords = GeographicCoordinateConverter.pos_to_geodetic(pos_vec_array[:, i])
-      latitude[i]  = coords.latitude
-      longitude[i] = coords.longitude
-      altitude[i]  = coords.altitude
-    
+      # Convert m to km for SPICE
+      pos_vec__km = pos_vec_array[:, i] / 1000.0
+
+      # SPICE recgeo returns (lon, lat, alt) in (rad, rad, km)
+      longitude[i], latitude[i], altitude__km = spice.recgeo(
+        pos_vec__km,
+        GeographicCoordinateConverter.WGS84_RE,
+        GeographicCoordinateConverter.WGS84_F,
+      )
+
+      # Convert alt back to m
+      altitude[i] = altitude__km * 1000.0
+
     return GeodeticCoordinates(
       latitude  = latitude,
       longitude = longitude,
@@ -1490,3 +1484,154 @@ class GeographicCoordinateConverter:
     """
     pos_vec = GeographicCoordinateConverter.geodetic_to_pos(coords)
     return GeographicCoordinateConverter.pos_to_geocentric(pos_vec)
+
+
+class TopocentricConverter:
+  """
+  Conversion between Cartesian position vectors and topocentric coordinates.
+
+  Topocentric coordinates (azimuth, elevation, range) are the natural
+  frame for ground-based observations and are fundamental to orbit
+  determination from ground-based tracking data.
+  """
+
+  @staticmethod
+  def pos_to_topocentric(
+    sat_pos_vec : np.ndarray,
+    tracker_lat : float,
+    tracker_lon : float,
+    tracker_alt : float,
+  ) -> tuple[float, float, float]:
+    """
+    Convert satellite position to topocentric coordinates from a ground station.
+
+    Input:
+    ------
+      sat_pos_vec : np.ndarray
+        Satellite position vector in body-fixed frame [m].
+      tracker_lat : float
+        Tracker geodetic latitude [rad].
+      tracker_lon : float
+        Tracker geodetic longitude [rad].
+      tracker_alt : float
+        Tracker altitude above WGS84 ellipsoid [m].
+
+    Output:
+    -------
+      azimuth : float
+        Azimuth angle [rad] (0 = North, π/2 = East, clockwise positive).
+      elevation : float
+        Elevation angle [rad] (0 = horizon, π/2 = zenith).
+      range : float
+        Slant range to satellite [m].
+
+    Notes:
+    ------
+      The azimuth convention is:
+      -   0° = North
+      -  90° = East
+      - 180° = South
+      - 270° = West
+
+      The local topocentric frame (East-North-Up) is constructed using
+      the geodetic latitude and longitude at the tracker location.
+    """
+    # Delegate to array version with single position
+    sat_pos_vec = np.asarray(sat_pos_vec).flatten().reshape(3, 1)
+    azimuth_arr, elevation_arr, range_arr = TopocentricConverter.pos_to_topocentric_array(
+      sat_pos_vec, tracker_lat, tracker_lon, tracker_alt
+    )
+    return float(azimuth_arr[0]), float(elevation_arr[0]), float(range_arr[0])
+
+  @staticmethod
+  def pos_to_topocentric_array(
+    sat_pos_array : np.ndarray,
+    tracker_lat   : float,
+    tracker_lon   : float,
+    tracker_alt   : float,
+  ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Convert multiple satellite positions to topocentric coordinates from a ground station.
+
+    This vectorized version is more efficient than calling pos_to_topocentric() in a loop.
+
+    Input:
+    ------
+      sat_pos_array : np.ndarray
+        Satellite position vectors in body-fixed frame [m], shape (3, N).
+      tracker_lat : float
+        Tracker geodetic latitude [rad].
+      tracker_lon : float
+        Tracker geodetic longitude [rad].
+      tracker_alt : float
+        Tracker altitude above WGS84 ellipsoid [m].
+
+    Output:
+    -------
+      azimuth : np.ndarray
+        Azimuth angles [rad] (0 = North, π/2 = East, clockwise positive), shape (N,).
+      elevation : np.ndarray
+        Elevation angles [rad] (0 = horizon, π/2 = zenith), shape (N,).
+      range : np.ndarray
+        Slant ranges to satellite [m], shape (N,).
+
+    Notes:
+    ------
+      The azimuth convention is:
+      -   0° = North
+      -  90° = East
+      - 180° = South
+      - 270° = West
+
+      The local topocentric frame (East-North-Up) is constructed using
+      the geodetic latitude and longitude at the tracker location.
+    """
+    # Ensure array is numpy array with shape (3, N)
+    sat_pos_array = np.asarray(sat_pos_array)
+    if sat_pos_array.ndim == 1:
+      sat_pos_array = sat_pos_array.reshape(3, 1)
+
+    # Compute tracker position in body-fixed frame using existing converter
+    tracker_coords = GeodeticCoordinates(
+      latitude  = tracker_lat,
+      longitude = tracker_lon,
+      altitude  = tracker_alt,
+    )
+    tracker_pos_vec = GeographicCoordinateConverter.geodetic_to_pos(tracker_coords)
+
+    # Compute relative position vectors (satellite - tracker) for all points
+    # Shape: (3, N)
+    rel_pos_array = sat_pos_array - tracker_pos_vec.reshape(3, 1)
+
+    # Compute ranges for all points
+    range_array = np.linalg.norm(rel_pos_array, axis=0)
+
+    # Build local topocentric frame (ENU - East, North, Up) at tracker location
+    sin_lat = np.sin(tracker_lat)
+    cos_lat = np.cos(tracker_lat)
+    sin_lon = np.sin(tracker_lon)
+    cos_lon = np.cos(tracker_lon)
+
+    # East unit vector
+    east_dir = np.array([-sin_lon, cos_lon, 0.0])
+
+    # North unit vector
+    north_dir = np.array([-sin_lat * cos_lon, -sin_lat * sin_lon, cos_lat])
+
+    # Up unit vector (geodetic normal)
+    up_dir = np.array([cos_lat * cos_lon, cos_lat * sin_lon, sin_lat])
+
+    # Project relative positions onto local ENU frame
+    # Shape: (N,) for each component
+    pos_east  =  east_dir @ rel_pos_array
+    pos_north = north_dir @ rel_pos_array
+    pos_up    =    up_dir @ rel_pos_array
+
+    # Compute azimuth (from North, clockwise positive)
+    azimuth_array = np.arctan2(pos_east, pos_north)
+
+    # Compute elevation (angle above horizon)
+    horizontal_range = np.sqrt(pos_east**2 + pos_north**2)
+    elevation_array  = np.arctan2(pos_up, horizontal_range)
+
+    return azimuth_array, elevation_array, range_array

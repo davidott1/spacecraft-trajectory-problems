@@ -13,13 +13,14 @@ from typing            import Optional
 from matplotlib.figure import Figure
 from matplotlib.lines  import Line2D
 
-from src.plot.utility          import get_equal_limits, add_utc_time_axis
-from src.model.constants       import CONVERTER, SOLARSYSTEMCONSTANTS
-from src.model.frame_converter import FrameConverter
-from src.model.time_converter  import utc_to_et
-from src.model.orbit_converter import GeographicCoordinateConverter, OrbitConverter
-from src.schemas.propagation   import PropagationResult
-from src.schemas.state         import TrackerStation, TopocentricCoordinates
+from src.plot.utility                  import get_equal_limits, add_utc_time_axis
+from src.orbit_determination.topocentric import compute_topocentric_coordinates
+from src.model.constants               import CONVERTER, SOLARSYSTEMCONSTANTS
+from src.model.frame_converter         import FrameConverter
+from src.model.time_converter          import utc_to_et
+from src.model.orbit_converter         import GeographicCoordinateConverter, OrbitConverter
+from src.schemas.propagation           import PropagationResult
+from src.schemas.state                 import TrackerStation, TopocentricCoordinates
 
 
 def project_to_bounds(origin, direction, ax):
@@ -2418,24 +2419,24 @@ def generate_error_plots(
   # If neither comparison is requested, do nothing
   if not (compare_jpl_horizons or compare_tle):
     return
-  
-  print("\n  Generate Error Plots")
+
+  print("    Error Plots")
 
   # Define availability flags
   has_horizons      = result_jpl_horizons_ephemeris is not None and result_jpl_horizons_ephemeris.success
   has_high_fidelity = result_high_fidelity_propagation.success
   has_sgp4          = result_sgp4_propagation is not None and result_sgp4_propagation.success
-  
+
   # Check for pre-computed ephemeris-time data
   has_hf_at_ephem   = has_high_fidelity and result_high_fidelity_propagation.at_ephem_times is not None
   has_sgp4_at_ephem = has_sgp4 and result_sgp4_propagation.at_ephem_times is not None
-  
+
   # Lowercase name for filenames
   name_lower = object_name.lower()
 
   # High-Fidelity Relative To JPL Horizons (compare at ephemeris times)
   if compare_jpl_horizons and has_horizons and has_hf_at_ephem:
-    print("    High-Fidelity Relative To JPL Horizons (at ephemeris times)")
+    print("      High-Fidelity Relative To JPL Horizons")
     
     # Build result dict for comparison using pre-computed at_ephem_times data
     # Note: plot_time_series_error expects dicts or objects. 
@@ -2493,103 +2494,6 @@ def generate_error_plots(
     print(f"      Time-Series Error : <figures_folderpath>/{filename}")
     plt.close(fig_err_ts)
   
-
-
-def compute_topocentric_coordinates(
-  result       : PropagationResult,
-  tracker      : TrackerStation,
-  epoch_dt_utc : Optional[datetime.datetime] = None,
-) -> TopocentricCoordinates:
-  """
-  Compute topocentric coordinates (azimuth, elevation, range) from a ground station.
-  
-  Input:
-  ------
-    result : PropagationResult
-      Propagation result containing 'state' (6xN array) and 'plot_time_s'.
-    tracker : TrackerStation
-      Ground tracking station with latitude, longitude, altitude.
-    epoch_dt_utc : datetime, optional
-      Reference epoch (start time) for time conversion to ET.
-      
-  Output:
-  -------
-    topo : TopocentricCoordinates
-      Topocentric coordinates (azimuth, elevation, range) arrays.
-  """
-  # Extract J2000 state vectors
-  j2000_state   = result.state
-  j2000_pos_vec = j2000_state[0:3, :]
-  time_s        = result.plot_time_s
-  n_points      = j2000_state.shape[1]
-  
-  # Convert epoch to ET
-  if epoch_dt_utc is not None:
-    epoch_et = utc_to_et(epoch_dt_utc)
-  else:
-    epoch_et = 0.0
-  
-  # Compute tracker position in IAU_EARTH frame (body-fixed)
-  # Use SPICE's georec for geodetic to Cartesian conversion
-  tracker_pos_iau_earth__km = spice.georec(
-    tracker.position.longitude,
-    tracker.position.latitude,
-    tracker.position.altitude / 1000.0,  # Convert m to km
-    GeographicCoordinateConverter.WGS84_RE,
-    GeographicCoordinateConverter.WGS84_F,
-  )
-  tracker_pos_iau_earth = np.array(tracker_pos_iau_earth__km) * 1000.0  # Convert km to m
-  
-  # Initialize output arrays
-  azimuth   = np.zeros(n_points)
-  elevation = np.zeros(n_points)
-  slant_range = np.zeros(n_points)
-  
-  for i in range(n_points):
-    # Current ephemeris time
-    epoch_et_i = epoch_et + time_s[i]
-    
-    # Transform satellite position from J2000 to IAU_EARTH
-    rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(epoch_et_i)
-    sat_pos_iau_earth = rot_mat_j2000_to_iau_earth @ j2000_pos_vec[:, i]
-    
-    # Compute relative position vector (satellite - tracker)
-    rel_pos_iau_earth = sat_pos_iau_earth - tracker_pos_iau_earth
-    slant_range[i] = np.linalg.norm(rel_pos_iau_earth)
-    
-    # Build local topocentric frame (ENU - East, North, Up) at tracker location
-    # Up vector: surface normal at geodetic location
-    sin_lat = np.sin(tracker.position.latitude)
-    cos_lat = np.cos(tracker.position.latitude)
-    sin_lon = np.sin(tracker.position.longitude)
-    cos_lon = np.cos(tracker.position.longitude)
-    
-    # East unit vector
-    e_east = np.array([-sin_lon, cos_lon, 0.0])
-    
-    # North unit vector
-    e_north = np.array([-sin_lat * cos_lon, -sin_lat * sin_lon, cos_lat])
-    
-    # Up unit vector (geodetic normal)
-    e_up = np.array([cos_lat * cos_lon, cos_lat * sin_lon, sin_lat])
-    
-    # Project relative position onto local ENU frame
-    east  = np.dot(rel_pos_iau_earth, e_east)
-    north = np.dot(rel_pos_iau_earth, e_north)
-    up    = np.dot(rel_pos_iau_earth, e_up)
-    
-    # Compute azimuth (from North, clockwise positive)
-    azimuth[i] = np.arctan2(east, north)
-    
-    # Compute elevation (angle above horizon)
-    horizontal_range = np.sqrt(east**2 + north**2)
-    elevation[i] = np.arctan2(up, horizontal_range)
-  
-  return TopocentricCoordinates(
-    azimuth   = azimuth,
-    elevation = elevation,
-    range     = slant_range,
-  )
 
 
 def plot_skyplot(
@@ -2822,35 +2726,57 @@ def plot_skyplot(
           # Transition point - use dashed line
           ax.plot(seg_theta[i:i+2], seg_radius[i:i+2], 'k--', linewidth=1.5, alpha=0.5)
       
-      # Add entry marker and UTC time label
-      ax.scatter([seg_theta[0]], [seg_radius[0]], s=120, marker='s', facecolors='none', 
-                edgecolors='black', linewidths=2, zorder=10)
-      if epoch_dt_utc is not None:
-        entry_dt = epoch_dt_utc + timedelta(seconds=seg_time[0])
-        entry_label = entry_dt.strftime('%Y-%m-%d %H:%M:%S')
-        ax.annotate(f'Entry\n{entry_label}', (seg_theta[0], seg_radius[0]), 
-                   textcoords='offset points', xytext=(8, 8), fontsize=8,
-                   color='black', fontweight='normal',
-                   bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='black', alpha=0.8))
+      # Add entry marker if this is a true entry (satellite rose above horizon during propagation)
+      # A true entry means there was a point before this segment that was below horizon
+      is_true_entry = seg_start > 0
+      if is_true_entry:
+        ax.scatter([seg_theta[0]], [seg_radius[0]], s=120, marker='s', facecolors='none', 
+                  edgecolors='black', linewidths=2, zorder=10)
+        if epoch_dt_utc is not None:
+          entry_dt = epoch_dt_utc + timedelta(seconds=seg_time[0])
+          entry_label = entry_dt.strftime('%Y-%m-%d %H:%M:%S')
+          ax.annotate(f'Entry\n{entry_label}', (seg_theta[0], seg_radius[0]), 
+                     textcoords='offset points', xytext=(8, 8), fontsize=8,
+                     color='black', fontweight='normal',
+                     bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='black', alpha=0.8))
       
-      # Add exit marker and UTC time label
-      ax.scatter([seg_theta[-1]], [seg_radius[-1]], s=120, marker='s', facecolors='none',
-                edgecolors='black', linewidths=2, zorder=10)
-      if epoch_dt_utc is not None:
-        exit_dt = epoch_dt_utc + timedelta(seconds=seg_time[-1])
-        exit_label = exit_dt.strftime('%Y-%m-%d %H:%M:%S')
-        ax.annotate(f'Exit\n{exit_label}', (seg_theta[-1], seg_radius[-1]),
-                   textcoords='offset points', xytext=(8, -12), fontsize=8,
-                   color='black', fontweight='normal',
-                   bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='black', alpha=0.8))
+      # Add exit marker if this is a true exit (satellite set below horizon during propagation)
+      # A true exit means there's a point after this segment that's below horizon
+      is_true_exit = seg_end < len(visible_mask)
+      if is_true_exit:
+        ax.scatter([seg_theta[-1]], [seg_radius[-1]], s=120, marker='s', facecolors='none',
+                  edgecolors='black', linewidths=2, zorder=10)
+        if epoch_dt_utc is not None:
+          exit_dt = epoch_dt_utc + timedelta(seconds=seg_time[-1])
+          exit_label = exit_dt.strftime('%Y-%m-%d %H:%M:%S')
+          ax.annotate(f'Exit\n{exit_label}', (seg_theta[-1], seg_radius[-1]),
+                     textcoords='offset points', xytext=(8, -12), fontsize=8,
+                     color='black', fontweight='normal',
+                     bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='black', alpha=0.8))
   
-  # Mark start and end of simulation (different from pass entry/exit)
+  # Add initial marker at the first point of the entire propagation (if visible)
   if visible_mask[0]:
-    ax.scatter([theta[0]], [radius[0]], s=200, marker='o', facecolors='lime', 
-              edgecolors='darkgreen', linewidths=2, zorder=10, label='AOS (Acquisition)')
+    ax.scatter([theta[0]], [radius[0]], s=120, marker='s', facecolors='none', 
+              edgecolors='black', linewidths=2, zorder=10)
+    if epoch_dt_utc is not None:
+      initial_dt = epoch_dt_utc + timedelta(seconds=time_s[0])
+      initial_label = initial_dt.strftime('%Y-%m-%d %H:%M:%S')
+      ax.annotate(f'Initial\n{initial_label}', (theta[0], radius[0]), 
+                 textcoords='offset points', xytext=(8, 8), fontsize=8,
+                 color='black', fontweight='normal',
+                 bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='black', alpha=0.8))
+  
+  # Add final marker at the last point of the entire propagation (if visible)
   if visible_mask[-1]:
-    ax.scatter([theta[-1]], [radius[-1]], s=200, marker='s', facecolors='red',
-              edgecolors='darkred', linewidths=2, zorder=10, label='LOS (Loss)')
+    ax.scatter([theta[-1]], [radius[-1]], s=120, marker='s', facecolors='none',
+              edgecolors='black', linewidths=2, zorder=10)
+    if epoch_dt_utc is not None:
+      final_dt = epoch_dt_utc + timedelta(seconds=time_s[-1])
+      final_label = final_dt.strftime('%Y-%m-%d %H:%M:%S')
+      ax.annotate(f'Final\n{final_label}', (theta[-1], radius[-1]),
+                 textcoords='offset points', xytext=(8, -12), fontsize=8,
+                 color='black', fontweight='normal',
+                 bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='black', alpha=0.8))
   
   # Find and mark maximum elevation with UTC time
   max_el_idx = np.argmax(el_deg)
@@ -2997,85 +2923,85 @@ def generate_3d_and_time_series_plots(
   -------
     None
   """
-  print("  Generate 3D-Trajectory and Time-Series Plots")
-  
+  print("    3D-Trajectory, Time-Series, and Groundtrack Plots")
+
   # Lowercase name for filenames
   name_lower = object_name.lower()
 
   # Horizons plots
   if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
-    print("    JPL-Horizons-Ephemeris Plots")
+    print("      JPL-Horizons-Ephemeris Plots")
 
     fig1 = plot_3d_trajectories(result_jpl_horizons_ephemeris, epoch=time_o_dt, frame="J2000")
     fig1.suptitle(f'3D Inertial - {object_name_display} - JPL Horizons', fontsize=16)
     filename = f'3d_j2000_earth_centered_jpl_horizons_{name_lower}.png'
     fig1.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"      3D Inertial    : <figures_folderpath>/{filename}")
+    print(f"        3D Inertial    : <figures_folderpath>/{filename}")
     plt.close(fig1)
-    
+
     fig2 = plot_time_series(result_jpl_horizons_ephemeris, epoch=time_o_dt)
     fig2.suptitle(f'Time Series - {object_name_display} - JPL Horizons', fontsize=16)
     filename = f'timeseries_jpl_horizons_{name_lower}.png'
     fig2.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"      Time Series    : <figures_folderpath>/{filename}")
+    print(f"        Time Series    : <figures_folderpath>/{filename}")
     plt.close(fig2)
-    
+
     # Body-fixed 3D plot for Horizons
     fig_ef = plot_3d_trajectories_body_fixed(result_jpl_horizons_ephemeris, epoch_dt_utc=time_o_dt, trackers=trackers, include_tracker_on_body=include_tracker_on_body)
     fig_ef.suptitle(f'3D Body-Fixed - {object_name_display} - JPL Horizons', fontsize=16)
     filename = f'3d_iau_earth_jpl_horizons_{name_lower}.png'
     fig_ef.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"      3D Body-Fixed  : <figures_folderpath>/{filename}")
+    print(f"        3D Body-Fixed  : <figures_folderpath>/{filename}")
     plt.close(fig_ef)
-    
+
     # Ground track plot for Horizons
     gt_title = f'Ground Track - {object_name_display} - JPL Horizons'
     fig_gt = plot_ground_track(result_jpl_horizons_ephemeris, epoch_dt_utc=time_o_dt, title_text=gt_title, trackers=trackers, include_tracker_on_body=include_tracker_on_body)
     filename = f'groundtrack_jpl_horizons_{name_lower}.png'
     fig_gt.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"      Ground Track   : <figures_folderpath>/{filename}")
+    print(f"        Ground Track   : <figures_folderpath>/{filename}")
     plt.close(fig_gt)
   
   # High-fidelity plots
   if result_high_fidelity_propagation.success:
-    print("    High-Fidelity-Model Plots")
+    print("      High-Fidelity-Model Plots")
 
     fig3 = plot_3d_trajectories(result_high_fidelity_propagation, epoch=time_o_dt, frame="J2000")
     fig3.suptitle(f'3D Inertial - {object_name_display} - High-Fidelity', fontsize=16)
     filename = f'3d_j2000_earth_centered_high_fidelity_{name_lower}.png'
     fig3.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"      3D Inertial    : <figures_folderpath>/{filename}")
+    print(f"        3D Inertial    : <figures_folderpath>/{filename}")
     plt.close(fig3)
-    
+
     fig4 = plot_time_series(result_high_fidelity_propagation, epoch=time_o_dt)
     fig4.suptitle(f'Time Series - {object_name_display} - High-Fidelity', fontsize=16)
     filename = f'timeseries_high_fidelity_{name_lower}.png'
     fig4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"      Time Series    : <figures_folderpath>/{filename}")
+    print(f"        Time Series    : <figures_folderpath>/{filename}")
     plt.close(fig4)
-    
+
     # Body-fixed 3D plot
     fig_ef = plot_3d_trajectories_body_fixed(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt, trackers=trackers, include_tracker_on_body=include_tracker_on_body)
     fig_ef.suptitle(f'3D Body-Fixed - {object_name_display} - High-Fidelity', fontsize=16)
     filename = f'3d_iau_earth_high_fidelity_{name_lower}.png'
     fig_ef.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"      3D Body-Fixed  : <figures_folderpath>/{filename}")
+    print(f"        3D Body-Fixed  : <figures_folderpath>/{filename}")
     plt.close(fig_ef)
-    
+
     # Ground track plot
     gt_title = f'Ground Track - {object_name_display} - High-Fidelity'
     fig_gt = plot_ground_track(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt, title_text=gt_title, trackers=trackers, include_tracker_on_body=include_tracker_on_body)
     filename = f'groundtrack_high_fidelity_{name_lower}.png'
     fig_gt.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"      Ground Track   : <figures_folderpath>/{filename}")
+    print(f"        Ground Track   : <figures_folderpath>/{filename}")
     plt.close(fig_gt)
-    
+
     # 3D plot Sun-centered trajectory
     fig_moon = plot_3d_trajectory_sun_centered(result_high_fidelity_propagation, epoch=time_o_dt)
     fig_moon.suptitle(f'3D Inertial - {object_name_display} - High-Fidelity', fontsize=16)
     filename = f'3d_j2000_sun_centered_high_fidelity_{name_lower}.png'
     fig_moon.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"      3D Inertial    : <figures_folderpath>/{filename}")
+    print(f"        3D Inertial    : <figures_folderpath>/{filename}")
     plt.close(fig_moon)
   
   # SGP4 plots
@@ -3155,9 +3081,20 @@ def generate_plots(
   print("\n" + "-" * len(title))
   print(title)
   print("-" * len(title))
+
   print()
-  print(f"  Figure Folderpath : {figures_folderpath}\n")
-  
+  print("  Progress")
+  print("    Generate 3D-trajectory, time-series, and groundtrack plots")
+  if compare_jpl_horizons or compare_tle:
+    print("    Generate error plots")
+  if trackers is not None and len(trackers) > 0:
+    print("    Generate skyplots")
+
+  print()
+  print("  Summary")
+  print(f"    Figure Folderpath : {figures_folderpath}")
+  print()
+
   # Generate 3D and time series plots
   generate_3d_and_time_series_plots(
     result_jpl_horizons_ephemeris    = result_jpl_horizons_ephemeris,
@@ -3172,9 +3109,10 @@ def generate_plots(
     trackers                         = trackers,
     include_tracker_on_body          = include_tracker_on_body,
   )
-    
+
   # Generate error plots only if a comparison was requested
   if compare_jpl_horizons or compare_tle:
+    print()
     generate_error_plots(
       result_jpl_horizons_ephemeris    = result_jpl_horizons_ephemeris,
       result_high_fidelity_propagation = result_high_fidelity_propagation,
@@ -3186,17 +3124,20 @@ def generate_plots(
       object_name                      = object_name,
       object_name_display              = object_name_display,
     )
-  
+
   # Generate skyplots for each tracker
   if trackers is not None and len(trackers) > 0:
-    print("\n  Generate Skyplots")
+    print()
+    print("    Skyplots")
 
     name_lower = object_name.lower().replace(' ', '_').replace('-', '_')
 
     for tracker in trackers:
       try:
-        print(f"    Tracker       : {tracker.name}")
         tracker_name_sanitized = tracker.name.lower().replace(' ', '_').replace('-', '_')
+
+        # Collect filenames for this tracker
+        filenames = []
 
         # Generate skyplot for high-fidelity propagation
         if result_high_fidelity_propagation.success:
@@ -3209,8 +3150,8 @@ def generate_plots(
           )
           filename = f'skyplot_{tracker_name_sanitized}_high_fidelity_{name_lower}.png'
           fig_skyplot.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-          print(f"      High-Fidelity : <figures_folderpath>/{filename}")
           plt.close(fig_skyplot)
+          filenames.append(filename)
 
         # Generate skyplot for SGP4 if available
         if compare_tle and result_sgp4_propagation and result_sgp4_propagation.success:
@@ -3223,8 +3164,8 @@ def generate_plots(
           )
           filename = f'skyplot_{tracker_name_sanitized}_sgp4_{name_lower}.png'
           fig_skyplot_sgp4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-          print(f"      SGP4          : <figures_folderpath>/{filename}")
           plt.close(fig_skyplot_sgp4)
+          filenames.append(filename)
 
         # Generate skyplot for JPL Horizons if available
         if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
@@ -3237,8 +3178,13 @@ def generate_plots(
           )
           filename = f'skyplot_{tracker_name_sanitized}_jpl_horizons_{name_lower}.png'
           fig_skyplot_horizons.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-          print(f"      JPL Horizons  : <figures_folderpath>/{filename}")
           plt.close(fig_skyplot_horizons)
+          filenames.append(filename)
+
+        # Print tracker and filenames
+        print(f"      Tracker {tracker.name}")
+        for filename in filenames:
+          print(f"        <figures_folderpath>/{filename}")
 
       except Exception as e:
-        print(f"    [WARNING] Failed to generate skyplot: {e}")
+        print(f"      [WARNING] Failed to generate skyplot for {tracker.name}: {e}")
