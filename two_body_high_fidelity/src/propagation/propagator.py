@@ -13,8 +13,8 @@ from sgp4.api          import jday
 
 from src.model.dynamics        import GeneralStateEquationsOfMotion, Acceleration
 from src.model.orbit_converter import OrbitConverter
-from src.model.constants       import PRINTFORMATTER, SOLARSYSTEMCONSTANTS
-from src.model.time_converter  import utc_to_et
+from src.model.constants       import PRINTFORMATTER, SOLARSYSTEMCONSTANTS, CONVERTER
+from src.model.time_converter  import utc_to_et, et_to_utc
 from src.model.frame_converter import VectorConverter
 from src.utility.tle_helper    import modify_tle_bstar, get_tle_satellite_and_tle_epoch
 from src.schemas.gravity       import GravityModelConfig
@@ -476,98 +476,36 @@ def run_high_fidelity_propagation(
   # Extract the actual gravity model from the namespace
   spherical_harmonics_model = two_body_gravity_model.spherical_harmonics.model
 
-  # Print configuration
   print()
-  print(f"  Configuration")
-  print(f"    Timespan")
-  print(f"      Initial  : {propagation_config.time_o_dt} UTC / {time_et_o:.6f} ET")
-  print(f"      Final    : {propagation_config.time_f_dt} UTC / {time_et_f:.6f} ET")
-  print(f"      Duration : {delta_time_s} s")
-  print(f"    Forces")
-  print(f"      Gravity")
-  print(f"        Earth")
-  
-  # Display gravity model info
-  if spherical_harmonics_model is not None:
-    # Check if this is an explicit coefficients model (has active_coefficients set)
-    if hasattr(spherical_harmonics_model, 'active_coefficients') and spherical_harmonics_model.active_coefficients is not None:
-      print(f"          Spherical Harmonics (Explicit Coefficients)")
-      # Show which coefficients are active
-      active_names = []
-      for deg, ord, ctype in sorted(spherical_harmonics_model.active_coefficients):
-        if ctype == 'J':
-          active_names.append(f"J{deg}")
-        elif ctype == 'C':
-          active_names.append(f"C{deg}{ord}")
-        elif ctype == 'S':
-          active_names.append(f"S{deg}{ord}")
-      print(f"            Active   : {', '.join(active_names)}")
-      print(f"            GP       : {spherical_harmonics_model.gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
-      print(f"            Radius   : {spherical_harmonics_model.radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
-    else:
-      print(f"          Spherical Harmonics")
-      print(f"            Degree : {two_body_gravity_model.spherical_harmonics.degree}")
-      print(f"            Order  : {two_body_gravity_model.spherical_harmonics.order}")
-      print(f"            GP     : {two_body_gravity_model.spherical_harmonics.gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
-      print(f"            Radius : {two_body_gravity_model.spherical_harmonics.radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
-  elif include_gravity_harmonics:
-    print(f"          Two-Body Point Mass")
-    # Separate zonal and tesseral for display
-    zonal_harmonics    = [h for h in gravity_harmonics_list if h.startswith('J')]
-    tesseral_harmonics = [h for h in gravity_harmonics_list if h.startswith('C') or h.startswith('S')]
-    if zonal_harmonics:
-      print(f"          Zonal Harmonics    : {', '.join(zonal_harmonics)}")
-    else:
-      print(f"          Zonal Harmonics    : None")
-    if tesseral_harmonics:
-      print(f"          Tesseral Harmonics : {', '.join(tesseral_harmonics)}")
-  else:
-    print(f"          Two-Body Point Mass")
-    print(f"          Zonal Harmonics    : None")
-  
-  if include_third_body:
-    print(f"        Third-Body")
-    print(f"          Bodies    : {', '.join(third_bodies_list)}")
-    print(f"          Ephemeris : SPICE")
-  
-  if spacecraft.drag.enabled:
-    print(f"      Atmospheric Drag")
-    print(f"        Model : Exponential Atmosphere")
-    print(f"        Coeff : {spacecraft.drag.cd:{PRINTFORMATTER.SCIENTIFIC_NOTATION}}")
-    print(f"        Area  : {spacecraft.drag.area:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m²")
-    print(f"        Mass  : {spacecraft.mass:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} kg")
-  
-  if spacecraft.srp.enabled:
-    print(f"      Solar Radiation Pressure")
-    print(f"        Model : Spherical Earth & Cylindrical Shadow")
-    print(f"        Coeff : {spacecraft.srp.cr:{PRINTFORMATTER.SCIENTIFIC_NOTATION}}")
-    print(f"        Area  : {spacecraft.srp.area:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m²")
-    print(f"        Mass  : {spacecraft.mass:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} kg")
+  print("  Progress")
+  print("    Initialize acceleration model")
 
   # Initialize acceleration model
   acceleration = Acceleration(
     gravity_config = two_body_gravity_model,
     spacecraft     = spacecraft,
   )
-  
+
+  print("    Calculate orbital period for grid density")
+
   # Get orbital period for grid density
   period = OrbitConverter.pv_to_period(
     initial_state[0:3],
     initial_state[3:6],
     SOLARSYSTEMCONSTANTS.EARTH.GP
   )
-  
+
   if np.isfinite(period):
     # Elliptical orbit
     # Determine number of points
-    
+
     # Calculate eccentricity to determine grid density
     coe = OrbitConverter.pv_to_coe(
       initial_state[0:3],
       initial_state[3:6],
       SOLARSYSTEMCONSTANTS.EARTH.GP
     )
-    
+
     if coe.ecc > 0.1:
       points_per_period = 1000
     else:
@@ -575,29 +513,25 @@ def run_high_fidelity_propagation(
 
     num_periods       = abs(delta_time_s) / period
     num_grid_points   = int(num_periods * points_per_period)
-    
+
     # Ensure reasonable limits
     if num_grid_points < 1000:
       num_grid_points = 1000
     # Cap at reasonable max to prevent memory issues for long propagations
     if num_grid_points > 1000000:
       num_grid_points = 1000000
-      print(f"    [WARNING] Grid points capped at {num_grid_points}")
-      
+      print(f"      [WARNING] Grid points capped at {num_grid_points}")
+
   else:
     # Hyperbolic or parabolic - fallback to fixed number
     num_grid_points = 10000
 
+  print("    Create equal-spaced time grid")
+
   # Create equal-spaced time grid (in ET)
   t_eval_grid = np.linspace(time_et_o, time_et_f, num_grid_points)
 
-  print("    Numerical Integration")
-  print(f"      Method     : {propagation_config.method}")
-  print(f"      Tolerances : rtol={propagation_config.rtol}, atol={propagation_config.atol}")
-  print(f"      Grid       : {len(t_eval_grid)} points (equal-spaced)")
-
-  print("\n  Compute")
-  print("    Numerical Integration Running ... ", end='', flush=True)
+  print("    Run numerical integration")
 
   # Propagate on equal-spaced grid with dense output for interpolation
   result_high_fidelity = propagate_state_numerical_integration(
@@ -614,8 +548,6 @@ def run_high_fidelity_propagation(
     gp                  = SOLARSYSTEMCONSTANTS.EARTH.GP,
   )
 
-  print("Complete")
-  
   if result_high_fidelity.success:
     # Store integration time (ET)
     result_high_fidelity.integ_time_et = result_high_fidelity.time
@@ -627,25 +559,25 @@ def run_high_fidelity_propagation(
       epoch_et = time_et_o,
       time_s   = result_high_fidelity.plot_time_s,
     )
-    
+
     # If comparing to Horizons, interpolate to ephemeris times and store separately
     if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
+      print("    Interpolate to ephemeris time points")
+
       ephem_times_s = result_jpl_horizons_ephemeris.plot_time_s
       ephem_times_et = ephem_times_s + time_et_o
-      
-      print(f"    Interpolating to {len(ephem_times_et)} ephemeris time points ... ", end='', flush=True)
-      
+
       # Interpolate state to ephemeris times
       state_at_ephem = np.zeros((6, len(ephem_times_et)))
       for i in range(6):
         interpolator = interp1d(
-          result_high_fidelity.time, 
-          result_high_fidelity.state[i, :], 
-          kind='cubic', 
+          result_high_fidelity.time,
+          result_high_fidelity.state[i, :],
+          kind='cubic',
           fill_value='extrapolate'
         )
         state_at_ephem[i, :] = interpolator(ephem_times_et)
-      
+
       # Compute COEs at ephemeris times
       n_ephem = len(ephem_times_et)
       coe_sma  = np.zeros(n_ephem)
@@ -678,7 +610,7 @@ def run_high_fidelity_propagation(
         coe_ma[i]   = coe.ma
         coe_ta[i]   = coe.ta
         coe_ea[i]   = coe.ea
-        
+
         # Compute MEE
         mee = OrbitConverter.pv_to_mee(
           state_at_ephem[0:3, i],
@@ -691,7 +623,7 @@ def run_high_fidelity_propagation(
         mee_h[i] = mee.h
         mee_k[i] = mee.k
         mee_L[i] = mee.L
-      
+
       # Construct objects
       coe_at_ephem = ClassicalOrbitalElements(
         sma=coe_sma, ecc=coe_ecc, inc=coe_inc, raan=coe_raan, aop=coe_aop, ma=coe_ma, ta=coe_ta, ea=coe_ea
@@ -710,10 +642,145 @@ def run_high_fidelity_propagation(
         coe           = coe_at_ephem,
         mee           = mee_at_ephem,
       )
-      
-      print("Complete")
+
+    print()
+    print("  Summary")
+
+    # Print configuration
+    print(f"    Configuration")
+    print(f"      Timespan")
+    print(f"        Initial  : {propagation_config.time_o_dt} UTC / {time_et_o:.6f} ET")
+    print(f"        Final    : {propagation_config.time_f_dt} UTC / {time_et_f:.6f} ET")
+    print(f"        Duration : {delta_time_s} s")
+    print(f"      Forces")
+    print(f"        Gravity")
+    print(f"          Earth")
+
+    # Display gravity model info
+    if spherical_harmonics_model is not None:
+      # Check if this is an explicit coefficients model (has active_coefficients set)
+      if hasattr(spherical_harmonics_model, 'active_coefficients') and spherical_harmonics_model.active_coefficients is not None:
+        print(f"            Spherical Harmonics (Explicit Coefficients)")
+        # Show which coefficients are active
+        active_names = []
+        for deg, ord, ctype in sorted(spherical_harmonics_model.active_coefficients):
+          if ctype == 'J':
+            active_names.append(f"J{deg}")
+          elif ctype == 'C':
+            active_names.append(f"C{deg}{ord}")
+          elif ctype == 'S':
+            active_names.append(f"S{deg}{ord}")
+        print(f"              Active   : {', '.join(active_names)}")
+        print(f"              GP       : {spherical_harmonics_model.gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
+        print(f"              Radius   : {spherical_harmonics_model.radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
+      else:
+        print(f"            Spherical Harmonics")
+        print(f"              Degree : {two_body_gravity_model.spherical_harmonics.degree}")
+        print(f"              Order  : {two_body_gravity_model.spherical_harmonics.order}")
+        print(f"              GP     : {two_body_gravity_model.spherical_harmonics.gp:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m³/s²")
+        print(f"              Radius : {two_body_gravity_model.spherical_harmonics.radius:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m")
+    elif include_gravity_harmonics:
+      print(f"            Two-Body Point Mass")
+      # Separate zonal and tesseral for display
+      zonal_harmonics    = [h for h in gravity_harmonics_list if h.startswith('J')]
+      tesseral_harmonics = [h for h in gravity_harmonics_list if h.startswith('C') or h.startswith('S')]
+      if zonal_harmonics:
+        print(f"            Zonal Harmonics    : {', '.join(zonal_harmonics)}")
+      else:
+        print(f"            Zonal Harmonics    : None")
+      if tesseral_harmonics:
+        print(f"            Tesseral Harmonics : {', '.join(tesseral_harmonics)}")
+    else:
+      print(f"            Two-Body Point Mass")
+      print(f"            Zonal Harmonics    : None")
+
+    if include_third_body:
+      print(f"          Third-Body")
+      print(f"            Bodies    : {', '.join(third_bodies_list)}")
+      print(f"            Ephemeris : SPICE")
+
+    if spacecraft.drag.enabled:
+      print(f"        Atmospheric Drag")
+      print(f"          Model : Exponential Atmosphere")
+      print(f"          Coeff : {spacecraft.drag.cd:{PRINTFORMATTER.SCIENTIFIC_NOTATION}}")
+      print(f"          Area  : {spacecraft.drag.area:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m²")
+      print(f"          Mass  : {spacecraft.mass:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} kg")
+
+    if spacecraft.srp.enabled:
+      print(f"        Solar Radiation Pressure")
+      print(f"          Model : Spherical Earth & Cylindrical Shadow")
+      print(f"          Coeff : {spacecraft.srp.cr:{PRINTFORMATTER.SCIENTIFIC_NOTATION}}")
+      print(f"          Area  : {spacecraft.srp.area:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m²")
+      print(f"          Mass  : {spacecraft.mass:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} kg")
+
+    print(f"      Numerical Integration")
+    print(f"        Method     : {propagation_config.method}")
+    print(f"        Tolerances : rtol={propagation_config.rtol}, atol={propagation_config.atol}")
+    print(f"        Grid       : {len(t_eval_grid)} points (equal-spaced)")
+    print()
+
+    # Print initial state
+    print(f"    Initial State")
+    print(f"      Epoch : {propagation_config.time_o_dt} UTC / {time_et_o:.6f} ET")
+    print(f"      Frame : J2000")
+    print(f"      Cartesian State")
+    print(f"        Position : {initial_state[0]:>19.12e}  {initial_state[1]:>19.12e}  {initial_state[2]:>19.12e} m")
+    print(f"        Velocity : {initial_state[3]:>19.12e}  {initial_state[4]:>19.12e}  {initial_state[5]:>19.12e} m/s")
+
+    # Compute initial COE
+    coe_o = OrbitConverter.pv_to_coe(
+      initial_state[0:3],
+      initial_state[3:6],
+      SOLARSYSTEMCONSTANTS.EARTH.GP
+    )
+    print(f"      Classical Orbital Elements")
+    print(f"        SMA  : { coe_o.sma:>19.12e} m")
+    print(f"        ECC  : { coe_o.ecc:>19.12e}")
+    print(f"        INC  : { coe_o.inc * CONVERTER.DEG_PER_RAD:>19.12e} deg")
+    print(f"        RAAN : {coe_o.raan * CONVERTER.DEG_PER_RAD:>19.12e} deg")
+    print(f"        AOP  : { coe_o.aop * CONVERTER.DEG_PER_RAD:>19.12e} deg")
+    if coe_o.ta is not None:
+      print(f"        TA   : {  coe_o.ta * CONVERTER.DEG_PER_RAD:>19.12e} deg")
+    if coe_o.ea is not None:
+      print(f"        EA   : {  coe_o.ea * CONVERTER.DEG_PER_RAD:>19.12e} deg")
+    if coe_o.ma is not None:
+      print(f"        MA   : {  coe_o.ma * CONVERTER.DEG_PER_RAD:>19.12e} deg")
+    print()
+
+    # Print final state and orbital elements
+    time_et_f_final = result_high_fidelity.time[-1]
+    time_utc_f_str = f"{et_to_utc(time_et_f_final)} UTC / {time_et_f_final:.6f} ET"
+
+    pos_vec_f = result_high_fidelity.state[0:3, -1]
+    vel_vec_f = result_high_fidelity.state[3:6, -1]
+
+    coe_f = result_high_fidelity.coe
+    sma  = coe_f.sma[-1]
+    ecc  = coe_f.ecc[-1]
+    inc  = coe_f.inc[-1] * CONVERTER.DEG_PER_RAD
+    raan = coe_f.raan[-1] * CONVERTER.DEG_PER_RAD
+    aop  = coe_f.aop[-1] * CONVERTER.DEG_PER_RAD
+    ta   = coe_f.ta[-1] * CONVERTER.DEG_PER_RAD
+    ea   = coe_f.ea[-1] * CONVERTER.DEG_PER_RAD
+    ma   = coe_f.ma[-1] * CONVERTER.DEG_PER_RAD
+
+    print(f"    Final State")
+    print(f"      Epoch : {time_utc_f_str}")
+    print(f"      Frame : J2000")
+    print(f"      Cartesian State")
+    print(f"        Position : {pos_vec_f[0]:>19.12e}  {pos_vec_f[1]:>19.12e}  {pos_vec_f[2]:>19.12e} m")
+    print(f"        Velocity : {vel_vec_f[0]:>19.12e}  {vel_vec_f[1]:>19.12e}  {vel_vec_f[2]:>19.12e} m/s")
+    print(f"      Classical Orbital Elements")
+    print(f"        SMA  : { sma:>19.12e} m")
+    print(f"        ECC  : { ecc:>19.12e}")
+    print(f"        INC  : { inc:>19.12e} deg")
+    print(f"        RAAN : {raan:>19.12e} deg")
+    print(f"        AOP  : { aop:>19.12e} deg")
+    print(f"        TA   : {  ta:>19.12e} deg")
+    print(f"        EA   : {  ea:>19.12e} deg")
+    print(f"        MA   : {  ma:>19.12e} deg")
   else:
-    print(f"  Propagation failed: {result_high_fidelity.message}")
+    print(f"\n  [ERROR] Propagation failed: {result_high_fidelity.message}")
   
   return result_high_fidelity
 

@@ -58,7 +58,7 @@ from datetime                          import datetime
 from src.plot.trajectory               import generate_plots
 from src.propagation.propagator        import run_propagations
 from src.input.loader                  import unload_files, load_files, get_horizons_ephemeris, get_celestrak_tle
-from src.utility.printer               import print_results_summary
+from src.utility.printer               import final_print
 from src.input.cli                     import parse_command_line_arguments
 from src.input.configuration           import build_config, print_configuration, extract_tle_to_config
 from src.propagation.state_initializer import get_initial_state
@@ -333,11 +333,6 @@ def main(
     two_body_gravity_model        = config.gravity,
   )
   
-  # Display results and create plots
-  print_results_summary( 
-    result_high_fidelity_propagation,
-  )
-  
   # Generate plots
   generate_plots(
     result_jpl_horizons_ephemeris    = result_jpl_horizons_ephemeris,
@@ -353,8 +348,11 @@ def main(
     include_tracker_on_body          = include_tracker_on_body,
   )
   
-  # Unload all files (SPICE kernels)
+  # Cleanup: Unload all files (SPICE kernels)
   unload_files()
+
+  # Cleanup: final print
+  final_print()
   
   # Stop logging
   stop_logging(logger)
