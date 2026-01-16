@@ -2,6 +2,8 @@ import warnings
 import numpy    as np
 import spiceypy as spice
 
+from typing import Union
+
 from src.model.constants import SOLARSYSTEMCONSTANTS, CONVERTER
 from src.schemas.state   import (
   ClassicalOrbitalElements,
@@ -1218,6 +1220,40 @@ class GeographicCoordinateConverter:
   WGS84_RE = 6378.137          # Equatorial radius [km]
   WGS84_F  = 1/298.257223563   # Flattening
   
+  # -------
+  # Generic
+  # -------
+
+  @staticmethod
+  def spherical_to_cartesian(
+    lat_rad : Union[np.ndarray, float],
+    lon_rad : Union[np.ndarray, float],
+    radius  : Union[np.ndarray, float] = 1.0,
+  ) -> np.ndarray:
+    """
+    Convert spherical coordinates (latitude, longitude, radius) to Cartesian.
+    
+    This is a low-level helper for both geocentric conversions and plotting utilities.
+    
+    Input:
+    ------
+      lat_rad : Union[np.ndarray, float]
+        Latitude in radians (geocentric or geodetic)
+      lon_rad : Union[np.ndarray, float]
+        Longitude in radians
+      radius : Union[np.ndarray, float]
+        Radial distance from origin (e.g., Earth center) [m]. Default is 1.0 (unit sphere).
+        
+    Output:
+    -------
+      pos_vec : np.ndarray
+        Cartesian position vector [m], shape (3,) or (3, N)
+    """
+    x = radius * np.cos(lat_rad) * np.cos(lon_rad)
+    y = radius * np.cos(lat_rad) * np.sin(lon_rad)
+    z = radius * np.sin(lat_rad)
+    return np.array([x, y, z])
+  
   # ----------------------------
   # Geocentric (Spherical)
   # ----------------------------
@@ -1272,13 +1308,10 @@ class GeographicCoordinateConverter:
       pos_vec : np.ndarray
         Position vector in body-fixed frame [m].
     """
-    pos_mag = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR + coords.altitude
-    
-    pos_x = pos_mag * np.cos(coords.latitude) * np.cos(coords.longitude)
-    pos_y = pos_mag * np.cos(coords.latitude) * np.sin(coords.longitude)
-    pos_z = pos_mag * np.sin(coords.latitude)
-    
-    return np.array([pos_x, pos_y, pos_z])
+    radius = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR + coords.altitude
+    return GeographicCoordinateConverter.spherical_to_cartesian(
+      coords.latitude, coords.longitude, radius
+    )
   
   # ----------------------------
   # Geodetic (Ellipsoidal)
