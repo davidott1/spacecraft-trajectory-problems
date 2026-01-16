@@ -228,6 +228,11 @@ class TestJ2Perturbation:
     state_f = sol.y[:, -1]
     coe_f   = OrbitConverter.pv_to_coe(state_f[0:3], state_f[3:6], gp)
     
+    # Verify RAAN is defined (not None) for both initial and final states
+    # RAAN is undefined for equatorial orbits (inc = 0° or 180°)
+    assert coe_o.raan is not None, "Initial RAAN is None - cannot test RAAN drift for equatorial orbit"
+    assert coe_f.raan is not None, "Final RAAN is None - cannot test RAAN drift for equatorial orbit"
+    
     # For prograde orbit, RAAN should decrease (regress westward)
     # Handle angle wrapping
     delta_raan = coe_f.raan - coe_o.raan
