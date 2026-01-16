@@ -176,7 +176,7 @@ def generate_3d_and_time_series_plots(
 
     fig2 = plot_time_series(result_jpl_horizons_ephemeris, epoch=time_o_dt)
     fig2.suptitle(f'Time Series - {object_name_display} - JPL Horizons', fontsize=16)
-    filename = f'timeseries_jpl_horizons_{name_lower}.png'
+    filename = f'timeseries_cart_coe_mee_jpl_horizons_{name_lower}.png'
     fig2.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     plot_files['jpl_horizons']['time_series'] = filename
     plt.close(fig2)
@@ -208,7 +208,7 @@ def generate_3d_and_time_series_plots(
 
     fig4 = plot_time_series(result_high_fidelity_propagation, epoch=time_o_dt)
     fig4.suptitle(f'Time Series - {object_name_display} - High-Fidelity', fontsize=16)
-    filename = f'timeseries_high_fidelity_{name_lower}.png'
+    filename = f'timeseries_cart_coe_mee_high_fidelity_{name_lower}.png'
     fig4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     plot_files['high_fidelity']['time_series'] = filename
     plt.close(fig4)
@@ -250,7 +250,7 @@ def generate_3d_and_time_series_plots(
     # Time series plot
     fig_sgp4_ts = plot_time_series(result_sgp4_propagation, epoch=time_o_dt)
     fig_sgp4_ts.suptitle(f'Time Series - {object_name_display} - SGP4', fontsize=16)
-    filename = f'timeseries_sgp4_{name_lower}.png'
+    filename = f'timeseries_cart_coe_mee_sgp4_{name_lower}.png'
     fig_sgp4_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     plot_files['sgp4']['time_series'] = filename
     plt.close(fig_sgp4_ts)
@@ -436,7 +436,7 @@ def generate_plots(
             title_text   = pass_ts_title,
           )
           if fig_pass_ts is not None:
-            filename = f'time_series_range_azimuth_elevation_{tracker_name_sanitized}_high_fidelity_{name_lower}.png'
+            filename = f'time_series_meas_{tracker_name_sanitized}_high_fidelity_{name_lower}.png'
             fig_pass_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
             plt.close(fig_pass_ts)
             filenames.append(filename)
@@ -451,7 +451,7 @@ def generate_plots(
             title_text   = pass_ts_title,
           )
           if fig_pass_ts_sgp4 is not None:
-            filename = f'time_series_range_azimuth_elevation_{tracker_name_sanitized}_tle_{name_lower}.png'
+            filename = f'time_series_meas_{tracker_name_sanitized}_sgp4_{name_lower}.png'
             fig_pass_ts_sgp4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
             plt.close(fig_pass_ts_sgp4)
             filenames.append(filename)
@@ -466,7 +466,7 @@ def generate_plots(
             title_text   = pass_ts_title,
           )
           if fig_pass_ts_horizons is not None:
-            filename = f'time_series_range_azimuth_elevation_{tracker_name_sanitized}_jpl_horizons_{name_lower}.png'
+            filename = f'time_series_meas_{tracker_name_sanitized}_jpl_horizons_{name_lower}.png'
             fig_pass_ts_horizons.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
             plt.close(fig_pass_ts_horizons)
             filenames.append(filename)

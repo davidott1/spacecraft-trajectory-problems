@@ -1,6 +1,6 @@
 # High-Fidelity Orbit Propagator
 
-A Python-based high-fidelity orbital mechanics propagation tool for Earth-orbiting spacecraft. This project provides numerical integration of spacecraft trajectories with configurable force models, comparison against reference ephemerides, and comprehensive visualization.
+A Python-based high-fidelity orbital mechanics propagation and orbit determination tool for Earth-orbiting spacecraft. This project provides numerical integration of spacecraft trajectories with configurable force models, ground station tracking simulation, comparison against reference ephemerides, and comprehensive visualization.
 
 ## Table of Contents
 
@@ -14,6 +14,10 @@ A Python-based high-fidelity orbital mechanics propagation tool for Earth-orbiti
   - [Examples](#examples)
   - [Custom State Vectors](#custom-state-vectors)
 - [Force Models](#force-models)
+- [Orbit Determination](#orbit-determination)
+  - [Ground Station Tracking](#ground-station-tracking)
+  - [Tracker Configuration](#tracker-configuration)
+  - [Skyplot Visualization](#skyplot-visualization)
 - [Data Sources](#data-sources)
 - [Data Download Tools](#data-download-tools)
 - [Output](#output)
@@ -37,69 +41,85 @@ The tool supports validation against JPL Horizons ephemerides and SGP4/TLE propa
 - **Configurable Force Models**: Enable/disable individual perturbations
 - **Multiple Initial State Sources**: JPL Horizons, TLE/SGP4, or custom state vectors
 - **Reference Comparisons**: Validate against JPL Horizons or SGP4 propagation
-- **Comprehensive Visualization**: 3D trajectories, time series, and error plots
-- **Frame Conversions**: J2000/GCRS, TEME, and RIC/RTN frames
-- **Orbital Element Computation**: Classical elements from Cartesian states
+- **Comprehensive Visualization**: 3D trajectories, time series, error plots, and skyplots
+- **Frame Conversions**: J2000/GCRS, TEME, IAU_EARTH, and RIC/RTN frames
+- **Orbital Element Computation**: Classical and Modified Equinoctial Elements
 - **SPICE Integration**: High-accuracy planetary ephemerides via DE440
+- **Orbit Determination**: Ground station tracking with topocentric coordinates (azimuth, elevation, range)
+- **Skyplot Visualization**: Polar plots showing satellite visibility from ground stations
+- **Geographic Coordinate Conversion**: Geodetic and geocentric coordinate systems with WGS84 ellipsoid
 
 ## Project Structure
 
 ```
 two_body_high_fidelity/
-├── README.md                    # This file
-├── requirements.txt             # Python dependencies
-├── .gitignore                   # Git ignore patterns
+├── README.md                        # This file
+├── requirements.txt                 # Python dependencies
+├── .gitignore                       # Git ignore patterns
 │
-├── data/                        # Input data (mostly gitignored)
-│   ├── ephems/                  # JPL Horizons ephemeris files
-│   ├── tles/                    # Two-Line Element files
-│   ├── spice_kernels/           # SPICE kernel files (DE440, leap seconds)
-│   └── state_vectors/           # Custom initial state vector YAML files
+├── data/                            # Input data (mostly gitignored)
+│   ├── ephems/                      # JPL Horizons ephemeris files
+│   ├── tles/                        # Two-Line Element files
+│   ├── spice_kernels/               # SPICE kernel files (DE440, leap seconds)
+│   ├── state_vectors/               # Custom initial state vector YAML files
+│   └── trackers/                    # Ground station tracker configurations
 │
-├── output/                      # Generated output (gitignored)
-│   └── <timestamp>/             # Timestamped run folders
-│       ├── figures/             # Generated plots
-│       └── files/               # Log files and data exports
+├── output/                          # Generated output (gitignored)
+│   └── <timestamp>/                 # Timestamped run folders
+│       ├── figures/                 # Generated plots
+│       └── files/                   # Log files and data exports
 │
-└── src/                         # Source code
+└── src/                             # Source code
     ├── __init__.py
-    ├── main.py                  # Main entry point
+    ├── main.py                      # Main entry point
     │
-    ├── input/                   # Input handling
-    │   ├── cli.py               # Command-line argument parsing
-    │   ├── configuration.py     # Configuration management
-    │   └── loader.py            # Data loading (SPICE, Horizons, TLEs)
+    ├── input/                       # Input handling
+    │   ├── cli.py                   # Command-line argument parsing
+    │   ├── configuration.py         # Configuration management
+    │   └── loader.py                # Data loading (SPICE, Horizons, TLEs)
     │
-    ├── model/                   # Core physics models
-    │   ├── constants.py         # Physical constants and unit conversions
-    │   ├── dynamics.py          # Acceleration models (gravity, drag, SRP)
-    │   ├── frame_converter.py   # Reference frame transformations
-    │   ├── orbit_converter.py   # Orbital element conversions
-    │   └── time_converter.py    # Time system conversions
+    ├── model/                       # Core physics models
+    │   ├── constants.py             # Physical constants and unit conversions
+    │   ├── dynamics.py              # Acceleration models (gravity, drag, SRP)
+    │   ├── frame_converter.py       # Reference frame transformations
+    │   ├── orbit_converter.py       # Orbital element conversions
+    │   └── time_converter.py        # Time system conversions
     │
-    ├── propagation/             # Numerical integration
-    │   ├── propagator.py        # ODE integration and SGP4 wrapper
-    │   └── state_initializer.py # Initial state determination
+    ├── propagation/                 # Numerical integration
+    │   ├── propagator.py            # ODE integration and SGP4 wrapper
+    │   └── state_initializer.py     # Initial state determination
     │
-    ├── plot/                    # Visualization
-    │   ├── trajectory.py        # Trajectory and error plotting
-    │   └── utility.py           # Plot helper functions
+    ├── orbit_determination/         # Orbit determination
+    │   ├── topocentric.py           # Topocentric coordinate computation
+    │   └── measurement_simulator.py # Measurement simulation
     │
-    ├── utility/                 # Utilities
-    │   ├── logger.py            # Logging configuration
-    │   ├── printer.py           # Console output formatting
-    │   ├── time_helper.py       # Time parsing utilities
-    │   └── tle_helper.py        # TLE parsing utilities
+    ├── plot/                        # Visualization
+    │   ├── trajectory.py            # Trajectory, error, and skyplot plotting
+    │   └── utility.py               # Plot helper functions
     │
-    └── validation/              # Test suite
+    ├── schemas/                     # Data schemas
+    │   ├── config.py                # Configuration dataclasses
+    │   ├── gravity.py               # Gravity model configuration
+    │   ├── propagation.py           # Propagation results
+    │   ├── spacecraft.py            # Spacecraft properties
+    │   ├── state.py                 # State and coordinate representations
+    │   └── measurement.py           # Measurement models
+    │
+    ├── utility/                     # Utilities
+    │   ├── logger.py                # Logging configuration
+    │   ├── printer.py               # Console output formatting
+    │   ├── time_helper.py           # Time parsing utilities
+    │   └── tle_helper.py            # TLE parsing utilities
+    │
+    └── validation/                  # Test suite
         ├── __init__.py
-        ├── conftest.py          # Pytest configuration and fixtures
-        ├── fixtures/            # Static test data
-        ├── test_dynamics.py     # Dynamics model tests
+        ├── conftest.py              # Pytest configuration and fixtures
+        ├── fixtures/                # Static test data
+        ├── test_dynamics.py         # Dynamics model tests
         ├── test_frame_converter.py
         ├── test_orbit_converter.py
         ├── test_propagator.py
-        └── test_regression.py   # End-to-end regression tests
+        └── test_regression.py       # End-to-end regression tests
 ```
 
 ## Installation
@@ -258,6 +278,85 @@ Cannonball model with:
 - Cylindrical Earth shadow model
 - Inverse-square intensity scaling
 
+
+## Orbit Determination
+
+The propagator includes comprehensive orbit determination capabilities for simulating ground station tracking and analyzing satellite visibility.
+
+### Ground Station Tracking
+
+The tool computes topocentric coordinates (azimuth, elevation, range) from ground stations to satellites:
+
+- **Azimuth**: Angle from North (0°) clockwise to East (90°), South (180°), West (270°)
+- **Elevation**: Angle above the horizon (0°) to zenith (90°)
+- **Range**: Slant distance from ground station to satellite (m)
+
+Additional computed quantities:
+- **Azimuth rate** (rad/s): Angular velocity in azimuth
+- **Elevation rate** (rad/s): Angular velocity in elevation
+- **Range rate** (m/s): Radial velocity (range-rate)
+
+These measurements are fundamental for:
+- Orbit determination from tracking data
+- Ground station scheduling and operations
+- Communication link analysis
+- Satellite visibility prediction
+
+### Tracker Configuration
+
+Ground station configurations are defined in YAML files located in `data/trackers/`. Multiple tracker sets are available:
+
+**trackers_set1.yaml** - Standard network:
+```yaml
+- name: "Canberra DSN"
+  position:
+    latitude__deg: -35.4
+    longitude__deg: 148.98
+    altitude__m: 550.0
+  performance:
+    azimuth_min_max__deg: -180.0, 180.0
+    elevation_min_max__deg: 10.0, 90.0
+    range_min_max__m: 0.0, 2.5e6
+```
+
+**trackers_set2.yaml** - Global coverage:
+- Equatorial Tracker
+- Northern Tracker (45°N)
+- Southern Tracker (45°S)
+- Equatorial Eastern Tracker
+
+**trackers_set3.yaml** - Real-world stations:
+- Canberra DSN (Australia)
+- Svalbard Arctic (Norway)
+- Santiago Chile
+
+Each tracker specifies:
+- **Position**: Geodetic latitude, longitude, altitude (WGS84)
+- **Performance**: Azimuth/elevation limits, maximum range
+
+### Skyplot Visualization
+
+Skyplots provide polar visualizations of satellite visibility from ground stations:
+
+**Features**:
+- Polar plot with elevation (radial axis) and azimuth (angular axis)
+- Color-coded ground track showing elevation history
+- Visibility statistics (percentage, max elevation, min range)
+- Field-of-view (FOV) hemisphere visualization
+- Time progression indicators
+- Automatic visibility filtering based on tracker performance limits
+
+**Example skyplot output**:
+```
+output/<timestamp>/figures/skyplot_<tracker>_<satellite>.png
+```
+
+The skyplot shows:
+- **Center**: Zenith (90° elevation)
+- **Outer ring**: Horizon (0° elevation)
+- **Angular direction**: Azimuth (North=top, East=right, South=bottom, West=left)
+- **Color gradient**: Elevation angle (low to high)
+- **FOV cone**: Ground station's field-of-view projection
 ## Data Sources
 
 ### JPL Horizons
@@ -370,7 +469,9 @@ output/20251216_143052/
 │   ├── timeseries_iss_jpl_horizons.png
 │   ├── timeseries_iss_sgp4.png
 │   ├── error_timeseries_iss_high_fidelity_relative_to_jpl_horizons.png
-│   └── error_timeseries_iss_high_fidelity_relative_to_sgp4.png
+│   ├── error_timeseries_iss_high_fidelity_relative_to_sgp4.png
+│   ├── skyplot_canberra_dsn_iss.png
+│   └── skyplot_svalbard_arctic_iss.png
 └── files/
     └── output.log
 ```
@@ -382,6 +483,7 @@ output/20251216_143052/
 | 3D Trajectory | Position and velocity in 3D with Earth wireframe |
 | Time Series | Position, velocity, and orbital elements vs time |
 | Error Plots | RIC-frame position/velocity errors and orbital element differences |
+| Skyplots | Polar plots showing satellite visibility from ground stations with azimuth/elevation tracks |
 
 ## Testing
 
