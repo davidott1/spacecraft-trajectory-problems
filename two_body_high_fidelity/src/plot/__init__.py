@@ -33,6 +33,7 @@ from src.plot.plot_groundtrack import (
 
 from src.plot.plot_skyplot import (
     plot_skyplot,
+    plot_pass_timeseries,
 )
 
 from src.plot.plot_generator import (
@@ -54,6 +55,7 @@ __all__ = [
     'plot_ground_track',
     # Skyplot
     'plot_skyplot',
+    'plot_pass_timeseries',
     # Generators
     'generate_plots',
     'generate_error_plots',
