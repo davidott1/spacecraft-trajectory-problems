@@ -567,6 +567,7 @@ def build_config(
     object_name         = object_name,
     object_name_display = object_name_display,
     auto_download       = auto_download,
+    propagation_config  = propagation_config,
   )
 
 

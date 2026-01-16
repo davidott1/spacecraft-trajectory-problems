@@ -10,9 +10,10 @@ from datetime    import datetime
 from pathlib     import Path
 from typing      import Optional
 
-from src.schemas.gravity    import GravityModelConfig
-from src.schemas.spacecraft import SpacecraftProperties
-from src.schemas.state      import CartesianState
+from src.schemas.gravity     import GravityModelConfig
+from src.schemas.propagation import PropagationConfig
+from src.schemas.spacecraft  import SpacecraftProperties
+from src.schemas.state       import CartesianState
 
 
 @dataclass
@@ -124,6 +125,7 @@ class SimulationConfig:
   object_name         : str                          = "object"
   object_name_display : str                          = "Object"
   auto_download       : bool                         = False
+  propagation_config  : Optional[PropagationConfig]  = None
   tle_line_1          : Optional[str]                = None
   tle_line_2          : Optional[str]                = None
   tle_epoch_dt        : Optional[datetime]           = None
