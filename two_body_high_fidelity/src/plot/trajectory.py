@@ -2700,14 +2700,14 @@ def plot_skyplot(
   
   # Plot each visible segment
   for seg_start, seg_end in zip(segment_starts, segment_ends):
-    seg_theta = theta[seg_start:seg_end]
-    seg_radius = radius[seg_start:seg_end]
-    seg_time = time_s[seg_start:seg_end]
-    seg_marker_sizes = marker_sizes[seg_start:seg_end]
-    seg_range = range_m[seg_start:seg_end]
+    seg_theta            = theta[seg_start:seg_end]
+    seg_radius           = radius[seg_start:seg_end]
+    seg_time             = time_s[seg_start:seg_end]
+    seg_marker_sizes     = marker_sizes[seg_start:seg_end]
+    seg_range            = range_m[seg_start:seg_end]
     seg_constraint_valid = constraint_valid_mask[seg_start:seg_end]
-    seg_el_deg = el_deg[seg_start:seg_end]
-    seg_az_deg = az_deg[seg_start:seg_end]
+    seg_el_deg           = el_deg[seg_start:seg_end]
+    seg_az_deg           = az_deg[seg_start:seg_end]
 
     # Plot trajectory
     if len(seg_time) > 0:
@@ -3008,9 +3008,6 @@ def plot_skyplot(
   # Convert time_s to UTC datetime for x-axis
   if epoch_dt_utc is not None:
     time_utc = [epoch_dt_utc + timedelta(seconds=float(t)) for t in time_s]
-  else:
-    # Fallback to hours if no epoch provided
-    time_utc = time_hrs
 
   # Thin black line for entire solution (not in legend)
   if epoch_dt_utc is not None:
