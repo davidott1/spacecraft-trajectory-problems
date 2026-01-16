@@ -215,4 +215,4 @@ class TestCLIIntegration:
     
     # Verify expected output in stdout
     assert "High-Fidelity Model" in result.stdout
-    assert "Complete" in result.stdout
+    assert "Generate and Save Plots" in result.stdout
