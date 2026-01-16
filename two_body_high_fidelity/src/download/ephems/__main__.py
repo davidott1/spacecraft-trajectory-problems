@@ -11,7 +11,6 @@ Examples:
 
 import sys
 from pathlib import Path
-from datetime import datetime
 
 # Import shared functionality from ephems_and_tles module
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
