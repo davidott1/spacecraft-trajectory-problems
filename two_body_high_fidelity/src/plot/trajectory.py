@@ -2412,15 +2412,23 @@ def generate_error_plots(
   compare_tle                      : bool,
   object_name                      : str = "object",
   object_name_display              : str = "Object",
-) -> None:
+) -> dict:
   """
   Generate and save error comparison plots.
+  
+  Returns:
+  --------
+    dict : Dictionary with error plot filenames organized by comparison type.
   """
+  error_files = {
+    'hf_vs_horizons': [],
+    'hf_vs_sgp4': [],
+    'sgp4_vs_horizons': [],
+  }
+  
   # If neither comparison is requested, do nothing
   if not (compare_jpl_horizons or compare_tle):
-    return
-
-  print("    Error Plots")
+    return error_files
 
   # Define availability flags
   has_horizons      = result_jpl_horizons_ephemeris is not None and result_jpl_horizons_ephemeris.success
@@ -2436,8 +2444,6 @@ def generate_error_plots(
 
   # High-Fidelity Relative To JPL Horizons (compare at ephemeris times)
   if compare_jpl_horizons and has_horizons and has_hf_at_ephem:
-    print("      High-Fidelity Relative To JPL Horizons")
-    
     # Build result dict for comparison using pre-computed at_ephem_times data
     # Note: plot_time_series_error expects dicts or objects. 
     # at_ephem_times is a dict in PropagationResult.
@@ -2453,13 +2459,11 @@ def generate_error_plots(
     fig_err_ts.suptitle(title, fontsize=14)
     filename = f'error_timeseries_high_fidelity_rel_jpl_horizons_{name_lower}.png'
     fig_err_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"      Time-Series Error : <figures_folderpath>/{filename}")
+    error_files['hf_vs_horizons'].append(filename)
     plt.close(fig_err_ts)
 
   # High-Fidelity Relative To SGP4 (compare at equal grid times)
   if compare_tle and has_high_fidelity and has_sgp4:
-    print("    High-Fidelity Relative To SGP4 (at equal grid times)")
-    
     # Use equal grid data (main plot_time_s, state, coe)
     fig_err_ts = plot_time_series_error(
       result_ref  = result_sgp4_propagation,
@@ -2471,13 +2475,11 @@ def generate_error_plots(
     fig_err_ts.suptitle(title, fontsize=14)
     filename = f'error_timeseries_high_fidelity_rel_sgp4_{name_lower}.png'
     fig_err_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"      Time-Series Error : <figures_folderpath>/{filename}")
+    error_files['hf_vs_sgp4'].append(filename)
     plt.close(fig_err_ts)
 
   # SGP4 Relative To JPL Horizons (compare at ephemeris times)
   if compare_jpl_horizons and compare_tle and has_horizons and has_sgp4_at_ephem:
-    print("    SGP4 Relative To JPL Horizons (at ephemeris times)")
-    
     # Build result dict for comparison using pre-computed at_ephem_times data
     sgp4_at_ephem = result_sgp4_propagation.at_ephem_times
     
@@ -2491,9 +2493,10 @@ def generate_error_plots(
     fig_err_ts.suptitle(title, fontsize=14)
     filename = f'error_timeseries_sgp4_rel_jpl_horizons_{name_lower}.png'
     fig_err_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"      Time-Series Error : <figures_folderpath>/{filename}")
+    error_files['sgp4_vs_horizons'].append(filename)
     plt.close(fig_err_ts)
   
+  return error_files
 
 
 def plot_skyplot(
@@ -2894,7 +2897,7 @@ def generate_3d_and_time_series_plots(
   object_name_display              : str = "Object",
   trackers                         : Optional[list['TrackerStation']] = None,
   include_tracker_on_body          : bool = False,
-) -> None:
+) -> dict:
   """
   Generate and save 3D trajectory and time series plots.
   
@@ -2921,29 +2924,31 @@ def generate_3d_and_time_series_plots(
       
   Output:
   -------
-    None
+    dict : Dictionary with plot filenames organized by source type.
   """
-  print("    3D-Trajectory, Time-Series, and Groundtrack Plots")
+  plot_files = {
+    'jpl_horizons': {},
+    'high_fidelity': {},
+    'sgp4': {},
+  }
 
   # Lowercase name for filenames
   name_lower = object_name.lower()
 
   # Horizons plots
   if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
-    print("      JPL-Horizons-Ephemeris Plots")
-
     fig1 = plot_3d_trajectories(result_jpl_horizons_ephemeris, epoch=time_o_dt, frame="J2000")
     fig1.suptitle(f'3D Inertial - {object_name_display} - JPL Horizons', fontsize=16)
     filename = f'3d_j2000_earth_centered_jpl_horizons_{name_lower}.png'
     fig1.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"        3D Inertial    : <figures_folderpath>/{filename}")
+    plot_files['jpl_horizons']['3d_inertial'] = filename
     plt.close(fig1)
 
     fig2 = plot_time_series(result_jpl_horizons_ephemeris, epoch=time_o_dt)
     fig2.suptitle(f'Time Series - {object_name_display} - JPL Horizons', fontsize=16)
     filename = f'timeseries_jpl_horizons_{name_lower}.png'
     fig2.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"        Time Series    : <figures_folderpath>/{filename}")
+    plot_files['jpl_horizons']['time_series'] = filename
     plt.close(fig2)
 
     # Body-fixed 3D plot for Horizons
@@ -2951,7 +2956,7 @@ def generate_3d_and_time_series_plots(
     fig_ef.suptitle(f'3D Body-Fixed - {object_name_display} - JPL Horizons', fontsize=16)
     filename = f'3d_iau_earth_jpl_horizons_{name_lower}.png'
     fig_ef.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"        3D Body-Fixed  : <figures_folderpath>/{filename}")
+    plot_files['jpl_horizons']['3d_body_fixed'] = filename
     plt.close(fig_ef)
 
     # Ground track plot for Horizons
@@ -2959,25 +2964,23 @@ def generate_3d_and_time_series_plots(
     fig_gt = plot_ground_track(result_jpl_horizons_ephemeris, epoch_dt_utc=time_o_dt, title_text=gt_title, trackers=trackers, include_tracker_on_body=include_tracker_on_body)
     filename = f'groundtrack_jpl_horizons_{name_lower}.png'
     fig_gt.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"        Ground Track   : <figures_folderpath>/{filename}")
+    plot_files['jpl_horizons']['ground_track'] = filename
     plt.close(fig_gt)
   
   # High-fidelity plots
   if result_high_fidelity_propagation.success:
-    print("      High-Fidelity-Model Plots")
-
     fig3 = plot_3d_trajectories(result_high_fidelity_propagation, epoch=time_o_dt, frame="J2000")
     fig3.suptitle(f'3D Inertial - {object_name_display} - High-Fidelity', fontsize=16)
     filename = f'3d_j2000_earth_centered_high_fidelity_{name_lower}.png'
     fig3.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"        3D Inertial    : <figures_folderpath>/{filename}")
+    plot_files['high_fidelity']['3d_inertial'] = filename
     plt.close(fig3)
 
     fig4 = plot_time_series(result_high_fidelity_propagation, epoch=time_o_dt)
     fig4.suptitle(f'Time Series - {object_name_display} - High-Fidelity', fontsize=16)
     filename = f'timeseries_high_fidelity_{name_lower}.png'
     fig4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"        Time Series    : <figures_folderpath>/{filename}")
+    plot_files['high_fidelity']['time_series'] = filename
     plt.close(fig4)
 
     # Body-fixed 3D plot
@@ -2985,7 +2988,7 @@ def generate_3d_and_time_series_plots(
     fig_ef.suptitle(f'3D Body-Fixed - {object_name_display} - High-Fidelity', fontsize=16)
     filename = f'3d_iau_earth_high_fidelity_{name_lower}.png'
     fig_ef.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"        3D Body-Fixed  : <figures_folderpath>/{filename}")
+    plot_files['high_fidelity']['3d_body_fixed'] = filename
     plt.close(fig_ef)
 
     # Ground track plot
@@ -2993,7 +2996,7 @@ def generate_3d_and_time_series_plots(
     fig_gt = plot_ground_track(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt, title_text=gt_title, trackers=trackers, include_tracker_on_body=include_tracker_on_body)
     filename = f'groundtrack_high_fidelity_{name_lower}.png'
     fig_gt.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"        Ground Track   : <figures_folderpath>/{filename}")
+    plot_files['high_fidelity']['ground_track'] = filename
     plt.close(fig_gt)
 
     # 3D plot Sun-centered trajectory
@@ -3001,19 +3004,17 @@ def generate_3d_and_time_series_plots(
     fig_moon.suptitle(f'3D Inertial - {object_name_display} - High-Fidelity', fontsize=16)
     filename = f'3d_j2000_sun_centered_high_fidelity_{name_lower}.png'
     fig_moon.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"        3D Inertial    : <figures_folderpath>/{filename}")
+    plot_files['high_fidelity']['3d_sun_centered'] = filename
     plt.close(fig_moon)
   
   # SGP4 plots
   if compare_tle and result_sgp4_propagation and result_sgp4_propagation.success:
-    print("    SGP4-Model Plots")
-    
     # 3D trajectory plot
     fig_sgp4_3d = plot_3d_trajectories(result_sgp4_propagation, epoch=time_o_dt, frame="J2000")
     fig_sgp4_3d.suptitle(f'3D Inertial - {object_name_display} - SGP4', fontsize=16)
     filename = f'3d_j2000_earth_centered_sgp4_{name_lower}.png'
     fig_sgp4_3d.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"      3D Inertial    : <figures_folderpath>/{filename}")
+    plot_files['sgp4']['3d_inertial'] = filename
     plt.close(fig_sgp4_3d)
     
     # Time series plot
@@ -3021,7 +3022,7 @@ def generate_3d_and_time_series_plots(
     fig_sgp4_ts.suptitle(f'Time Series - {object_name_display} - SGP4', fontsize=16)
     filename = f'timeseries_sgp4_{name_lower}.png'
     fig_sgp4_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"      Time Series    : <figures_folderpath>/{filename}")
+    plot_files['sgp4']['time_series'] = filename
     plt.close(fig_sgp4_ts)
 
     # Ground track plot for SGP4
@@ -3029,8 +3030,10 @@ def generate_3d_and_time_series_plots(
     fig_gt_sgp4 = plot_ground_track(result_sgp4_propagation, epoch_dt_utc=time_o_dt, title_text=gt_title, trackers=trackers, include_tracker_on_body=include_tracker_on_body)
     filename = f'groundtrack_sgp4_{name_lower}.png'
     fig_gt_sgp4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    print(f"      Ground Track   : <figures_folderpath>/{filename}")
+    plot_files['sgp4']['ground_track'] = filename
     plt.close(fig_gt_sgp4)
+
+  return plot_files
 
 def generate_plots(
   result_jpl_horizons_ephemeris    : Optional[PropagationResult],
@@ -3084,19 +3087,10 @@ def generate_plots(
 
   print()
   print("  Progress")
-  print("    Generate 3D-trajectory, time-series, and groundtrack plots")
-  if compare_jpl_horizons or compare_tle:
-    print("    Generate error plots")
-  if trackers is not None and len(trackers) > 0:
-    print("    Generate skyplots")
-
-  print()
-  print("  Summary")
-  print(f"    Figure Folderpath : {figures_folderpath}")
-  print()
 
   # Generate 3D and time series plots
-  generate_3d_and_time_series_plots(
+  print("    Generate 3D-trajectory, time-series, and groundtrack plots")
+  plot_files = generate_3d_and_time_series_plots(
     result_jpl_horizons_ephemeris    = result_jpl_horizons_ephemeris,
     result_high_fidelity_propagation = result_high_fidelity_propagation,
     result_sgp4_propagation          = result_sgp4_propagation,
@@ -3111,9 +3105,10 @@ def generate_plots(
   )
 
   # Generate error plots only if a comparison was requested
+  error_files = {'hf_vs_horizons': [], 'hf_vs_sgp4': [], 'sgp4_vs_horizons': []}
   if compare_jpl_horizons or compare_tle:
-    print()
-    generate_error_plots(
+    print("    Generate error plots")
+    error_files = generate_error_plots(
       result_jpl_horizons_ephemeris    = result_jpl_horizons_ephemeris,
       result_high_fidelity_propagation = result_high_fidelity_propagation,
       result_sgp4_propagation          = result_sgp4_propagation,
@@ -3126,9 +3121,9 @@ def generate_plots(
     )
 
   # Generate skyplots for each tracker
+  skyplot_files = {}  # Dict of tracker_name -> list of filenames
   if trackers is not None and len(trackers) > 0:
-    print()
-    print("    Skyplots")
+    print("    Generate skyplots")
 
     name_lower = object_name.lower().replace(' ', '_').replace('-', '_')
 
@@ -3181,10 +3176,75 @@ def generate_plots(
           plt.close(fig_skyplot_horizons)
           filenames.append(filename)
 
-        # Print tracker and filenames
-        print(f"      Tracker {tracker.name}")
-        for filename in filenames:
-          print(f"        <figures_folderpath>/{filename}")
+        skyplot_files[tracker.name] = filenames
 
       except Exception as e:
         print(f"      [WARNING] Failed to generate skyplot for {tracker.name}: {e}")
+
+  print()
+  print("  Summary")
+  print(f"    Figure Folderpath : {figures_folderpath}")
+  print()
+  
+  # Print 3D-Trajectory, Time-Series, and Groundtrack Plots
+  print("    3D-Trajectory, Time-Series, and Groundtrack Plots")
+  
+  if plot_files['jpl_horizons']:
+    print("      JPL-Horizons-Ephemeris Plots")
+    if '3d_inertial' in plot_files['jpl_horizons']:
+      print(f"        3D Inertial    : <figures_folderpath>/{plot_files['jpl_horizons']['3d_inertial']}")
+    if 'time_series' in plot_files['jpl_horizons']:
+      print(f"        Time Series    : <figures_folderpath>/{plot_files['jpl_horizons']['time_series']}")
+    if '3d_body_fixed' in plot_files['jpl_horizons']:
+      print(f"        3D Body-Fixed  : <figures_folderpath>/{plot_files['jpl_horizons']['3d_body_fixed']}")
+    if 'ground_track' in plot_files['jpl_horizons']:
+      print(f"        Ground Track   : <figures_folderpath>/{plot_files['jpl_horizons']['ground_track']}")
+  
+  if plot_files['high_fidelity']:
+    print("      High-Fidelity-Model Plots")
+    if '3d_inertial' in plot_files['high_fidelity']:
+      print(f"        3D Inertial    : <figures_folderpath>/{plot_files['high_fidelity']['3d_inertial']}")
+    if 'time_series' in plot_files['high_fidelity']:
+      print(f"        Time Series    : <figures_folderpath>/{plot_files['high_fidelity']['time_series']}")
+    if '3d_body_fixed' in plot_files['high_fidelity']:
+      print(f"        3D Body-Fixed  : <figures_folderpath>/{plot_files['high_fidelity']['3d_body_fixed']}")
+    if 'ground_track' in plot_files['high_fidelity']:
+      print(f"        Ground Track   : <figures_folderpath>/{plot_files['high_fidelity']['ground_track']}")
+    if '3d_sun_centered' in plot_files['high_fidelity']:
+      print(f"        3D Sun-Centered: <figures_folderpath>/{plot_files['high_fidelity']['3d_sun_centered']}")
+  
+  if plot_files['sgp4']:
+    print("      SGP4-Model Plots")
+    if '3d_inertial' in plot_files['sgp4']:
+      print(f"        3D Inertial    : <figures_folderpath>/{plot_files['sgp4']['3d_inertial']}")
+    if 'time_series' in plot_files['sgp4']:
+      print(f"        Time Series    : <figures_folderpath>/{plot_files['sgp4']['time_series']}")
+    if 'ground_track' in plot_files['sgp4']:
+      print(f"        Ground Track   : <figures_folderpath>/{plot_files['sgp4']['ground_track']}")
+  
+  # Print Error Plots
+  has_error_plots = any(error_files[k] for k in error_files)
+  if has_error_plots:
+    print()
+    print("    Error Plots")
+    if error_files['hf_vs_horizons']:
+      print("      High-Fidelity Relative To JPL Horizons")
+      for filename in error_files['hf_vs_horizons']:
+        print(f"        Time-Series Error : <figures_folderpath>/{filename}")
+    if error_files['hf_vs_sgp4']:
+      print("      High-Fidelity Relative To SGP4")
+      for filename in error_files['hf_vs_sgp4']:
+        print(f"        Time-Series Error : <figures_folderpath>/{filename}")
+    if error_files['sgp4_vs_horizons']:
+      print("      SGP4 Relative To JPL Horizons")
+      for filename in error_files['sgp4_vs_horizons']:
+        print(f"        Time-Series Error : <figures_folderpath>/{filename}")
+  
+  # Print Skyplots
+  if skyplot_files:
+    print()
+    print("    Skyplots")
+    for tracker_name, filenames in skyplot_files.items():
+      print(f"      Tracker {tracker_name}")
+      for filename in filenames:
+        print(f"        <figures_folderpath>/{filename}")

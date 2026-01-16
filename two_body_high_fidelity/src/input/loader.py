@@ -817,7 +817,7 @@ def get_horizons_ephemeris(
       user_response = input().strip().lower()
     
     if user_response == 'y':
-      print(f"               :   ... Downloading {object_name} ({norad_id}) ...", end=" ", flush=True)
+      print(f"                 :   ... Downloading {object_name} ({norad_id}) ...", end=" ", flush=True)
       
       try:
         # Construct command to run the standalone ephemeris download module
