@@ -2507,7 +2507,7 @@ def plot_skyplot(
 ) -> Figure:
   """
   Plot a skyplot (polar plot of azimuth vs elevation) from a ground station.
-  
+
   Input:
   ------
     result : PropagationResult
@@ -2518,13 +2518,13 @@ def plot_skyplot(
       Reference epoch (start time) for time conversion to ET.
     title_text : str
       Base title for the plot.
-      
+
   Output:
   -------
     fig : matplotlib.figure.Figure
-      Figure object containing the skyplot.
+      Figure object containing the skyplot and time-series plots.
   """
-  fig = plt.figure(figsize=(12, 10))
+  fig = plt.figure(figsize=(20, 10))
   
   # Compute topocentric coordinates
   topo = compute_topocentric_coordinates(result, tracker, epoch_dt_utc)
@@ -2541,9 +2541,9 @@ def plot_skyplot(
   # theta = azimuth (convert negative angles to positive for polar plotting: 0 to 2π)
   radius = 90.0 - el_deg
   theta  = np.deg2rad(np.where(az_deg >= 0, az_deg, az_deg + 360.0))
-  
-  # Create polar subplot
-  ax = fig.add_subplot(111, projection='polar')
+
+  # Create grid: polar skyplot on left, three time-series plots on right
+  ax = fig.add_subplot(1, 2, 1, projection='polar')
   
   # Configure polar plot for skyplot convention
   ax.set_theta_zero_location('N')  # North at top
@@ -2701,33 +2701,31 @@ def plot_skyplot(
     # Plot trajectory
     if len(seg_time) > 0:
 
-      # Split segment into valid and invalid portions based on constraints
-      for i in range(len(seg_theta)):
-        if seg_constraint_valid[i]:
-          # Valid region - plot in blue
-          color = 'blue'
-          alpha_scatter = 1.0
-          alpha_line = 0.5
-        else:
-          # Invalid region (violates constraints) - plot in gray
-          color = 'gray'
-          alpha_scatter = 0.4
-          alpha_line = 0.3
-
-        # Plot individual points
-        ax.scatter([seg_theta[i]], [seg_radius[i]], c=color, s=seg_marker_sizes[i], alpha=alpha_scatter)
-
-      # Plot line segments with appropriate colors
+      # Plot line segments based on point types:
+      # - Gray solid line between gray (not valid) points
+      # - Gray dashed line between gray and blue (transition) points
+      # - Blue solid line between blue (valid) points
       for i in range(len(seg_theta) - 1):
         if seg_constraint_valid[i] and seg_constraint_valid[i+1]:
-          # Both points valid - blue line
-          ax.plot(seg_theta[i:i+2], seg_radius[i:i+2], 'b-', linewidth=2.0, alpha=0.5)
+          # Both points valid (blue) - blue solid line
+          ax.plot(seg_theta[i:i+2], seg_radius[i:i+2], 'b-', linewidth=2.0, alpha=0.8)
         elif not seg_constraint_valid[i] and not seg_constraint_valid[i+1]:
-          # Both points invalid - gray line
-          ax.plot(seg_theta[i:i+2], seg_radius[i:i+2], color='gray', linewidth=2.0, alpha=0.3)
+          # Both points not valid (gray) - gray solid line
+          ax.plot(seg_theta[i:i+2], seg_radius[i:i+2], color='gray', linestyle='-', linewidth=1.5, alpha=0.8)
         else:
-          # Transition point - use dashed line
-          ax.plot(seg_theta[i:i+2], seg_radius[i:i+2], 'k--', linewidth=1.5, alpha=0.5)
+          # Transition between gray and blue - gray dashed line
+          ax.plot(seg_theta[i:i+2], seg_radius[i:i+2], color='gray', linestyle='--', linewidth=1.5, alpha=0.8)
+
+      # Plot visible points with gray (do not connect)
+      ax.scatter(seg_theta, seg_radius, c='gray', s=seg_marker_sizes, alpha=0.6)
+
+      # Plot valid portions with blue markers
+      if np.any(seg_constraint_valid):
+        # Plot blue scatter points for valid portions
+        valid_indices = np.where(seg_constraint_valid)[0]
+        if len(valid_indices) > 0:
+          ax.scatter(seg_theta[valid_indices], seg_radius[valid_indices],
+                    c='blue', s=seg_marker_sizes[valid_indices], alpha=1.0)
       
       # Add entry marker if this is a true entry (satellite rose above horizon during propagation)
       # A true entry means there was a point before this segment that was below horizon
@@ -2846,42 +2844,218 @@ def plot_skyplot(
   fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=10, color='black',
            bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', alpha=0.9))
   
-  # Add range-size legend box on the right side
+  # Add range-size legend box at bottom left of figure
   range_mid = (range_min + range_max) / 2.0
   range_min_km = range_min / 1000.0
   range_max_km = range_max / 1000.0
   range_mid_km = range_mid / 1000.0
-  
-  # Create a separate axes for the legend
-  legend_ax = fig.add_axes([0.75, 0.40, 0.12, 0.18])  # [left, bottom, width, height]
-  legend_ax.set_xlim(0, 8)
+
+  # Create a separate axes for the legend at bottom left
+  legend_ax = fig.add_axes([0.05, 0.02, 0.15, 0.09])  # [left, bottom, width, height]
+  legend_ax.set_xlim(0, 10)
   legend_ax.set_ylim(0, 10)
   legend_ax.axis('off')
-  
-  # Draw dots and range labels (closer = larger dot)
-  legend_ax.scatter([1.2], [7], s=marker_size_max, c='blue', alpha=0.8)
-  legend_ax.text(2.2, 7, f'{range_min_km:.0f} km, min', va='center', fontsize=9)
-  
-  legend_ax.scatter([1.2], [5], s=(marker_size_min + marker_size_max) / 2, c='blue', alpha=0.8)
-  legend_ax.text(2.2, 5, f'{range_mid_km:.0f} km, mid', va='center', fontsize=9)
-  
-  legend_ax.scatter([1.2], [3], s=marker_size_min, c='blue', alpha=0.8)
-  legend_ax.text(2.2, 3, f'{range_max_km:.0f} km, max', va='center', fontsize=9)
-  
-  legend_ax.text(4, 8.5, 'Range', ha='center', fontsize=10, fontweight='bold')
-  
-  # Add border box
-  legend_ax.add_patch(plt.Rectangle((0, 1.5), 8, 8, fill=True, facecolor='None', 
-                                     edgecolor='black', alpha=1.0, linewidth=1))
-  legend_ax.set_zorder(0)
-  for child in legend_ax.get_children():
-    if hasattr(child, 'set_zorder'):
-      child.set_zorder(1)
-  
+
+  # Add border box FIRST (draw background before foreground elements)
+  legend_ax.add_patch(plt.Rectangle((0, 0), 10, 10, fill=True, facecolor='white',
+                                     edgecolor='black', alpha=1.0, linewidth=1, zorder=0))
+
+  # Draw dots and range labels horizontally (closer = larger dot)
+  legend_ax.scatter([1], [6], s=marker_size_max, c='blue', alpha=0.8, zorder=2)
+  legend_ax.text(1, 4.5, f'{range_min_km:.0f} km\nmin', ha='center', va='top', fontsize=8, zorder=2)
+
+  legend_ax.scatter([5], [6], s=(marker_size_min + marker_size_max) / 2, c='blue', alpha=0.8, zorder=2)
+  legend_ax.text(5, 4.5, f'{range_mid_km:.0f} km\nmid', ha='center', va='top', fontsize=8, zorder=2)
+
+  legend_ax.scatter([9], [6], s=marker_size_min, c='blue', alpha=0.8, zorder=2)
+  legend_ax.text(9, 4.5, f'{range_max_km:.0f} km\nmax', ha='center', va='top', fontsize=8, zorder=2)
+
+  legend_ax.text(5, 8.5, 'Range', ha='center', fontsize=9, fontweight='bold', zorder=2)
+
   ax.set_title(title_text, fontsize=14, pad=20)
+
+  # ============================================
+  # Time-series plots on the right column
+  # ============================================
+
+  # Convert time to hours for better readability
+  time_hrs = time_s / 3600.0
+
+  # Create three subplots in the right column (stacked vertically)
+  ax_range = fig.add_subplot(3, 2, 2)
+  ax_az    = fig.add_subplot(3, 2, 4)
+  ax_el    = fig.add_subplot(3, 2, 6)
+
+  # Plot Range vs Time
+  range_km = topo.range / 1000.0
+
+  # Thin black line for entire solution (not in legend)
+  ax_range.plot(time_hrs, range_km, 'k-', linewidth=0.5, alpha=0.8)
+  ax_range.set_ylabel('Range [km]', fontsize=11)
+  ax_range.grid(True, alpha=0.3)
+  ax_range.set_title('Truth Measurements vs Time', fontsize=12)
+
+  # Find segments for visible portions
+  visible_segment_starts = []
+  visible_segment_ends = []
+  in_visible_segment = False
+
+  for i in range(len(visible_mask)):
+    if visible_mask[i] and not in_visible_segment:
+      visible_segment_starts.append(i)
+      in_visible_segment = True
+    elif not visible_mask[i] and in_visible_segment:
+      visible_segment_ends.append(i)
+      in_visible_segment = False
+  if in_visible_segment:
+    visible_segment_ends.append(len(visible_mask))
+
+  # Plot gray lines and markers for each visible segment
+  gray_plotted = False
+  for seg_start, seg_end in zip(visible_segment_starts, visible_segment_ends):
+    label = 'Above Horizon' if not gray_plotted else None
+    ax_range.plot(time_hrs[seg_start:seg_end], range_km[seg_start:seg_end],
+                  color='gray', linewidth=2.5, alpha=0.6, marker='o', markersize=4, label=label)
+    gray_plotted = True
+
+  # Find segments for valid portions (same segment logic)
+  valid_segment_starts = []
+  valid_segment_ends = []
+  in_valid_segment = False
+
+  for i in range(len(constraint_valid_mask)):
+    if constraint_valid_mask[i] and not in_valid_segment:
+      valid_segment_starts.append(i)
+      in_valid_segment = True
+    elif not constraint_valid_mask[i] and in_valid_segment:
+      valid_segment_ends.append(i)
+      in_valid_segment = False
+  if in_valid_segment:
+    valid_segment_ends.append(len(constraint_valid_mask))
+
+  # Plot blue lines for each valid segment (do not connect across segments)
+  blue_plotted = False
+  for seg_start, seg_end in zip(valid_segment_starts, valid_segment_ends):
+    label = 'Trackable' if not blue_plotted else None
+    ax_range.plot(time_hrs[seg_start:seg_end], range_km[seg_start:seg_end],
+                  'b-', linewidth=3.5, alpha=0.8, label=label)
+    blue_plotted = True
+
+  # Add horizontal lines for range constraints (if they exist)
+  if tracker.performance and tracker.performance.range:
+    range_min_km = tracker.performance.range.min / 1000.0
+    range_max_km = tracker.performance.range.max / 1000.0
+    if range_min_km > 0:
+      ax_range.axhline(y=range_min_km, color='k', linestyle='--', linewidth=1.0, alpha=0.5, label=f'Min Range ({range_min_km:.0f} km)')
+    if range_max_km < np.inf:
+      ax_range.axhline(y=range_max_km, color='k', linestyle='--', linewidth=1.0, alpha=0.5, label=f'Max Range ({range_max_km:.0f} km)')
+
+  ax_range.legend(loc='best', fontsize=9)
+  # Hide x-axis tick labels for range plot
+  ax_range.set_xticklabels([])
+
+  # Plot Azimuth vs Time
+  # Thin black line for entire solution (not in legend)
+  ax_az.plot(time_hrs, az_deg, 'k-', linewidth=0.5, alpha=0.8)
+  ax_az.set_ylabel('Azimuth [deg]', fontsize=11)
+  ax_az.grid(True, alpha=0.3)
+
+  # Plot gray lines and markers for each visible segment
+  gray_plotted = False
+  for seg_start, seg_end in zip(visible_segment_starts, visible_segment_ends):
+    label = 'Above Horizon' if not gray_plotted else None
+    ax_az.plot(time_hrs[seg_start:seg_end], az_deg[seg_start:seg_end],
+               color='gray', linewidth=2.5, alpha=0.6, marker='o', markersize=4, label=label)
+    gray_plotted = True
+
+  # Plot blue lines for each valid segment (do not connect across segments)
+  blue_plotted = False
+  for seg_start, seg_end in zip(valid_segment_starts, valid_segment_ends):
+    label = 'Trackable' if not blue_plotted else None
+    ax_az.plot(time_hrs[seg_start:seg_end], az_deg[seg_start:seg_end],
+               'b-', linewidth=3.5, alpha=0.8, label=label)
+    blue_plotted = True
+
+  # Add horizontal lines for azimuth constraints (if they exist)
+  if tracker.performance and tracker.performance.azimuth:
+    az_min_constraint = tracker.performance.azimuth.min * CONVERTER.DEG_PER_RAD
+    az_max_constraint = tracker.performance.azimuth.max * CONVERTER.DEG_PER_RAD
+    ax_az.axhline(y=az_min_constraint, color='k', linestyle='--', linewidth=1.0, alpha=0.5, label=f'Min Az ({az_min_constraint:.0f}°)')
+    ax_az.axhline(y=az_max_constraint, color='k', linestyle='--', linewidth=1.0, alpha=0.5, label=f'Max Az ({az_max_constraint:.0f}°)')
+
+  ax_az.legend(loc='best', fontsize=9)
+  # Hide x-axis tick labels for azimuth plot
+  ax_az.set_xticklabels([])
+
+  # Plot Elevation vs Time
+  # Convert time_s to UTC datetime for x-axis
+  if epoch_dt_utc is not None:
+    time_utc = [epoch_dt_utc + timedelta(seconds=float(t)) for t in time_s]
+  else:
+    # Fallback to hours if no epoch provided
+    time_utc = time_hrs
+
+  # Thin black line for entire solution (not in legend)
+  if epoch_dt_utc is not None:
+    ax_el.plot(time_utc, el_deg, 'k-', linewidth=0.5, alpha=0.8)
+  else:
+    ax_el.plot(time_hrs, el_deg, 'k-', linewidth=0.5, alpha=0.8)
+
+  ax_el.set_ylabel('Elevation [deg]', fontsize=11)
+  ax_el.set_xlabel('UTC Time', fontsize=11)
+  ax_el.grid(True, alpha=0.3)
+
+  # Plot gray lines and markers for each visible segment
+  gray_plotted = False
+  for seg_start, seg_end in zip(visible_segment_starts, visible_segment_ends):
+    label = 'Above Horizon' if not gray_plotted else None
+    if epoch_dt_utc is not None:
+      ax_el.plot(time_utc[seg_start:seg_end], el_deg[seg_start:seg_end],
+                 color='gray', linewidth=2.5, alpha=0.6, marker='o', markersize=4, label=label)
+    else:
+      ax_el.plot(time_hrs[seg_start:seg_end], el_deg[seg_start:seg_end],
+                 color='gray', linewidth=2.5, alpha=0.6, marker='o', markersize=4, label=label)
+    gray_plotted = True
+
+  # Plot blue lines for each valid segment (do not connect across segments)
+  blue_plotted = False
+  for seg_start, seg_end in zip(valid_segment_starts, valid_segment_ends):
+    label = 'Trackable' if not blue_plotted else None
+    if epoch_dt_utc is not None:
+      ax_el.plot(time_utc[seg_start:seg_end], el_deg[seg_start:seg_end],
+                 'b-', linewidth=3.5, alpha=0.8, label=label)
+    else:
+      ax_el.plot(time_hrs[seg_start:seg_end], el_deg[seg_start:seg_end],
+                 'b-', linewidth=3.5, alpha=0.8, label=label)
+    blue_plotted = True
+
+  # Add horizontal line at elevation = 0 (horizon)
+  ax_el.axhline(y=0, color='k', linestyle='--', linewidth=1.0, alpha=0.5, label='Horizon')
+
+  # Add horizontal lines for elevation constraints (if they exist)
+  if tracker.performance and tracker.performance.elevation:
+    el_min_constraint = tracker.performance.elevation.min * CONVERTER.DEG_PER_RAD
+    el_max_constraint = tracker.performance.elevation.max * CONVERTER.DEG_PER_RAD
+    if el_min_constraint > 0:
+      ax_el.axhline(y=el_min_constraint, color='k', linestyle='--', linewidth=1.0, alpha=0.5, label=f'Min El ({el_min_constraint:.0f}°)')
+    if el_max_constraint < 90:
+      ax_el.axhline(y=el_max_constraint, color='k', linestyle='--', linewidth=1.0, alpha=0.5, label=f'Max El ({el_max_constraint:.0f}°)')
+
+  # Rotate x-axis labels for better readability
+  if epoch_dt_utc is not None:
+    ax_el.tick_params(axis='x', rotation=45)
+    # Format x-axis to show time nicely
+    import matplotlib.dates as mdates
+    ax_el.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+    fig.autofmt_xdate(rotation=45)
+
+  ax_el.legend(loc='best', fontsize=9)
+
+  # Adjust layout
   with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message=".*tight_layout.*")
-    plt.tight_layout(rect=(0.0, 0.10, 0.82, 0.95))
+    plt.tight_layout(rect=(0.0, 0.10, 1.0, 0.95))
+
   return fig
 
 
