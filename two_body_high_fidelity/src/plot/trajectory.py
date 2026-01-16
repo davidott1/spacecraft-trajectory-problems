@@ -1049,9 +1049,9 @@ def _create_tracker_fov_hemisphere(
   rotated_points = R @ points
 
   # Translate to tracker position
-  x_fov = rotated_points[0].reshape(x_sphere.shape) + x_tracker
-  y_fov = rotated_points[1].reshape(y_sphere.shape) + y_tracker
-  z_fov = rotated_points[2].reshape(z_sphere.shape) + z_tracker
+  x_fov = rotated_points[0].reshape(x_sphere.shape) + tracker_pos[0]
+  y_fov = rotated_points[1].reshape(y_sphere.shape) + tracker_pos[1]
+  z_fov = rotated_points[2].reshape(z_sphere.shape) + tracker_pos[2]
 
   return x_fov, y_fov, z_fov
 
