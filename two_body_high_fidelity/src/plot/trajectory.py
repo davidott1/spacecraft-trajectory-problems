@@ -2638,8 +2638,12 @@ def plot_skyplot(
       az_min_deg = tracker.performance.azimuth.min * CONVERTER.DEG_PER_RAD
       az_max_deg = tracker.performance.azimuth.max * CONVERTER.DEG_PER_RAD
 
-      # Check if range wraps around 0°/360°
-      if az_max_deg < az_min_deg:
+      # Check if this covers the full circle (e.g., -180 to 180 or 0 to 360)
+      az_range_deg = az_max_deg - az_min_deg
+      if abs(az_range_deg - 360.0) < 1e-6:
+        # Full circle coverage - all azimuths are valid
+        pass  # Don't modify constraint_valid_mask
+      elif az_max_deg < az_min_deg:
         # Wraps around: valid range is [az_min, 360] OR [0, az_max]
         constraint_valid_mask &= (az_deg >= az_min_deg) | (az_deg <= az_max_deg)
       else:
