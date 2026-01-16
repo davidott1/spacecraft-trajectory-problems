@@ -55,7 +55,7 @@ Usage:
 from typing                            import Optional, Union
 from datetime                          import datetime
 
-from src.plot.trajectory               import generate_plots
+from src.plot.plot_generator           import generate_plots
 from src.propagation.propagator        import run_propagations
 from src.input.loader                  import unload_files, load_files, get_horizons_ephemeris, get_celestrak_tle
 from src.utility.printer               import final_print
