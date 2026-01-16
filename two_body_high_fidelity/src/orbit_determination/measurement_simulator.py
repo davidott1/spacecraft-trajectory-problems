@@ -12,7 +12,7 @@ import numpy as np
 from typing import Optional
 
 from src.model.constants       import CONVERTER
-from src.model.frame_converter import FrameConverter
+from src.model.frame_converter import FrameConverter, VectorConverter
 from src.model.orbit_converter import TopocentricConverter
 from src.model.time_converter  import utc_to_et
 from src.schemas.measurement   import MeasurementNoise, TopocentricState, SimulatedMeasurements
@@ -66,14 +66,22 @@ class MeasurementSimulator:
     self._truth        : Optional[TopocentricState] = None
     self._visible_mask : Optional[np.ndarray]       = None
 
-  def compute_truth(self) -> TopocentricState:
+  def compute_truth(
+      self, 
+      include_rates: bool = True,
+    ) -> TopocentricState:
     """
-    Compute true topocentric coordinates.
+    Compute true topocentric coordinates and optionally rates.
+
+    Input:
+    ------
+      include_rates : bool
+        If True, also compute azimuth_dot, elevation_dot, range_dot.
 
     Returns:
     --------
       truth : TopocentricState
-        True azimuth, elevation, range.
+        True azimuth, elevation, range (and rates if requested).
     """
     if self._truth is not None:
       return self._truth
@@ -81,32 +89,59 @@ class MeasurementSimulator:
     # Extract state vectors
     j2000_state   = self.result.state
     j2000_pos_vec = j2000_state[0:3, :]
+    j2000_vel_vec = j2000_state[3:6, :]
     time_s        = self.result.plot_time_s
     n_points      = j2000_state.shape[1]
 
-    # Transform positions from J2000 to body-fixed frame
-    sat_pos_bf_array = np.zeros((3, n_points))
+    # Transform positions and velocities from J2000 to body-fixed frame
+    sat_pos_iau_earth_array = np.zeros((3, n_points))
+    sat_vel_iau_earth_array = np.zeros((3, n_points))
 
     for i in range(n_points):
       et_i = self.epoch_et + time_s[i]
-      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(et_i)
-      sat_pos_bf_array[:, i] = rot_mat_j2000_to_iau_earth @ j2000_pos_vec[:, i]
+      sat_pos_iau_earth_array[:, i], sat_vel_iau_earth_array[:, i] = VectorConverter.j2000_to_iau_earth(
+        j2000_pos_vec = j2000_pos_vec[:, i],
+        j2000_vel_vec = j2000_vel_vec[:, i],
+        time_et       = et_i,
+      )
 
-    # Use TopocentricConverter for az, el, range
-    azimuth, elevation, range_arr = TopocentricConverter.pos_to_topocentric_array(
-      sat_pos_array = sat_pos_bf_array,
-      tracker_lat   = self.tracker.position.latitude,
-      tracker_lon   = self.tracker.position.longitude,
-      tracker_alt   = self.tracker.position.altitude,
-    )
+    if include_rates:
+      # Use TopocentricConverter for az, el, range AND rates
+      azimuth, elevation, range_arr, az_dot, el_dot, rng_dot = TopocentricConverter.posvel_to_topocentric_array(
+        sat_pos_array = sat_pos_iau_earth_array,
+        sat_vel_array = sat_vel_iau_earth_array,
+        tracker_lat   = self.tracker.position.latitude,
+        tracker_lon   = self.tracker.position.longitude,
+        tracker_alt   = self.tracker.position.altitude,
+      )
 
-    # Store and return
-    self._truth = TopocentricState(
-      time_s    = time_s,
-      azimuth   = azimuth,
-      elevation = elevation,
-      range     = range_arr,
-    )
+      # Store and return
+      self._truth = TopocentricState(
+        time_s        = time_s,
+        azimuth       = azimuth,
+        elevation     = elevation,
+        range         = range_arr,
+        azimuth_dot   = az_dot,
+        elevation_dot = el_dot,
+        range_dot     = rng_dot,
+      )
+    else:
+      # Use TopocentricConverter for az, el, range only
+      azimuth, elevation, range_arr = TopocentricConverter.pos_to_topocentric_array(
+        sat_pos_array = sat_pos_iau_earth_array,
+        tracker_lat   = self.tracker.position.latitude,
+        tracker_lon   = self.tracker.position.longitude,
+        tracker_alt   = self.tracker.position.altitude,
+      )
+
+      # Store and return
+      self._truth = TopocentricState(
+        time_s    = time_s,
+        azimuth   = azimuth,
+        elevation = elevation,
+        range     = range_arr,
+      )
+
     return self._truth
 
   def compute_visibility_mask(self) -> np.ndarray:
@@ -165,8 +200,9 @@ class MeasurementSimulator:
 
   def simulate(
     self,
-    noise_config : Optional[MeasurementNoise] = None,
-    seed         : Optional[int] = None,
+    noise_config  : Optional[MeasurementNoise] = None,
+    seed          : Optional[int] = None,
+    include_rates : bool = True,
   ) -> SimulatedMeasurements:
     """
     Simulate measurements with optional Gaussian noise.
@@ -177,6 +213,8 @@ class MeasurementSimulator:
         Noise standard deviations. If None, no noise is added.
       seed : int, optional
         Random seed for reproducibility.
+      include_rates : bool
+        If True, include rate measurements (az_dot, el_dot, range_dot).
 
     Returns:
     --------
@@ -187,8 +225,8 @@ class MeasurementSimulator:
     if seed is not None:
       np.random.seed(seed)
 
-    # Compute true topocentric coordinates and visibility
-    truth        = self.compute_truth()
+    # Compute true topocentric coordinates (and optionally rates) and visibility
+    truth        = self.compute_truth(include_rates=include_rates)
     visible_mask = self.compute_visibility_mask()
 
     # Use zero noise if no noise config provided
@@ -199,12 +237,23 @@ class MeasurementSimulator:
     n_points = truth.n_points
 
     # Generate noisy measurements by adding Gaussian noise to truth
-    measured = TopocentricState(
-      time_s    = truth.time_s.copy(),
-      azimuth   = truth.azimuth   + np.random.randn(n_points) * noise_config.azimuth,
-      elevation = truth.elevation + np.random.randn(n_points) * noise_config.elevation,
-      range     = truth.range     + np.random.randn(n_points) * noise_config.range,
-    )
+    if include_rates and truth.has_rates:
+      measured = TopocentricState(
+        time_s        = truth.time_s.copy(),
+        azimuth       = truth.azimuth       + np.random.randn(n_points) * noise_config.azimuth,
+        elevation     = truth.elevation     + np.random.randn(n_points) * noise_config.elevation,
+        range         = truth.range         + np.random.randn(n_points) * noise_config.range,
+        azimuth_dot   = truth.azimuth_dot   + np.random.randn(n_points) * noise_config.azimuth_dot,
+        elevation_dot = truth.elevation_dot + np.random.randn(n_points) * noise_config.elevation_dot,
+        range_dot     = truth.range_dot     + np.random.randn(n_points) * noise_config.range_dot,
+      )
+    else:
+      measured = TopocentricState(
+        time_s    = truth.time_s.copy(),
+        azimuth   = truth.azimuth   + np.random.randn(n_points) * noise_config.azimuth,
+        elevation = truth.elevation + np.random.randn(n_points) * noise_config.elevation,
+        range     = truth.range     + np.random.randn(n_points) * noise_config.range,
+      )
 
     # Combine truth, measurements, config, visibility, tracker
     return SimulatedMeasurements(
