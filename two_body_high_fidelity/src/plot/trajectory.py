@@ -2585,40 +2585,47 @@ def plot_skyplot(
       az_min_deg = tracker.performance.azimuth.min * CONVERTER.DEG_PER_RAD
       az_max_deg = tracker.performance.azimuth.max * CONVERTER.DEG_PER_RAD
 
-      # Convert azimuth to theta (polar angle in radians)
-      # Note: polar plots use 0-2π, but our azimuth is in -180° to +180°
-      # Convert negative angles to positive for polar plotting
-      az_min_rad = np.deg2rad(az_min_deg if az_min_deg >= 0 else az_min_deg + 360.0)
-      az_max_rad = np.deg2rad(az_max_deg if az_max_deg >= 0 else az_max_deg + 360.0)
+      # Check if this covers the full circle (e.g., -180 to 180 or 0 to 360)
+      az_range_deg = az_max_deg - az_min_deg
+      is_full_circle = abs(az_range_deg - 360.0) < 1e-6
 
-      # Check if the valid azimuth range wraps around (e.g., 120° to -120° crosses ±180°)
-      wraps_around = az_max_deg < az_min_deg
+      # Only add shading if not covering full circle
+      if not is_full_circle:
+        # Convert azimuth to theta (polar angle in radians)
+        # Note: polar plots use 0-2π, but our azimuth is in -180° to +180°
+        # Convert negative angles to positive for polar plotting
+        az_min_rad = np.deg2rad(az_min_deg if az_min_deg >= 0 else az_min_deg + 360.0)
+        az_max_rad = np.deg2rad(az_max_deg if az_max_deg >= 0 else az_max_deg + 360.0)
 
-      if not wraps_around:
-        # Normal case: valid range doesn't cross ±180°
-        # Shade two wedges: [0, az_min] and [az_max, 2π]
+        # Check if the valid azimuth range wraps around (e.g., 120° to -120° crosses ±180°)
+        wraps_around = az_max_deg < az_min_deg
 
-        # Shade before minimum azimuth (0° to az_min)
-        if az_min_rad > 0:
-          theta_wedge_1 = np.linspace(0, az_min_rad, 100)
-          radius_full = np.full_like(theta_wedge_1, 90)
-          ax.fill_between(theta_wedge_1, 0, radius_full,
-                          color='gray', alpha=0.1, label=f'Az < {az_min_deg:.0f}°')
+        if not wraps_around:
+          # Normal case: valid range doesn't cross ±180°
+          # Shade two wedges: [0, az_min] and [az_max, 2π]
 
-        # Shade after maximum azimuth (az_max to 360°)
-        if az_max_rad < 2 * np.pi:
-          theta_wedge_2 = np.linspace(az_max_rad, 2 * np.pi, 100)
-          radius_full = np.full_like(theta_wedge_2, 90)
-          ax.fill_between(theta_wedge_2, 0, radius_full,
-                          color='gray', alpha=0.1, label=f'Az > {az_max_deg:.0f}°')
-      else:
-        # Wraps around ±180°: valid range is [az_min, 180] + [-180, az_max]
-        # Shade the middle wedge [az_max, az_min]
-        theta_wedge = np.linspace(az_max_rad, az_min_rad, 100)
-        radius_full = np.full_like(theta_wedge, 90)
-        ax.fill_between(theta_wedge, 0, radius_full,
-                        color='gray', alpha=0.1,
-                        label=f'Az {az_max_deg:.0f}° to {az_min_deg:.0f}° (Invalid)')
+          # Shade before minimum azimuth (0° to az_min)
+          if az_min_rad > 0:
+            theta_wedge_1 = np.linspace(0, az_min_rad, 100)
+            radius_full = np.full_like(theta_wedge_1, 90)
+            ax.fill_between(theta_wedge_1, 0, radius_full,
+                            color='gray', alpha=0.1, label=f'Az < {az_min_deg:.0f}°')
+
+          # Shade after maximum azimuth (az_max to 360°)
+          if az_max_rad < 2 * np.pi:
+            theta_wedge_2 = np.linspace(az_max_rad, 2 * np.pi, 100)
+            radius_full = np.full_like(theta_wedge_2, 90)
+            ax.fill_between(theta_wedge_2, 0, radius_full,
+                            color='gray', alpha=0.1, label=f'Az > {az_max_deg:.0f}°')
+        else:
+          # Wraps around ±180°: valid range is [az_min, 180] + [-180, az_max]
+          # Shade the middle wedge [az_max, az_min]
+          theta_wedge = np.linspace(az_max_rad, az_min_rad, 100)
+          radius_full = np.full_like(theta_wedge, 90)
+          ax.fill_between(theta_wedge, 0, radius_full,
+                          color='gray', alpha=0.1,
+                          label=f'Az {az_max_deg:.0f}° to {az_min_deg:.0f}° (Invalid)')
+      # If is_full_circle, don't shade anything (all azimuths valid)
 
   # Split track where satellite goes below horizon
   visible_mask = el_deg >= 0
@@ -2799,12 +2806,13 @@ def plot_skyplot(
   
   # Find and mark minimum range (closest approach) with UTC time
   visible_indices = np.where(visible_mask)[0]
+  min_range_km = None  # Initialize to None for later use in info text
   if len(visible_indices) > 0:
     visible_ranges = range_m[visible_indices]
     min_range_visible_idx = np.argmin(visible_ranges)
     min_range_idx = visible_indices[min_range_visible_idx]
     min_range_km = range_m[min_range_idx] / 1000.0
-    ax.scatter([theta[min_range_idx]], [radius[min_range_idx]], s=marker_size_max * 3.0, marker='s', 
+    ax.scatter([theta[min_range_idx]], [radius[min_range_idx]], s=marker_size_max * 3.0, marker='s',
               facecolors='none', edgecolors='black', linewidths=2, zorder=11,
               label=f'Min Range ({min_range_km:.0f} km)')
     if epoch_dt_utc is not None:
@@ -2842,7 +2850,12 @@ def plot_skyplot(
   else:
     dt_step = 0.0
   
-  info_text += f"\nVisibility: {visibility_pct:.1f}%  |  Max Elevation: {max_elevation:.2f}°  |  Δt: {dt_step:.1f} s"
+  # Build visibility line with Min Range if available
+  visibility_line = f"\nVisibility: {visibility_pct:.1f}%  |  Max Elevation: {max_elevation:.2f}°"
+  if min_range_km is not None:
+    visibility_line += f"  |  Min Range: {min_range_km:.0f} km"
+  visibility_line += f"  |  Δt: {dt_step:.1f} s"
+  info_text += visibility_line
   
   # Add info text below plot
   fig.text(0.5, 0.02, info_text, ha='center', va='bottom', fontsize=10, color='black',

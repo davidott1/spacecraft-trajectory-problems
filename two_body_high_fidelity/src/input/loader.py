@@ -481,11 +481,76 @@ def load_files(
       print(f"          Lon    : {tracker.position.longitude * CONVERTER.DEG_PER_RAD:.1f}°")
       print(f"          Alt    : {tracker.position.altitude:.1f} m")
 
-    # Normalize values from loaded files
+    # Validate and normalize values from loaded files
+    trackers = [validate_tracker_input(t) for t in trackers]
     trackers = [normalize_tracker_azimuth(t) for t in trackers]
 
   # Return loaded model and trackers (or None if not requested)
   return spherical_harmonics_model, trackers
+
+
+def validate_tracker_input(tracker):
+  """
+  Validate tracker input data.
+
+  Checks that tracker performance limits are valid:
+  - Azimuth: min < max (clockwise convention)
+  - Elevation: min < max
+  - Range: min < max
+
+  Input:
+  ------
+    tracker : TrackerStation | None
+      Tracker station object to validate. If None, returns None.
+
+  Output:
+  -------
+    tracker : TrackerStation | None
+      Same tracker object (unmodified) if valid.
+
+  Raises:
+  -------
+    ValueError
+      If any performance limits are invalid.
+  """
+  if tracker is None:
+    return None
+
+  if tracker.performance:
+    # Validate azimuth limits
+    if tracker.performance.azimuth:
+      az_min_deg = tracker.performance.azimuth.min * CONVERTER.DEG_PER_RAD
+      az_max_deg = tracker.performance.azimuth.max * CONVERTER.DEG_PER_RAD
+
+      if az_min_deg > az_max_deg:
+        raise ValueError(
+          f"Invalid azimuth range for tracker '{tracker.name}': "
+          f"min ({az_min_deg:.1f}°) > max ({az_max_deg:.1f}°). "
+          f"Azimuth must be specified with min < max."
+        )
+
+    # Validate elevation limits
+    if tracker.performance.elevation:
+      el_min_deg = tracker.performance.elevation.min * CONVERTER.DEG_PER_RAD
+      el_max_deg = tracker.performance.elevation.max * CONVERTER.DEG_PER_RAD
+
+      if el_min_deg > el_max_deg:
+        raise ValueError(
+          f"Invalid elevation range for tracker '{tracker.name}': "
+          f"min ({el_min_deg:.1f}°) > max ({el_max_deg:.1f}°). "
+          f"Elevation must be specified with min < max."
+        )
+
+    # Validate range limits
+    if tracker.performance.range:
+      if tracker.performance.range.min > tracker.performance.range.max:
+        raise ValueError(
+          f"Invalid range limits for tracker '{tracker.name}': "
+          f"min ({tracker.performance.range.min:.1f} m) > max ({tracker.performance.range.max:.1f} m). "
+          f"Range must be specified with min < max."
+        )
+
+  return tracker
 
 
 def normalize_tracker_azimuth(tracker):
@@ -515,10 +580,19 @@ def normalize_tracker_azimuth(tracker):
     az_min_deg = tracker.performance.azimuth.min * CONVERTER.DEG_PER_RAD
     az_max_deg = tracker.performance.azimuth.max * CONVERTER.DEG_PER_RAD
 
-    # Normalize to -180° to +180° range
-    # Use (value + 180) % 360 - 180 to map to [-180, 180]
-    az_min_deg = ((az_min_deg + 180.0) % 360.0) - 180.0
-    az_max_deg = ((az_max_deg + 180.0) % 360.0) - 180.0
+    # Check if this represents full circle coverage before normalizing
+    az_range_deg = az_max_deg - az_min_deg
+    is_full_circle = abs(az_range_deg - 360.0) < 1e-6
+
+    if is_full_circle:
+      # Full circle: keep as -180 to 180 (canonical full range)
+      az_min_deg = -180.0
+      az_max_deg = 180.0
+    else:
+      # Normalize to -180° to +180° range
+      # Use (value + 180) % 360 - 180 to map to [-180, 180]
+      az_min_deg = ((az_min_deg + 180.0) % 360.0) - 180.0
+      az_max_deg = ((az_max_deg + 180.0) % 360.0) - 180.0
 
     # Update the tracker with normalized values (convert back to radians)
     tracker.performance.azimuth = AzimuthLimits(
