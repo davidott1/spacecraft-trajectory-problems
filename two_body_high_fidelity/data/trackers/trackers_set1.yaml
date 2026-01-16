@@ -6,7 +6,7 @@
   performance              :
     azimuth_min_max__deg   : -180.0, 90.0
     elevation_min_max__deg : 0.0, 90.0
-    range_min_max__m       : 0.0, 8.0e6
+    range_min_max__m       : 0.0, 2.0e6
 
 - name                     : "Northern Tracker"
   position                 :
@@ -16,7 +16,7 @@
   performance              :
     azimuth_min_max__deg   : -90.0, 90.0
     elevation_min_max__deg : 5.0, 90.0
-    range_min_max__m       : 0.0, 9.0e6
+    range_min_max__m       : 0.0, 2.5e6
 
 - name                     : "Southern Tracker"
   position                 :
@@ -26,4 +26,4 @@
   performance              :
     azimuth_min_max__deg   : -90.0, 90.0
     elevation_min_max__deg : 5.0, 90.0
-    range_min_max__m       : 0.0, 10.0e6
+    range_min_max__m       : 0.0, 3.0e6
