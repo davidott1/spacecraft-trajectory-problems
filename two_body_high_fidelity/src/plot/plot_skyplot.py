@@ -15,7 +15,7 @@ from typing            import Optional
 from matplotlib.figure import Figure
 
 from src.model.constants                   import CONVERTER
-from src.orbit_determination.topocentric   import compute_topocentric_coordinates
+from src.orbit_determination.topocentric   import compute_topocentric_coordinates_with_rates
 from src.schemas.propagation               import PropagationResult
 from src.schemas.state                     import TrackerStation
 
@@ -45,15 +45,20 @@ def plot_skyplot(
     fig : matplotlib.figure.Figure
       Figure object containing the skyplot and time-series plots.
   """
-  fig = plt.figure(figsize=(20, 10))
+  fig = plt.figure(figsize=(30, 10))
   
-  # Compute topocentric coordinates
-  topo = compute_topocentric_coordinates(result, tracker, epoch_dt_utc)
+  # Compute topocentric coordinates with rates
+  topo = compute_topocentric_coordinates_with_rates(result, tracker, epoch_dt_utc)
   
   # Convert to degrees for display
   az_deg  = topo.azimuth   * CONVERTER.DEG_PER_RAD
   el_deg  = topo.elevation * CONVERTER.DEG_PER_RAD
   time_s  = result.plot_time_s
+  
+  # Get rates (convert angular rates to deg/s)
+  az_dot_deg  = topo.azimuth_dot   * CONVERTER.DEG_PER_RAD if topo.azimuth_dot is not None else None
+  el_dot_deg  = topo.elevation_dot * CONVERTER.DEG_PER_RAD if topo.elevation_dot is not None else None
+  rng_dot     = topo.range_dot  # m/s
 
   # Normalize azimuth to -180° to +180° range
   az_deg = ((az_deg + 180.0) % 360.0) - 180.0
@@ -63,8 +68,8 @@ def plot_skyplot(
   radius = 90.0 - el_deg
   theta  = np.where(az_deg >= 0, az_deg, az_deg + 360.0) * CONVERTER.RAD_PER_DEG
 
-  # Create grid: polar skyplot on left, three time-series plots on right
-  ax = fig.add_subplot(1, 2, 1, projection='polar')
+  # Create grid: polar skyplot on left, three time-series plots in middle, three rate plots on right
+  ax = fig.add_subplot(1, 3, 1, projection='polar')
   
   # Configure polar plot for skyplot convention
   ax.set_theta_zero_location('N')  # North at top
@@ -413,16 +418,16 @@ def plot_skyplot(
   ax.set_title(title_text, fontsize=14, pad=20)
 
   # ============================================
-  # Time-series plots on the right column
+  # Time-series plots in the middle column
   # ============================================
 
   # Convert time to hours for better readability
   time_hrs = time_s / 3600.0
 
-  # Create three subplots in the right column (stacked vertically)
-  ax_range = fig.add_subplot(3, 2, 2)
-  ax_az    = fig.add_subplot(3, 2, 4)
-  ax_el    = fig.add_subplot(3, 2, 6)
+  # Create three subplots in the middle column (stacked vertically)
+  ax_range = fig.add_subplot(3, 3, 2)
+  ax_az    = fig.add_subplot(3, 3, 5)
+  ax_el    = fig.add_subplot(3, 3, 8)
 
   # Plot Range vs Time
   range_km = topo.range / 1000.0
@@ -581,9 +586,115 @@ def plot_skyplot(
     ax_el.tick_params(axis='x', rotation=45)
     # Format x-axis to show time nicely
     ax_el.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
-    fig.autofmt_xdate(rotation=45)
 
   ax_el.legend(loc='best', fontsize=9)
+
+  # ============================================
+  # Rate plots in the right column
+  # ============================================
+
+  # Create three subplots in the right column (stacked vertically)
+  ax_rng_dot = fig.add_subplot(3, 3, 3)
+  ax_az_dot  = fig.add_subplot(3, 3, 6)
+  ax_el_dot  = fig.add_subplot(3, 3, 9)
+
+  # Plot Range Rate vs Time
+  if rng_dot is not None:
+    rng_dot_km = rng_dot / 1000.0  # Convert to km/s
+    
+    # Thin black line for entire solution
+    ax_rng_dot.plot(time_hrs, rng_dot_km, 'k-', linewidth=0.5, alpha=0.8)
+    ax_rng_dot.set_ylabel('Range Rate [km/s]', fontsize=11)
+    ax_rng_dot.grid(True, alpha=0.3)
+    ax_rng_dot.set_title('Truth Measurement Rates vs Time', fontsize=12)
+
+    # Plot gray lines and markers for each visible segment
+    gray_plotted = False
+    for seg_start, seg_end in zip(visible_segment_starts, visible_segment_ends):
+      label = 'Above Horizon' if not gray_plotted else None
+      ax_rng_dot.plot(time_hrs[seg_start:seg_end], rng_dot_km[seg_start:seg_end],
+                      color='gray', linewidth=2.5, alpha=0.6, marker='o', markersize=4, label=label)
+      gray_plotted = True
+
+    # Plot blue lines for each valid segment
+    blue_plotted = False
+    for seg_start, seg_end in zip(valid_segment_starts, valid_segment_ends):
+      label = 'Trackable' if not blue_plotted else None
+      ax_rng_dot.plot(time_hrs[seg_start:seg_end], rng_dot_km[seg_start:seg_end],
+                      'b-', linewidth=3.5, alpha=0.8, label=label)
+      blue_plotted = True
+
+    ax_rng_dot.legend(loc='best', fontsize=9)
+  ax_rng_dot.set_xticklabels([])
+
+  # Plot Azimuth Rate vs Time
+  if az_dot_deg is not None:
+    # Thin black line for entire solution
+    ax_az_dot.plot(time_hrs, az_dot_deg, 'k-', linewidth=0.5, alpha=0.8)
+    ax_az_dot.set_ylabel('Azimuth Rate [deg/s]', fontsize=11)
+    ax_az_dot.grid(True, alpha=0.3)
+
+    # Plot gray lines and markers for each visible segment
+    gray_plotted = False
+    for seg_start, seg_end in zip(visible_segment_starts, visible_segment_ends):
+      label = 'Above Horizon' if not gray_plotted else None
+      ax_az_dot.plot(time_hrs[seg_start:seg_end], az_dot_deg[seg_start:seg_end],
+                     color='gray', linewidth=2.5, alpha=0.6, marker='o', markersize=4, label=label)
+      gray_plotted = True
+
+    # Plot blue lines for each valid segment
+    blue_plotted = False
+    for seg_start, seg_end in zip(valid_segment_starts, valid_segment_ends):
+      label = 'Trackable' if not blue_plotted else None
+      ax_az_dot.plot(time_hrs[seg_start:seg_end], az_dot_deg[seg_start:seg_end],
+                     'b-', linewidth=3.5, alpha=0.8, label=label)
+      blue_plotted = True
+
+    ax_az_dot.legend(loc='best', fontsize=9)
+  ax_az_dot.set_xticklabels([])
+
+  # Plot Elevation Rate vs Time
+  if el_dot_deg is not None:
+    # Thin black line for entire solution
+    if epoch_dt_utc is not None:
+      ax_el_dot.plot(time_utc, el_dot_deg, 'k-', linewidth=0.5, alpha=0.8)
+    else:
+      ax_el_dot.plot(time_hrs, el_dot_deg, 'k-', linewidth=0.5, alpha=0.8)
+
+    ax_el_dot.set_ylabel('Elevation Rate [deg/s]', fontsize=11)
+    ax_el_dot.set_xlabel('UTC Time', fontsize=11)
+    ax_el_dot.grid(True, alpha=0.3)
+
+    # Plot gray lines and markers for each visible segment
+    gray_plotted = False
+    for seg_start, seg_end in zip(visible_segment_starts, visible_segment_ends):
+      label = 'Above Horizon' if not gray_plotted else None
+      if epoch_dt_utc is not None:
+        ax_el_dot.plot(time_utc[seg_start:seg_end], el_dot_deg[seg_start:seg_end],
+                       color='gray', linewidth=2.5, alpha=0.6, marker='o', markersize=4, label=label)
+      else:
+        ax_el_dot.plot(time_hrs[seg_start:seg_end], el_dot_deg[seg_start:seg_end],
+                       color='gray', linewidth=2.5, alpha=0.6, marker='o', markersize=4, label=label)
+      gray_plotted = True
+
+    # Plot blue lines for each valid segment
+    blue_plotted = False
+    for seg_start, seg_end in zip(valid_segment_starts, valid_segment_ends):
+      label = 'Trackable' if not blue_plotted else None
+      if epoch_dt_utc is not None:
+        ax_el_dot.plot(time_utc[seg_start:seg_end], el_dot_deg[seg_start:seg_end],
+                       'b-', linewidth=3.5, alpha=0.8, label=label)
+      else:
+        ax_el_dot.plot(time_hrs[seg_start:seg_end], el_dot_deg[seg_start:seg_end],
+                       'b-', linewidth=3.5, alpha=0.8, label=label)
+      blue_plotted = True
+
+    # Rotate x-axis labels for better readability
+    if epoch_dt_utc is not None:
+      ax_el_dot.tick_params(axis='x', rotation=45)
+      ax_el_dot.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+
+    ax_el_dot.legend(loc='best', fontsize=9)
 
   # Adjust layout
   with warnings.catch_warnings():

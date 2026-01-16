@@ -1668,3 +1668,179 @@ class TopocentricConverter:
     elevation_array  = np.arctan2(pos_up, horizontal_range)
 
     return azimuth_array, elevation_array, range_array
+
+  @staticmethod
+  def posvel_to_topocentric_array(
+    sat_pos_array : np.ndarray,
+    sat_vel_array : np.ndarray,
+    tracker_lat   : float,
+    tracker_lon   : float,
+    tracker_alt   : float,
+  ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Convert satellite position and velocity to topocentric coordinates and rates.
+
+    This vectorized method computes azimuth, elevation, range and their time
+    derivatives (az_dot, el_dot, range_dot) for orbit determination applications.
+
+    Input:
+    ------
+      sat_pos_array : np.ndarray
+        Satellite position vectors in body-fixed frame [m], shape (3, N).
+      sat_vel_array : np.ndarray
+        Satellite velocity vectors in body-fixed frame [m/s], shape (3, N).
+      tracker_lat : float
+        Tracker geodetic latitude [rad].
+      tracker_lon : float
+        Tracker geodetic longitude [rad].
+      tracker_alt : float
+        Tracker altitude above WGS84 ellipsoid [m].
+
+    Output:
+    -------
+      azimuth : np.ndarray
+        Azimuth angles [rad], shape (N,).
+      elevation : np.ndarray
+        Elevation angles [rad], shape (N,).
+      range : np.ndarray
+        Slant ranges [m], shape (N,).
+      azimuth_dot : np.ndarray
+        Azimuth rates [rad/s], shape (N,).
+      elevation_dot : np.ndarray
+        Elevation rates [rad/s], shape (N,).
+      range_dot : np.ndarray
+        Range rates [m/s], shape (N,).
+
+    Notes:
+    ------
+      The velocity is assumed to be in the body-fixed frame (e.g., IAU_EARTH).
+      For the tracker, it is assumed to be stationary in the body-fixed frame.
+
+      Rate derivation:
+        range_dot = d/dt(|r|) = (r · v) / |r|
+        az_dot    = d/dt(atan2(e, n)) = (n·e_dot - e·n_dot) / (e² + n²)
+        el_dot    = d/dt(atan2(u, h)) = (h·u_dot - u·h_dot) / (u² + h²)
+
+      where e, n, u are East, North, Up components of relative position,
+      and h = sqrt(e² + n²) is horizontal range.
+    """
+    # Ensure arrays are numpy arrays with shape (3, N)
+    sat_pos_array = np.asarray(sat_pos_array)
+    sat_vel_array = np.asarray(sat_vel_array)
+    if sat_pos_array.ndim == 1:
+      sat_pos_array = sat_pos_array.reshape(3, 1)
+    if sat_vel_array.ndim == 1:
+      sat_vel_array = sat_vel_array.reshape(3, 1)
+
+    # Compute tracker position in body-fixed frame
+    tracker_coords = GeodeticCoordinates(
+      latitude  = tracker_lat,
+      longitude = tracker_lon,
+      altitude  = tracker_alt,
+    )
+    tracker_pos_vec = GeographicCoordinateConverter.geodetic_to_pos(tracker_coords)
+
+    # Compute relative position and velocity vectors (satellite - tracker)
+    # Tracker velocity in body-fixed frame is zero (stationary on Earth)
+    rel_pos_array = sat_pos_array - tracker_pos_vec.reshape(3, 1)
+    rel_vel_array = sat_vel_array  # Tracker velocity = 0 in body-fixed frame
+
+    # Compute ranges
+    range_array = np.linalg.norm(rel_pos_array, axis=0)
+
+    # Build local topocentric frame (ENU) at tracker location
+    sin_lat = np.sin(tracker_lat)
+    cos_lat = np.cos(tracker_lat)
+    sin_lon = np.sin(tracker_lon)
+    cos_lon = np.cos(tracker_lon)
+
+    # East unit vector
+    east_dir = np.array([-sin_lon, cos_lon, 0.0])
+
+    # North unit vector
+    north_dir = np.array([-sin_lat * cos_lon, -sin_lat * sin_lon, cos_lat])
+
+    # Up unit vector (geodetic normal)
+    up_dir = np.array([cos_lat * cos_lon, cos_lat * sin_lon, sin_lat])
+
+    # Project relative position onto local ENU frame
+    pos_east  =  east_dir @ rel_pos_array
+    pos_north = north_dir @ rel_pos_array
+    pos_up    =    up_dir @ rel_pos_array
+
+    # Project relative velocity onto local ENU frame
+    vel_east  =  east_dir @ rel_vel_array
+    vel_north = north_dir @ rel_vel_array
+    vel_up    =    up_dir @ rel_vel_array
+
+    # Compute azimuth and elevation (same as pos_to_topocentric_array)
+    azimuth_array   = np.arctan2(pos_east, pos_north)
+    horizontal_range = np.sqrt(pos_east**2 + pos_north**2)
+    elevation_array = np.arctan2(pos_up, horizontal_range)
+
+    # Compute range rate: range_dot = (r · v) / |r|
+    # Using ENU components: range_dot = (e·e_dot + n·n_dot + u·u_dot) / range
+    range_dot_array = (pos_east * vel_east + pos_north * vel_north + pos_up * vel_up) / range_array
+
+    # Compute azimuth rate: az_dot = (n·e_dot - e·n_dot) / (e² + n²)
+    horizontal_range_sq = pos_east**2 + pos_north**2
+    # Avoid division by zero for points directly overhead
+    horizontal_range_sq = np.where(horizontal_range_sq < 1e-20, 1e-20, horizontal_range_sq)
+    azimuth_dot_array = (pos_north * vel_east - pos_east * vel_north) / horizontal_range_sq
+
+    # Compute elevation rate: el_dot = (h·u_dot - u·h_dot) / (u² + h²)
+    # where h = horizontal_range and h_dot = (e·e_dot + n·n_dot) / h
+    h_dot = (pos_east * vel_east + pos_north * vel_north) / np.where(horizontal_range < 1e-10, 1e-10, horizontal_range)
+    range_sq = range_array**2
+    # Avoid division by zero
+    range_sq = np.where(range_sq < 1e-20, 1e-20, range_sq)
+    elevation_dot_array = (horizontal_range * vel_up - pos_up * h_dot) / range_sq
+
+    return azimuth_array, elevation_array, range_array, azimuth_dot_array, elevation_dot_array, range_dot_array
+
+  @staticmethod
+  def posvel_to_topocentric(
+    sat_pos_vec : np.ndarray,
+    sat_vel_vec : np.ndarray,
+    tracker_lat : float,
+    tracker_lon : float,
+    tracker_alt : float,
+  ) -> tuple[float, float, float, float, float, float]:
+    """
+    Convert satellite position and velocity to topocentric coordinates and rates.
+
+    Input:
+    ------
+      sat_pos_vec : np.ndarray
+        Satellite position vector in body-fixed frame [m], shape (3,).
+      sat_vel_vec : np.ndarray
+        Satellite velocity vector in body-fixed frame [m/s], shape (3,).
+      tracker_lat : float
+        Tracker geodetic latitude [rad].
+      tracker_lon : float
+        Tracker geodetic longitude [rad].
+      tracker_alt : float
+        Tracker altitude above WGS84 ellipsoid [m].
+
+    Output:
+    -------
+      azimuth : float
+        Azimuth angle [rad].
+      elevation : float
+        Elevation angle [rad].
+      range : float
+        Slant range [m].
+      azimuth_dot : float
+        Azimuth rate [rad/s].
+      elevation_dot : float
+        Elevation rate [rad/s].
+      range_dot : float
+        Range rate [m/s].
+    """
+    # Delegate to array version with single position/velocity
+    sat_pos_vec = np.asarray(sat_pos_vec).flatten().reshape(3, 1)
+    sat_vel_vec = np.asarray(sat_vel_vec).flatten().reshape(3, 1)
+    az, el, rng, az_dot, el_dot, rng_dot = TopocentricConverter.posvel_to_topocentric_array(
+      sat_pos_vec, sat_vel_vec, tracker_lat, tracker_lon, tracker_alt
+    )
+    return float(az[0]), float(el[0]), float(rng[0]), float(az_dot[0]), float(el_dot[0]), float(rng_dot[0])

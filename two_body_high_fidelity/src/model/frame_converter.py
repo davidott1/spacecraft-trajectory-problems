@@ -9,7 +9,8 @@ from astropy.coordinates import TEME, GCRS, CartesianRepresentation, CartesianDi
 class FrameConverter:
   @staticmethod
   def j2000_to_iau_earth(
-    time_et : float,
+    time_et       : float,
+    include_rates : bool = False,
   ) -> np.ndarray:
     """
     Get rotation matrix from J2000 to IAU_EARTH (body-fixed) frame using SPICE.
@@ -18,21 +19,30 @@ class FrameConverter:
     ------
       time_et : float
         Ephemeris Time (ET) in seconds past J2000 epoch.
+      include_rates : bool
+        If False, returns 3x3 rotation matrix (pxform).
+        If True, returns 6x6 state transformation matrix (sxform).
     
     Output:
     -------
       rot_mat : np.ndarray
         3x3 rotation matrix such that: iau_earth_vec = rot_mat @ j2000_vec
+        OR 6x6 state transformation matrix if include_rates=True.
     
     Notes:
     ------
       Requires SPICE kernels (PCK) to be loaded.
+      The 6x6 sxform matrix properly handles Earth's rotation rate for velocity.
     """
-    return spice.pxform('J2000', 'IAU_EARTH', time_et)
+    if include_rates:
+      return spice.sxform('J2000', 'IAU_EARTH', time_et)
+    else:
+      return spice.pxform('J2000', 'IAU_EARTH', time_et)
 
   @staticmethod
   def iau_earth_to_j2000(
-    time_et : float,
+    time_et       : float,
+    include_rates : bool = False,
   ) -> np.ndarray:
     """
     Get rotation matrix from IAU_EARTH (body-fixed) to J2000 frame using SPICE.
@@ -41,17 +51,25 @@ class FrameConverter:
     ------
       time_et : float
         Ephemeris Time (ET) in seconds past J2000 epoch.
+      include_rates : bool
+        If False, returns 3x3 rotation matrix (pxform).
+        If True, returns 6x6 state transformation matrix (sxform).
     
     Output:
     -------
       rot_mat : np.ndarray
         3x3 rotation matrix such that: j2000_vec = rot_mat @ iau_earth_vec
+        OR 6x6 state transformation matrix if include_rates=True.
     
     Notes:
     ------
       Requires SPICE kernels (PCK) to be loaded.
+      The 6x6 sxform matrix properly handles Earth's rotation rate for velocity.
     """
-    return spice.pxform('IAU_EARTH', 'J2000', time_et)
+    if include_rates:
+      return spice.sxform('IAU_EARTH', 'J2000', time_et)
+    else:
+      return spice.pxform('IAU_EARTH', 'J2000', time_et)
 
   @staticmethod
   def xyz_to_ric(
@@ -183,6 +201,104 @@ class FrameConverter:
 
 
 class VectorConverter:
+  @staticmethod
+  def j2000_to_iau_earth(
+    j2000_pos_vec : np.ndarray,
+    j2000_vel_vec : Optional[np.ndarray],
+    time_et       : float,
+  ) -> Union[np.ndarray, tuple[np.ndarray, np.ndarray]]:
+    """
+    Convert J2000/GCRS to IAU_EARTH (body-fixed) using SPICE.
+    Properly accounts for Earth's rotation rate when transforming velocity.
+    
+    Input:
+    ------
+      j2000_pos_vec : np.ndarray
+        Position in J2000 frame. Shape (3,).
+      j2000_vel_vec : np.ndarray, optional
+        Velocity in J2000 frame. Shape (3,).
+      time_et : float
+        Ephemeris Time (ET) in seconds past J2000 epoch.
+    
+    Output:
+    -------
+      If vel provided: (iau_earth_pos_vec, iau_earth_vel_vec)
+      If vel is None: iau_earth_pos_vec
+
+    Usage:
+    ------
+      # Position and velocity
+      iau_earth_pos_vec, iau_earth_vel_vec = VectorConverter.j2000_to_iau_earth(
+        j2000_pos_vec = j2000_pos_vec,
+        j2000_vel_vec = j2000_vel_vec,
+        time_et       = time_et,
+      )
+      
+      # Position only
+      iau_earth_pos_vec = VectorConverter.j2000_to_iau_earth(
+        j2000_pos_vec = j2000_pos_vec,
+        j2000_vel_vec = None,
+        time_et       = time_et,
+      )
+    """
+    if j2000_vel_vec is not None:
+      rot_mat   = FrameConverter.j2000_to_iau_earth(time_et, include_rates=True)
+      state_in  = np.concatenate([j2000_pos_vec.flatten(), j2000_vel_vec.flatten()])
+      state_out = rot_mat @ state_in
+      return state_out[0:3], state_out[3:6]
+    else:
+      rot_mat = FrameConverter.j2000_to_iau_earth(time_et, include_rates=False)
+      return rot_mat @ j2000_pos_vec.flatten()
+
+  @staticmethod
+  def iau_earth_to_j2000(
+    iau_earth_pos_vec : np.ndarray,
+    iau_earth_vel_vec : Optional[np.ndarray],
+    time_et           : float,
+  ) -> Union[np.ndarray, tuple[np.ndarray, np.ndarray]]:
+    """
+    Convert IAU_EARTH (body-fixed) to J2000/GCRS using SPICE.
+    Properly accounts for Earth's rotation rate when transforming velocity.
+    
+    Input:
+    ------
+      iau_earth_pos_vec : np.ndarray
+        Position in IAU_EARTH frame. Shape (3,).
+      iau_earth_vel_vec : np.ndarray, optional
+        Velocity in IAU_EARTH frame. Shape (3,).
+      time_et : float
+        Ephemeris Time (ET) in seconds past J2000 epoch.
+    
+    Output:
+    -------
+      If vel provided: (j2000_pos_vec, j2000_vel_vec)
+      If vel is None: j2000_pos_vec
+
+    Usage:
+    ------
+      # Position and velocity
+      j2000_pos_vec, j2000_vel_vec = VectorConverter.iau_earth_to_j2000(
+        iau_earth_pos_vec = iau_earth_pos_vec,
+        iau_earth_vel_vec = iau_earth_vel_vec,
+        time_et           = time_et,
+      )
+      
+      # Position only
+      j2000_pos_vec = VectorConverter.iau_earth_to_j2000(
+        iau_earth_pos_vec = iau_earth_pos_vec,
+        iau_earth_vel_vec = None,
+        time_et           = time_et,
+      )
+    """
+    if iau_earth_vel_vec is not None:
+      sxform_mat = FrameConverter.iau_earth_to_j2000(time_et, include_rates=True)
+      state_in   = np.concatenate([iau_earth_pos_vec.flatten(), iau_earth_vel_vec.flatten()])
+      state_out  = sxform_mat @ state_in
+      return state_out[0:3], state_out[3:6]
+    else:
+      rot_mat = FrameConverter.iau_earth_to_j2000(time_et, include_rates=False)
+      return rot_mat @ iau_earth_pos_vec.flatten()
+
   @staticmethod
   def teme_to_j2000(
     teme_pos_vec : np.ndarray,

@@ -264,10 +264,21 @@ class TopocentricCoordinates:
   Topocentric coordinates (azimuth, elevation, range) from a ground station.
   
   Attributes:
-    azimuth   : Azimuth angle [rad] (0 = North, π/2 = East)
-    elevation : Elevation angle [rad] (0 = horizon, π/2 = zenith)
-    range     : Slant range to target [m]
+    azimuth       : Azimuth angle [rad] (0 = North, π/2 = East)
+    elevation     : Elevation angle [rad] (0 = horizon, π/2 = zenith)
+    range         : Slant range to target [m]
+    azimuth_dot   : Azimuth rate [rad/s] (optional)
+    elevation_dot : Elevation rate [rad/s] (optional)
+    range_dot     : Range rate [m/s] (optional)
   """
-  azimuth   : Union[float, np.ndarray]
-  elevation : Union[float, np.ndarray]
-  range     : Union[float, np.ndarray]
+  azimuth       : Union[float, np.ndarray]
+  elevation     : Union[float, np.ndarray]
+  range         : Union[float, np.ndarray]
+  azimuth_dot   : Union[float, np.ndarray, None] = None
+  elevation_dot : Union[float, np.ndarray, None] = None
+  range_dot     : Union[float, np.ndarray, None] = None
+
+  @property
+  def has_rates(self) -> bool:
+    """Check if rate data is available."""
+    return self.azimuth_dot is not None and self.elevation_dot is not None and self.range_dot is not None
