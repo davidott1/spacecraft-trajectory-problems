@@ -1,4 +1,3 @@
-import datetime
 import warnings
 
 import matplotlib.pyplot as plt
@@ -7,7 +6,7 @@ import cartopy.crs       as ccrs
 import cartopy.feature   as cfeature
 import spiceypy          as spice
 
-from datetime          import timedelta
+from datetime          import datetime, timedelta
 from pathlib           import Path
 from typing            import Optional
 from matplotlib.figure import Figure
@@ -57,7 +56,7 @@ def project_to_bounds(origin, direction, ax):
 
 def plot_3d_trajectories(
   result : PropagationResult,
-  epoch  : Optional[datetime.datetime] = None,
+  epoch  : Optional[datetime] = None,
   frame  : str = "J2000",
 ) -> Figure:
   """
@@ -255,7 +254,7 @@ def plot_3d_trajectories(
 def plot_time_series_error(
   result_ref  : PropagationResult, 
   result_comp : PropagationResult, 
-  epoch       : Optional[datetime.datetime] = None, 
+  epoch       : Optional[datetime] = None, 
   title       : str                         = "Time Series Error", 
   use_ric     : bool                        = True,
 ) -> Figure:
@@ -525,7 +524,7 @@ def plot_time_series_error(
 
 def plot_3d_trajectories_body_fixed(
   result                  : PropagationResult,
-  epoch_dt_utc            : Optional[datetime.datetime] = None,
+  epoch_dt_utc            : Optional[datetime] = None,
   trackers                : Optional[list['TrackerStation']] = None,
   include_tracker_on_body : bool = False,
 ) -> Figure:
@@ -695,7 +694,7 @@ def plot_3d_trajectories_body_fixed(
 
 def plot_time_series(
   result : PropagationResult,
-  epoch  : Optional[datetime.datetime] = None,
+  epoch  : Optional[datetime] = None,
 ) -> Figure:
   """
   Plot position and velocity components vs time in a 3-column grid.
@@ -953,7 +952,7 @@ def plot_3d_error(
 def plot_time_series_error(
   result_ref  : PropagationResult, 
   result_comp : PropagationResult, 
-  epoch       : Optional[datetime.datetime] = None, 
+  epoch       : Optional[datetime] = None, 
   title       : str                         = "Time Series Error", 
   use_ric     : bool                        = True,
 ) -> Figure:
@@ -1223,7 +1222,7 @@ def plot_time_series_error(
 
 def plot_3d_trajectories_body_fixed(
   result                  : PropagationResult,
-  epoch_dt_utc            : Optional[datetime.datetime] = None,
+  epoch_dt_utc            : Optional[datetime] = None,
   trackers                : Optional[list['TrackerStation']] = None,
   include_tracker_on_body : bool = False,
 ) -> Figure:
@@ -1582,7 +1581,7 @@ def _calculate_hemisphere_ground_track(tracker_lat_deg, tracker_lon_deg, earth_r
 
 def plot_ground_track(
   result                  : PropagationResult,
-  epoch_dt_utc            : Optional[datetime.datetime] = None,
+  epoch_dt_utc            : Optional[datetime] = None,
   title_text              : str = "Ground Track",
   trackers                : Optional[list['TrackerStation']] = None,
   include_tracker_on_body : bool = False,
@@ -1809,7 +1808,7 @@ def plot_ground_track(
 
 def plot_3d_trajectory_sun_centered(
   result : PropagationResult,
-  epoch  : Optional[datetime.datetime] = None,
+  epoch  : Optional[datetime] = None,
 ) -> Figure:
   """
   Plot 3D position trajectory with Moon trajectory in J2000 Earth-centered frame.
@@ -2149,7 +2148,7 @@ def generate_error_plots(
   result_jpl_horizons_ephemeris    : Optional[PropagationResult],
   result_high_fidelity_propagation : PropagationResult,
   result_sgp4_propagation          : Optional[PropagationResult],
-  time_o_dt                        : datetime.datetime,
+  time_o_dt                        : datetime,
   figures_folderpath               : Path,
   compare_jpl_horizons             : bool,
   compare_tle                      : bool,
@@ -2245,7 +2244,7 @@ def generate_error_plots(
 def plot_skyplot(
   result       : PropagationResult,
   tracker      : TrackerStation,
-  epoch_dt_utc : Optional[datetime.datetime] = None,
+  epoch_dt_utc : Optional[datetime] = None,
   title_text   : str = "Skyplot",
 ) -> Figure:
   """
@@ -2820,7 +2819,7 @@ def generate_3d_and_time_series_plots(
   result_jpl_horizons_ephemeris    : Optional[PropagationResult],
   result_high_fidelity_propagation : PropagationResult,
   result_sgp4_propagation          : Optional[PropagationResult],
-  time_o_dt                        : datetime.datetime,
+  time_o_dt                        : datetime,
   figures_folderpath               : Path,
   compare_jpl_horizons             : bool,
   compare_tle                      : bool,
@@ -2970,7 +2969,7 @@ def generate_plots(
   result_jpl_horizons_ephemeris    : Optional[PropagationResult],
   result_high_fidelity_propagation : PropagationResult,
   result_sgp4_propagation          : Optional[PropagationResult],
-  time_o_dt                        : datetime.datetime,
+  time_o_dt                        : datetime,
   figures_folderpath               : Path,
   compare_jpl_horizons             : bool = False,
   compare_tle                      : bool = False,
