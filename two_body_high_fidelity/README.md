@@ -462,16 +462,20 @@ Each run creates a timestamped folder in `output/`:
 ```
 output/20251216_143052/
 ├── figures/
-│   ├── 3d_iss_high_fidelity.png
-│   ├── 3d_iss_jpl_horizons.png
-│   ├── 3d_iss_sgp4.png
-│   ├── timeseries_iss_high_fidelity.png
-│   ├── timeseries_iss_jpl_horizons.png
-│   ├── timeseries_iss_sgp4.png
-│   ├── error_timeseries_iss_high_fidelity_relative_to_jpl_horizons.png
-│   ├── error_timeseries_iss_high_fidelity_relative_to_sgp4.png
-│   ├── skyplot_canberra_dsn_iss.png
-│   └── skyplot_svalbard_arctic_iss.png
+│   ├── 3d_j2000_earth_centered_high_fidelity_iss.png
+│   ├── 3d_j2000_earth_centered_jpl_horizons_iss.png
+│   ├── 3d_j2000_earth_centered_sgp4_iss.png
+│   ├── 3d_iau_earth_high_fidelity_iss.png
+│   ├── 3d_j2000_sun_centered_high_fidelity_iss.png
+│   ├── timeseries_cart_coe_mee_high_fidelity_iss.png
+│   ├── timeseries_cart_coe_mee_jpl_horizons_iss.png
+│   ├── timeseries_cart_coe_mee_sgp4_iss.png
+│   ├── error_timeseries_high_fidelity_rel_jpl_horizons_iss.png
+│   ├── error_timeseries_high_fidelity_rel_sgp4_iss.png
+│   ├── groundtrack_high_fidelity_iss.png
+│   ├── skyplot_canberra_dsn_high_fidelity_iss.png
+│   ├── time_series_meas_canberra_dsn_high_fidelity_iss.png
+│   └── skyplot_svalbard_arctic_high_fidelity_iss.png
 └── files/
     └── output.log
 ```
@@ -480,10 +484,14 @@ output/20251216_143052/
 
 | Plot | Description |
 |------|-------------|
-| 3D Trajectory | Position and velocity in 3D with Earth wireframe |
-| Time Series | Position, velocity, and orbital elements vs time |
-| Error Plots | RIC-frame position/velocity errors and orbital element differences |
+| 3D Trajectory (J2000) | Position and velocity in 3D inertial frame with Earth wireframe |
+| 3D Trajectory (IAU_EARTH) | Body-fixed 3D trajectory with rotating Earth |
+| 3D Trajectory (Sun-centered) | Heliocentric trajectory visualization |
+| Time Series (Cart/COE/MEE) | Cartesian state, Classical Orbital Elements, and Modified Equinoctial Elements vs time |
+| Error Time Series | RIC-frame position/velocity errors and orbital element differences |
+| Ground Track | Geographic ground track with latitude/longitude |
 | Skyplots | Polar plots showing satellite visibility from ground stations with azimuth/elevation tracks |
+| Measurement Time Series | Range, azimuth, and elevation measurements from ground stations vs time |
 
 ## Testing
 
