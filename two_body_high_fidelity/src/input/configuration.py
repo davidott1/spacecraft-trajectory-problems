@@ -321,8 +321,21 @@ def build_config(
   -------
     ValueError
       If NORAD ID is not supported.
+      If timespan is not provided.
   """
-  
+
+  # Validate required arguments
+  if timespan_dt is None:
+    raise ValueError(
+      "timespan is required but was not provided. "
+      "Please provide --timespan via command line or 'timespan' in config file."
+    )
+
+  if not isinstance(timespan_dt, (list, tuple)) or len(timespan_dt) != 2:
+    raise ValueError(
+      f"timespan must be a list or tuple of exactly 2 datetime objects, got: {type(timespan_dt).__name__}"
+    )
+
   # Normalize inputs
   initial_state_source, gravity_harmonics_list = normalize_input(
     initial_state_source,
