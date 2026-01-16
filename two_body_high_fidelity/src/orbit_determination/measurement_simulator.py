@@ -143,15 +143,20 @@ class MeasurementSimulator:
         if perf.range.max is not None:
           visible_mask &= (truth.range <= perf.range.max)
 
-      # Azimuth limits (handle wraparound)
+      # Azimuth limits (handle wraparound and full range)
       if perf.azimuth is not None:
         az_min = perf.azimuth.min
         az_max = perf.azimuth.max
-        if az_min <= az_max:
-          visible_mask &= (truth.azimuth >= az_min) & (truth.azimuth <= az_max)
-        else:
-          # Wraparound case (e.g., 350° to 10°)
-          visible_mask &= (truth.azimuth >= az_min) | (truth.azimuth <= az_max)
+        # Check if full azimuth range (all angles valid)
+        az_min_deg = az_min * CONVERTER.DEG_PER_RAD
+        az_max_deg = az_max * CONVERTER.DEG_PER_RAD
+        full_range = (az_max_deg - az_min_deg) >= 360.0 or (az_min_deg == -180.0 and az_max_deg == 180.0)
+        if not full_range:
+          if az_min <= az_max:
+            visible_mask &= (truth.azimuth >= az_min) & (truth.azimuth <= az_max)
+          else:
+            # Wraparound case (e.g., 350° to 10°)
+            visible_mask &= (truth.azimuth >= az_min) | (truth.azimuth <= az_max)
 
     # Store and return
     self._visible_mask = visible_mask

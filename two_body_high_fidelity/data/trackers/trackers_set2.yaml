@@ -1,0 +1,39 @@
+- name                     : "Equatorial Tracker"
+  position                 :
+    latitude__deg          : 0.0
+    longitude__deg         : -120.0
+    altitude__m            : 0.0
+  performance              :
+    azimuth_min_max__deg   : -180.0, 90.0
+    elevation_min_max__deg : 0.0, 90.0
+    range_min_max__m       : 0.0, 2.0e6
+
+- name                     : "Northern Tracker"
+  position                 :
+    latitude__deg          : 45.0
+    longitude__deg         : 100.0
+    altitude__m            : 0.0
+  performance              :
+    azimuth_min_max__deg   : -90.0, 90.0
+    elevation_min_max__deg : 5.0, 90.0
+    range_min_max__m       : 0.0, 2.5e6
+
+- name                     : "Southern Tracker"
+  position                 :
+    latitude__deg          : -45.0
+    longitude__deg         : 0.0
+    altitude__m            : 0.0
+  performance              :
+    azimuth_min_max__deg   : -90.0, 90.0
+    elevation_min_max__deg : 5.0, 90.0
+    range_min_max__m       : 0.0, 3.0e6
+
+- name                     : "Equatorial Eastern Tracker"
+  position                 :
+    latitude__deg          : 0.0
+    longitude__deg         : 120.0
+    altitude__m            : 10.0
+  performance              :
+    azimuth_min_max__deg   : -180.0, 180.0
+    elevation_min_max__deg : 0.0, 90.0
+    range_min_max__m       : 0.0, 3.0e6
