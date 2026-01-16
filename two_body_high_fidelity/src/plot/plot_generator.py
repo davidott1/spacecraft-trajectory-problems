@@ -13,7 +13,7 @@ from typing   import Optional
 from src.plot.plot_3d          import plot_3d_trajectories, plot_3d_trajectories_body_fixed, plot_3d_trajectory_sun_centered
 from src.plot.plot_timeseries  import plot_time_series, plot_time_series_error
 from src.plot.plot_groundtrack import plot_ground_track
-from src.plot.plot_skyplot     import plot_skyplot
+from src.plot.plot_skyplot     import plot_skyplot, plot_pass_timeseries
 from src.schemas.propagation   import PropagationResult
 from src.schemas.state         import TrackerStation
 
@@ -412,6 +412,70 @@ def generate_plots(
       except Exception as e:
         print(f"      [WARNING] Failed to generate skyplot for {tracker.name}: {e}")
 
+  # Generate pass time-series plots for each tracker
+  pass_timeseries_files = {}  # Dict of tracker_name -> list of filenames
+  if trackers is not None and len(trackers) > 0:
+    print("    Generate pass time-series plots")
+
+    name_lower = object_name.lower().replace(' ', '_').replace('-', '_')
+
+    for tracker in trackers:
+      try:
+        tracker_name_sanitized = tracker.name.lower().replace(' ', '_').replace('-', '_')
+
+        # Collect filenames for this tracker
+        filenames = []
+
+        # Generate pass time-series for high-fidelity propagation
+        if result_high_fidelity_propagation.success:
+          pass_ts_title = f'Pass Time Series - {object_name_display} - High-Fidelity - {tracker.name}'
+          fig_pass_ts = plot_pass_timeseries(
+            result       = result_high_fidelity_propagation,
+            tracker      = tracker,
+            epoch_dt_utc = time_o_dt,
+            title_text   = pass_ts_title,
+          )
+          if fig_pass_ts is not None:
+            filename = f'time_series_range_azimuth_elevation_{tracker_name_sanitized}_high_fidelity_{name_lower}.png'
+            fig_pass_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+            plt.close(fig_pass_ts)
+            filenames.append(filename)
+
+        # Generate pass time-series for SGP4 if available
+        if compare_tle and result_sgp4_propagation and result_sgp4_propagation.success:
+          pass_ts_title = f'Pass Time Series - {object_name_display} - SGP4 - {tracker.name}'
+          fig_pass_ts_sgp4 = plot_pass_timeseries(
+            result       = result_sgp4_propagation,
+            tracker      = tracker,
+            epoch_dt_utc = time_o_dt,
+            title_text   = pass_ts_title,
+          )
+          if fig_pass_ts_sgp4 is not None:
+            filename = f'time_series_range_azimuth_elevation_{tracker_name_sanitized}_tle_{name_lower}.png'
+            fig_pass_ts_sgp4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+            plt.close(fig_pass_ts_sgp4)
+            filenames.append(filename)
+
+        # Generate pass time-series for JPL Horizons if available
+        if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
+          pass_ts_title = f'Pass Time Series - {object_name_display} - JPL Horizons - {tracker.name}'
+          fig_pass_ts_horizons = plot_pass_timeseries(
+            result       = result_jpl_horizons_ephemeris,
+            tracker      = tracker,
+            epoch_dt_utc = time_o_dt,
+            title_text   = pass_ts_title,
+          )
+          if fig_pass_ts_horizons is not None:
+            filename = f'time_series_range_azimuth_elevation_{tracker_name_sanitized}_jpl_horizons_{name_lower}.png'
+            fig_pass_ts_horizons.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+            plt.close(fig_pass_ts_horizons)
+            filenames.append(filename)
+
+        pass_timeseries_files[tracker.name] = filenames
+
+      except Exception as e:
+        print(f"      [WARNING] Failed to generate pass time-series for {tracker.name}: {e}")
+
   print()
   print("  Summary")
   print(f"    Figure Folderpath : {figures_folderpath}")
@@ -479,3 +543,13 @@ def generate_plots(
       print(f"      Tracker {tracker_name}")
       for filename in filenames:
         print(f"        <figures_folderpath>/{filename}")
+
+  # Print Pass Time-Series
+  if pass_timeseries_files:
+    print()
+    print("    Pass Time-Series")
+    for tracker_name, filenames in pass_timeseries_files.items():
+      if filenames:
+        print(f"      Tracker {tracker_name}")
+        for filename in filenames:
+          print(f"        <figures_folderpath>/{filename}")

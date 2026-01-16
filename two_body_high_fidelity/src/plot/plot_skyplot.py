@@ -435,6 +435,7 @@ def plot_skyplot(
   # Thin black line for entire solution (not in legend)
   ax_range.plot(time_hrs, range_km, 'k-', linewidth=0.5, alpha=0.8)
   ax_range.set_ylabel('Range [km]', fontsize=11)
+  ax_range.yaxis.set_label_coords(-0.06, 0.5)
   ax_range.grid(True, alpha=0.3)
   ax_range.set_title('Truth Measurements vs Time', fontsize=12)
 
@@ -501,6 +502,7 @@ def plot_skyplot(
   # Thin black line for entire solution (not in legend)
   ax_az.plot(time_hrs, az_deg, 'k-', linewidth=0.5, alpha=0.8)
   ax_az.set_ylabel('Azimuth [deg]', fontsize=11)
+  ax_az.yaxis.set_label_coords(-0.06, 0.5)
   ax_az.grid(True, alpha=0.3)
 
   # Plot gray lines and markers for each visible segment
@@ -542,6 +544,7 @@ def plot_skyplot(
     ax_el.plot(time_hrs, el_deg, 'k-', linewidth=0.5, alpha=0.8)
 
   ax_el.set_ylabel('Elevation [deg]', fontsize=11)
+  ax_el.yaxis.set_label_coords(-0.06, 0.5)
   ax_el.set_xlabel('UTC Time', fontsize=11)
   ax_el.grid(True, alpha=0.3)
 
@@ -605,6 +608,7 @@ def plot_skyplot(
     # Thin black line for entire solution
     ax_rng_dot.plot(time_hrs, rng_dot_km, 'k-', linewidth=0.5, alpha=0.8)
     ax_rng_dot.set_ylabel('Range Rate [km/s]', fontsize=11)
+    ax_rng_dot.yaxis.set_label_coords(-0.06, 0.5)
     ax_rng_dot.grid(True, alpha=0.3)
     ax_rng_dot.set_title('Truth Measurement Rates vs Time', fontsize=12)
 
@@ -632,6 +636,7 @@ def plot_skyplot(
     # Thin black line for entire solution
     ax_az_dot.plot(time_hrs, az_dot_deg, 'k-', linewidth=0.5, alpha=0.8)
     ax_az_dot.set_ylabel('Azimuth Rate [deg/s]', fontsize=11)
+    ax_az_dot.yaxis.set_label_coords(-0.06, 0.5)
     ax_az_dot.grid(True, alpha=0.3)
 
     # Plot gray lines and markers for each visible segment
@@ -662,6 +667,7 @@ def plot_skyplot(
       ax_el_dot.plot(time_hrs, el_dot_deg, 'k-', linewidth=0.5, alpha=0.8)
 
     ax_el_dot.set_ylabel('Elevation Rate [deg/s]', fontsize=11)
+    ax_el_dot.yaxis.set_label_coords(-0.06, 0.5)
     ax_el_dot.set_xlabel('UTC Time', fontsize=11)
     ax_el_dot.grid(True, alpha=0.3)
 
@@ -700,5 +706,252 @@ def plot_skyplot(
   with warnings.catch_warnings():
     warnings.filterwarnings("ignore", message=".*tight_layout.*")
     plt.tight_layout(rect=(0.0, 0.10, 1.0, 0.95))
+
+  return fig
+
+
+def plot_pass_timeseries(
+  result       : PropagationResult,
+  tracker      : TrackerStation,
+  epoch_dt_utc : Optional[datetime] = None,
+  title_text   : str = "Pass Time Series",
+) -> Optional[Figure]:
+  """
+  Plot magnified time-series of trackable passes showing range, azimuth, elevation and their rates.
+  
+  Creates a grid with 3 rows (range, azimuth, elevation) and (num_passes × 2) columns.
+  Layout groups measurements and rates:
+    Row 0: Range [Pass 1, 2, 3...] | Range Rate [Pass 1, 2, 3...]
+    Row 1: Azimuth [Pass 1, 2, 3...] | Azimuth Rate [Pass 1, 2, 3...]
+    Row 2: Elevation [Pass 1, 2, 3...] | Elevation Rate [Pass 1, 2, 3...]
+
+  Input:
+  ------
+    result : PropagationResult
+      Propagation result containing 'state' (6xN array) and 'plot_time_s'.
+    tracker : TrackerStation
+      Ground tracking station with latitude, longitude, altitude.
+    epoch_dt_utc : datetime, optional
+      Reference epoch (start time) for time conversion to ET.
+    title_text : str
+      Base title for the plot.
+
+  Output:
+  -------
+    fig : matplotlib.figure.Figure | None
+      Figure object containing the pass time-series plots, or None if no trackable passes.
+  """
+  # Compute topocentric coordinates with rates
+  topo = compute_topocentric_coordinates_with_rates(result, tracker, epoch_dt_utc)
+  
+  # Convert to degrees for display
+  az_deg  = topo.azimuth   * CONVERTER.DEG_PER_RAD
+  el_deg  = topo.elevation * CONVERTER.DEG_PER_RAD
+  time_s  = result.plot_time_s
+  
+  # Get rates (convert angular rates to deg/s)
+  az_dot_deg  = topo.azimuth_dot   * CONVERTER.DEG_PER_RAD if topo.azimuth_dot is not None else None
+  el_dot_deg  = topo.elevation_dot * CONVERTER.DEG_PER_RAD if topo.elevation_dot is not None else None
+  rng_dot     = topo.range_dot  # m/s
+
+  # Normalize azimuth to -180° to +180° range
+  az_deg = ((az_deg + 180.0) % 360.0) - 180.0
+
+  # Get range values
+  range_m  = topo.range
+  range_km = range_m / 1000.0
+
+  # Convert rates
+  rng_dot_km = rng_dot / 1000.0 if rng_dot is not None else None
+
+  # Build constraint valid mask
+  constraint_valid_mask = np.ones(len(el_deg), dtype=bool)
+
+  if tracker.performance:
+    # Check elevation constraints
+    if tracker.performance.elevation:
+      el_min_deg = tracker.performance.elevation.min * CONVERTER.DEG_PER_RAD
+      el_max_deg = tracker.performance.elevation.max * CONVERTER.DEG_PER_RAD
+      constraint_valid_mask &= (el_deg >= el_min_deg) & (el_deg <= el_max_deg)
+
+    # Check azimuth constraints
+    if tracker.performance.azimuth:
+      az_min_deg = tracker.performance.azimuth.min * CONVERTER.DEG_PER_RAD
+      az_max_deg = tracker.performance.azimuth.max * CONVERTER.DEG_PER_RAD
+
+      az_range_deg = az_max_deg - az_min_deg
+      if abs(az_range_deg - 360.0) < 1e-6:
+        pass  # Full circle - all valid
+      elif az_max_deg < az_min_deg:
+        constraint_valid_mask &= (az_deg >= az_min_deg) | (az_deg <= az_max_deg)
+      else:
+        constraint_valid_mask &= (az_deg >= az_min_deg) & (az_deg <= az_max_deg)
+
+    # Check range constraints
+    if tracker.performance.range:
+      range_min_m = tracker.performance.range.min
+      range_max_m = tracker.performance.range.max
+      constraint_valid_mask &= (range_m >= range_min_m) & (range_m <= range_max_m)
+
+  # Find trackable (valid) segments/passes
+  valid_segment_starts = []
+  valid_segment_ends = []
+  in_valid_segment = False
+
+  for i in range(len(constraint_valid_mask)):
+    if constraint_valid_mask[i] and not in_valid_segment:
+      valid_segment_starts.append(i)
+      in_valid_segment = True
+    elif not constraint_valid_mask[i] and in_valid_segment:
+      valid_segment_ends.append(i)
+      in_valid_segment = False
+  if in_valid_segment:
+    valid_segment_ends.append(len(constraint_valid_mask))
+
+  num_passes = len(valid_segment_starts)
+  
+  # If no trackable passes, return None
+  if num_passes == 0:
+    return None
+
+  # Compute y-axis limits across all passes for consistent scaling
+  all_range_km = []
+  all_az_deg = []
+  all_el_deg = []
+  all_rng_dot_km = []
+  all_az_dot_deg = []
+  all_el_dot_deg = []
+
+  for seg_start, seg_end in zip(valid_segment_starts, valid_segment_ends):
+    all_range_km.extend(range_km[seg_start:seg_end])
+    all_az_deg.extend(az_deg[seg_start:seg_end])
+    all_el_deg.extend(el_deg[seg_start:seg_end])
+    if rng_dot_km is not None:
+      all_rng_dot_km.extend(rng_dot_km[seg_start:seg_end])
+    if az_dot_deg is not None:
+      all_az_dot_deg.extend(az_dot_deg[seg_start:seg_end])
+    if el_dot_deg is not None:
+      all_el_dot_deg.extend(el_dot_deg[seg_start:seg_end])
+
+  # Compute limits with small padding
+  def get_limits(data, pad_frac=0.05):
+    if len(data) == 0:
+      return (0, 1)
+    dmin, dmax = min(data), max(data)
+    pad = (dmax - dmin) * pad_frac if dmax != dmin else 0.1
+    return (dmin - pad, dmax + pad)
+
+  range_ylim     = get_limits(all_range_km)
+  az_ylim        = get_limits(all_az_deg)
+  el_ylim        = get_limits(all_el_deg)
+  rng_dot_ylim   = get_limits(all_rng_dot_km)
+  az_dot_ylim    = get_limits(all_az_dot_deg)
+  el_dot_ylim    = get_limits(all_el_dot_deg)
+
+  # Create figure: 6 rows × num_passes columns
+  # Layout: Row 0=Range, Row 1=Range Rate, Row 2=Az, Row 3=Az Rate, Row 4=El, Row 5=El Rate
+  num_rows = 6
+  fig_width = max(3.5 * num_passes, 10)  # At least 3.5 inches per column, min 10
+  fig_height = 12
+  fig, axes = plt.subplots(num_rows, num_passes, figsize=(fig_width, fig_height), squeeze=False)
+
+  # Convert time to UTC datetime if epoch provided
+  if epoch_dt_utc is not None:
+    time_utc = [epoch_dt_utc + timedelta(seconds=float(t)) for t in time_s]
+
+  # Y-label alignment coordinate
+  ylabel_x = -0.15
+
+  # Row configuration: (data_key, rate_data_key, ylabel, rate_ylabel, ylim, rate_ylim)
+  row_configs = [
+    ('range',     'rng_dot',  'Range [km]',     'Range Rate [km/s]',     range_ylim,   rng_dot_ylim),
+    ('az',        'az_dot',   'Azimuth [deg]',  'Azimuth Rate [deg/s]',  az_ylim,      az_dot_ylim),
+    ('el',        'el_dot',   'Elevation [deg]','Elevation Rate [deg/s]',el_ylim,      el_dot_ylim),
+  ]
+
+  # Plot each pass
+  for pass_idx, (seg_start, seg_end) in enumerate(zip(valid_segment_starts, valid_segment_ends)):
+    col = pass_idx
+
+    # Extract segment data
+    seg_time_s    = time_s[seg_start:seg_end]
+    seg_range_km  = range_km[seg_start:seg_end]
+    seg_az_deg    = az_deg[seg_start:seg_end]
+    seg_el_deg    = el_deg[seg_start:seg_end]
+    
+    seg_rng_dot_km = rng_dot_km[seg_start:seg_end] if rng_dot_km is not None else None
+    seg_az_dot_deg = az_dot_deg[seg_start:seg_end] if az_dot_deg is not None else None
+    seg_el_dot_deg = el_dot_deg[seg_start:seg_end] if el_dot_deg is not None else None
+
+    # Time axis for this segment
+    if epoch_dt_utc is not None:
+      seg_time = time_utc[seg_start:seg_end]
+    else:
+      seg_time = seg_time_s / 3600.0  # hours
+
+    # Pass label for title (only on row 0)
+    pass_label = f"Pass {pass_idx + 1}"
+    if epoch_dt_utc is not None and len(seg_time) > 0:
+      pass_start_str = seg_time[0].strftime('%H:%M:%S')
+      pass_end_str   = seg_time[-1].strftime('%H:%M:%S')
+      pass_label = f"Pass {pass_idx + 1}\n{pass_start_str} - {pass_end_str}"
+
+    # Data arrays for each measurement type
+    seg_data = {
+      'range': seg_range_km,
+      'az': seg_az_deg,
+      'el': seg_el_deg,
+      'rng_dot': seg_rng_dot_km,
+      'az_dot': seg_az_dot_deg,
+      'el_dot': seg_el_dot_deg,
+    }
+
+    # Plot each row pair (measurement + rate)
+    for meas_idx, (meas_key, rate_key, ylabel, rate_ylabel, ylim, rate_ylim) in enumerate(row_configs):
+      row_meas = meas_idx * 2      # 0, 2, 4
+      row_rate = meas_idx * 2 + 1  # 1, 3, 5
+
+      # ---- Measurement row ----
+      ax_meas = axes[row_meas, col]
+      ax_meas.plot(seg_time, seg_data[meas_key], 'b-', linewidth=2.0)
+      ax_meas.set_ylim(ylim)
+      if col == 0:
+        ax_meas.set_ylabel(ylabel, fontsize=10)
+        ax_meas.yaxis.set_label_coords(ylabel_x, 0.5)
+      else:
+        ax_meas.set_yticklabels([])
+      ax_meas.grid(True, alpha=0.3)
+      ax_meas.set_xticklabels([])
+      if row_meas == 0:
+        ax_meas.set_title(pass_label, fontsize=10)
+
+      # ---- Rate row ----
+      ax_rate = axes[row_rate, col]
+      if seg_data[rate_key] is not None:
+        ax_rate.plot(seg_time, seg_data[rate_key], 'b-', linewidth=2.0)
+      ax_rate.set_ylim(rate_ylim)
+      if col == 0:
+        ax_rate.set_ylabel(rate_ylabel, fontsize=10)
+        ax_rate.yaxis.set_label_coords(ylabel_x, 0.5)
+      else:
+        ax_rate.set_yticklabels([])
+      ax_rate.grid(True, alpha=0.3)
+      ax_rate.set_xticklabels([])
+
+    # Bottom row (el_dot) gets x-axis labels
+    ax_bottom = axes[5, col]
+    if epoch_dt_utc is not None:
+      ax_bottom.tick_params(axis='x', rotation=45)
+      ax_bottom.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+    ax_bottom.set_xlabel('UTC Time', fontsize=10)
+
+  # Add overall title
+  fig.suptitle(title_text, fontsize=14, y=0.98)
+
+  # Adjust layout with tighter spacing
+  with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message=".*tight_layout.*")
+    plt.tight_layout(rect=(0.0, 0.0, 1.0, 0.95))
+    plt.subplots_adjust(wspace=0.08, hspace=0.15)
 
   return fig
