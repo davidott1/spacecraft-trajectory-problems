@@ -425,7 +425,7 @@ def plot_3d_trajectories_body_fixed(
       # Draw field of view hemisphere (use tracker's max range)
       tracker_lat_deg = tracker_lat_rad * CONVERTER.DEG_PER_RAD
       tracker_lon_deg = tracker_lon_rad * CONVERTER.DEG_PER_RAD
-      fov_radius_m = tracker.performance.range.max
+      fov_radius_m = tracker.performance.constraints.range.max
       x_fov, y_fov, z_fov = _create_tracker_fov_hemisphere(tracker_lat_deg, tracker_lon_deg, r_eq, fov_radius_m, resolution=30)
       ax1.plot_surface(x_fov, y_fov, z_fov, color='red', alpha=0.2, edgecolor='none', zorder=2)  # type: ignore
 

@@ -82,9 +82,9 @@ def plot_skyplot(
   if tracker.performance:
 
     # Elevation constraints (circular boundaries)
-    if tracker.performance.elevation:
-      el_min_deg = tracker.performance.elevation.min * CONVERTER.DEG_PER_RAD
-      el_max_deg = tracker.performance.elevation.max * CONVERTER.DEG_PER_RAD
+    if tracker.performance.constraints.elevation:
+      el_min_deg = tracker.performance.constraints.elevation.min * CONVERTER.DEG_PER_RAD
+      el_max_deg = tracker.performance.constraints.elevation.max * CONVERTER.DEG_PER_RAD
 
       # Convert elevation to radius (radius = 90 - elevation)
       radius_max_constraint = 90.0 - el_min_deg  # Outer boundary (low elevation limit)
@@ -106,10 +106,10 @@ def plot_skyplot(
                         color='gray', alpha=0.1, label=f'Above Max El ({el_max_deg:.0f}°)')
 
     # Azimuth constraints (wedge-shaped boundaries)
-    if tracker.performance.azimuth:
+    if tracker.performance.constraints.azimuth:
       # Azimuth values are already normalized to -180° to +180° in the loader
-      az_min_deg = tracker.performance.azimuth.min * CONVERTER.DEG_PER_RAD
-      az_max_deg = tracker.performance.azimuth.max * CONVERTER.DEG_PER_RAD
+      az_min_deg = tracker.performance.constraints.azimuth.min * CONVERTER.DEG_PER_RAD
+      az_max_deg = tracker.performance.constraints.azimuth.max * CONVERTER.DEG_PER_RAD
 
       # Check if this covers the full circle (e.g., -180 to 180 or 0 to 360)
       az_range_deg = az_max_deg - az_min_deg
@@ -161,15 +161,15 @@ def plot_skyplot(
 
   if tracker.performance:
     # Check elevation constraints
-    if tracker.performance.elevation:
-      el_min_deg = tracker.performance.elevation.min * CONVERTER.DEG_PER_RAD
-      el_max_deg = tracker.performance.elevation.max * CONVERTER.DEG_PER_RAD
+    if tracker.performance.constraints.elevation:
+      el_min_deg = tracker.performance.constraints.elevation.min * CONVERTER.DEG_PER_RAD
+      el_max_deg = tracker.performance.constraints.elevation.max * CONVERTER.DEG_PER_RAD
       constraint_valid_mask &= (el_deg >= el_min_deg) & (el_deg <= el_max_deg)
 
     # Check azimuth constraints
-    if tracker.performance.azimuth:
-      az_min_deg = tracker.performance.azimuth.min * CONVERTER.DEG_PER_RAD
-      az_max_deg = tracker.performance.azimuth.max * CONVERTER.DEG_PER_RAD
+    if tracker.performance.constraints.azimuth:
+      az_min_deg = tracker.performance.constraints.azimuth.min * CONVERTER.DEG_PER_RAD
+      az_max_deg = tracker.performance.constraints.azimuth.max * CONVERTER.DEG_PER_RAD
 
       # Check if this covers the full circle (e.g., -180 to 180 or 0 to 360)
       az_range_deg = az_max_deg - az_min_deg
@@ -187,9 +187,9 @@ def plot_skyplot(
   range_m = topo.range
 
   # Check range constraints
-  if tracker.performance and tracker.performance.range:
-    range_min_m = tracker.performance.range.min
-    range_max_m = tracker.performance.range.max
+  if tracker.performance and tracker.performance.constraints.range:
+    range_min_m = tracker.performance.constraints.range.min
+    range_max_m = tracker.performance.constraints.range.max
     constraint_valid_mask &= (range_m >= range_min_m) & (range_m <= range_max_m)
   
   # Compute marker sizes based on VISIBLE range only (closer = larger, further = smaller)
@@ -486,9 +486,9 @@ def plot_skyplot(
     blue_plotted = True
 
   # Add horizontal lines for range constraints (if they exist)
-  if tracker.performance and tracker.performance.range:
-    range_min_km = tracker.performance.range.min / 1000.0
-    range_max_km = tracker.performance.range.max / 1000.0
+  if tracker.performance and tracker.performance.constraints.range:
+    range_min_km = tracker.performance.constraints.range.min / 1000.0
+    range_max_km = tracker.performance.constraints.range.max / 1000.0
     if range_min_km > 0:
       ax_range.axhline(y=range_min_km, color='k', linestyle='--', linewidth=1.0, alpha=0.5, label=f'Min Range ({range_min_km:.0f} km)')
     if range_max_km < np.inf:
@@ -522,9 +522,9 @@ def plot_skyplot(
     blue_plotted = True
 
   # Add horizontal lines for azimuth constraints (if they exist)
-  if tracker.performance and tracker.performance.azimuth:
-    az_min_constraint = tracker.performance.azimuth.min * CONVERTER.DEG_PER_RAD
-    az_max_constraint = tracker.performance.azimuth.max * CONVERTER.DEG_PER_RAD
+  if tracker.performance and tracker.performance.constraints.azimuth:
+    az_min_constraint = tracker.performance.constraints.azimuth.min * CONVERTER.DEG_PER_RAD
+    az_max_constraint = tracker.performance.constraints.azimuth.max * CONVERTER.DEG_PER_RAD
     ax_az.axhline(y=az_min_constraint, color='k', linestyle='--', linewidth=1.0, alpha=0.5, label=f'Min Az ({az_min_constraint:.0f}°)')
     ax_az.axhline(y=az_max_constraint, color='k', linestyle='--', linewidth=1.0, alpha=0.5, label=f'Max Az ({az_max_constraint:.0f}°)')
 
@@ -576,9 +576,9 @@ def plot_skyplot(
   ax_el.axhline(y=0, color='k', linestyle='--', linewidth=1.0, alpha=0.5, label='Horizon')
 
   # Add horizontal lines for elevation constraints (if they exist)
-  if tracker.performance and tracker.performance.elevation:
-    el_min_constraint = tracker.performance.elevation.min * CONVERTER.DEG_PER_RAD
-    el_max_constraint = tracker.performance.elevation.max * CONVERTER.DEG_PER_RAD
+  if tracker.performance and tracker.performance.constraints.elevation:
+    el_min_constraint = tracker.performance.constraints.elevation.min * CONVERTER.DEG_PER_RAD
+    el_max_constraint = tracker.performance.constraints.elevation.max * CONVERTER.DEG_PER_RAD
     if el_min_constraint > 0:
       ax_el.axhline(y=el_min_constraint, color='k', linestyle='--', linewidth=1.0, alpha=0.5, label=f'Min El ({el_min_constraint:.0f}°)')
     if el_max_constraint < 90:
@@ -769,15 +769,15 @@ def plot_pass_timeseries(
 
   if tracker.performance:
     # Check elevation constraints
-    if tracker.performance.elevation:
-      el_min_deg = tracker.performance.elevation.min * CONVERTER.DEG_PER_RAD
-      el_max_deg = tracker.performance.elevation.max * CONVERTER.DEG_PER_RAD
+    if tracker.performance.constraints.elevation:
+      el_min_deg = tracker.performance.constraints.elevation.min * CONVERTER.DEG_PER_RAD
+      el_max_deg = tracker.performance.constraints.elevation.max * CONVERTER.DEG_PER_RAD
       constraint_valid_mask &= (el_deg >= el_min_deg) & (el_deg <= el_max_deg)
 
     # Check azimuth constraints
-    if tracker.performance.azimuth:
-      az_min_deg = tracker.performance.azimuth.min * CONVERTER.DEG_PER_RAD
-      az_max_deg = tracker.performance.azimuth.max * CONVERTER.DEG_PER_RAD
+    if tracker.performance.constraints.azimuth:
+      az_min_deg = tracker.performance.constraints.azimuth.min * CONVERTER.DEG_PER_RAD
+      az_max_deg = tracker.performance.constraints.azimuth.max * CONVERTER.DEG_PER_RAD
 
       az_range_deg = az_max_deg - az_min_deg
       if abs(az_range_deg - 360.0) < 1e-6:
@@ -788,9 +788,9 @@ def plot_pass_timeseries(
         constraint_valid_mask &= (az_deg >= az_min_deg) & (az_deg <= az_max_deg)
 
     # Check range constraints
-    if tracker.performance.range:
-      range_min_m = tracker.performance.range.min
-      range_max_m = tracker.performance.range.max
+    if tracker.performance.constraints.range:
+      range_min_m = tracker.performance.constraints.range.min
+      range_max_m = tracker.performance.constraints.range.max
       constraint_valid_mask &= (range_m >= range_min_m) & (range_m <= range_max_m)
 
   # Find trackable (valid) segments/passes

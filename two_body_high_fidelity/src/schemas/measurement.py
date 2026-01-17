@@ -36,12 +36,12 @@ class MeasurementNoise:
   @classmethod
   def from_degrees(
     cls,
-    azimuth_deg       : float = 0.0,
-    elevation_deg     : float = 0.0,
-    range_m           : float = 0.0,
-    azimuth_dot_dps   : float = 0.0,
-    elevation_dot_dps : float = 0.0,
-    range_dot_mps     : float = 0.0,
+    azimuth_deg             : float = 0.0,
+    elevation_deg           : float = 0.0,
+    range_m                 : float = 0.0,
+    azimuth_dot_deg_per_s   : float = 0.0,
+    elevation_dot_deg_per_s : float = 0.0,
+    range_dot_m_per_s       : float = 0.0,
   ) -> 'MeasurementNoise':
     """
     Create MeasurementNoise from angle noise in degrees.
@@ -54,31 +54,31 @@ class MeasurementNoise:
         Elevation noise [deg]
       range_m : float
         Range noise [m]
-      azimuth_dot_dps : float
+      azimuth_dot_deg_per_s : float
         Azimuth rate noise [deg/s]
-      elevation_dot_dps : float
+      elevation_dot_deg_per_s : float
         Elevation rate noise [deg/s]
-      range_dot_mps : float
+      range_dot_m_per_s : float
         Range rate noise [m/s]
     """
     return cls(
       azimuth       = azimuth_deg       * CONVERTER.RAD_PER_DEG,
       elevation     = elevation_deg     * CONVERTER.RAD_PER_DEG,
       range         = range_m,
-      azimuth_dot   = azimuth_dot_dps   * CONVERTER.RAD_PER_DEG,
-      elevation_dot = elevation_dot_dps * CONVERTER.RAD_PER_DEG,
-      range_dot     = range_dot_mps,
+      azimuth_dot   = azimuth_dot_deg_per_s   * CONVERTER.RAD_PER_DEG,
+      elevation_dot = elevation_dot_deg_per_s * CONVERTER.RAD_PER_DEG,
+      range_dot     = range_dot_m_per_s,
     )
   
   @classmethod
   def from_radians(
     cls,
-    azimuth_rad       : float = 0.0,
-    elevation_rad     : float = 0.0,
-    range_m           : float = 0.0,
+    azimuth_rad             : float = 0.0,
+    elevation_rad           : float = 0.0,
+    range_m                 : float = 0.0,
     azimuth_dot_rad_per_s   : float = 0.0,
     elevation_dot_rad_per_s : float = 0.0,
-    range_dot_m_per_s     : float = 0.0,
+    range_dot_m_per_s       : float = 0.0,
   ) -> 'MeasurementNoise':
     """
     Create MeasurementNoise from angle noise in radians.
@@ -87,9 +87,9 @@ class MeasurementNoise:
       azimuth       = azimuth_rad,
       elevation     = elevation_rad,
       range         = range_m,
-      azimuth_dot   = azimuth_dot_rps,
-      elevation_dot = elevation_dot_rps,
-      range_dot     = range_dot_mps,
+      azimuth_dot   = azimuth_dot_rad_per_s,
+      elevation_dot = elevation_dot_rad_per_s,
+      range_dot     = range_dot_m_per_s,
     )
 
 
