@@ -198,6 +198,39 @@ class MeasurementSimulator:
     self._visible_mask = visible_mask
     return visible_mask
 
+  def get_tracker_noise_config(self) -> Optional[MeasurementNoise]:
+    """
+    Create MeasurementNoise from tracker uncertainty configuration.
+
+    Returns:
+    --------
+      noise_config : MeasurementNoise | None
+        MeasurementNoise object with tracker uncertainty values,
+        or None if tracker has no uncertainty configured.
+
+    Example:
+    --------
+      simulator = MeasurementSimulator(result, tracker, epoch_dt)
+
+      # For JPL Horizons truth - apply tracker uncertainty
+      noise = simulator.get_tracker_noise_config()
+      measurements = simulator.simulate(noise_config=noise)
+
+      # For TLE/high-fidelity - no uncertainty
+      measurements = simulator.simulate()  # noise_config=None by default
+    """
+    if self.tracker.performance is not None and self.tracker.performance.uncertainty is not None:
+      unc = self.tracker.performance.uncertainty
+      return MeasurementNoise(
+        azimuth       = unc.azimuth,
+        elevation     = unc.elevation,
+        range         = unc.range,
+        azimuth_dot   = unc.azimuth_rate,
+        elevation_dot = unc.elevation_rate,
+        range_dot     = unc.range_rate,
+      )
+    return None
+
   def simulate(
     self,
     noise_config  : Optional[MeasurementNoise] = None,
@@ -207,11 +240,19 @@ class MeasurementSimulator:
     """
     Simulate measurements with optional Gaussian noise.
 
+    By default (noise_config=None), no noise is applied - measurements are pure
+    geometric calculations from the state. This is appropriate for TLE and
+    high-fidelity propagated solutions.
+
+    For JPL Horizons truth comparison, explicitly pass noise_config with
+    tracker uncertainty to generate simulated measurements.
+
     Input:
     ------
       noise_config : MeasurementNoise, optional
-        Noise standard deviations. If None, uses tracker uncertainty from
-        performance.uncertainty if available, otherwise no noise is added.
+        Noise standard deviations. If None (default), no noise is added.
+        To apply tracker uncertainty, create MeasurementNoise from
+        tracker.performance.uncertainty and pass explicitly.
       seed : int, optional
         Random seed for reproducibility.
       include_rates : bool
@@ -220,7 +261,12 @@ class MeasurementSimulator:
     Returns:
     --------
       measurements : SimulatedMeasurements
-        Simulated measurements with truth and noisy values.
+        Object containing:
+        - truth: Pure geometric calculations (no noise)
+        - measured: Same as truth if noise_config=None, otherwise truth + noise
+        - noise_config: The noise configuration used
+        - visible_mask: Boolean mask for visibility constraints
+        - tracker: The tracker station
     """
     # Set random seed for reproducibility
     if seed is not None:
@@ -230,22 +276,11 @@ class MeasurementSimulator:
     truth        = self.compute_truth(include_rates=include_rates)
     visible_mask = self.compute_visibility_mask()
 
-    # Use tracker uncertainty if no noise config provided
+    # Default to zero noise if no noise config provided
+    # Uncertainty should only be applied when explicitly requested
+    # (e.g., for JPL Horizons truth measurements)
     if noise_config is None:
-      if self.tracker.performance is not None and self.tracker.performance.uncertainty is not None:
-        # Use uncertainty from tracker configuration
-        unc = self.tracker.performance.uncertainty
-        noise_config = MeasurementNoise(
-          azimuth       = unc.azimuth,
-          elevation     = unc.elevation,
-          range         = unc.range,
-          azimuth_dot   = unc.azimuth_rate,
-          elevation_dot = unc.elevation_rate,
-          range_dot     = unc.range_rate,
-        )
-      else:
-        # No uncertainty specified - use zero noise
-        noise_config = MeasurementNoise()
+      noise_config = MeasurementNoise()
 
     # Compute number of points
     n_points = truth.n_points

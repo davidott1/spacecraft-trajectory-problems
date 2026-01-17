@@ -18,6 +18,7 @@ from src.model.constants                   import CONVERTER
 from src.orbit_determination.topocentric   import compute_topocentric_coordinates_with_rates
 from src.schemas.propagation               import PropagationResult
 from src.schemas.state                     import TrackerStation
+from src.schemas.measurement               import SimulatedMeasurements
 
 
 def plot_skyplot(
@@ -25,6 +26,7 @@ def plot_skyplot(
   tracker      : TrackerStation,
   epoch_dt_utc : Optional[datetime] = None,
   title_text   : str = "Skyplot",
+  measurements : Optional[SimulatedMeasurements] = None,
 ) -> Figure:
   """
   Plot a skyplot (polar plot of azimuth vs elevation) from a ground station.
@@ -39,6 +41,10 @@ def plot_skyplot(
       Reference epoch (start time) for time conversion to ET.
     title_text : str
       Base title for the plot.
+    measurements : SimulatedMeasurements, optional
+      Simulated measurements with truth and measured (noisy) data.
+      If provided, both truth (blue) and measured (red) will be plotted.
+      If None, only the geometric calculation is plotted (blue).
 
   Output:
   -------
@@ -46,27 +52,62 @@ def plot_skyplot(
       Figure object containing the skyplot and time-series plots.
   """
   fig = plt.figure(figsize=(30, 10))
-  
-  # Compute topocentric coordinates with rates
-  topo = compute_topocentric_coordinates_with_rates(result, tracker, epoch_dt_utc)
-  
-  # Convert to degrees for display
-  az_deg  = topo.azimuth   * CONVERTER.DEG_PER_RAD
-  el_deg  = topo.elevation * CONVERTER.DEG_PER_RAD
-  time_s  = result.plot_time_s
-  
-  # Get rates (convert angular rates to deg/s)
-  az_dot_deg  = topo.azimuth_dot   * CONVERTER.DEG_PER_RAD if topo.azimuth_dot is not None else None
-  el_dot_deg  = topo.elevation_dot * CONVERTER.DEG_PER_RAD if topo.elevation_dot is not None else None
-  rng_dot     = topo.range_dot  # m/s
 
-  # Normalize azimuth to -180° to +180° range
-  az_deg = ((az_deg + 180.0) % 360.0) - 180.0
+  # If measurements are provided, use them; otherwise compute topocentric coordinates
+  if measurements is not None:
+    # Use measurements from SimulatedMeasurements
+    topo_truth = measurements.truth
+    topo_measured = measurements.measured
+  else:
+    # Compute topocentric coordinates with rates (no measurements)
+    topo_truth = compute_topocentric_coordinates_with_rates(result, tracker, epoch_dt_utc)
+    topo_measured = None
+  
+  # Convert truth to degrees for display
+  az_deg_truth  = topo_truth.azimuth   * CONVERTER.DEG_PER_RAD
+  el_deg_truth  = topo_truth.elevation * CONVERTER.DEG_PER_RAD
+  time_s        = topo_truth.time_s
+  range_m_truth = topo_truth.range
+
+  # Get rates from truth (convert angular rates to deg/s)
+  az_dot_deg_truth  = topo_truth.azimuth_dot   * CONVERTER.DEG_PER_RAD if topo_truth.azimuth_dot is not None else None
+  el_dot_deg_truth  = topo_truth.elevation_dot * CONVERTER.DEG_PER_RAD if topo_truth.elevation_dot is not None else None
+  rng_dot_truth     = topo_truth.range_dot  # m/s
+
+  # Normalize truth azimuth to -180° to +180° range
+  az_deg_truth = ((az_deg_truth + 180.0) % 360.0) - 180.0
 
   # For polar plot: radius = 90 - elevation (so zenith is at center)
   # theta = azimuth (convert negative angles to positive for polar plotting: 0 to 2π)
-  radius = 90.0 - el_deg
-  theta  = np.where(az_deg >= 0, az_deg, az_deg + 360.0) * CONVERTER.RAD_PER_DEG
+  radius_truth = 90.0 - el_deg_truth
+  theta_truth  = np.where(az_deg_truth >= 0, az_deg_truth, az_deg_truth + 360.0) * CONVERTER.RAD_PER_DEG
+
+  # Process measured data if available
+  if topo_measured is not None:
+    az_deg_measured  = topo_measured.azimuth   * CONVERTER.DEG_PER_RAD
+    el_deg_measured  = topo_measured.elevation * CONVERTER.DEG_PER_RAD
+    range_m_measured = topo_measured.range
+
+    # Normalize measured azimuth to -180° to +180° range
+    az_deg_measured = ((az_deg_measured + 180.0) % 360.0) - 180.0
+
+    # For polar plot
+    radius_measured = 90.0 - el_deg_measured
+    theta_measured  = np.where(az_deg_measured >= 0, az_deg_measured, az_deg_measured + 360.0) * CONVERTER.RAD_PER_DEG
+  else:
+    # No measured data - use truth for backward compatibility
+    az_deg_measured = az_deg_truth
+    el_deg_measured = el_deg_truth
+    range_m_measured = range_m_truth
+    radius_measured = radius_truth
+    theta_measured = theta_truth
+
+  # Use truth for visibility and constraint checking
+  az_deg = az_deg_truth
+  el_deg = el_deg_truth
+  range_m = range_m_truth
+  radius = radius_truth
+  theta = theta_truth
 
   # Create grid: polar skyplot on left, three time-series plots in middle, three rate plots on right
   ax = fig.add_subplot(1, 3, 1, projection='polar')
@@ -226,8 +267,9 @@ def plot_skyplot(
   
   # Plot each visible segment
   for seg_start, seg_end in zip(segment_starts, segment_ends):
-    seg_theta            = theta[seg_start:seg_end]
-    seg_radius           = radius[seg_start:seg_end]
+    # Truth data
+    seg_theta_truth      = theta_truth[seg_start:seg_end]
+    seg_radius_truth     = radius_truth[seg_start:seg_end]
     seg_time             = time_s[seg_start:seg_end]
     seg_marker_sizes     = marker_sizes[seg_start:seg_end]
     seg_range            = range_m[seg_start:seg_end]
@@ -235,59 +277,88 @@ def plot_skyplot(
     seg_el_deg           = el_deg[seg_start:seg_end]
     seg_az_deg           = az_deg[seg_start:seg_end]
 
+    # Measured data (if available)
+    if topo_measured is not None:
+      seg_theta_measured = theta_measured[seg_start:seg_end]
+      seg_radius_measured = radius_measured[seg_start:seg_end]
+    else:
+      seg_theta_measured = seg_theta_truth
+      seg_radius_measured = seg_radius_truth
+
     # Plot trajectory
     if len(seg_time) > 0:
 
-      # Plot line segments based on point types:
+      # Plot TRUTH line segments (blue)
       # - Gray solid line between gray (not valid) points
       # - Gray dashed line between gray and blue (transition) points
       # - Blue solid line between blue (valid) points
-      for i in range(len(seg_theta) - 1):
+      for i in range(len(seg_theta_truth) - 1):
         if seg_constraint_valid[i] and seg_constraint_valid[i+1]:
           # Both points valid (blue) - blue solid line
-          ax.plot(seg_theta[i:i+2], seg_radius[i:i+2], 'b-', linewidth=2.0, alpha=0.8)
+          ax.plot(seg_theta_truth[i:i+2], seg_radius_truth[i:i+2], 'b-', linewidth=2.0, alpha=0.8)
         elif not seg_constraint_valid[i] and not seg_constraint_valid[i+1]:
           # Both points not valid (gray) - gray solid line
-          ax.plot(seg_theta[i:i+2], seg_radius[i:i+2], color='gray', linestyle='-', linewidth=1.5, alpha=0.8)
+          ax.plot(seg_theta_truth[i:i+2], seg_radius_truth[i:i+2], color='gray', linestyle='-', linewidth=1.5, alpha=0.8)
         else:
           # Transition between gray and blue - gray dashed line
-          ax.plot(seg_theta[i:i+2], seg_radius[i:i+2], color='gray', linestyle='--', linewidth=1.5, alpha=0.8)
+          ax.plot(seg_theta_truth[i:i+2], seg_radius_truth[i:i+2], color='gray', linestyle='--', linewidth=1.5, alpha=0.8)
 
-      # Plot visible points with gray (do not connect)
-      ax.scatter(seg_theta, seg_radius, c='gray', s=seg_marker_sizes, alpha=0.6)
+      # Plot visible truth points with gray (do not connect)
+      ax.scatter(seg_theta_truth, seg_radius_truth, c='gray', s=seg_marker_sizes, alpha=0.6)
 
-      # Plot valid portions with blue markers
+      # Plot valid portions with blue markers (truth)
       if np.any(seg_constraint_valid):
         # Plot blue scatter points for valid portions
         valid_indices = np.where(seg_constraint_valid)[0]
         if len(valid_indices) > 0:
-          ax.scatter(seg_theta[valid_indices], seg_radius[valid_indices],
-                    c='blue', s=seg_marker_sizes[valid_indices], alpha=1.0)
+          ax.scatter(seg_theta_truth[valid_indices], seg_radius_truth[valid_indices],
+                    c='blue', s=seg_marker_sizes[valid_indices], alpha=1.0, label='Truth' if seg_start == segment_starts[0] else '')
+
+      # Plot MEASURED data in RED on top (if available)
+      if topo_measured is not None:
+        # Plot red line segments for measured data
+        for i in range(len(seg_theta_measured) - 1):
+          if seg_constraint_valid[i] and seg_constraint_valid[i+1]:
+            # Both points valid - red solid line
+            ax.plot(seg_theta_measured[i:i+2], seg_radius_measured[i:i+2], 'r-', linewidth=1.5, alpha=0.7)
+          elif not seg_constraint_valid[i] and not seg_constraint_valid[i+1]:
+            # Both points not valid - gray solid line
+            ax.plot(seg_theta_measured[i:i+2], seg_radius_measured[i:i+2], color='lightgray', linestyle='-', linewidth=1.0, alpha=0.6)
+          else:
+            # Transition - gray dashed line
+            ax.plot(seg_theta_measured[i:i+2], seg_radius_measured[i:i+2], color='lightgray', linestyle='--', linewidth=1.0, alpha=0.6)
+
+        # Plot valid portions with red markers (measured)
+        if np.any(seg_constraint_valid):
+          valid_indices = np.where(seg_constraint_valid)[0]
+          if len(valid_indices) > 0:
+            ax.scatter(seg_theta_measured[valid_indices], seg_radius_measured[valid_indices],
+                      c='red', s=seg_marker_sizes[valid_indices] * 0.6, alpha=0.8, label='Measured' if seg_start == segment_starts[0] else '')
       
       # Add entry marker if this is a true entry (satellite rose above horizon during propagation)
       # A true entry means there was a point before this segment that was below horizon
       is_true_entry = seg_start > 0
       if is_true_entry:
-        ax.scatter([seg_theta[0]], [seg_radius[0]], s=120, marker='s', facecolors='none', 
+        ax.scatter([seg_theta_truth[0]], [seg_radius_truth[0]], s=120, marker='s', facecolors='none',
                   edgecolors='black', linewidths=2, zorder=10)
         if epoch_dt_utc is not None:
           entry_dt = epoch_dt_utc + timedelta(seconds=seg_time[0])
           entry_label = entry_dt.strftime('%Y-%m-%d %H:%M:%S')
-          ax.annotate(f'Entry\n{entry_label}', (seg_theta[0], seg_radius[0]), 
+          ax.annotate(f'Entry\n{entry_label}', (seg_theta_truth[0], seg_radius_truth[0]),
                      textcoords='offset points', xytext=(8, 8), fontsize=8,
                      color='black', fontweight='normal',
                      bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='black', alpha=0.8))
-      
+
       # Add exit marker if this is a true exit (satellite set below horizon during propagation)
       # A true exit means there's a point after this segment that's below horizon
       is_true_exit = seg_end < len(visible_mask)
       if is_true_exit:
-        ax.scatter([seg_theta[-1]], [seg_radius[-1]], s=120, marker='s', facecolors='none',
+        ax.scatter([seg_theta_truth[-1]], [seg_radius_truth[-1]], s=120, marker='s', facecolors='none',
                   edgecolors='black', linewidths=2, zorder=10)
         if epoch_dt_utc is not None:
           exit_dt = epoch_dt_utc + timedelta(seconds=seg_time[-1])
           exit_label = exit_dt.strftime('%Y-%m-%d %H:%M:%S')
-          ax.annotate(f'Exit\n{exit_label}', (seg_theta[-1], seg_radius[-1]),
+          ax.annotate(f'Exit\n{exit_label}', (seg_theta_truth[-1], seg_radius_truth[-1]),
                      textcoords='offset points', xytext=(8, -12), fontsize=8,
                      color='black', fontweight='normal',
                      bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='black', alpha=0.8))
@@ -414,6 +485,10 @@ def plot_skyplot(
   legend_ax.text(9, 4.5, f'{range_max_km:.0f} km\nmax', ha='center', va='top', fontsize=8, zorder=2)
 
   legend_ax.text(5, 8.5, 'Range', ha='center', fontsize=9, fontweight='bold', zorder=2)
+
+  # Add legend for truth vs measured if both are present
+  if topo_measured is not None:
+    ax.legend(loc='upper right', fontsize=10, framealpha=0.9)
 
   ax.set_title(title_text, fontsize=14, pad=20)
 
