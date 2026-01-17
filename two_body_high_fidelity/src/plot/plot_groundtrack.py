@@ -343,7 +343,7 @@ def plot_ground_track(
       # Draw field of view hemisphere (use tracker's max range)
       tracker_lat_deg = tracker_lat_rad * CONVERTER.DEG_PER_RAD
       tracker_lon_deg = tracker_lon_rad * CONVERTER.DEG_PER_RAD
-      fov_radius_m = tracker.performance.range.max
+      fov_radius_m = tracker.performance.constraints.range.max
       x_fov, y_fov, z_fov = _create_tracker_fov_hemisphere(tracker_lat_deg, tracker_lon_deg, r_earth, fov_radius_m, resolution=30)
       ax_3d.plot_surface(x_fov, y_fov, z_fov, color='red', alpha=0.2, edgecolor='none', zorder=2)  # type: ignore
 
@@ -422,7 +422,7 @@ def plot_ground_track(
       ax_2d.scatter([tracker_lon_deg], [tracker_lat_deg], s=200, c='red', marker='o', edgecolors='darkred', linewidths=2, zorder=6, **plot_kwargs)
 
       # Draw FOV ground track circle (use tracker's max range)
-      fov_radius_m = tracker.performance.range.max
+      fov_radius_m = tracker.performance.constraints.range.max
       r_earth = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
       lat_circle, lon_circle = _calculate_hemisphere_ground_track(tracker_lat_deg, tracker_lon_deg, r_earth, fov_radius_m, num_points=100)
       ax_2d.plot(lon_circle, lat_circle, 'r--', linewidth=2, zorder=5, **plot_kwargs)

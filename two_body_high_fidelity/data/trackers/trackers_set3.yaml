@@ -1,29 +1,53 @@
-- name                     : "Canberra DSN"
-  position                 :
-    latitude__deg          : -35.4
-    longitude__deg         : 148.98
-    altitude__m            : 550.0
-  performance              :
-    azimuth_min_max__deg   : -180.0, 180.0
-    elevation_min_max__deg : 10.0, 90.0
-    range_min_max__m       : 0.0, 2.5e6
+- name                          : "Canberra DSN"
+  position                      :
+    latitude__deg               : -35.4
+    longitude__deg              : 148.98
+    altitude__m                 : 550.0
+  performance                   :
+    constraints                 :
+      range_min_max__m          : 0.0, 2.5e6
+      azimuth_min_max__deg      : -180.0, 180.0
+      elevation_min_max__deg    : 10.0, 90.0
+    uncertainty                 :
+      range__m                  : 10.0
+      range_rate__m_per_s       : 0.1
+      azimuth__deg              : 0.01
+      azimuth_rate__deg_per_s   : 0.001
+      elevation__deg            : 0.01
+      elevation_rate__deg_per_s : 0.001
 
-- name                     : "Svalbard Arctic"
-  position                 :
-    latitude__deg          : 78.23
-    longitude__deg         : 15.39
-    altitude__m            : 450.0
-  performance              :
-    azimuth_min_max__deg   : -180.0, 180.0
-    elevation_min_max__deg : 5.0, 85.0
-    range_min_max__m       : 0.0, 3.0e6
+- name                          : "Svalbard Arctic"
+  position                      :
+    latitude__deg               : 78.23
+    longitude__deg              : 15.39
+    altitude__m                 : 450.0
+  performance                   :
+    constraints                 :
+      range_min_max__m          : 0.0, 3.0e6
+      azimuth_min_max__deg      : -180.0, 180.0
+      elevation_min_max__deg    : 5.0, 85.0
+    uncertainty                 :
+      range__m                  : 10.0
+      range_rate__m_per_s       : 0.1
+      azimuth__deg              : 0.01
+      azimuth_rate__deg_per_s   : 0.001
+      elevation__deg            : 0.01
+      elevation_rate__deg_per_s : 0.001
 
-- name                     : "Santiago Chile"
-  position                 :
-    latitude__deg          : -33.15
-    longitude__deg         : -70.67
-    altitude__m            : 730.0
-  performance              :
-    azimuth_min_max__deg   : -120.0, 120.0
-    elevation_min_max__deg : 8.0, 88.0
-    range_min_max__m       : 0.0, 2.0e6
+- name                          : "Santiago Chile"
+  position                      :
+    latitude__deg               : -33.15
+    longitude__deg              : -70.67
+    altitude__m                 : 730.0
+  performance                   :
+    constraints                 :
+      range_min_max__m          : 0.0, 2.0e6
+      azimuth_min_max__deg      : -120.0, 120.0
+      elevation_min_max__deg    : 8.0, 88.0
+    uncertainty                 :
+      range__m                  : 10.0
+      range_rate__m_per_s       : 0.1
+      azimuth__deg              : 0.01
+      azimuth_rate__deg_per_s   : 0.001
+      elevation__deg            : 0.01
+      elevation_rate__deg_per_s : 0.001

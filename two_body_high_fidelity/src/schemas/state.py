@@ -229,9 +229,9 @@ class RangeLimits:
 
 
 @dataclass
-class TrackerPerformance:
+class TrackerConstraints:
   """
-  Tracker station performance limits.
+  Tracker station operational constraints.
 
   Attributes:
     azimuth   : Azimuth angle limits (optional)
@@ -241,6 +241,40 @@ class TrackerPerformance:
   azimuth   : Optional[AzimuthLimits] = None
   elevation : Optional[ElevationLimits] = None
   range     : Optional[RangeLimits] = None
+
+
+@dataclass
+class TrackerUncertainty:
+  """
+  Tracker station measurement uncertainty (1-sigma).
+
+  Attributes:
+    range          : Range uncertainty [m]
+    range_rate     : Range rate uncertainty [m/s]
+    azimuth        : Azimuth uncertainty [rad]
+    azimuth_rate   : Azimuth rate uncertainty [rad/s]
+    elevation      : Elevation uncertainty [rad]
+    elevation_rate : Elevation rate uncertainty [rad/s]
+  """
+  range          : float = 0.0
+  range_rate     : float = 0.0
+  azimuth        : float = 0.0
+  azimuth_rate   : float = 0.0
+  elevation      : float = 0.0
+  elevation_rate : float = 0.0
+
+
+@dataclass
+class TrackerPerformance:
+  """
+  Tracker station performance characteristics.
+
+  Attributes:
+    constraints : Operational constraints (azimuth, elevation, range limits)
+    uncertainty : Measurement uncertainty (1-sigma values)
+  """
+  constraints : Optional[TrackerConstraints] = None
+  uncertainty : Optional[TrackerUncertainty] = None
 
 
 @dataclass

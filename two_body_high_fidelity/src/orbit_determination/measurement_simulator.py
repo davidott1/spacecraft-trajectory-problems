@@ -162,27 +162,27 @@ class MeasurementSimulator:
     # Start with all visible
     visible_mask = np.ones(n_points, dtype=bool)
 
-    # Apply tracker performance limits if available
-    if self.tracker.performance is not None:
-      perf = self.tracker.performance
+    # Apply tracker performance constraints if available
+    if self.tracker.performance is not None and self.tracker.performance.constraints is not None:
+      constraints = self.tracker.performance.constraints
 
       # Elevation limits
-      if perf.elevation is not None:
-        visible_mask &= (truth.elevation >= perf.elevation.min)
-        if perf.elevation.max is not None:
-          visible_mask &= (truth.elevation <= perf.elevation.max)
+      if constraints.elevation is not None:
+        visible_mask &= (truth.elevation >= constraints.elevation.min)
+        if constraints.elevation.max is not None:
+          visible_mask &= (truth.elevation <= constraints.elevation.max)
 
       # Range limits
-      if perf.range is not None:
-        if perf.range.min is not None:
-          visible_mask &= (truth.range >= perf.range.min)
-        if perf.range.max is not None:
-          visible_mask &= (truth.range <= perf.range.max)
+      if constraints.range is not None:
+        if constraints.range.min is not None:
+          visible_mask &= (truth.range >= constraints.range.min)
+        if constraints.range.max is not None:
+          visible_mask &= (truth.range <= constraints.range.max)
 
       # Azimuth limits (handle wraparound and full range)
-      if perf.azimuth is not None:
-        az_min = perf.azimuth.min
-        az_max = perf.azimuth.max
+      if constraints.azimuth is not None:
+        az_min = constraints.azimuth.min
+        az_max = constraints.azimuth.max
         # Check if full azimuth range (all angles valid)
         az_min_deg = az_min * CONVERTER.DEG_PER_RAD
         az_max_deg = az_max * CONVERTER.DEG_PER_RAD
@@ -210,7 +210,8 @@ class MeasurementSimulator:
     Input:
     ------
       noise_config : MeasurementNoise, optional
-        Noise standard deviations. If None, no noise is added.
+        Noise standard deviations. If None, uses tracker uncertainty from
+        performance.uncertainty if available, otherwise no noise is added.
       seed : int, optional
         Random seed for reproducibility.
       include_rates : bool
@@ -229,9 +230,22 @@ class MeasurementSimulator:
     truth        = self.compute_truth(include_rates=include_rates)
     visible_mask = self.compute_visibility_mask()
 
-    # Use zero noise if no noise config provided
+    # Use tracker uncertainty if no noise config provided
     if noise_config is None:
-      noise_config = MeasurementNoise()
+      if self.tracker.performance is not None and self.tracker.performance.uncertainty is not None:
+        # Use uncertainty from tracker configuration
+        unc = self.tracker.performance.uncertainty
+        noise_config = MeasurementNoise(
+          azimuth       = unc.azimuth,
+          elevation     = unc.elevation,
+          range         = unc.range,
+          azimuth_dot   = unc.azimuth_rate,
+          elevation_dot = unc.elevation_rate,
+          range_dot     = unc.range_rate,
+        )
+      else:
+        # No uncertainty specified - use zero noise
+        noise_config = MeasurementNoise()
 
     # Compute number of points
     n_points = truth.n_points

@@ -60,7 +60,7 @@ def _parse_single_tracker(data: dict) -> 'TrackerStation':
       If required fields are missing.
   """
   # Import nested dataclasses
-  from src.schemas.state import TrackerStation, TrackerPosition, TrackerPerformance, AzimuthLimits, ElevationLimits, RangeLimits
+  from src.schemas.state import TrackerStation, TrackerPosition, TrackerPerformance, TrackerConstraints, TrackerUncertainty, AzimuthLimits, ElevationLimits, RangeLimits
 
   # Validate required fields
   if 'name' not in data:
@@ -83,98 +83,132 @@ def _parse_single_tracker(data: dict) -> 'TrackerStation':
     altitude  = position['altitude__m'],
   )
 
-  # Parse performance limits (optional)
+  # Parse performance section (optional)
   tracker_performance = None
   if 'performance' in data:
     perf = data['performance']
 
-    # Default values for performance limits
-    default_azimuth_min_deg   = -180.0
-    default_azimuth_max_deg   = 180.0
-    default_elevation_min_deg = 0.0
-    default_elevation_max_deg = 90.0
-    default_range_min_m       = 0.0
-    default_range_max_m       = 5.0e6
+    # Parse constraints subsection
+    tracker_constraints = None
+    if 'constraints' in perf:
+      constraints = perf['constraints']
 
-    azimuth_limits   = None
-    elevation_limits = None
-    range_limits     = None
+      # Default values for performance limits
+      default_azimuth_min_deg   = -180.0
+      default_azimuth_max_deg   = 180.0
+      default_elevation_min_deg = 0.0
+      default_elevation_max_deg = 90.0
+      default_range_min_m       = 0.0
+      default_range_max_m       = 5.0e6
 
-    # Parse azimuth limits
-    if 'azimuth_min_max__deg' in perf:
-      az_limits = perf['azimuth_min_max__deg']
-      # Handle both string "min, max" and list/tuple [min, max]
-      if isinstance(az_limits, str):
-        az_values = [float(x.strip()) for x in az_limits.split(',')]
-        if len(az_values) == 2:
+      azimuth_limits   = None
+      elevation_limits = None
+      range_limits     = None
+
+      # Parse azimuth limits
+      if 'azimuth_min_max__deg' in constraints:
+        az_limits = constraints['azimuth_min_max__deg']
+        # Handle both string "min, max" and list/tuple [min, max]
+        if isinstance(az_limits, str):
+          az_values = [float(x.strip()) for x in az_limits.split(',')]
+          if len(az_values) == 2:
+            azimuth_limits = AzimuthLimits(
+              min = az_values[0] * CONVERTER.RAD_PER_DEG,
+              max = az_values[1] * CONVERTER.RAD_PER_DEG,
+            )
+        elif isinstance(az_limits, (list, tuple)) and len(az_limits) == 2:
           azimuth_limits = AzimuthLimits(
-            min = az_values[0] * CONVERTER.RAD_PER_DEG,
-            max = az_values[1] * CONVERTER.RAD_PER_DEG,
+            min = az_limits[0] * CONVERTER.RAD_PER_DEG,
+            max = az_limits[1] * CONVERTER.RAD_PER_DEG,
           )
-      elif isinstance(az_limits, (list, tuple)) and len(az_limits) == 2:
-        azimuth_limits = AzimuthLimits(
-          min = az_limits[0] * CONVERTER.RAD_PER_DEG,
-          max = az_limits[1] * CONVERTER.RAD_PER_DEG,
-        )
 
-    # Parse elevation limits
-    if 'elevation_min_max__deg' in perf:
-      el_limits = perf['elevation_min_max__deg']
-      # Handle both string "min, max" and list/tuple [min, max]
-      if isinstance(el_limits, str):
-        el_values = [float(x.strip()) for x in el_limits.split(',')]
-        if len(el_values) == 2:
+      # Parse elevation limits
+      if 'elevation_min_max__deg' in constraints:
+        el_limits = constraints['elevation_min_max__deg']
+        # Handle both string "min, max" and list/tuple [min, max]
+        if isinstance(el_limits, str):
+          el_values = [float(x.strip()) for x in el_limits.split(',')]
+          if len(el_values) == 2:
+            elevation_limits = ElevationLimits(
+              min = el_values[0] * CONVERTER.RAD_PER_DEG,
+              max = el_values[1] * CONVERTER.RAD_PER_DEG,
+            )
+        elif isinstance(el_limits, (list, tuple)) and len(el_limits) == 2:
           elevation_limits = ElevationLimits(
-            min = el_values[0] * CONVERTER.RAD_PER_DEG,
-            max = el_values[1] * CONVERTER.RAD_PER_DEG,
+            min = el_limits[0] * CONVERTER.RAD_PER_DEG,
+            max = el_limits[1] * CONVERTER.RAD_PER_DEG,
           )
-      elif isinstance(el_limits, (list, tuple)) and len(el_limits) == 2:
-        elevation_limits = ElevationLimits(
-          min = el_limits[0] * CONVERTER.RAD_PER_DEG,
-          max = el_limits[1] * CONVERTER.RAD_PER_DEG,
-        )
 
-    # Parse range limits
-    if 'range_min_max__m' in perf:
-      rg_limits = perf['range_min_max__m']
-      # Handle both string "min, max" and list/tuple [min, max]
-      if isinstance(rg_limits, str):
-        rg_values = [float(x.strip()) for x in rg_limits.split(',')]
-        if len(rg_values) == 2:
+      # Parse range limits
+      if 'range_min_max__m' in constraints:
+        rg_limits = constraints['range_min_max__m']
+        # Handle both string "min, max" and list/tuple [min, max]
+        if isinstance(rg_limits, str):
+          rg_values = [float(x.strip()) for x in rg_limits.split(',')]
+          if len(rg_values) == 2:
+            range_limits = RangeLimits(
+              min = rg_values[0],
+              max = rg_values[1],
+            )
+        elif isinstance(rg_limits, (list, tuple)) and len(rg_limits) == 2:
           range_limits = RangeLimits(
-            min = rg_values[0],
-            max = rg_values[1],
+            min = rg_limits[0],
+            max = rg_limits[1],
           )
-      elif isinstance(rg_limits, (list, tuple)) and len(rg_limits) == 2:
-        range_limits = RangeLimits(
-          min = rg_limits[0],
-          max = rg_limits[1],
+
+      # Apply defaults for any unspecified limits
+      if azimuth_limits is None:
+        azimuth_limits = AzimuthLimits(
+          min = default_azimuth_min_deg * CONVERTER.RAD_PER_DEG,
+          max = default_azimuth_max_deg * CONVERTER.RAD_PER_DEG,
         )
 
-    # Apply defaults for any unspecified limits
-    if azimuth_limits is None:
-      azimuth_limits = AzimuthLimits(
-        min = default_azimuth_min_deg * CONVERTER.RAD_PER_DEG,
-        max = default_azimuth_max_deg * CONVERTER.RAD_PER_DEG,
+      if elevation_limits is None:
+        elevation_limits = ElevationLimits(
+          min = default_elevation_min_deg * CONVERTER.RAD_PER_DEG,
+          max = default_elevation_max_deg * CONVERTER.RAD_PER_DEG,
+        )
+
+      if range_limits is None:
+        range_limits = RangeLimits(
+          min = default_range_min_m,
+          max = default_range_max_m,
+        )
+
+      # Create constraints object
+      tracker_constraints = TrackerConstraints(
+        azimuth   = azimuth_limits,
+        elevation = elevation_limits,
+        range     = range_limits,
       )
 
-    if elevation_limits is None:
-      elevation_limits = ElevationLimits(
-        min = default_elevation_min_deg * CONVERTER.RAD_PER_DEG,
-        max = default_elevation_max_deg * CONVERTER.RAD_PER_DEG,
-      )
+    # Parse uncertainty subsection
+    tracker_uncertainty = None
+    if 'uncertainty' in perf:
+      uncertainty = perf['uncertainty']
 
-    if range_limits is None:
-      range_limits = RangeLimits(
-        min = default_range_min_m,
-        max = default_range_max_m,
+      # Extract uncertainty values (defaults to 0.0 if not specified)
+      range_unc          = uncertainty.get('range__m', 0.0)
+      range_rate_unc     = uncertainty.get('range_rate__m_per_s', 0.0)
+      azimuth_unc_deg    = uncertainty.get('azimuth__deg', 0.0)
+      azimuth_rate_unc_deg_per_s = uncertainty.get('azimuth_rate__deg_per_s', 0.0)
+      elevation_unc_deg  = uncertainty.get('elevation__deg', 0.0)
+      elevation_rate_unc_deg_per_s = uncertainty.get('elevation_rate__deg_per_s', 0.0)
+
+      # Convert angular uncertainties from degrees to radians
+      tracker_uncertainty = TrackerUncertainty(
+        range          = range_unc,
+        range_rate     = range_rate_unc,
+        azimuth        = azimuth_unc_deg * CONVERTER.RAD_PER_DEG,
+        azimuth_rate   = azimuth_rate_unc_deg_per_s * CONVERTER.RAD_PER_DEG,
+        elevation      = elevation_unc_deg * CONVERTER.RAD_PER_DEG,
+        elevation_rate = elevation_rate_unc_deg_per_s * CONVERTER.RAD_PER_DEG,
       )
 
     # Create performance object
     tracker_performance = TrackerPerformance(
-      azimuth   = azimuth_limits,
-      elevation = elevation_limits,
-      range     = range_limits,
+      constraints = tracker_constraints,
+      uncertainty = tracker_uncertainty,
     )
 
   return TrackerStation(
@@ -516,11 +550,11 @@ def validate_tracker_input(tracker):
   if tracker is None:
     return None
 
-  if tracker.performance:
+  if tracker.performance and tracker.performance.constraints:
     # Validate azimuth limits
-    if tracker.performance.azimuth:
-      az_min_deg = tracker.performance.azimuth.min * CONVERTER.DEG_PER_RAD
-      az_max_deg = tracker.performance.azimuth.max * CONVERTER.DEG_PER_RAD
+    if tracker.performance.constraints.azimuth:
+      az_min_deg = tracker.performance.constraints.azimuth.min * CONVERTER.DEG_PER_RAD
+      az_max_deg = tracker.performance.constraints.azimuth.max * CONVERTER.DEG_PER_RAD
 
       if az_min_deg > az_max_deg:
         raise ValueError(
@@ -530,9 +564,9 @@ def validate_tracker_input(tracker):
         )
 
     # Validate elevation limits
-    if tracker.performance.elevation:
-      el_min_deg = tracker.performance.elevation.min * CONVERTER.DEG_PER_RAD
-      el_max_deg = tracker.performance.elevation.max * CONVERTER.DEG_PER_RAD
+    if tracker.performance.constraints.elevation:
+      el_min_deg = tracker.performance.constraints.elevation.min * CONVERTER.DEG_PER_RAD
+      el_max_deg = tracker.performance.constraints.elevation.max * CONVERTER.DEG_PER_RAD
 
       if el_min_deg > el_max_deg:
         raise ValueError(
@@ -542,11 +576,11 @@ def validate_tracker_input(tracker):
         )
 
     # Validate range limits
-    if tracker.performance.range:
-      if tracker.performance.range.min > tracker.performance.range.max:
+    if tracker.performance.constraints.range:
+      if tracker.performance.constraints.range.min > tracker.performance.constraints.range.max:
         raise ValueError(
           f"Invalid range limits for tracker '{tracker.name}': "
-          f"min ({tracker.performance.range.min:.1f} m) > max ({tracker.performance.range.max:.1f} m). "
+          f"min ({tracker.performance.constraints.range.min:.1f} m) > max ({tracker.performance.constraints.range.max:.1f} m). "
           f"Range must be specified with min < max."
         )
 
@@ -573,12 +607,12 @@ def normalize_tracker_azimuth(tracker):
   if tracker is None:
     return None
 
-  if tracker.performance and tracker.performance.azimuth:
+  if tracker.performance and tracker.performance.constraints and tracker.performance.constraints.azimuth:
     from src.schemas.state import AzimuthLimits
 
     # Convert radians to degrees for normalization
-    az_min_deg = tracker.performance.azimuth.min * CONVERTER.DEG_PER_RAD
-    az_max_deg = tracker.performance.azimuth.max * CONVERTER.DEG_PER_RAD
+    az_min_deg = tracker.performance.constraints.azimuth.min * CONVERTER.DEG_PER_RAD
+    az_max_deg = tracker.performance.constraints.azimuth.max * CONVERTER.DEG_PER_RAD
 
     # Check if this represents full circle coverage before normalizing
     az_range_deg = az_max_deg - az_min_deg
@@ -595,7 +629,7 @@ def normalize_tracker_azimuth(tracker):
       az_max_deg = ((az_max_deg + 180.0) % 360.0) - 180.0
 
     # Update the tracker with normalized values (convert back to radians)
-    tracker.performance.azimuth = AzimuthLimits(
+    tracker.performance.constraints.azimuth = AzimuthLimits(
       min = az_min_deg * CONVERTER.RAD_PER_DEG,
       max = az_max_deg * CONVERTER.RAD_PER_DEG,
     )
