@@ -66,7 +66,13 @@ def plot_skyplot(
   # Convert truth to degrees for display
   az_deg_truth  = topo_truth.azimuth   * CONVERTER.DEG_PER_RAD
   el_deg_truth  = topo_truth.elevation * CONVERTER.DEG_PER_RAD
-  time_s        = topo_truth.time_s
+
+  # Get time from appropriate source
+  if hasattr(topo_truth, 'time_s'):
+    time_s = topo_truth.time_s  # From TopocentricState (SimulatedMeasurements)
+  else:
+    time_s = result.plot_time_s  # From PropagationResult (compute_topocentric_coordinates_with_rates)
+
   range_m_truth = topo_truth.range
 
   # Get rates from truth (convert angular rates to deg/s)
@@ -225,7 +231,7 @@ def plot_skyplot(
         constraint_valid_mask &= (az_deg >= az_min_deg) & (az_deg <= az_max_deg)
 
   # Get range values
-  range_m = topo.range
+  range_m = topo_truth.range
 
   # Check range constraints
   if tracker.performance and tracker.performance.constraints.range:
@@ -241,14 +247,25 @@ def plot_skyplot(
   else:
     range_min = np.min(range_m)
     range_max = np.max(range_m)
-  
+
   marker_size_min = 2
   marker_size_max = 100
   # Linear scale: closer (smaller range) -> larger marker
   if range_max > range_min:
-    marker_sizes = marker_size_max - (range_m - range_min) / (range_max - range_min) * (marker_size_max - marker_size_min)
+    marker_sizes_truth = marker_size_max - (range_m - range_min) / (range_max - range_min) * (marker_size_max - marker_size_min)
   else:
-    marker_sizes = np.full_like(range_m, (marker_size_min + marker_size_max) / 2)
+    marker_sizes_truth = np.full_like(range_m, (marker_size_min + marker_size_max) / 2)
+
+  # Compute marker sizes for measured data (if available)
+  if topo_measured is not None:
+    range_m_measured_arr = range_m_measured
+    # Use same range min/max for consistent scaling
+    if range_max > range_min:
+      marker_sizes_measured = marker_size_max - (range_m_measured_arr - range_min) / (range_max - range_min) * (marker_size_max - marker_size_min)
+    else:
+      marker_sizes_measured = np.full_like(range_m_measured_arr, (marker_size_min + marker_size_max) / 2)
+  else:
+    marker_sizes_measured = marker_sizes_truth
   
   # Find segments where satellite is visible
   segment_starts = []
@@ -268,22 +285,24 @@ def plot_skyplot(
   # Plot each visible segment
   for seg_start, seg_end in zip(segment_starts, segment_ends):
     # Truth data
-    seg_theta_truth      = theta_truth[seg_start:seg_end]
-    seg_radius_truth     = radius_truth[seg_start:seg_end]
-    seg_time             = time_s[seg_start:seg_end]
-    seg_marker_sizes     = marker_sizes[seg_start:seg_end]
-    seg_range            = range_m[seg_start:seg_end]
-    seg_constraint_valid = constraint_valid_mask[seg_start:seg_end]
-    seg_el_deg           = el_deg[seg_start:seg_end]
-    seg_az_deg           = az_deg[seg_start:seg_end]
+    seg_theta_truth          = theta_truth[seg_start:seg_end]
+    seg_radius_truth         = radius_truth[seg_start:seg_end]
+    seg_time                 = time_s[seg_start:seg_end]
+    seg_marker_sizes_truth   = marker_sizes_truth[seg_start:seg_end]
+    seg_range                = range_m[seg_start:seg_end]
+    seg_constraint_valid     = constraint_valid_mask[seg_start:seg_end]
+    seg_el_deg               = el_deg[seg_start:seg_end]
+    seg_az_deg               = az_deg[seg_start:seg_end]
 
     # Measured data (if available)
     if topo_measured is not None:
-      seg_theta_measured = theta_measured[seg_start:seg_end]
-      seg_radius_measured = radius_measured[seg_start:seg_end]
+      seg_theta_measured       = theta_measured[seg_start:seg_end]
+      seg_radius_measured      = radius_measured[seg_start:seg_end]
+      seg_marker_sizes_measured = marker_sizes_measured[seg_start:seg_end]
     else:
-      seg_theta_measured = seg_theta_truth
-      seg_radius_measured = seg_radius_truth
+      seg_theta_measured       = seg_theta_truth
+      seg_radius_measured      = seg_radius_truth
+      seg_marker_sizes_measured = seg_marker_sizes_truth
 
     # Plot trajectory
     if len(seg_time) > 0:
@@ -304,7 +323,7 @@ def plot_skyplot(
           ax.plot(seg_theta_truth[i:i+2], seg_radius_truth[i:i+2], color='gray', linestyle='--', linewidth=1.5, alpha=0.8)
 
       # Plot visible truth points with gray (do not connect)
-      ax.scatter(seg_theta_truth, seg_radius_truth, c='gray', s=seg_marker_sizes, alpha=0.6)
+      ax.scatter(seg_theta_truth, seg_radius_truth, c='gray', s=seg_marker_sizes_truth, alpha=0.6)
 
       # Plot valid portions with blue markers (truth)
       if np.any(seg_constraint_valid):
@@ -312,7 +331,7 @@ def plot_skyplot(
         valid_indices = np.where(seg_constraint_valid)[0]
         if len(valid_indices) > 0:
           ax.scatter(seg_theta_truth[valid_indices], seg_radius_truth[valid_indices],
-                    c='blue', s=seg_marker_sizes[valid_indices], alpha=1.0, label='Truth' if seg_start == segment_starts[0] else '')
+                    c='blue', s=seg_marker_sizes_truth[valid_indices], alpha=1.0, label='Truth' if seg_start == segment_starts[0] else '')
 
       # Plot MEASURED data in RED on top (if available)
       if topo_measured is not None:
@@ -333,7 +352,7 @@ def plot_skyplot(
           valid_indices = np.where(seg_constraint_valid)[0]
           if len(valid_indices) > 0:
             ax.scatter(seg_theta_measured[valid_indices], seg_radius_measured[valid_indices],
-                      c='red', s=seg_marker_sizes[valid_indices] * 0.6, alpha=0.8, label='Measured' if seg_start == segment_starts[0] else '')
+                      c='red', s=seg_marker_sizes_measured[valid_indices] * 0.6, alpha=0.8, label='Measured' if seg_start == segment_starts[0] else '')
       
       # Add entry marker if this is a true entry (satellite rose above horizon during propagation)
       # A true entry means there was a point before this segment that was below horizon
@@ -486,10 +505,6 @@ def plot_skyplot(
 
   legend_ax.text(5, 8.5, 'Range', ha='center', fontsize=9, fontweight='bold', zorder=2)
 
-  # Add legend for truth vs measured if both are present
-  if topo_measured is not None:
-    ax.legend(loc='upper right', fontsize=10, framealpha=0.9)
-
   ax.set_title(title_text, fontsize=14, pad=20)
 
   # ============================================
@@ -505,7 +520,7 @@ def plot_skyplot(
   ax_el    = fig.add_subplot(3, 3, 8)
 
   # Plot Range vs Time
-  range_km = topo.range / 1000.0
+  range_km = topo_truth.range / 1000.0
 
   # Thin black line for entire solution (not in legend)
   ax_range.plot(time_hrs, range_km, 'k-', linewidth=0.5, alpha=0.8)
@@ -677,9 +692,9 @@ def plot_skyplot(
   ax_el_dot  = fig.add_subplot(3, 3, 9)
 
   # Plot Range Rate vs Time
-  if rng_dot is not None:
-    rng_dot_km = rng_dot / 1000.0  # Convert to km/s
-    
+  if rng_dot_truth is not None:
+    rng_dot_km = rng_dot_truth / 1000.0  # Convert to km/s
+
     # Thin black line for entire solution
     ax_rng_dot.plot(time_hrs, rng_dot_km, 'k-', linewidth=0.5, alpha=0.8)
     ax_rng_dot.set_ylabel('Range Rate [km/s]', fontsize=11)
@@ -707,9 +722,9 @@ def plot_skyplot(
   ax_rng_dot.set_xticklabels([])
 
   # Plot Azimuth Rate vs Time
-  if az_dot_deg is not None:
+  if az_dot_deg_truth is not None:
     # Thin black line for entire solution
-    ax_az_dot.plot(time_hrs, az_dot_deg, 'k-', linewidth=0.5, alpha=0.8)
+    ax_az_dot.plot(time_hrs, az_dot_deg_truth, 'k-', linewidth=0.5, alpha=0.8)
     ax_az_dot.set_ylabel('Azimuth Rate [deg/s]', fontsize=11)
     ax_az_dot.yaxis.set_label_coords(-0.06, 0.5)
     ax_az_dot.grid(True, alpha=0.3)
@@ -718,7 +733,7 @@ def plot_skyplot(
     gray_plotted = False
     for seg_start, seg_end in zip(visible_segment_starts, visible_segment_ends):
       label = 'Above Horizon' if not gray_plotted else None
-      ax_az_dot.plot(time_hrs[seg_start:seg_end], az_dot_deg[seg_start:seg_end],
+      ax_az_dot.plot(time_hrs[seg_start:seg_end], az_dot_deg_truth[seg_start:seg_end],
                      color='gray', linewidth=2.5, alpha=0.6, marker='o', markersize=4, label=label)
       gray_plotted = True
 
@@ -726,7 +741,7 @@ def plot_skyplot(
     blue_plotted = False
     for seg_start, seg_end in zip(valid_segment_starts, valid_segment_ends):
       label = 'Trackable' if not blue_plotted else None
-      ax_az_dot.plot(time_hrs[seg_start:seg_end], az_dot_deg[seg_start:seg_end],
+      ax_az_dot.plot(time_hrs[seg_start:seg_end], az_dot_deg_truth[seg_start:seg_end],
                      'b-', linewidth=3.5, alpha=0.8, label=label)
       blue_plotted = True
 
@@ -734,12 +749,12 @@ def plot_skyplot(
   ax_az_dot.set_xticklabels([])
 
   # Plot Elevation Rate vs Time
-  if el_dot_deg is not None:
+  if el_dot_deg_truth is not None:
     # Thin black line for entire solution
     if epoch_dt_utc is not None:
-      ax_el_dot.plot(time_utc, el_dot_deg, 'k-', linewidth=0.5, alpha=0.8)
+      ax_el_dot.plot(time_utc, el_dot_deg_truth, 'k-', linewidth=0.5, alpha=0.8)
     else:
-      ax_el_dot.plot(time_hrs, el_dot_deg, 'k-', linewidth=0.5, alpha=0.8)
+      ax_el_dot.plot(time_hrs, el_dot_deg_truth, 'k-', linewidth=0.5, alpha=0.8)
 
     ax_el_dot.set_ylabel('Elevation Rate [deg/s]', fontsize=11)
     ax_el_dot.yaxis.set_label_coords(-0.06, 0.5)
@@ -751,10 +766,10 @@ def plot_skyplot(
     for seg_start, seg_end in zip(visible_segment_starts, visible_segment_ends):
       label = 'Above Horizon' if not gray_plotted else None
       if epoch_dt_utc is not None:
-        ax_el_dot.plot(time_utc[seg_start:seg_end], el_dot_deg[seg_start:seg_end],
+        ax_el_dot.plot(time_utc[seg_start:seg_end], el_dot_deg_truth[seg_start:seg_end],
                        color='gray', linewidth=2.5, alpha=0.6, marker='o', markersize=4, label=label)
       else:
-        ax_el_dot.plot(time_hrs[seg_start:seg_end], el_dot_deg[seg_start:seg_end],
+        ax_el_dot.plot(time_hrs[seg_start:seg_end], el_dot_deg_truth[seg_start:seg_end],
                        color='gray', linewidth=2.5, alpha=0.6, marker='o', markersize=4, label=label)
       gray_plotted = True
 
@@ -763,10 +778,10 @@ def plot_skyplot(
     for seg_start, seg_end in zip(valid_segment_starts, valid_segment_ends):
       label = 'Trackable' if not blue_plotted else None
       if epoch_dt_utc is not None:
-        ax_el_dot.plot(time_utc[seg_start:seg_end], el_dot_deg[seg_start:seg_end],
+        ax_el_dot.plot(time_utc[seg_start:seg_end], el_dot_deg_truth[seg_start:seg_end],
                        'b-', linewidth=3.5, alpha=0.8, label=label)
       else:
-        ax_el_dot.plot(time_hrs[seg_start:seg_end], el_dot_deg[seg_start:seg_end],
+        ax_el_dot.plot(time_hrs[seg_start:seg_end], el_dot_deg_truth[seg_start:seg_end],
                        'b-', linewidth=3.5, alpha=0.8, label=label)
       blue_plotted = True
 
@@ -1014,6 +1029,269 @@ def plot_pass_timeseries(
       ax_rate.set_xticklabels([])
 
     # Bottom row (el_dot) gets x-axis labels
+    ax_bottom = axes[5, col]
+    if epoch_dt_utc is not None:
+      ax_bottom.tick_params(axis='x', rotation=45)
+      ax_bottom.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+    ax_bottom.set_xlabel('UTC Time', fontsize=10)
+
+  # Add overall title
+  fig.suptitle(title_text, fontsize=14, y=0.98)
+
+  # Adjust layout with tighter spacing
+  with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message=".*tight_layout.*")
+    plt.tight_layout(rect=(0.0, 0.0, 1.0, 0.95))
+    plt.subplots_adjust(wspace=0.08, hspace=0.15)
+
+  return fig
+
+
+def plot_error_skyplot(
+  measurements : SimulatedMeasurements,
+  epoch_dt_utc : Optional[datetime] = None,
+  title_text   : str = "Measurement Error",
+) -> Optional[Figure]:
+  """
+  Plot error time-series (measured - truth) for range, range_rate, az, az_rate, el, el_rate.
+  
+  Creates a grid with 6 rows × num_passes columns:
+    Row 0: Range Error
+    Row 1: Range Rate Error
+    Row 2: Azimuth Error
+    Row 3: Azimuth Rate Error
+    Row 4: Elevation Error
+    Row 5: Elevation Rate Error
+  
+  Each column is a trackable pass (based on tracker constraints applied to truth).
+
+  Input:
+  ------
+    measurements : SimulatedMeasurements
+      Simulated measurements containing both truth and measured (noisy) values.
+    epoch_dt_utc : datetime, optional
+      Reference epoch (start time) for time axis formatting.
+    title_text : str
+      Title for the plot.
+
+  Output:
+  -------
+    fig : matplotlib.figure.Figure | None
+      Figure object containing the error plots, or None if no trackable passes.
+  """
+  # Get truth and measured from SimulatedMeasurements
+  topo_truth = measurements.truth
+  topo_meas  = measurements.measured
+  tracker    = measurements.tracker
+  time_s     = topo_truth.time_s
+
+  # Convert to degrees for display
+  az_meas_deg  = topo_meas.azimuth   * CONVERTER.DEG_PER_RAD
+  el_meas_deg  = topo_meas.elevation * CONVERTER.DEG_PER_RAD
+  az_truth_deg = topo_truth.azimuth   * CONVERTER.DEG_PER_RAD
+  el_truth_deg = topo_truth.elevation * CONVERTER.DEG_PER_RAD
+
+  # Normalize azimuth to -180° to +180° range
+  az_meas_deg  = ((az_meas_deg + 180.0) % 360.0) - 180.0
+  az_truth_deg = ((az_truth_deg + 180.0) % 360.0) - 180.0
+
+  # Get range values
+  range_meas_m  = topo_meas.range
+  range_truth_m = topo_truth.range
+  range_meas_km  = range_meas_m / 1000.0
+  range_truth_km = range_truth_m / 1000.0
+
+  # Get rates (convert angular rates to deg/s)
+  az_dot_meas_deg  = topo_meas.azimuth_dot   * CONVERTER.DEG_PER_RAD if topo_meas.azimuth_dot is not None else None
+  el_dot_meas_deg  = topo_meas.elevation_dot * CONVERTER.DEG_PER_RAD if topo_meas.elevation_dot is not None else None
+  rng_dot_meas     = topo_meas.range_dot  # m/s
+  az_dot_truth_deg = topo_truth.azimuth_dot   * CONVERTER.DEG_PER_RAD if topo_truth.azimuth_dot is not None else None
+  el_dot_truth_deg = topo_truth.elevation_dot * CONVERTER.DEG_PER_RAD if topo_truth.elevation_dot is not None else None
+  rng_dot_truth    = topo_truth.range_dot  # m/s
+
+  # Convert rate to km/s
+  rng_dot_meas_km  = rng_dot_meas / 1000.0 if rng_dot_meas is not None else None
+  rng_dot_truth_km = rng_dot_truth / 1000.0 if rng_dot_truth is not None else None
+
+  # Compute errors (measurement - truth)
+  range_err_km   = range_meas_km - range_truth_km
+  az_err_deg     = az_meas_deg - az_truth_deg
+  el_err_deg     = el_meas_deg - el_truth_deg
+
+  # Handle azimuth wraparound (if error > 180, it wrapped)
+  az_err_deg = np.where(az_err_deg > 180.0, az_err_deg - 360.0, az_err_deg)
+  az_err_deg = np.where(az_err_deg < -180.0, az_err_deg + 360.0, az_err_deg)
+
+  # Compute rate errors
+  if rng_dot_meas_km is not None and rng_dot_truth_km is not None:
+    rng_dot_err_km = rng_dot_meas_km - rng_dot_truth_km
+  else:
+    rng_dot_err_km = None
+  if az_dot_meas_deg is not None and az_dot_truth_deg is not None:
+    az_dot_err_deg = az_dot_meas_deg - az_dot_truth_deg
+  else:
+    az_dot_err_deg = None
+  if el_dot_meas_deg is not None and el_dot_truth_deg is not None:
+    el_dot_err_deg = el_dot_meas_deg - el_dot_truth_deg
+  else:
+    el_dot_err_deg = None
+
+  # Build visibility mask based on elevation (above horizon)
+  # For error skyplots, we only check elevation to determine visibility,
+  # not range/azimuth constraints which may filter out high-altitude satellites
+  constraint_valid_mask = el_truth_deg > 0.0  # Above horizon
+
+  # Optionally apply elevation min constraint if specified
+  if tracker.performance and tracker.performance.constraints and tracker.performance.constraints.elevation:
+    el_min_deg = tracker.performance.constraints.elevation.min * CONVERTER.DEG_PER_RAD
+    constraint_valid_mask &= (el_truth_deg >= el_min_deg)
+
+  # Find trackable (valid) segments/passes
+  valid_segment_starts = []
+  valid_segment_ends = []
+  in_valid_segment = False
+
+  for i in range(len(constraint_valid_mask)):
+    if constraint_valid_mask[i] and not in_valid_segment:
+      valid_segment_starts.append(i)
+      in_valid_segment = True
+    elif not constraint_valid_mask[i] and in_valid_segment:
+      valid_segment_ends.append(i)
+      in_valid_segment = False
+  if in_valid_segment:
+    valid_segment_ends.append(len(constraint_valid_mask))
+
+  num_passes = len(valid_segment_starts)
+  
+  # If no trackable passes, return None
+  if num_passes == 0:
+    return None
+
+  # Compute y-axis limits across all passes for consistent scaling
+  all_range_err = []
+  all_az_err = []
+  all_el_err = []
+  all_rng_dot_err = []
+  all_az_dot_err = []
+  all_el_dot_err = []
+
+  for seg_start, seg_end in zip(valid_segment_starts, valid_segment_ends):
+    all_range_err.extend(range_err_km[seg_start:seg_end])
+    all_az_err.extend(az_err_deg[seg_start:seg_end])
+    all_el_err.extend(el_err_deg[seg_start:seg_end])
+    if rng_dot_err_km is not None:
+      all_rng_dot_err.extend(rng_dot_err_km[seg_start:seg_end])
+    if az_dot_err_deg is not None:
+      all_az_dot_err.extend(az_dot_err_deg[seg_start:seg_end])
+    if el_dot_err_deg is not None:
+      all_el_dot_err.extend(el_dot_err_deg[seg_start:seg_end])
+
+  # Compute limits with small padding
+  def get_limits(data, pad_frac=0.05):
+    if len(data) == 0:
+      return (-1, 1)
+    dmin, dmax = min(data), max(data)
+    pad = (dmax - dmin) * pad_frac if dmax != dmin else abs(dmax) * 0.1 + 0.001
+    return (dmin - pad, dmax + pad)
+
+  range_err_ylim   = get_limits(all_range_err)
+  az_err_ylim      = get_limits(all_az_err)
+  el_err_ylim      = get_limits(all_el_err)
+  rng_dot_err_ylim = get_limits(all_rng_dot_err)
+  az_dot_err_ylim  = get_limits(all_az_dot_err)
+  el_dot_err_ylim  = get_limits(all_el_dot_err)
+
+  # Create figure: 6 rows × num_passes columns
+  num_rows = 6
+  fig_width = max(3.5 * num_passes, 10)
+  fig_height = 12
+  fig, axes = plt.subplots(num_rows, num_passes, figsize=(fig_width, fig_height), squeeze=False)
+
+  # Convert time to UTC datetime if epoch provided
+  if epoch_dt_utc is not None:
+    time_utc = [epoch_dt_utc + timedelta(seconds=float(t)) for t in time_s]
+
+  # Y-label alignment coordinate
+  ylabel_x = -0.15
+
+  # Row configuration: (error_data, ylabel, ylim)
+  row_configs = [
+    ('range_err',     'rng_dot_err',  'Range Err [km]',       'Range Rate Err [km/s]',     range_err_ylim,   rng_dot_err_ylim),
+    ('az_err',        'az_dot_err',   'Azimuth Err [deg]',    'Azimuth Rate Err [deg/s]',  az_err_ylim,      az_dot_err_ylim),
+    ('el_err',        'el_dot_err',   'Elevation Err [deg]',  'Elevation Rate Err [deg/s]',el_err_ylim,      el_dot_err_ylim),
+  ]
+
+  # Plot each pass
+  for pass_idx, (seg_start, seg_end) in enumerate(zip(valid_segment_starts, valid_segment_ends)):
+    col = pass_idx
+
+    # Extract segment error data
+    seg_time_s      = time_s[seg_start:seg_end]
+    seg_range_err   = range_err_km[seg_start:seg_end]
+    seg_az_err      = az_err_deg[seg_start:seg_end]
+    seg_el_err      = el_err_deg[seg_start:seg_end]
+    seg_rng_dot_err = rng_dot_err_km[seg_start:seg_end] if rng_dot_err_km is not None else None
+    seg_az_dot_err  = az_dot_err_deg[seg_start:seg_end] if az_dot_err_deg is not None else None
+    seg_el_dot_err  = el_dot_err_deg[seg_start:seg_end] if el_dot_err_deg is not None else None
+
+    # Time axis for this segment
+    if epoch_dt_utc is not None:
+      seg_time = time_utc[seg_start:seg_end]
+    else:
+      seg_time = seg_time_s / 3600.0  # hours
+
+    # Pass label for title (only on row 0)
+    pass_label = f"Pass {pass_idx + 1}"
+    if epoch_dt_utc is not None and len(seg_time) > 0:
+      pass_start_str = seg_time[0].strftime('%H:%M:%S')
+      pass_end_str   = seg_time[-1].strftime('%H:%M:%S')
+      pass_label = f"Pass {pass_idx + 1}\n{pass_start_str} - {pass_end_str}"
+
+    # Data arrays for each error type
+    seg_data = {
+      'range_err': seg_range_err,
+      'az_err': seg_az_err,
+      'el_err': seg_el_err,
+      'rng_dot_err': seg_rng_dot_err,
+      'az_dot_err': seg_az_dot_err,
+      'el_dot_err': seg_el_dot_err,
+    }
+
+    # Plot each row pair (measurement error + rate error)
+    for meas_idx, (meas_key, rate_key, ylabel, rate_ylabel, ylim, rate_ylim) in enumerate(row_configs):
+      row_meas = meas_idx * 2      # 0, 2, 4
+      row_rate = meas_idx * 2 + 1  # 1, 3, 5
+
+      # ---- Measurement error row ----
+      ax_meas = axes[row_meas, col]
+      ax_meas.plot(seg_time, seg_data[meas_key], 'b-', linewidth=2.0)
+      ax_meas.axhline(y=0, color='k', linestyle='--', linewidth=0.5, alpha=0.5)
+      ax_meas.set_ylim(ylim)
+      if col == 0:
+        ax_meas.set_ylabel(ylabel, fontsize=10)
+        ax_meas.yaxis.set_label_coords(ylabel_x, 0.5)
+      else:
+        ax_meas.set_yticklabels([])
+      ax_meas.grid(True, alpha=0.3)
+      ax_meas.set_xticklabels([])
+      if row_meas == 0:
+        ax_meas.set_title(pass_label, fontsize=10)
+
+      # ---- Rate error row ----
+      ax_rate = axes[row_rate, col]
+      if seg_data[rate_key] is not None:
+        ax_rate.plot(seg_time, seg_data[rate_key], 'b-', linewidth=2.0)
+      ax_rate.axhline(y=0, color='k', linestyle='--', linewidth=0.5, alpha=0.5)
+      ax_rate.set_ylim(rate_ylim)
+      if col == 0:
+        ax_rate.set_ylabel(rate_ylabel, fontsize=10)
+        ax_rate.yaxis.set_label_coords(ylabel_x, 0.5)
+      else:
+        ax_rate.set_yticklabels([])
+      ax_rate.grid(True, alpha=0.3)
+      ax_rate.set_xticklabels([])
+
+    # Bottom row (el_dot_err) gets x-axis labels
     ax_bottom = axes[5, col]
     if epoch_dt_utc is not None:
       ax_bottom.tick_params(axis='x', rotation=45)

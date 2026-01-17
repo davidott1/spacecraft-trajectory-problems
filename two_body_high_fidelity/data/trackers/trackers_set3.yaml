@@ -9,12 +9,12 @@
       azimuth_min_max__deg      : -180.0, 180.0
       elevation_min_max__deg    : 10.0, 90.0
     uncertainty                 :
-      range__m                  : 10.0
-      range_rate__m_per_s       : 0.1
-      azimuth__deg              : 0.01
-      azimuth_rate__deg_per_s   : 0.001
-      elevation__deg            : 0.01
-      elevation_rate__deg_per_s : 0.001
+      range__m                  : 500.0
+      range_rate__m_per_s       : 5.0
+      azimuth__deg              : 0.5
+      azimuth_rate__deg_per_s   : 0.05
+      elevation__deg            : 0.5
+      elevation_rate__deg_per_s : 0.05
 
 - name                          : "Svalbard Arctic"
   position                      :
@@ -27,12 +27,12 @@
       azimuth_min_max__deg      : -180.0, 180.0
       elevation_min_max__deg    : 5.0, 85.0
     uncertainty                 :
-      range__m                  : 10.0
-      range_rate__m_per_s       : 0.1
-      azimuth__deg              : 0.01
-      azimuth_rate__deg_per_s   : 0.001
-      elevation__deg            : 0.01
-      elevation_rate__deg_per_s : 0.001
+      range__m                  : 500.0
+      range_rate__m_per_s       : 5.0
+      azimuth__deg              : 0.5
+      azimuth_rate__deg_per_s   : 0.05
+      elevation__deg            : 0.5
+      elevation_rate__deg_per_s : 0.05
 
 - name                          : "Santiago Chile"
   position                      :
@@ -45,9 +45,9 @@
       azimuth_min_max__deg      : -120.0, 120.0
       elevation_min_max__deg    : 8.0, 88.0
     uncertainty                 :
-      range__m                  : 10.0
-      range_rate__m_per_s       : 0.1
-      azimuth__deg              : 0.01
-      azimuth_rate__deg_per_s   : 0.001
-      elevation__deg            : 0.01
-      elevation_rate__deg_per_s : 0.001
+      range__m                  : 500.0
+      range_rate__m_per_s       : 5.0
+      azimuth__deg              : 0.5
+      azimuth_rate__deg_per_s   : 0.05
+      elevation__deg            : 0.5
+      elevation_rate__deg_per_s : 0.05

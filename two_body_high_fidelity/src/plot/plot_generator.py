@@ -10,12 +10,13 @@ from datetime import datetime
 from pathlib  import Path
 from typing   import Optional
 
-from src.plot.plot_3d          import plot_3d_trajectories, plot_3d_trajectories_body_fixed, plot_3d_trajectory_sun_centered
-from src.plot.plot_timeseries  import plot_time_series, plot_time_series_error
-from src.plot.plot_groundtrack import plot_ground_track
-from src.plot.plot_skyplot     import plot_skyplot, plot_pass_timeseries
-from src.schemas.propagation   import PropagationResult
-from src.schemas.state         import TrackerStation
+from src.plot.plot_3d                          import plot_3d_trajectories, plot_3d_trajectories_body_fixed, plot_3d_trajectory_sun_centered
+from src.plot.plot_timeseries                  import plot_time_series, plot_time_series_error
+from src.plot.plot_groundtrack                 import plot_ground_track
+from src.plot.plot_skyplot                     import plot_skyplot, plot_pass_timeseries, plot_error_skyplot
+from src.schemas.propagation                   import PropagationResult
+from src.schemas.state                         import TrackerStation
+from src.orbit_determination.measurement_simulator import MeasurementSimulator
 
 
 def generate_error_plots(
@@ -73,7 +74,7 @@ def generate_error_plots(
     )
     title = f'Error Time Series: High-Fidelity vs JPL Horizons - {object_name_display}'
     fig_err_ts.suptitle(title, fontsize=14)
-    filename = f'error_timeseries_high_fidelity_rel_jpl_horizons_{name_lower}.png'
+    filename = f'error_timeseries_cart_coe_mee_high_fidelity_rel_jpl_horizons_{name_lower}.png'
     fig_err_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     error_files['hf_vs_horizons'].append(filename)
     plt.close(fig_err_ts)
@@ -395,12 +396,18 @@ def generate_plots(
 
         # Generate skyplot for JPL Horizons if available
         if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
+          # Generate simulated measurements with uncertainty for JPL Horizons
+          simulator = MeasurementSimulator(result_jpl_horizons_ephemeris, tracker, time_o_dt)
+          noise_config = simulator.get_tracker_noise_config()
+          measurements = simulator.simulate(noise_config=noise_config, seed=42, include_rates=True)
+
           skyplot_title = f'Skyplot - {object_name_display} - JPL Horizons - {tracker.name}'
           fig_skyplot_horizons = plot_skyplot(
             result       = result_jpl_horizons_ephemeris,
             tracker      = tracker,
             epoch_dt_utc = time_o_dt,
             title_text   = skyplot_title,
+            measurements = measurements,
           )
           filename = f'skyplot_{tracker_name_sanitized}_jpl_horizons_{name_lower}.png'
           fig_skyplot_horizons.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
@@ -411,6 +418,43 @@ def generate_plots(
 
       except Exception as e:
         print(f"      [WARNING] Failed to generate skyplot for {tracker.name}: {e}")
+
+  # Generate error skyplot for each tracker (Measured vs Truth from JPL Horizons)
+  error_skyplot_files = {}  # Dict of tracker_name -> list of filenames
+  if trackers is not None and len(trackers) > 0 and compare_jpl_horizons:
+    has_horizons = result_jpl_horizons_ephemeris is not None and result_jpl_horizons_ephemeris.success
+
+    if has_horizons:
+      print("    Generate error skyplots (Measured vs Truth)")
+
+      name_lower = object_name.lower().replace(' ', '_').replace('-', '_')
+
+      for tracker in trackers:
+        try:
+          tracker_name_sanitized = tracker.name.lower().replace(' ', '_').replace('-', '_')
+
+          # Generate simulated measurements with noise for JPL Horizons
+          simulator = MeasurementSimulator(result_jpl_horizons_ephemeris, tracker, time_o_dt)
+          noise_config = simulator.get_tracker_noise_config()
+          measurements = simulator.simulate(noise_config=noise_config, seed=42, include_rates=True)
+
+          # Generate error skyplot (measured - truth)
+          error_title = f'Measurement Error - {object_name_display} - {tracker.name}'
+          fig_error = plot_error_skyplot(
+            measurements = measurements,
+            epoch_dt_utc = time_o_dt,
+            title_text   = error_title,
+          )
+          if fig_error is not None:
+            filename = f'error_skyplot_{tracker_name_sanitized}_jpl_horizons_meas_rel_truth_{name_lower}.png'
+            fig_error.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+            plt.close(fig_error)
+            error_skyplot_files[tracker.name] = [filename]
+
+        except Exception as e:
+          import traceback
+          print(f"      [WARNING] Failed to generate error skyplot for {tracker.name}: {e}")
+          traceback.print_exc()
 
   # Generate pass time-series plots for each tracker
   pass_timeseries_files = {}  # Dict of tracker_name -> list of filenames
@@ -521,7 +565,7 @@ def generate_plots(
   has_error_plots = any(error_files[k] for k in error_files)
   if has_error_plots:
     print()
-    print("    Error Plots")
+    print("    Error Cartesian-COE-MEE Plots")
     if error_files['hf_vs_horizons']:
       print("      High-Fidelity Relative To JPL Horizons")
       for filename in error_files['hf_vs_horizons']:
@@ -540,6 +584,15 @@ def generate_plots(
     print()
     print("    Skyplots")
     for tracker_name, filenames in skyplot_files.items():
+      print(f"      Tracker {tracker_name}")
+      for filename in filenames:
+        print(f"        <figures_folderpath>/{filename}")
+
+  # Print Error Skyplots
+  if error_skyplot_files:
+    print()
+    print("    Error Skyplots")
+    for tracker_name, filenames in error_skyplot_files.items():
       print(f"      Tracker {tracker_name}")
       for filename in filenames:
         print(f"        <figures_folderpath>/{filename}")
