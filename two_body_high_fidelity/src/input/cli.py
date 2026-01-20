@@ -13,7 +13,7 @@ def load_config_file(config_path: str) -> dict:
   ------
     config_path : str
       Path to the YAML config file. Can be:
-      - Just filename (looks in data/configs/)
+      - Just filename (looks in input/configs/)
       - Relative or absolute path
 
   Output:
@@ -23,9 +23,9 @@ def load_config_file(config_path: str) -> dict:
   """
   path = Path(config_path)
 
-  # If just a filename, look in data/configs/
+  # If just a filename, look in input/configs/
   if not path.is_absolute() and path.parent == Path('.'):
-    path = Path(__file__).parent.parent.parent / 'data' / 'configs' / config_path
+    path = Path(__file__).parent.parent.parent / 'input' / 'configs' / config_path
 
   if not path.exists():
     raise FileNotFoundError(f"Config file not found: {path}")
@@ -200,7 +200,7 @@ def parse_command_line_arguments(
     dest    = 'config',
     type    = str,
     default = None,
-    help    = 'Path to YAML configuration file. If just a filename, looks in data/configs/. CLI arguments override config file values.',
+    help    = 'Path to YAML configuration file. If just a filename, looks in input/configs/. CLI arguments override config file values.',
   )
 
   # Initial state arguments
@@ -226,7 +226,7 @@ def parse_command_line_arguments(
     '--initial-state-filename',
     type     = str,
     required = False,
-    help     = 'Filename of the custom state vector .yaml file in data/state_vectors. Required if initial state source is custom-state-vector.'
+    help     = 'Filename of the custom state vector .yaml file in input/state_vectors. Required if initial state source is custom-state-vector.'
   )
   
   # Time arguments
@@ -338,7 +338,7 @@ def parse_command_line_arguments(
     dest    = 'include_tracker_skyplots',
     action  = 'store_true',
     default = False,
-    help    = 'Enable skyplot generation (disabled by default). Uses tracker file from data/trackers/.',
+    help    = 'Enable skyplot generation (disabled by default). Uses tracker file from input/trackers/.',
   )
   
   parser.add_argument(
@@ -346,7 +346,7 @@ def parse_command_line_arguments(
     dest     = 'tracker_filename',
     type     = str,
     required = False,
-    help     = 'Tracker station YAML filename (assumes data/trackers/ folder). E.g., trackers.yaml',
+    help     = 'Tracker station YAML filename (assumes input/trackers/ folder). E.g., trackers.yaml',
   )
   
   parser.add_argument(
