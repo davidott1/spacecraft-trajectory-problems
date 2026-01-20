@@ -15,7 +15,7 @@ from src.plot.plot_3d                          import plot_3d_trajectories, plot
 from src.plot.plot_timeseries                  import plot_time_series, plot_time_series_error
 from src.plot.plot_groundtrack                 import plot_ground_track
 from src.plot.plot_skyplot                     import plot_skyplot, plot_pass_timeseries, plot_measurement_errors, plot_error_skyplot
-from src.plot.plot_covariance                  import plot_covariance_timeseries, plot_covariance_components
+from src.plot.plot_covariance                  import plot_covariance_combined
 from src.schemas.propagation                   import PropagationResult
 from src.schemas.state                         import TrackerStation
 from src.orbit_determination.measurement_simulator import MeasurementSimulator
@@ -551,30 +551,17 @@ def generate_plots(
       # Use the dedicated covariance time array (includes pre-update and post-update times for sawtooth)
       delta_time_epoch = od_estimation_times
 
-      # Plot 1: Covariance time series (RSS uncertainties with 1-sigma and 3-sigma)
-      cov_ts_title = f'State Uncertainty Evolution - {object_name_display} - Orbit Determination'
-      fig_cov_ts = plot_covariance_timeseries(
+      # Combined covariance plot (RSS + components in 2x2 grid)
+      cov_title = f'State Uncertainty Evolution - {object_name_display} - Orbit Determination'
+      fig_cov = plot_covariance_combined(
         covariances       = od_covariances,
         delta_time_epoch  = delta_time_epoch,
-        title_text        = cov_ts_title,
+        title_text        = cov_title,
         measurement_times = od_measurement_times,
       )
-      filename = f'covariance_timeseries_od_{name_lower}.png'
-      fig_cov_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-      plt.close(fig_cov_ts)
-      covariance_files.append(filename)
-
-      # Plot 2: Covariance components (individual x,y,z and vx,vy,vz)
-      cov_comp_title = f'State Uncertainty Components - {object_name_display} - Orbit Determination'
-      fig_cov_comp = plot_covariance_components(
-        covariances       = od_covariances,
-        delta_time_epoch  = delta_time_epoch,
-        title_text        = cov_comp_title,
-        measurement_times = od_measurement_times,
-      )
-      filename = f'covariance_components_od_{name_lower}.png'
-      fig_cov_comp.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-      plt.close(fig_cov_comp)
+      filename = f'timeseries_cov_high_fidelity_{name_lower}.png'
+      fig_cov.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+      plt.close(fig_cov)
       covariance_files.append(filename)
 
     except Exception as e:

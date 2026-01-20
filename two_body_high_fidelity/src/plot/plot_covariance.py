@@ -178,3 +178,97 @@ def plot_covariance_components(
   fig.tight_layout(rect=[0, 0, 1, 0.97])
 
   return fig
+
+
+def plot_covariance_combined(
+  covariances       : np.ndarray,
+  delta_time_epoch  : np.ndarray,
+  title_text        : str = "State Uncertainty Evolution",
+  measurement_times : Optional[np.ndarray] = None,
+) -> Figure:
+  """
+  Plot combined covariance visualization with RSS and component uncertainties.
+
+  Creates a 1x2 grid showing:
+    - Left: Position uncertainties (RSS and components) vs time
+    - Right: Velocity uncertainties (RSS and components) vs time
+
+  Input:
+  ------
+    covariances : np.ndarray (6, 6, N)
+      State covariance matrices at each time step.
+    delta_time_epoch : np.ndarray (N,)
+      Time array relative to epoch.
+    title_text : str
+      Title for the figure.
+    measurement_times : np.ndarray, optional
+      Times when measurements were incorporated relative to epoch. If provided,
+      vertical lines are drawn at these times to indicate state updates.
+
+  Output:
+  -------
+    fig : Figure
+      Matplotlib figure containing the combined covariance plots.
+  """
+  # Extract standard deviations (1-sigma) for each state component
+  sigma_x  = np.sqrt(covariances[0, 0, :])  # Position x uncertainty [m]
+  sigma_y  = np.sqrt(covariances[1, 1, :])  # Position y uncertainty [m]
+  sigma_z  = np.sqrt(covariances[2, 2, :])  # Position z uncertainty [m]
+  sigma_vx = np.sqrt(covariances[3, 3, :])  # Velocity x uncertainty [m/s]
+  sigma_vy = np.sqrt(covariances[4, 4, :])  # Velocity y uncertainty [m/s]
+  sigma_vz = np.sqrt(covariances[5, 5, :])  # Velocity z uncertainty [m/s]
+
+  # Compute RSS (Root Sum Square) uncertainties
+  sigma_pos_rss = np.sqrt(sigma_x**2 + sigma_y**2 + sigma_z**2)  # Position RSS [m]
+  sigma_vel_rss = np.sqrt(sigma_vx**2 + sigma_vy**2 + sigma_vz**2)  # Velocity RSS [m/s]
+
+  # Convert time to minutes
+  time_min = delta_time_epoch / 60.0
+
+  # Create figure with 1x2 subplots
+  fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+  # Left: Position uncertainties (RSS + components)
+  ax1 = axes[0]
+  # Plot RSS
+  ax1.semilogy(time_min, sigma_pos_rss, 'k-', linewidth=3.0, alpha=0.5, label='√(σrx² + σry² + σrz²)')
+  # Plot components
+  ax1.semilogy(time_min, sigma_x, 'r-', linewidth=1.2, label='σrx', alpha=0.6)
+  ax1.semilogy(time_min, sigma_y, 'g-', linewidth=1.2, label='σry', alpha=0.6)
+  ax1.semilogy(time_min, sigma_z, 'b-', linewidth=1.2, label='σrz', alpha=0.6)
+  ax1.set_xlabel('Time [min]', fontsize=12)
+  ax1.set_ylabel('Position Uncertainty [m]', fontsize=12)
+  ax1.set_title('Position Uncertainty', fontsize=13, fontweight='bold')
+  ax1.grid(True, which='both', linestyle=':', alpha=0.5)
+  ax1.legend(loc='best', fontsize=10)
+
+  # Add measurement markers if provided
+  if measurement_times is not None:
+    meas_time_min = measurement_times / 60.0
+    for mt in meas_time_min:
+      ax1.axvline(mt, color='magenta', alpha=0.1, linewidth=0.8, linestyle='-')
+
+  # Right: Velocity uncertainties (RSS + components)
+  ax2 = axes[1]
+  # Plot RSS
+  ax2.semilogy(time_min, sigma_vel_rss, 'k-', linewidth=3.0, alpha=0.5, label='√(σvx² + σvy² + σvz²)')
+  # Plot components
+  ax2.semilogy(time_min, sigma_vx, 'r-', linewidth=1.2, label='σvx', alpha=0.6)
+  ax2.semilogy(time_min, sigma_vy, 'g-', linewidth=1.2, label='σvy', alpha=0.6)
+  ax2.semilogy(time_min, sigma_vz, 'b-', linewidth=1.2, label='σvz', alpha=0.6)
+  ax2.set_xlabel('Time [min]', fontsize=12)
+  ax2.set_ylabel('Velocity Uncertainty [m/s]', fontsize=12)
+  ax2.set_title('Velocity Uncertainty', fontsize=13, fontweight='bold')
+  ax2.grid(True, which='both', linestyle=':', alpha=0.5)
+  ax2.legend(loc='best', fontsize=10)
+
+  # Add measurement markers if provided
+  if measurement_times is not None:
+    for mt in meas_time_min:
+      ax2.axvline(mt, color='magenta', alpha=0.1, linewidth=0.8, linestyle='-')
+
+  # Overall figure title
+  fig.suptitle(title_text, fontsize=14, fontweight='bold')
+  fig.tight_layout(rect=[0, 0, 1, 0.96])
+
+  return fig

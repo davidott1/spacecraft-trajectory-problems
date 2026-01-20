@@ -6,6 +6,7 @@ Numerical integration of spacecraft equations of motion.
 """
 import numpy as np
 
+from datetime          import datetime, timedelta
 from typing            import Optional
 from scipy.integrate   import solve_ivp
 from scipy.interpolate import interp1d
@@ -27,18 +28,20 @@ FORMAT_NUMBER = ">19.12e"
 
 
 def propagate_tle(
-  tle_line_1   : str,
-  tle_line_2   : str,
-  time_o       : Optional[float] = None,
-  time_f       : Optional[float] = None,
-  num_points   : int  = 100,
-  time_eval    : Optional[np.ndarray] = None,
-  to_j2000     : bool = False,
-  disable_drag : bool = False,
+  tle_line_1     : str,
+  tle_line_2     : str,
+  time_o         : Optional[float] = None,
+  time_f         : Optional[float] = None,
+  num_points     : int  = 100,
+  time_eval      : Optional[np.ndarray] = None,
+  to_j2000       : bool = False,
+  disable_drag   : bool = False,
+  initial_dt     : Optional['datetime'] = None,
+  final_dt       : Optional['datetime'] = None,
 ) -> PropagationResult:
   """
   Propagate orbit from TLE using SGP4.
-  
+
   Input:
   ------
     tle_line_1 : str
@@ -57,11 +60,15 @@ def propagate_tle(
       Convert from TEME to J2000 frame.
     disable_drag : bool
       If True, set B* drag term to zero.
-      
+    initial_dt : datetime, optional
+      Initial time as datetime (UTC) for creating TimeGrid.
+    final_dt : datetime, optional
+      Final time as datetime (UTC) for creating TimeGrid.
+
   Output:
   -------
     result : PropagationResult
-      Result object with 'success', 'state', 'time', 'message', 'coe', 'mee'.
+      Result object with 'success', 'state', 'time_grid', 'message', 'coe', 'mee'.
   """
   # Input validation
   if (time_o is not None or time_f is not None) and time_eval is not None:
@@ -200,15 +207,26 @@ def propagate_tle(
       p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L
     )
 
+    # Create TimeGrid if datetime parameters provided
+    time_grid = None
+    if initial_dt is not None and final_dt is not None:
+      # time array is in seconds from TLE epoch, convert to deltas from initial_dt
+      time_offset_o_s = (initial_dt - epoch_datetime).total_seconds()
+      deltas = time - time_offset_o_s
+      time_grid = TimeGrid(
+        initial = initial_dt,
+        final   = final_dt,
+        deltas  = deltas,
+      )
+
     # Return result object with time_grid
-    # Note: time array is in seconds from TLE epoch
-    # Caller will need to create TimeGrid with appropriate initial/final datetimes
     return PropagationResult(
-      success = True,
-      message = 'SGP4 propagation successful',
-      state   = posvel_vec_array,
-      coe     = coe_time_series,
-      mee     = mee_time_series,
+      success   = True,
+      message   = 'SGP4 propagation successful',
+      time_grid = time_grid,
+      state     = posvel_vec_array,
+      coe       = coe_time_series,
+      mee       = mee_time_series,
     )
   except Exception as e:
     # Catch all exceptions and return failure
@@ -282,8 +300,8 @@ def get_tle_initial_state(
 
 def propagate_state_numerical_integration(
   initial_state       : np.ndarray,
-  time_o              : float,
-  time_f              : float,
+  initial_dt          : datetime,
+  final_dt            : datetime,
   dynamics            : Acceleration,
   method              : str                  = 'DOP853', # DOP853 RK45
   rtol                : float                = 1e-12,
@@ -296,15 +314,15 @@ def propagate_state_numerical_integration(
 ) -> PropagationResult:
   """
   Propagate an orbit from initial cartesian state using numerical integration.
-  
+
   Input:
   ------
     initial_state : np.ndarray
       Initial state vector [pos, vel] in meters and m/s.
-    time_o : float
-      Initial time [s].
-    time_f : float
-      Final time [s].
+    initial_dt : datetime
+      Initial time as datetime (UTC).
+    final_dt : datetime
+      Final time as datetime (UTC).
     dynamics : Acceleration
       Acceleration model containing all force models.
     method : str
@@ -316,7 +334,7 @@ def propagate_state_numerical_integration(
     dense_output : bool
       Enable dense output for interpolation.
     t_eval : np.ndarray, optional
-      Times at which to store the solution.
+      Times at which to store the solution (in ET seconds).
     get_coe_time_series : bool
       If True, convert states to classical orbital elements.
     num_points : int, optional
@@ -324,18 +342,22 @@ def propagate_state_numerical_integration(
       If specified, solution is evaluated at uniformly spaced times.
     gp : float, optional
       Gravitational parameter for orbital element conversion [m³/s²].
-  
+
   Output:
   -------
     result : PropagationResult
       Object containing:
-      - success : bool - Integration success flag
-      - message : str - Status message
-      - time : np.ndarray - Time array [s]
-      - state : np.ndarray - State history [6 x N]
-      - coe : ClassicalOrbitalElements - Classical orbital elements time series (if requested)
-      - mee : ModifiedEquinoctialElements - Modified equinoctial elements time series (if requested)
+      - success   : bool - Integration success flag
+      - message   : str - Status message
+      - time_grid : TimeGrid - Time grid with initial, final, and deltas
+      - state     : np.ndarray - State history [6 x N]
+      - coe       : ClassicalOrbitalElements - Classical orbital elements time series (if requested)
+      - mee       : ModifiedEquinoctialElements - Modified equinoctial elements time series (if requested)
   """
+  # Convert datetime to ephemeris time for integration
+  time_o = utc_to_et(initial_dt)
+  time_f = utc_to_et(final_dt)
+
   # Time span for integration
   time_span = (time_o, time_f)
 
@@ -383,11 +405,12 @@ def propagate_state_numerical_integration(
     mee_L = np.zeros(num_steps)
 
     for i in range(num_steps):
-      pos = solution.y[0:3, i]
-      vel = solution.y[3:6, i]
+      # Unpack position and velocity vectors
+      pos_vec = solution.y[0:3, i]
+      vel_vec = solution.y[3:6, i]
       
       # Compute COE
-      coe = OrbitConverter.pv_to_coe(pos, vel, gp)
+      coe = OrbitConverter.pv_to_coe(pos_vec, vel_vec, gp)
       coe_sma[i]  = coe.sma
       coe_ecc[i]  = coe.ecc
       coe_inc[i]  = coe.inc
@@ -398,7 +421,7 @@ def propagate_state_numerical_integration(
       coe_ea[i]   = coe.ea
       
       # Compute MEE
-      mee = OrbitConverter.pv_to_mee(pos, vel, gp)
+      mee = OrbitConverter.pv_to_mee(pos_vec, vel_vec, gp)
       mee_p[i] = mee.p
       mee_f[i] = mee.f
       mee_g[i] = mee.g
@@ -408,20 +431,41 @@ def propagate_state_numerical_integration(
     
     # Construct objects
     coe_time_series = ClassicalOrbitalElements(
-      sma=coe_sma, ecc=coe_ecc, inc=coe_inc, raan=coe_raan, aop=coe_aop, ma=coe_ma, ta=coe_ta, ea=coe_ea
+      sma  = coe_sma,
+      ecc  = coe_ecc,
+      inc  = coe_inc,
+      raan = coe_raan,
+      aop  = coe_aop,
+      ma   = coe_ma,
+      ta   = coe_ta,
+      ea   = coe_ea,
     )
     mee_time_series = ModifiedEquinoctialElements(
-      p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L
+      p = mee_p,
+      f = mee_f,
+      g = mee_g,
+      h = mee_h,
+      k = mee_k,
+      L = mee_L,
     )
-  
-  # Return result without time_grid - caller will create it with appropriate initial/final times
-  # solution.t contains the raw time array (in the same units as time_o/time_f)
+
+  # Create TimeGrid
+  # solution.t contains the time array (in ET seconds)
+  # Convert to deltas from time_o
+  deltas = solution.t - time_o
+  time_grid = TimeGrid(
+    initial = initial_dt,
+    final   = final_dt,
+    deltas  = deltas,
+  )
+
   return PropagationResult(
-    success = solution.success,
-    message = solution.message,
-    state   = solution.y,
-    coe     = coe_time_series,
-    mee     = mee_time_series,
+    success   = solution.success,
+    message   = solution.message,
+    time_grid = time_grid,
+    state     = solution.y,
+    coe       = coe_time_series,
+    mee       = mee_time_series,
   )
 
 
@@ -536,8 +580,8 @@ def run_high_fidelity_propagation(
   # Propagate on equal-spaced grid with dense output for interpolation
   result_high_fidelity = propagate_state_numerical_integration(
     initial_state       = initial_state,
-    time_o              = time_et_o,
-    time_f              = time_et_f,
+    initial_dt          = propagation_config.time_o_dt,
+    final_dt            = propagation_config.time_f_dt,
     dynamics            = acceleration,
     method              = propagation_config.method,
     rtol                = propagation_config.rtol,
@@ -549,15 +593,8 @@ def run_high_fidelity_propagation(
   )
 
   if result_high_fidelity.success:
-    # Create time grid with deltas (seconds from time_o)
     # t_eval_grid is the time array we passed in (absolute ET values)
     time_et_array = t_eval_grid
-    deltas = time_et_array - time_et_o
-    result_high_fidelity.time_grid = TimeGrid(
-      initial = propagation_config.time_o_dt,
-      final   = propagation_config.time_f_dt,
-      deltas  = deltas,
-    )
 
     # If comparing to Horizons, interpolate to ephemeris times and store separately
     if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
@@ -868,6 +905,8 @@ def run_sgp4_propagation(
     tle_line_2 = tle_line_2,
     to_j2000   = True,
     time_eval  = sgp4_times_grid,
+    initial_dt = propagation_config.time_o_dt,
+    final_dt   = propagation_config.time_f_dt,
   )
   print("Complete")
 
@@ -875,46 +914,25 @@ def run_sgp4_propagation(
     print(f"  SGP4 propagation failed: {result_sgp4.message}")
     return None
 
-  # Create time grid (seconds from time_o)
-  # sgp4_times_grid is in seconds from TLE epoch, convert to seconds from time_o
-  deltas_sgp4 = sgp4_times_grid - time_offset_o_s
-  result_sgp4.time_grid = TimeGrid(
-    initial = propagation_config.time_o_dt,
-    final   = propagation_config.time_f_dt,
-    deltas  = deltas_sgp4,
-  )
-
   # If comparing to Horizons, also propagate at ephemeris times
   if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success and result_jpl_horizons_ephemeris.time_grid is not None:
     ephem_times_s = result_jpl_horizons_ephemeris.time_grid.deltas  # seconds from time_o
     ephem_times_from_tle = ephem_times_s + time_offset_o_s  # seconds from TLE epoch
-    
+
     print(f"    Propagating at {len(ephem_times_from_tle)} ephemeris time points ... ", end='', flush=True)
-    
+
     result_sgp4_at_ephem = propagate_tle(
       tle_line_1 = tle_line_1,
       tle_line_2 = tle_line_2,
       to_j2000   = True,
       time_eval  = ephem_times_from_tle,
+      initial_dt = result_jpl_horizons_ephemeris.time_grid.initial,
+      final_dt   = result_jpl_horizons_ephemeris.time_grid.final,
     )
-    
+
     if result_sgp4_at_ephem.success:
-      # Store ephemeris-time results as PropagationResult
-      # Create time grid for ephemeris times
-      if result_jpl_horizons_ephemeris.time_grid is not None:
-        ephem_time_grid_sgp4 = TimeGrid(
-          initial = result_jpl_horizons_ephemeris.time_grid.initial,
-          final   = result_jpl_horizons_ephemeris.time_grid.final,
-          deltas  = ephem_times_s,
-        )
-        result_sgp4.at_ephem_times = PropagationResult(
-          success   = True,
-          message   = "Interpolated to ephemeris times",
-          time_grid = ephem_time_grid_sgp4,
-          state     = result_sgp4_at_ephem.state,
-          coe       = result_sgp4_at_ephem.coe,
-          mee       = result_sgp4_at_ephem.mee,
-        )
+      # Store ephemeris-time results directly (time_grid already created by propagate_tle)
+      result_sgp4.at_ephem_times = result_sgp4_at_ephem
       print("Complete")
     else:
       print(f"Failed: {result_sgp4_at_ephem.message}")
