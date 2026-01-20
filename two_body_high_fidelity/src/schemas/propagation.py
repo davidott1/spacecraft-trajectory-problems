@@ -96,8 +96,6 @@ class PropagationResult:
     success        : Whether propagation completed successfully
     message        : Status or error message
     time_grid      : Time grid used for propagation (contains deltas, times, times_et, etc.)
-    time           : Time array (raw output from integrator/SGP4) - INTERNAL USE ONLY
-                     Set temporarily by low-level propagators, cleared after time_grid creation
     state          : Cartesian state array, shape (6, N)
     coe            : Classical orbital elements at each time
     mee            : Modified equinoctial elements at each time
@@ -107,13 +105,10 @@ class PropagationResult:
     - Use time_grid.deltas for plotting times (seconds relative to epoch)
     - Use time_grid.times_et for absolute ephemeris times (seconds past J2000)
     - Use time_grid.times for absolute datetime objects
-    - The 'time' attribute is for internal use only (raw integrator/SGP4 output)
-      and is cleared after time_grid is created
   """
   success        : bool
   message        : str                  = ""
   time_grid      : Optional[TimeGrid]   = None
-  time           : Optional[np.ndarray] = None
   state          : Optional[np.ndarray] = None
   coe            : Optional[ClassicalOrbitalElements]    = None
   mee            : Optional[ModifiedEquinoctialElements] = None
