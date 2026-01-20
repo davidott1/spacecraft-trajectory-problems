@@ -345,9 +345,10 @@ def main(
 
     # Use JPL Horizons as truth for measurement simulation
     if result_jpl_horizons_ephemeris is not None and result_jpl_horizons_ephemeris.success:
-      print("\n" + "-" * 60)
-      print("Orbit Determination with Extended Kalman Filter")
-      print("-" * 60)
+      section_title = "Orbit Determination with Extended Kalman Filter"
+      print("\n" + "-" * len(section_title))
+      print(section_title)
+      print("-" * len(section_title))
 
       # Use first tracker for orbit determination
       tracker_od = trackers[0]
