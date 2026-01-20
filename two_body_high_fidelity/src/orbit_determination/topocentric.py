@@ -43,7 +43,7 @@ def compute_topocentric_coordinates(
   # Extract J2000 state vectors
   j2000_state   = result.state
   j2000_pos_vec = j2000_state[0:3, :]
-  time_s        = result.plot_delta_time
+  time_s        = result.time_grid.deltas
   n_points      = j2000_state.shape[1]
 
   # Convert epoch to ET
@@ -111,7 +111,7 @@ def compute_topocentric_coordinates_with_rates(
   j2000_state   = result.state
   j2000_pos_vec = j2000_state[0:3, :]
   j2000_vel_vec = j2000_state[3:6, :]
-  time_s        = result.plot_delta_time
+  time_s        = result.time_grid.deltas
   n_points      = j2000_state.shape[1]
 
   # Convert epoch to ET

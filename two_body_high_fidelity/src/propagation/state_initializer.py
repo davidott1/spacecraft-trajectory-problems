@@ -117,7 +117,7 @@ def get_initial_state(
     
     # Get the actual epoch from the ephemeris
     if result_jpl_horizons_ephemeris.time_grid:
-      epoch_dt = result_jpl_horizons_ephemeris.time_grid.epoch_dt
+      epoch_dt = result_jpl_horizons_ephemeris.time_grid.initial
     else:
       # Fallback if time_grid is missing (shouldn't happen for valid Horizons result)
       epoch_dt = time_o_dt

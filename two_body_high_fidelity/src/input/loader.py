@@ -996,9 +996,9 @@ def get_horizons_ephemeris(
   if result_horizons and result_horizons.get('success'):
     # Construct TimeGrid
     time_grid = TimeGrid(
-        epoch_dt         = result_horizons['time_o'],
-        epoch_et         = utc_to_et(result_horizons['time_o']),
-        delta_time_epoch = result_horizons['delta_time']
+        initial = result_horizons['time_o'],
+        final   = result_horizons['time_f'],
+        deltas  = result_horizons['delta_time']
     )
 
     # Construct COE object
@@ -1024,14 +1024,12 @@ def get_horizons_ephemeris(
     )
 
     return PropagationResult(
-        success         = True,
-        message         = "JPL Horizons ephemeris loaded successfully",
-        time_grid       = time_grid,
-        time            = result_horizons['delta_time'],
-        state           = result_horizons['state'],
-        coe             = coe_obj,
-        mee             = mee_obj,
-        plot_delta_time = result_horizons['delta_time']
+        success   = True,
+        message   = "JPL Horizons ephemeris loaded successfully",
+        time_grid = time_grid,
+        state     = result_horizons['state'],
+        coe       = coe_obj,
+        mee       = mee_obj,
     )
   else:
     msg = result_horizons.get('message') if result_horizons else "Failed to process Horizons data"

@@ -41,7 +41,7 @@ def plot_time_series(
   fig = plt.figure(figsize=(24, 10))
   
   # Extract data
-  time   = result.plot_delta_time
+  time   = result.time_grid.deltas
   states = result.state
   pos_x, pos_y, pos_z = states[0, :], states[1, :], states[2, :]
   vel_x, vel_y, vel_z = states[3, :], states[4, :], states[5, :]
@@ -229,9 +229,9 @@ def plot_time_series_error(
     fig : matplotlib.figure.Figure
       Figure object containing the time series error plots.
   """
-  # Use plot_delta_time for both datasets
-  time_ref  = result_ref.plot_delta_time
-  time_comp = result_comp.plot_delta_time
+  # Use time_grid.deltas for both datasets
+  time_ref  = result_ref.time_grid.deltas
+  time_comp = result_comp.time_grid.deltas
   
   state_ref  = result_ref.state
   state_comp = result_comp.state
