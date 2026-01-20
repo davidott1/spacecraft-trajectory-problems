@@ -1,0 +1,180 @@
+"""
+Covariance plotting functions for orbit determination.
+
+This module provides functions to visualize the state covariance evolution
+from the Extended Kalman Filter.
+"""
+import numpy as np
+import matplotlib.pyplot as plt
+
+from matplotlib.figure import Figure
+from typing import Optional
+
+
+def plot_covariance_timeseries(
+  covariances       : np.ndarray,
+  time_s            : np.ndarray,
+  title_text        : str = "State Covariance Evolution",
+  measurement_times : Optional[np.ndarray] = None,
+) -> Figure:
+  """
+  Plot state covariance evolution over time.
+
+  Creates a 2x1 grid showing:
+    - Position uncertainty (3-sigma bounds) vs time
+    - Velocity uncertainty (3-sigma bounds) vs time
+
+  Input:
+  ------
+    covariances : np.ndarray (6, 6, N)
+      State covariance matrices at each time step.
+      Shape: (6, 6, N) where N is number of time steps.
+    time_s : np.ndarray (N,)
+      Time array in seconds from epoch.
+    title_text : str
+      Title for the figure.
+    measurement_times : np.ndarray, optional
+      Times when measurements were incorporated [s]. If provided, vertical
+      lines are drawn at these times to indicate state updates.
+
+  Output:
+  -------
+    fig : Figure
+      Matplotlib figure containing the covariance plots.
+  """
+  n_steps = covariances.shape[2]
+
+  # Extract standard deviations (1-sigma) for each state component
+  sigma_x  = np.sqrt(covariances[0, 0, :])  # Position x uncertainty [m]
+  sigma_y  = np.sqrt(covariances[1, 1, :])  # Position y uncertainty [m]
+  sigma_z  = np.sqrt(covariances[2, 2, :])  # Position z uncertainty [m]
+  sigma_vx = np.sqrt(covariances[3, 3, :])  # Velocity x uncertainty [m/s]
+  sigma_vy = np.sqrt(covariances[4, 4, :])  # Velocity y uncertainty [m/s]
+  sigma_vz = np.sqrt(covariances[5, 5, :])  # Velocity z uncertainty [m/s]
+
+  # Compute RSS (Root Sum Square) uncertainties
+  sigma_pos = np.sqrt(sigma_x**2 + sigma_y**2 + sigma_z**2)  # Total position uncertainty [m]
+  sigma_vel = np.sqrt(sigma_vx**2 + sigma_vy**2 + sigma_vz**2)  # Total velocity uncertainty [m/s]
+
+  # Convert time to minutes
+  time_min = time_s / 60.0
+
+  # Create figure with 2 subplots (position and velocity)
+  fig, axes = plt.subplots(2, 1, figsize=(12, 8))
+
+  # Plot 1: Position uncertainty (1-sigma and 3-sigma)
+  ax1 = axes[0]
+  ax1.semilogy(time_min, sigma_pos, 'b-', linewidth=2, label='1-sigma (RSS)')
+  ax1.semilogy(time_min, 3 * sigma_pos, 'r--', linewidth=1.5, label='3-sigma (RSS)')
+  ax1.set_xlabel('Time [min]', fontsize=12)
+  ax1.set_ylabel('Position Uncertainty [m]', fontsize=12)
+  ax1.set_title('Position Uncertainty vs Time', fontsize=13)
+  ax1.grid(True, alpha=0.3, which='both')
+
+  # Plot 2: Velocity uncertainty (1-sigma and 3-sigma)
+  ax2 = axes[1]
+  ax2.semilogy(time_min, sigma_vel, 'b-', linewidth=2, label='1-sigma (RSS)')
+  ax2.semilogy(time_min, 3 * sigma_vel, 'r--', linewidth=1.5, label='3-sigma (RSS)')
+  ax2.set_xlabel('Time [min]', fontsize=12)
+  ax2.set_ylabel('Velocity Uncertainty [m/s]', fontsize=12)
+  ax2.set_title('Velocity Uncertainty vs Time', fontsize=13)
+  ax2.grid(True, alpha=0.3, which='both')
+
+  # Add vertical lines at measurement update times
+  if measurement_times is not None and len(measurement_times) > 0:
+    meas_times_min = measurement_times / 60.0
+    for i, t in enumerate(meas_times_min):
+      label = 'Measurement Update' if i == 0 else None
+      ax1.axvline(x=t, color='green', linestyle='-', linewidth=0.5, alpha=0.5, label=label)
+      ax2.axvline(x=t, color='green', linestyle='-', linewidth=0.5, alpha=0.5, label=label)
+
+  ax1.legend(loc='best', fontsize=10)
+  ax2.legend(loc='best', fontsize=10)
+
+  # Overall figure title
+  fig.suptitle(title_text, fontsize=14, fontweight='bold')
+  fig.tight_layout(rect=[0, 0, 1, 0.97])
+
+  return fig
+
+
+def plot_covariance_components(
+  covariances       : np.ndarray,
+  time_s            : np.ndarray,
+  title_text        : str = "State Uncertainty Components",
+  measurement_times : Optional[np.ndarray] = None,
+) -> Figure:
+  """
+  Plot individual state uncertainty components over time.
+
+  Creates a 2x1 grid showing:
+    - Position component uncertainties (x, y, z) vs time
+    - Velocity component uncertainties (vx, vy, vz) vs time
+
+  Input:
+  ------
+    covariances : np.ndarray (6, 6, N)
+      State covariance matrices at each time step.
+    time_s : np.ndarray (N,)
+      Time array in seconds from epoch.
+    title_text : str
+      Title for the figure.
+    measurement_times : np.ndarray, optional
+      Times when measurements were incorporated [s]. If provided, vertical
+      lines are drawn at these times to indicate state updates.
+
+  Output:
+  -------
+    fig : Figure
+      Matplotlib figure containing the component uncertainty plots.
+  """
+  # Extract standard deviations (1-sigma) for each state component
+  sigma_x  = np.sqrt(covariances[0, 0, :])  # Position x uncertainty [m]
+  sigma_y  = np.sqrt(covariances[1, 1, :])  # Position y uncertainty [m]
+  sigma_z  = np.sqrt(covariances[2, 2, :])  # Position z uncertainty [m]
+  sigma_vx = np.sqrt(covariances[3, 3, :])  # Velocity x uncertainty [m/s]
+  sigma_vy = np.sqrt(covariances[4, 4, :])  # Velocity y uncertainty [m/s]
+  sigma_vz = np.sqrt(covariances[5, 5, :])  # Velocity z uncertainty [m/s]
+
+  # Convert time to minutes
+  time_min = time_s / 60.0
+
+  # Create figure with 2 subplots
+  fig, axes = plt.subplots(2, 1, figsize=(12, 8))
+
+  # Plot 1: Position component uncertainties (1-sigma)
+  ax1 = axes[0]
+  ax1.semilogy(time_min, sigma_x, 'r-', linewidth=1.5, label='σx')
+  ax1.semilogy(time_min, sigma_y, 'g-', linewidth=1.5, label='σy')
+  ax1.semilogy(time_min, sigma_z, 'b-', linewidth=1.5, label='σz')
+  ax1.set_xlabel('Time [min]', fontsize=12)
+  ax1.set_ylabel('Position Uncertainty [m]', fontsize=12)
+  ax1.set_title('Position Component Uncertainties (1-sigma)', fontsize=13)
+  ax1.grid(True, alpha=0.3, which='both')
+
+  # Plot 2: Velocity component uncertainties (1-sigma)
+  ax2 = axes[1]
+  ax2.semilogy(time_min, sigma_vx, 'r-', linewidth=1.5, label='σvx')
+  ax2.semilogy(time_min, sigma_vy, 'g-', linewidth=1.5, label='σvy')
+  ax2.semilogy(time_min, sigma_vz, 'b-', linewidth=1.5, label='σvz')
+  ax2.set_xlabel('Time [min]', fontsize=12)
+  ax2.set_ylabel('Velocity Uncertainty [m/s]', fontsize=12)
+  ax2.set_title('Velocity Component Uncertainties (1-sigma)', fontsize=13)
+  ax2.grid(True, alpha=0.3, which='both')
+
+  # Add vertical lines at measurement update times
+  if measurement_times is not None and len(measurement_times) > 0:
+    meas_times_min = measurement_times / 60.0
+    for i, t in enumerate(meas_times_min):
+      label = 'Measurement Update' if i == 0 else None
+      ax1.axvline(x=t, color='gray', linestyle='-', linewidth=0.5, alpha=0.5, label=label)
+      ax2.axvline(x=t, color='gray', linestyle='-', linewidth=0.5, alpha=0.5, label=label)
+
+  ax1.legend(loc='best', fontsize=10)
+  ax2.legend(loc='best', fontsize=10)
+
+  # Overall figure title
+  fig.suptitle(title_text, fontsize=14, fontweight='bold')
+  fig.tight_layout(rect=[0, 0, 1, 0.97])
+
+  return fig
