@@ -213,7 +213,7 @@ def plot_ground_track(
   Input:
   ------
     result : PropagationResult
-      Propagation result containing 'state' (6xN array) and 'plot_time_s'.
+      Propagation result containing 'state' (6xN array) and 'plot_delta_time'.
     epoch_dt_utc : datetime, optional
       Reference epoch (start time) for time conversion to ET.
     title_text : str
@@ -229,7 +229,7 @@ def plot_ground_track(
   # Extract J2000 state vectors
   j2000_state   = result.state
   j2000_pos_vec = j2000_state[0:3, :]
-  time_s        = result.plot_time_s
+  time_s        = result.plot_delta_time
   n_points      = j2000_state.shape[1]
   
   # Convert epoch to ET

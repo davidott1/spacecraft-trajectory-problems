@@ -99,27 +99,27 @@ class TopocentricState:
   Topocentric coordinates and rates from a ground station.
 
   Attributes:
-    time_s        : time array relative to epoch [s], shape (N,)
-    azimuth       : azimuth angle [rad], shape (N,)
-    elevation     : elevation angle [rad], shape (N,)
-    range         : range [m], shape (N,)
-    azimuth_dot   : azimuth rate [rad/s], shape (N,), optional
-    elevation_dot : elevation rate [rad/s], shape (N,), optional
-    range_dot     : range rate [m/s], shape (N,), optional
+    delta_time_epoch : time array relative to epoch, shape (N,)
+    azimuth          : azimuth angle [rad], shape (N,)
+    elevation        : elevation angle [rad], shape (N,)
+    range            : range [m], shape (N,)
+    azimuth_dot      : azimuth rate [rad/s], shape (N,), optional
+    elevation_dot    : elevation rate [rad/s], shape (N,), optional
+    range_dot        : range rate [m/s], shape (N,), optional
   """
-  time_s        : np.ndarray
-  azimuth       : np.ndarray
-  elevation     : np.ndarray
-  range         : np.ndarray
-  azimuth_dot   : Optional[np.ndarray] = None
-  elevation_dot : Optional[np.ndarray] = None
-  range_dot     : Optional[np.ndarray] = None
+  delta_time_epoch : np.ndarray
+  azimuth          : np.ndarray
+  elevation        : np.ndarray
+  range            : np.ndarray
+  azimuth_dot      : Optional[np.ndarray] = None
+  elevation_dot    : Optional[np.ndarray] = None
+  range_dot        : Optional[np.ndarray] = None
 
   def __post_init__(self):
-    self.time_s    = np.asarray(self.time_s)
-    self.azimuth   = np.asarray(self.azimuth)
-    self.elevation = np.asarray(self.elevation)
-    self.range     = np.asarray(self.range)
+    self.delta_time_epoch = np.asarray(self.delta_time_epoch)
+    self.azimuth          = np.asarray(self.azimuth)
+    self.elevation        = np.asarray(self.elevation)
+    self.range            = np.asarray(self.range)
     if self.azimuth_dot is not None:
       self.azimuth_dot = np.asarray(self.azimuth_dot)
     if self.elevation_dot is not None:
@@ -129,7 +129,7 @@ class TopocentricState:
 
   @property
   def n_points(self) -> int:
-    return len(self.time_s)
+    return len(self.delta_time_epoch)
 
   @property
   def has_rates(self) -> bool:
@@ -169,13 +169,13 @@ class SimulatedMeasurements:
     Return truth values only for visible points.
     """
     return TopocentricState(
-      time_s        = self.truth.time_s[self.visible_mask],
-      azimuth       = self.truth.azimuth[self.visible_mask],
-      elevation     = self.truth.elevation[self.visible_mask],
-      range         = self.truth.range[self.visible_mask],
-      azimuth_dot   = self.truth.azimuth_dot[self.visible_mask]   if self.truth.azimuth_dot   is not None else None,
-      elevation_dot = self.truth.elevation_dot[self.visible_mask] if self.truth.elevation_dot is not None else None,
-      range_dot     = self.truth.range_dot[self.visible_mask]     if self.truth.range_dot     is not None else None,
+      delta_time_epoch = self.truth.delta_time_epoch[self.visible_mask],
+      azimuth          = self.truth.azimuth[self.visible_mask],
+      elevation        = self.truth.elevation[self.visible_mask],
+      range            = self.truth.range[self.visible_mask],
+      azimuth_dot      = self.truth.azimuth_dot[self.visible_mask]   if self.truth.azimuth_dot   is not None else None,
+      elevation_dot    = self.truth.elevation_dot[self.visible_mask] if self.truth.elevation_dot is not None else None,
+      range_dot        = self.truth.range_dot[self.visible_mask]     if self.truth.range_dot     is not None else None,
     )
 
   def get_visible_measured(self) -> TopocentricState:
@@ -183,11 +183,11 @@ class SimulatedMeasurements:
     Return measured (noisy) values only for visible points.
     """
     return TopocentricState(
-      time_s        = self.measured.time_s[self.visible_mask],
-      azimuth       = self.measured.azimuth[self.visible_mask],
-      elevation     = self.measured.elevation[self.visible_mask],
-      range         = self.measured.range[self.visible_mask],
-      azimuth_dot   = self.measured.azimuth_dot[self.visible_mask]   if self.measured.azimuth_dot   is not None else None,
-      elevation_dot = self.measured.elevation_dot[self.visible_mask] if self.measured.elevation_dot is not None else None,
-      range_dot     = self.measured.range_dot[self.visible_mask]     if self.measured.range_dot     is not None else None,
+      delta_time_epoch = self.measured.delta_time_epoch[self.visible_mask],
+      azimuth          = self.measured.azimuth[self.visible_mask],
+      elevation        = self.measured.elevation[self.visible_mask],
+      range            = self.measured.range[self.visible_mask],
+      azimuth_dot      = self.measured.azimuth_dot[self.visible_mask]   if self.measured.azimuth_dot   is not None else None,
+      elevation_dot    = self.measured.elevation_dot[self.visible_mask] if self.measured.elevation_dot is not None else None,
+      range_dot        = self.measured.range_dot[self.visible_mask]     if self.measured.range_dot     is not None else None,
     )

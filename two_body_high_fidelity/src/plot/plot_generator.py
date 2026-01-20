@@ -83,7 +83,7 @@ def generate_error_plots(
 
   # High-Fidelity Relative To SGP4 (compare at equal grid times)
   if compare_tle and has_high_fidelity and has_sgp4:
-    # Use equal grid data (main plot_time_s, state, coe)
+    # Use equal grid data (main plot_delta_time, state, coe)
     fig_err_ts = plot_time_series_error(
       result_ref  = result_sgp4_propagation,
       result_comp = result_high_fidelity_propagation,
@@ -549,13 +549,13 @@ def generate_plots(
 
     try:
       # Use the dedicated covariance time array (includes pre-update and post-update times for sawtooth)
-      time_s = od_estimation_times
+      delta_time_epoch = od_estimation_times
 
       # Plot 1: Covariance time series (RSS uncertainties with 1-sigma and 3-sigma)
       cov_ts_title = f'State Uncertainty Evolution - {object_name_display} - Orbit Determination'
       fig_cov_ts = plot_covariance_timeseries(
         covariances       = od_covariances,
-        time_s            = time_s,
+        delta_time_epoch  = delta_time_epoch,
         title_text        = cov_ts_title,
         measurement_times = od_measurement_times,
       )
@@ -568,7 +568,7 @@ def generate_plots(
       cov_comp_title = f'State Uncertainty Components - {object_name_display} - Orbit Determination'
       fig_cov_comp = plot_covariance_components(
         covariances       = od_covariances,
-        time_s            = time_s,
+        delta_time_epoch  = delta_time_epoch,
         title_text        = cov_comp_title,
         measurement_times = od_measurement_times,
       )

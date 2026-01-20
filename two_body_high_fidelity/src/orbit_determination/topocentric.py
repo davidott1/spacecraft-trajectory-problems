@@ -29,7 +29,7 @@ def compute_topocentric_coordinates(
   Input:
   ------
     result : PropagationResult
-      Propagation result containing 'state' (6xN array) and 'plot_time_s'.
+      Propagation result containing 'state' (6xN array) and 'plot_delta_time'.
     tracker : TrackerStation
       Ground tracking station with latitude, longitude, altitude.
     epoch_dt_utc : datetime, optional
@@ -43,7 +43,7 @@ def compute_topocentric_coordinates(
   # Extract J2000 state vectors
   j2000_state   = result.state
   j2000_pos_vec = j2000_state[0:3, :]
-  time_s        = result.plot_time_s
+  time_s        = result.plot_delta_time
   n_points      = j2000_state.shape[1]
 
   # Convert epoch to ET
@@ -95,7 +95,7 @@ def compute_topocentric_coordinates_with_rates(
   Input:
   ------
     result : PropagationResult
-      Propagation result containing 'state' (6xN array) and 'plot_time_s'.
+      Propagation result containing 'state' (6xN array) and 'plot_delta_time'.
     tracker : TrackerStation
       Ground tracking station with latitude, longitude, altitude.
     epoch_dt_utc : datetime, optional
@@ -111,7 +111,7 @@ def compute_topocentric_coordinates_with_rates(
   j2000_state   = result.state
   j2000_pos_vec = j2000_state[0:3, :]
   j2000_vel_vec = j2000_state[3:6, :]
-  time_s        = result.plot_time_s
+  time_s        = result.plot_delta_time
   n_points      = j2000_state.shape[1]
 
   # Convert epoch to ET

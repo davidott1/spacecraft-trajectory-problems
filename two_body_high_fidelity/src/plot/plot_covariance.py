@@ -13,7 +13,7 @@ from typing import Optional
 
 def plot_covariance_timeseries(
   covariances       : np.ndarray,
-  time_s            : np.ndarray,
+  delta_time_epoch  : np.ndarray,
   title_text        : str = "State Covariance Evolution",
   measurement_times : Optional[np.ndarray] = None,
 ) -> Figure:
@@ -29,13 +29,13 @@ def plot_covariance_timeseries(
     covariances : np.ndarray (6, 6, N)
       State covariance matrices at each time step.
       Shape: (6, 6, N) where N is number of time steps.
-    time_s : np.ndarray (N,)
-      Time array in seconds from epoch.
+    delta_time_epoch : np.ndarray (N,)
+      Time array relative to epoch.
     title_text : str
       Title for the figure.
     measurement_times : np.ndarray, optional
-      Times when measurements were incorporated [s]. If provided, vertical
-      lines are drawn at these times to indicate state updates.
+      Times when measurements were incorporated relative to epoch. If provided,
+      vertical lines are drawn at these times to indicate state updates.
 
   Output:
   -------
@@ -57,7 +57,7 @@ def plot_covariance_timeseries(
   sigma_vel = np.sqrt(sigma_vx**2 + sigma_vy**2 + sigma_vz**2)  # Total velocity uncertainty [m/s]
 
   # Convert time to minutes
-  time_min = time_s / 60.0
+  time_min = delta_time_epoch / 60.0
 
   # Create figure with 2 subplots (position and velocity)
   fig, axes = plt.subplots(2, 1, figsize=(12, 8))
@@ -100,7 +100,7 @@ def plot_covariance_timeseries(
 
 def plot_covariance_components(
   covariances       : np.ndarray,
-  time_s            : np.ndarray,
+  delta_time_epoch  : np.ndarray,
   title_text        : str = "State Uncertainty Components",
   measurement_times : Optional[np.ndarray] = None,
 ) -> Figure:
@@ -115,13 +115,13 @@ def plot_covariance_components(
   ------
     covariances : np.ndarray (6, 6, N)
       State covariance matrices at each time step.
-    time_s : np.ndarray (N,)
-      Time array in seconds from epoch.
+    delta_time_epoch : np.ndarray (N,)
+      Time array relative to epoch.
     title_text : str
       Title for the figure.
     measurement_times : np.ndarray, optional
-      Times when measurements were incorporated [s]. If provided, vertical
-      lines are drawn at these times to indicate state updates.
+      Times when measurements were incorporated relative to epoch. If provided,
+      vertical lines are drawn at these times to indicate state updates.
 
   Output:
   -------
@@ -137,7 +137,7 @@ def plot_covariance_components(
   sigma_vz = np.sqrt(covariances[5, 5, :])  # Velocity z uncertainty [m/s]
 
   # Convert time to minutes
-  time_min = time_s / 60.0
+  time_min = delta_time_epoch / 60.0
 
   # Create figure with 2 subplots
   fig, axes = plt.subplots(2, 1, figsize=(12, 8))

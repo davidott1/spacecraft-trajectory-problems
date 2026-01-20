@@ -34,7 +34,7 @@ def plot_skyplot(
   Input:
   ------
     result : PropagationResult
-      Propagation result containing 'state' (6xN array) and 'plot_time_s'.
+      Propagation result containing 'state' (6xN array) and 'plot_delta_time'.
     tracker : TrackerStation
       Ground tracking station with latitude, longitude, altitude.
     epoch_dt_utc : datetime, optional
@@ -66,10 +66,10 @@ def plot_skyplot(
   el_deg_truth  = topo_truth.elevation * CONVERTER.DEG_PER_RAD
 
   # Get time from appropriate source
-  if hasattr(topo_truth, 'time_s'):
-    time_s = topo_truth.time_s  # From TopocentricState (SimulatedMeasurements)
+  if hasattr(topo_truth, 'delta_time_epoch'):
+    delta_time_epoch = topo_truth.delta_time_epoch  # From TopocentricState (SimulatedMeasurements)
   else:
-    time_s = result.plot_time_s  # From PropagationResult (compute_topocentric_coordinates_with_rates)
+    delta_time_epoch = result.plot_delta_time  # From PropagationResult (compute_topocentric_coordinates_with_rates)
 
   range_m_truth = topo_truth.range
 
@@ -254,7 +254,7 @@ def plot_skyplot(
     # Truth data
     seg_theta_truth          = theta_truth[seg_start:seg_end]
     seg_radius_truth         = radius_truth[seg_start:seg_end]
-    seg_time                 = time_s[seg_start:seg_end]
+    seg_time                 = delta_time_epoch[seg_start:seg_end]
     seg_marker_sizes_truth   = marker_sizes_truth[seg_start:seg_end]
     seg_range                = range_m[seg_start:seg_end]
     seg_constraint_valid     = constraint_valid_mask[seg_start:seg_end]
@@ -323,7 +323,7 @@ def plot_skyplot(
     ax.scatter([theta[0]], [radius[0]], s=120, marker='s', facecolors='none', 
               edgecolors='black', linewidths=2, zorder=10)
     if epoch_dt_utc is not None:
-      initial_dt = epoch_dt_utc + timedelta(seconds=time_s[0])
+      initial_dt = epoch_dt_utc + timedelta(seconds=delta_time_epoch[0])
       initial_label = initial_dt.strftime('%Y-%m-%d %H:%M:%S')
       ax.annotate(f'Initial\n{initial_label}', (theta[0], radius[0]), 
                  textcoords='offset points', xytext=(8, 8), fontsize=8,
@@ -335,7 +335,7 @@ def plot_skyplot(
     ax.scatter([theta[-1]], [radius[-1]], s=120, marker='s', facecolors='none',
               edgecolors='black', linewidths=2, zorder=10)
     if epoch_dt_utc is not None:
-      final_dt = epoch_dt_utc + timedelta(seconds=time_s[-1])
+      final_dt = epoch_dt_utc + timedelta(seconds=delta_time_epoch[-1])
       final_label = final_dt.strftime('%Y-%m-%d %H:%M:%S')
       ax.annotate(f'Final\n{final_label}', (theta[-1], radius[-1]),
                  textcoords='offset points', xytext=(8, -12), fontsize=8,
@@ -349,7 +349,7 @@ def plot_skyplot(
               facecolors='none', edgecolors='black', linewidths=2, zorder=11,
               label=f'Max Elevation ({el_deg[max_el_idx]:.1f}°)')
     if epoch_dt_utc is not None:
-      tca_dt = epoch_dt_utc + timedelta(seconds=time_s[max_el_idx])
+      tca_dt = epoch_dt_utc + timedelta(seconds=delta_time_epoch[max_el_idx])
       tca_label = tca_dt.strftime('%Y-%m-%d %H:%M:%S')
       ax.annotate(f'Max Elevation\n{tca_label}', (theta[max_el_idx], radius[max_el_idx]),
                  textcoords='offset points', xytext=(12, 13), fontsize=8,
@@ -368,7 +368,7 @@ def plot_skyplot(
               facecolors='none', edgecolors='black', linewidths=2, zorder=11,
               label=f'Min Range ({min_range_km:.0f} km)')
     if epoch_dt_utc is not None:
-      min_range_dt = epoch_dt_utc + timedelta(seconds=time_s[min_range_idx])
+      min_range_dt = epoch_dt_utc + timedelta(seconds=delta_time_epoch[min_range_idx])
       min_range_label = min_range_dt.strftime('%Y-%m-%d %H:%M:%S')
       ax.annotate(f'Min Range\n{min_range_label}', (theta[min_range_idx], radius[min_range_idx]),
                  textcoords='offset points', xytext=(13, -27), fontsize=8,
@@ -386,7 +386,7 @@ def plot_skyplot(
   
   if epoch_dt_utc is not None:
     start_time_iso_utc = epoch_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
-    end_time_dt_utc    = epoch_dt_utc + timedelta(seconds=time_s[-1])
+    end_time_dt_utc    = epoch_dt_utc + timedelta(seconds=delta_time_epoch[-1])
     end_time_iso_utc   = end_time_dt_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
     info_text += f"\nInitial: {start_time_iso_utc}  |  Final: {end_time_iso_utc}"
   
@@ -397,8 +397,8 @@ def plot_skyplot(
   max_elevation = np.max(el_deg)
   
   # Compute time step between points
-  if len(time_s) > 1:
-    dt_step = time_s[1] - time_s[0]
+  if len(delta_time_epoch) > 1:
+    dt_step = delta_time_epoch[1] - delta_time_epoch[0]
   else:
     dt_step = 0.0
   
@@ -448,7 +448,7 @@ def plot_skyplot(
   # ============================================
 
   # Convert time to hours for better readability
-  time_hrs = time_s / 3600.0
+  time_hrs = delta_time_epoch / 3600.0
 
   # Create three subplots in the middle column (stacked vertically)
   ax_range = fig.add_subplot(3, 3, 2)
@@ -559,9 +559,9 @@ def plot_skyplot(
   ax_az.set_xticklabels([])
 
   # Plot Elevation vs Time
-  # Convert time_s to UTC datetime for x-axis
+  # Convert delta_time_epoch to UTC datetime for x-axis
   if epoch_dt_utc is not None:
-    time_utc = [epoch_dt_utc + timedelta(seconds=float(t)) for t in time_s]
+    time_utc = [epoch_dt_utc + timedelta(seconds=float(t)) for t in delta_time_epoch]
 
   # Thin black line for entire solution (not in legend)
   if epoch_dt_utc is not None:
@@ -754,7 +754,7 @@ def plot_pass_timeseries(
   Input:
   ------
     result : PropagationResult
-      Propagation result containing 'state' (6xN array) and 'plot_time_s'.
+      Propagation result containing 'state' (6xN array) and 'plot_delta_time'.
     tracker : TrackerStation
       Ground tracking station with latitude, longitude, altitude.
     epoch_dt_utc : datetime, optional
@@ -773,7 +773,7 @@ def plot_pass_timeseries(
   # Convert to degrees for display
   az_deg  = topo.azimuth   * CONVERTER.DEG_PER_RAD
   el_deg  = topo.elevation * CONVERTER.DEG_PER_RAD
-  time_s  = result.plot_time_s
+  delta_time_epoch  = result.plot_delta_time
   
   # Get rates (convert angular rates to deg/s)
   az_dot_deg  = topo.azimuth_dot   * CONVERTER.DEG_PER_RAD if topo.azimuth_dot is not None else None
@@ -883,7 +883,7 @@ def plot_pass_timeseries(
 
   # Convert time to UTC datetime if epoch provided
   if epoch_dt_utc is not None:
-    time_utc = [epoch_dt_utc + timedelta(seconds=float(t)) for t in time_s]
+    time_utc = [epoch_dt_utc + timedelta(seconds=float(t)) for t in delta_time_epoch]
 
   # Y-label alignment coordinate
   ylabel_x = -0.15
@@ -900,7 +900,7 @@ def plot_pass_timeseries(
     col = pass_idx
 
     # Extract segment data
-    seg_time_s    = time_s[seg_start:seg_end]
+    seg_time_s    = delta_time_epoch[seg_start:seg_end]
     seg_range_km  = range_km[seg_start:seg_end]
     seg_az_deg    = az_deg[seg_start:seg_end]
     seg_el_deg    = el_deg[seg_start:seg_end]
@@ -1019,7 +1019,7 @@ def plot_error_skyplot(
   topo_truth = measurements.truth
   topo_meas  = measurements.measured
   tracker    = measurements.tracker
-  time_s     = topo_truth.time_s
+  delta_time_epoch = topo_truth.delta_time_epoch
 
   # Convert to degrees for display
   az_meas_deg  = topo_meas.azimuth   * CONVERTER.DEG_PER_RAD
@@ -1145,7 +1145,7 @@ def plot_error_skyplot(
 
   # Convert time to UTC datetime if epoch provided
   if epoch_dt_utc is not None:
-    time_utc = [epoch_dt_utc + timedelta(seconds=float(t)) for t in time_s]
+    time_utc = [epoch_dt_utc + timedelta(seconds=float(t)) for t in delta_time_epoch]
 
   # Y-label alignment coordinate
   ylabel_x = -0.15
@@ -1162,7 +1162,7 @@ def plot_error_skyplot(
     col = pass_idx
 
     # Extract segment error data
-    seg_time_s      = time_s[seg_start:seg_end]
+    seg_time_s      = delta_time_epoch[seg_start:seg_end]
     seg_range_err   = range_err_km[seg_start:seg_end]
     seg_az_err      = az_err_deg[seg_start:seg_end]
     seg_el_err      = el_err_deg[seg_start:seg_end]
@@ -1286,19 +1286,19 @@ def plot_measurement_errors(
   measured = measurements.measured
 
   # Get time array
-  if hasattr(truth, 'time_s'):
-    time_s = truth.time_s
+  if hasattr(truth, 'delta_time_epoch'):
+    delta_time_epoch = truth.delta_time_epoch
   else:
     # Should not happen with SimulatedMeasurements, but fallback
-    time_s = np.arange(len(truth.azimuth)) * 10.0  # Dummy time
+    delta_time_epoch = np.arange(len(truth.azimuth)) * 10.0  # Dummy time
 
   # Convert to hours or UTC datetime
   if epoch_dt_utc is not None:
-    time_utc = [epoch_dt_utc + timedelta(seconds=float(t)) for t in time_s]
+    time_utc = [epoch_dt_utc + timedelta(seconds=float(t)) for t in delta_time_epoch]
     time_x = time_utc
     xlabel = 'UTC Time'
   else:
-    time_hrs = time_s / 3600.0
+    time_hrs = delta_time_epoch / 3600.0
     time_x = time_hrs
     xlabel = 'Time [hours]'
 

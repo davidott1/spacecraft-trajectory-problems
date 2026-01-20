@@ -364,20 +364,20 @@ def main(
       measurements.measured = measurements.get_visible_measured()
 
       # Store measurement times for plotting (only visible times)
-      od_measurement_times = measurements.measured.time_s.copy()
+      od_measurement_times = measurements.measured.delta_time_epoch.copy()
 
       # Use ephemeris initial state as initial guess (this is what we would have from propagation)
       print(f"  Using ephemeris initial state as initial guess")
       initial_guess = initial_state.copy()
 
       # Process with EKF
-      print(f"  Processing {len(measurements.measured.time_s)} measurements with EKF")
+      print(f"  Processing {len(measurements.measured.delta_time_epoch)} measurements with EKF")
       od_estimated_states, od_covariances, od_estimation_times = process_measurements_with_ekf(
         measurements       = measurements,
         tracker            = tracker_od,
         initial_state      = initial_guess,
         epoch_dt_utc       = config.time_o_dt,
-        ephemeris_times    = result_jpl_horizons_ephemeris.plot_time_s,
+        ephemeris_times    = result_jpl_horizons_ephemeris.plot_delta_time,
         propagation_times  = None,  # Use ephemeris_times
         initial_covariance = None,  # Use defaults
         process_noise      = None,  # Use defaults

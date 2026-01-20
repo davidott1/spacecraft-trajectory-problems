@@ -471,7 +471,7 @@ def run_high_fidelity_propagation(
   # Calculate Ephemeris Times (ET) for integration
   time_et_o    = utc_to_et(propagation_config.time_o_dt)
   time_et_f    = utc_to_et(propagation_config.time_f_dt)
-  delta_time_s = (propagation_config.time_f_dt - propagation_config.time_o_dt).total_seconds()
+  delta_time_epoch = (propagation_config.time_f_dt - propagation_config.time_o_dt).total_seconds()
 
   # Extract the actual gravity model from the namespace
   spherical_harmonics_model = two_body_gravity_model.spherical_harmonics.model
@@ -511,7 +511,7 @@ def run_high_fidelity_propagation(
     else:
       points_per_period = 100
 
-    num_periods       = abs(delta_time_s) / period
+    num_periods       = abs(delta_time_epoch) / period
     num_grid_points   = int(num_periods * points_per_period)
 
     # Ensure reasonable limits
@@ -552,19 +552,19 @@ def run_high_fidelity_propagation(
     # Store integration time (ET)
     result_high_fidelity.integ_time_et = result_high_fidelity.time
     # Create plotting time array (seconds from time_o)
-    result_high_fidelity.plot_time_s = result_high_fidelity.time - time_et_o
+    result_high_fidelity.plot_delta_time = result_high_fidelity.time - time_et_o
     # Create time grid for skyplot and other uses
     result_high_fidelity.time_grid = TimeGrid(
-      epoch_dt = propagation_config.time_o_dt,
-      epoch_et = time_et_o,
-      time_s   = result_high_fidelity.plot_time_s,
+      epoch_dt         = propagation_config.time_o_dt,
+      epoch_et         = time_et_o,
+      delta_time_epoch = result_high_fidelity.plot_delta_time,
     )
 
     # If comparing to Horizons, interpolate to ephemeris times and store separately
     if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
       print("    Interpolate to ephemeris time points")
 
-      ephem_times_s = result_jpl_horizons_ephemeris.plot_time_s
+      ephem_times_s = result_jpl_horizons_ephemeris.plot_delta_time
       ephem_times_et = ephem_times_s + time_et_o
 
       # Interpolate state to ephemeris times
@@ -636,7 +636,7 @@ def run_high_fidelity_propagation(
       result_high_fidelity.at_ephem_times = PropagationResult(
         success       = True,
         message       = "Interpolated to ephemeris times",
-        plot_time_s   = ephem_times_s,
+        plot_delta_time   = ephem_times_s,
         integ_time_et = ephem_times_et,
         state         = state_at_ephem,
         coe           = coe_at_ephem,
@@ -651,7 +651,7 @@ def run_high_fidelity_propagation(
     print(f"      Timespan")
     print(f"        Initial  : {propagation_config.time_o_dt} UTC / {time_et_o:.6f} ET")
     print(f"        Final    : {propagation_config.time_f_dt} UTC / {time_et_f:.6f} ET")
-    print(f"        Duration : {delta_time_s} s")
+    print(f"        Duration : {delta_time_epoch} s")
     print(f"      Forces")
     print(f"        Gravity")
     print(f"          Earth")
@@ -831,7 +831,7 @@ def run_sgp4_propagation(
   # Calculate times relative to TLE epoch
   time_offset_o_s = (propagation_config.time_o_dt - tle_epoch_dt).total_seconds()
   time_offset_f_s = (propagation_config.time_f_dt - tle_epoch_dt).total_seconds()
-  delta_time_s = time_offset_f_s - time_offset_o_s
+  delta_time_epoch = time_offset_f_s - time_offset_o_s
   
   # Create time grid (seconds from TLE epoch)
   if time_eval_s is not None:
@@ -852,7 +852,7 @@ def run_sgp4_propagation(
   print(f"    Timespan")
   print(f"      Initial  : {propagation_config.time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {time_et_o:.6f} ET")
   print(f"      Final    : {propagation_config.time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / {time_et_f:.6f} ET")
-  print(f"      Duration : {delta_time_s:.1f} s")
+  print(f"      Duration : {delta_time_epoch:.1f} s")
   print(f"      Grid     : {grid_type_str}")
 
   print("\n  Compute")
@@ -871,14 +871,14 @@ def run_sgp4_propagation(
     return None
 
   # Store integration time (seconds from TLE epoch)
-  result_sgp4.integ_time_s = result_sgp4.time
+  result_sgp4.integ_delta_time_epoch = result_sgp4.time
   
   # Create plotting time array (seconds from time_o)
-  result_sgp4.plot_time_s = result_sgp4.time - time_offset_o_s
+  result_sgp4.plot_delta_time = result_sgp4.time - time_offset_o_s
   
   # If comparing to Horizons, also propagate at ephemeris times
   if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
-    ephem_times_s = result_jpl_horizons_ephemeris.plot_time_s  # seconds from time_o
+    ephem_times_s = result_jpl_horizons_ephemeris.plot_delta_time  # seconds from time_o
     ephem_times_from_tle = ephem_times_s + time_offset_o_s  # seconds from TLE epoch
     
     print(f"    Propagating at {len(ephem_times_from_tle)} ephemeris time points ... ", end='', flush=True)
@@ -895,8 +895,8 @@ def run_sgp4_propagation(
       result_sgp4.at_ephem_times = PropagationResult(
         success      = True,
         message      = "Interpolated to ephemeris times",
-        plot_time_s  = ephem_times_s,
-        integ_time_s = ephem_times_from_tle,
+        plot_delta_time  = ephem_times_s,
+        integ_delta_time_epoch = ephem_times_from_tle,
         state        = result_sgp4_at_ephem.state,
         coe          = result_sgp4_at_ephem.coe,
         mee          = result_sgp4_at_ephem.mee,
@@ -966,7 +966,7 @@ def run_propagations(
     # Use high-fidelity time grid if available for direct comparison
     time_eval_s = None
     if result_high_fidelity.success:
-      time_eval_s = result_high_fidelity.plot_time_s
+      time_eval_s = result_high_fidelity.plot_delta_time
     
     result_sgp4 = run_sgp4_propagation(
       result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
