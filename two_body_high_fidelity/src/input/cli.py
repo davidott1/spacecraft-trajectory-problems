@@ -74,6 +74,7 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
     'tracker_filename': 'tracker_filename',
     'tracker_filepath': 'tracker_filepath',
     'include_tracker_on_body': 'include_tracker_on_body',
+    'include_orbit_determination': 'include_orbit_determination',
   }
 
   # Process each config key
@@ -154,7 +155,8 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
           setattr(args, arg_name, config_value)
 
     elif arg_name in ['include_drag', 'include_srp', 'compare_tle', 'compare_jpl_horizons',
-                      'auto_download', 'include_tracker_skyplots', 'include_tracker_on_body']:
+                      'auto_download', 'include_tracker_skyplots', 'include_tracker_on_body',
+                      'include_orbit_determination']:
       # Boolean flags - only override if CLI kept the default False
       if not current_value:
         setattr(args, arg_name, config_value)
@@ -361,6 +363,14 @@ def parse_command_line_arguments(
     action  = 'store_true',
     default = False,
     help    = 'Show tracker location on ground track and 3D body-fixed plots (disabled by default).',
+  )
+
+  parser.add_argument(
+    '--include-orbit-determination',
+    dest    = 'include_orbit_determination',
+    action  = 'store_true',
+    default = False,
+    help    = 'Process measurements with EKF for orbit determination. When enabled, high-fidelity plots show estimated states instead of propagated states (disabled by default).',
   )
 
   # Parse arguments

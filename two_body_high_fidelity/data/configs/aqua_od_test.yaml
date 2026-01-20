@@ -1,0 +1,23 @@
+# Orbit Determination Test Configuration
+#   This configuration tests the EKF-based orbit determination with simulated measurements
+
+# Initial state configuration
+initial_state_source: jpl_horizons
+initial_state_norad_id: 27424  # Aqua
+
+# Time span for propagation (short for testing)
+timespan: 2025-01-15T00:00:00 2025-01-15T02:00:00
+
+# Gravity model configuration (use J2 only for speed)
+gravity_harmonics_coefficients: J2
+
+# Comparison options
+compare_jpl_horizons: true
+
+# Tracker and orbit determination options
+include_tracker_skyplots: true
+tracker_filename: trackers_set1.yaml
+include_orbit_determination: true
+
+# Download options
+auto_download: true

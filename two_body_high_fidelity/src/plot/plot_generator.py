@@ -4,6 +4,7 @@ Plot generation orchestration functions.
 This module contains high-level functions that orchestrate the generation
 of multiple plots and manage saving them to disk.
 """
+import numpy as np
 import matplotlib.pyplot as plt
 
 from datetime import datetime
@@ -13,7 +14,8 @@ from typing   import Optional
 from src.plot.plot_3d                          import plot_3d_trajectories, plot_3d_trajectories_body_fixed, plot_3d_trajectory_sun_centered
 from src.plot.plot_timeseries                  import plot_time_series, plot_time_series_error
 from src.plot.plot_groundtrack                 import plot_ground_track
-from src.plot.plot_skyplot                     import plot_skyplot, plot_pass_timeseries, plot_error_skyplot
+from src.plot.plot_skyplot                     import plot_skyplot, plot_pass_timeseries, plot_measurement_errors, plot_error_skyplot
+from src.plot.plot_covariance                  import plot_covariance_timeseries, plot_covariance_components
 from src.schemas.propagation                   import PropagationResult
 from src.schemas.state                         import TrackerStation
 from src.orbit_determination.measurement_simulator import MeasurementSimulator
@@ -279,6 +281,10 @@ def generate_plots(
   object_name_display              : str  = "Object",
   trackers                         : Optional[list['TrackerStation']] = None,
   include_tracker_on_body          : bool = False,
+  od_covariances                   : Optional['np.ndarray'] = None,
+  od_estimation_times              : Optional['np.ndarray'] = None,
+  od_measurement_times             : Optional['np.ndarray'] = None,
+  include_orbit_determination      : bool = False,
 ) -> None:
   """
   Generate and save all simulation plots.
@@ -401,6 +407,7 @@ def generate_plots(
           noise_config = simulator.get_tracker_noise_config()
           measurements = simulator.simulate(noise_config=noise_config, seed=42, include_rates=True)
 
+          # Generate regular skyplot
           skyplot_title = f'Skyplot - {object_name_display} - JPL Horizons - {tracker.name}'
           fig_skyplot_horizons = plot_skyplot(
             result       = result_jpl_horizons_ephemeris,
@@ -413,6 +420,19 @@ def generate_plots(
           fig_skyplot_horizons.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
           plt.close(fig_skyplot_horizons)
           filenames.append(filename)
+
+          # Generate error skyplot
+          error_skyplot_title = f'Measurement Errors - {object_name_display} - JPL Horizons - {tracker.name}'
+          fig_error_skyplot = plot_measurement_errors(
+            measurements = measurements,
+            tracker      = tracker,
+            epoch_dt_utc = time_o_dt,
+            title_text   = error_skyplot_title,
+          )
+          error_filename = f'error_skyplot_{tracker_name_sanitized}_jpl_horizons_{name_lower}.png'
+          fig_error_skyplot.savefig(figures_folderpath / error_filename, dpi=300, bbox_inches='tight')
+          plt.close(fig_error_skyplot)
+          filenames.append(error_filename)
 
         skyplot_files[tracker.name] = filenames
 
@@ -520,6 +540,46 @@ def generate_plots(
       except Exception as e:
         print(f"      [WARNING] Failed to generate pass time-series for {tracker.name}: {e}")
 
+  # Generate covariance plots if orbit determination was performed
+  covariance_files = []
+  if include_orbit_determination and od_covariances is not None and od_estimation_times is not None:
+    print("    Generate covariance plots")
+
+    name_lower = object_name.lower().replace(' ', '_').replace('-', '_')
+
+    try:
+      # Use the dedicated covariance time array (includes pre-update and post-update times for sawtooth)
+      time_s = od_estimation_times
+
+      # Plot 1: Covariance time series (RSS uncertainties with 1-sigma and 3-sigma)
+      cov_ts_title = f'State Uncertainty Evolution - {object_name_display} - Orbit Determination'
+      fig_cov_ts = plot_covariance_timeseries(
+        covariances       = od_covariances,
+        time_s            = time_s,
+        title_text        = cov_ts_title,
+        measurement_times = od_measurement_times,
+      )
+      filename = f'covariance_timeseries_od_{name_lower}.png'
+      fig_cov_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+      plt.close(fig_cov_ts)
+      covariance_files.append(filename)
+
+      # Plot 2: Covariance components (individual x,y,z and vx,vy,vz)
+      cov_comp_title = f'State Uncertainty Components - {object_name_display} - Orbit Determination'
+      fig_cov_comp = plot_covariance_components(
+        covariances       = od_covariances,
+        time_s            = time_s,
+        title_text        = cov_comp_title,
+        measurement_times = od_measurement_times,
+      )
+      filename = f'covariance_components_od_{name_lower}.png'
+      fig_cov_comp.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+      plt.close(fig_cov_comp)
+      covariance_files.append(filename)
+
+    except Exception as e:
+      print(f"      [WARNING] Failed to generate covariance plots: {e}")
+
   print()
   print("  Summary")
   print(f"    Figure Folderpath : {figures_folderpath}")
@@ -606,3 +666,10 @@ def generate_plots(
         print(f"      Tracker {tracker_name}")
         for filename in filenames:
           print(f"        <figures_folderpath>/{filename}")
+
+  # Print Covariance Plots
+  if covariance_files:
+    print()
+    print("    Covariance Plots (Orbit Determination)")
+    for filename in covariance_files:
+      print(f"      <figures_folderpath>/{filename}")

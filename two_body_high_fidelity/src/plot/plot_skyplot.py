@@ -42,9 +42,9 @@ def plot_skyplot(
     title_text : str
       Base title for the plot.
     measurements : SimulatedMeasurements, optional
-      Simulated measurements with truth and measured (noisy) data.
-      If provided, both truth (blue) and measured (red) will be plotted.
-      If None, only the geometric calculation is plotted (blue).
+      Simulated measurements with truth data.
+      If provided, uses truth from measurements.
+      If None, computes topocentric coordinates from propagation result.
 
   Output:
   -------
@@ -55,13 +55,11 @@ def plot_skyplot(
 
   # If measurements are provided, use them; otherwise compute topocentric coordinates
   if measurements is not None:
-    # Use measurements from SimulatedMeasurements
+    # Use truth from SimulatedMeasurements
     topo_truth = measurements.truth
-    topo_measured = measurements.measured
   else:
     # Compute topocentric coordinates with rates (no measurements)
     topo_truth = compute_topocentric_coordinates_with_rates(result, tracker, epoch_dt_utc)
-    topo_measured = None
   
   # Convert truth to degrees for display
   az_deg_truth  = topo_truth.azimuth   * CONVERTER.DEG_PER_RAD
@@ -87,26 +85,6 @@ def plot_skyplot(
   # theta = azimuth (convert negative angles to positive for polar plotting: 0 to 2π)
   radius_truth = 90.0 - el_deg_truth
   theta_truth  = np.where(az_deg_truth >= 0, az_deg_truth, az_deg_truth + 360.0) * CONVERTER.RAD_PER_DEG
-
-  # Process measured data if available
-  if topo_measured is not None:
-    az_deg_measured  = topo_measured.azimuth   * CONVERTER.DEG_PER_RAD
-    el_deg_measured  = topo_measured.elevation * CONVERTER.DEG_PER_RAD
-    range_m_measured = topo_measured.range
-
-    # Normalize measured azimuth to -180° to +180° range
-    az_deg_measured = ((az_deg_measured + 180.0) % 360.0) - 180.0
-
-    # For polar plot
-    radius_measured = 90.0 - el_deg_measured
-    theta_measured  = np.where(az_deg_measured >= 0, az_deg_measured, az_deg_measured + 360.0) * CONVERTER.RAD_PER_DEG
-  else:
-    # No measured data - use truth for backward compatibility
-    az_deg_measured = az_deg_truth
-    el_deg_measured = el_deg_truth
-    range_m_measured = range_m_truth
-    radius_measured = radius_truth
-    theta_measured = theta_truth
 
   # Use truth for visibility and constraint checking
   az_deg = az_deg_truth
@@ -255,17 +233,6 @@ def plot_skyplot(
     marker_sizes_truth = marker_size_max - (range_m - range_min) / (range_max - range_min) * (marker_size_max - marker_size_min)
   else:
     marker_sizes_truth = np.full_like(range_m, (marker_size_min + marker_size_max) / 2)
-
-  # Compute marker sizes for measured data (if available)
-  if topo_measured is not None:
-    range_m_measured_arr = range_m_measured
-    # Use same range min/max for consistent scaling
-    if range_max > range_min:
-      marker_sizes_measured = marker_size_max - (range_m_measured_arr - range_min) / (range_max - range_min) * (marker_size_max - marker_size_min)
-    else:
-      marker_sizes_measured = np.full_like(range_m_measured_arr, (marker_size_min + marker_size_max) / 2)
-  else:
-    marker_sizes_measured = marker_sizes_truth
   
   # Find segments where satellite is visible
   segment_starts = []
@@ -293,16 +260,6 @@ def plot_skyplot(
     seg_constraint_valid     = constraint_valid_mask[seg_start:seg_end]
     seg_el_deg               = el_deg[seg_start:seg_end]
     seg_az_deg               = az_deg[seg_start:seg_end]
-
-    # Measured data (if available)
-    if topo_measured is not None:
-      seg_theta_measured       = theta_measured[seg_start:seg_end]
-      seg_radius_measured      = radius_measured[seg_start:seg_end]
-      seg_marker_sizes_measured = marker_sizes_measured[seg_start:seg_end]
-    else:
-      seg_theta_measured       = seg_theta_truth
-      seg_radius_measured      = seg_radius_truth
-      seg_marker_sizes_measured = seg_marker_sizes_truth
 
     # Plot trajectory
     if len(seg_time) > 0:
@@ -332,27 +289,6 @@ def plot_skyplot(
         if len(valid_indices) > 0:
           ax.scatter(seg_theta_truth[valid_indices], seg_radius_truth[valid_indices],
                     c='blue', s=seg_marker_sizes_truth[valid_indices], alpha=1.0, label='Truth' if seg_start == segment_starts[0] else '')
-
-      # Plot MEASURED data in RED on top (if available)
-      if topo_measured is not None:
-        # Plot red line segments for measured data
-        for i in range(len(seg_theta_measured) - 1):
-          if seg_constraint_valid[i] and seg_constraint_valid[i+1]:
-            # Both points valid - red solid line
-            ax.plot(seg_theta_measured[i:i+2], seg_radius_measured[i:i+2], 'r-', linewidth=1.5, alpha=0.7)
-          elif not seg_constraint_valid[i] and not seg_constraint_valid[i+1]:
-            # Both points not valid - gray solid line
-            ax.plot(seg_theta_measured[i:i+2], seg_radius_measured[i:i+2], color='lightgray', linestyle='-', linewidth=1.0, alpha=0.6)
-          else:
-            # Transition - gray dashed line
-            ax.plot(seg_theta_measured[i:i+2], seg_radius_measured[i:i+2], color='lightgray', linestyle='--', linewidth=1.0, alpha=0.6)
-
-        # Plot valid portions with red markers (measured)
-        if np.any(seg_constraint_valid):
-          valid_indices = np.where(seg_constraint_valid)[0]
-          if len(valid_indices) > 0:
-            ax.scatter(seg_theta_measured[valid_indices], seg_radius_measured[valid_indices],
-                      c='red', s=seg_marker_sizes_measured[valid_indices] * 0.6, alpha=0.8, label='Measured' if seg_start == segment_starts[0] else '')
       
       # Add entry marker if this is a true entry (satellite rose above horizon during propagation)
       # A true entry means there was a point before this segment that was below horizon
@@ -1306,5 +1242,168 @@ def plot_error_skyplot(
     warnings.filterwarnings("ignore", message=".*tight_layout.*")
     plt.tight_layout(rect=(0.0, 0.0, 1.0, 0.95))
     plt.subplots_adjust(wspace=0.08, hspace=0.15)
+
+  return fig
+
+
+def plot_measurement_errors(
+  measurements : SimulatedMeasurements,
+  tracker      : TrackerStation,
+  epoch_dt_utc : Optional[datetime] = None,
+  title_text   : str = "Measurement Errors",
+) -> Figure:
+  """
+  Plot measurement errors (measured - truth) for all 6 measurement types vs time.
+
+  Creates a 3x2 grid of subplots:
+    - Range error vs time
+    - Range rate error vs time
+    - Azimuth error vs time
+    - Azimuth rate error vs time
+    - Elevation error vs time
+    - Elevation rate error vs time
+
+  Input:
+  ------
+    measurements : SimulatedMeasurements
+      Simulated measurements containing truth and measured data.
+    tracker : TrackerStation
+      Ground tracking station.
+    epoch_dt_utc : datetime, optional
+      Reference epoch for time conversion.
+    title_text : str
+      Title for the plot.
+
+  Output:
+  -------
+    fig : matplotlib.figure.Figure
+      Figure object containing the error plots.
+  """
+  fig = plt.figure(figsize=(16, 12))
+
+  # Extract truth and measured data
+  truth = measurements.truth
+  measured = measurements.measured
+
+  # Get time array
+  if hasattr(truth, 'time_s'):
+    time_s = truth.time_s
+  else:
+    # Should not happen with SimulatedMeasurements, but fallback
+    time_s = np.arange(len(truth.azimuth)) * 10.0  # Dummy time
+
+  # Convert to hours or UTC datetime
+  if epoch_dt_utc is not None:
+    time_utc = [epoch_dt_utc + timedelta(seconds=float(t)) for t in time_s]
+    time_x = time_utc
+    xlabel = 'UTC Time'
+  else:
+    time_hrs = time_s / 3600.0
+    time_x = time_hrs
+    xlabel = 'Time [hours]'
+
+  # Compute errors (measured - truth)
+  range_error = measured.range - truth.range  # meters
+  range_rate_error = measured.range_dot - truth.range_dot if measured.range_dot is not None else None  # m/s
+  azimuth_error = measured.azimuth - truth.azimuth  # radians
+  azimuth_rate_error = measured.azimuth_dot - truth.azimuth_dot if measured.azimuth_dot is not None else None  # rad/s
+  elevation_error = measured.elevation - truth.elevation  # radians
+  elevation_rate_error = measured.elevation_dot - truth.elevation_dot if measured.elevation_dot is not None else None  # rad/s
+
+  # Convert angular errors to degrees
+  azimuth_error_deg = azimuth_error * CONVERTER.DEG_PER_RAD
+  elevation_error_deg = elevation_error * CONVERTER.DEG_PER_RAD
+  azimuth_rate_error_deg_per_s = azimuth_rate_error * CONVERTER.DEG_PER_RAD if azimuth_rate_error is not None else None
+  elevation_rate_error_deg_per_s = elevation_rate_error * CONVERTER.DEG_PER_RAD if elevation_rate_error is not None else None
+
+  # Create 3x2 subplot grid
+  # Row 0: Range, Range Rate
+  # Row 1: Azimuth, Azimuth Rate
+  # Row 2: Elevation, Elevation Rate
+
+  # Range error
+  ax1 = fig.add_subplot(3, 2, 1)
+  ax1.plot(time_x, range_error, 'b-', linewidth=1.5, alpha=0.7)
+  ax1.axhline(y=0, color='k', linestyle='--', linewidth=1.0, alpha=0.5)
+  ax1.set_ylabel('Range Error [m]', fontsize=11)
+  ax1.grid(True, alpha=0.3)
+  ax1.set_title('Range Error vs Time', fontsize=12)
+  if epoch_dt_utc is not None:
+    ax1.tick_params(axis='x', rotation=45)
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+  else:
+    ax1.set_xticklabels([])
+
+  # Range rate error
+  ax2 = fig.add_subplot(3, 2, 2)
+  if range_rate_error is not None:
+    ax2.plot(time_x, range_rate_error, 'b-', linewidth=1.5, alpha=0.7)
+    ax2.axhline(y=0, color='k', linestyle='--', linewidth=1.0, alpha=0.5)
+  ax2.set_ylabel('Range Rate Error [m/s]', fontsize=11)
+  ax2.grid(True, alpha=0.3)
+  ax2.set_title('Range Rate Error vs Time', fontsize=12)
+  if epoch_dt_utc is not None:
+    ax2.tick_params(axis='x', rotation=45)
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+  else:
+    ax2.set_xticklabels([])
+
+  # Azimuth error
+  ax3 = fig.add_subplot(3, 2, 3)
+  ax3.plot(time_x, azimuth_error_deg, 'b-', linewidth=1.5, alpha=0.7)
+  ax3.axhline(y=0, color='k', linestyle='--', linewidth=1.0, alpha=0.5)
+  ax3.set_ylabel('Azimuth Error [deg]', fontsize=11)
+  ax3.grid(True, alpha=0.3)
+  ax3.set_title('Azimuth Error vs Time', fontsize=12)
+  if epoch_dt_utc is not None:
+    ax3.tick_params(axis='x', rotation=45)
+    ax3.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+  else:
+    ax3.set_xticklabels([])
+
+  # Azimuth rate error
+  ax4 = fig.add_subplot(3, 2, 4)
+  if azimuth_rate_error_deg_per_s is not None:
+    ax4.plot(time_x, azimuth_rate_error_deg_per_s, 'b-', linewidth=1.5, alpha=0.7)
+    ax4.axhline(y=0, color='k', linestyle='--', linewidth=1.0, alpha=0.5)
+  ax4.set_ylabel('Azimuth Rate Error [deg/s]', fontsize=11)
+  ax4.grid(True, alpha=0.3)
+  ax4.set_title('Azimuth Rate Error vs Time', fontsize=12)
+  if epoch_dt_utc is not None:
+    ax4.tick_params(axis='x', rotation=45)
+    ax4.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+  else:
+    ax4.set_xticklabels([])
+
+  # Elevation error
+  ax5 = fig.add_subplot(3, 2, 5)
+  ax5.plot(time_x, elevation_error_deg, 'b-', linewidth=1.5, alpha=0.7)
+  ax5.axhline(y=0, color='k', linestyle='--', linewidth=1.0, alpha=0.5)
+  ax5.set_ylabel('Elevation Error [deg]', fontsize=11)
+  ax5.set_xlabel(xlabel, fontsize=11)
+  ax5.grid(True, alpha=0.3)
+  ax5.set_title('Elevation Error vs Time', fontsize=12)
+  if epoch_dt_utc is not None:
+    ax5.tick_params(axis='x', rotation=45)
+    ax5.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+
+  # Elevation rate error
+  ax6 = fig.add_subplot(3, 2, 6)
+  if elevation_rate_error_deg_per_s is not None:
+    ax6.plot(time_x, elevation_rate_error_deg_per_s, 'b-', linewidth=1.5, alpha=0.7)
+    ax6.axhline(y=0, color='k', linestyle='--', linewidth=1.0, alpha=0.5)
+  ax6.set_ylabel('Elevation Rate Error [deg/s]', fontsize=11)
+  ax6.set_xlabel(xlabel, fontsize=11)
+  ax6.grid(True, alpha=0.3)
+  ax6.set_title('Elevation Rate Error vs Time', fontsize=12)
+  if epoch_dt_utc is not None:
+    ax6.tick_params(axis='x', rotation=45)
+    ax6.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+
+  # Add overall title
+  fig.suptitle(title_text, fontsize=14, y=0.995)
+
+  # Adjust layout
+  plt.tight_layout(rect=(0, 0, 1, 0.99))
 
   return fig

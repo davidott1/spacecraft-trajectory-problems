@@ -153,6 +153,7 @@ def main(
   tracker_filename               : Optional[str]  = None,
   tracker_filepath               : Optional[str]  = None,
   include_tracker_on_body        : bool           = False,
+  include_orbit_determination    : bool           = False,
 ) -> PropagationResult:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -332,7 +333,70 @@ def main(
     tle_line_2                    = config.tle_line_2,
     two_body_gravity_model        = config.gravity,
   )
-  
+
+  # Orbit Determination: Process measurements with EKF
+  od_estimated_states = None
+  od_covariances = None
+  od_estimation_times = None
+  od_measurement_times = None
+  if include_orbit_determination and trackers is not None and len(trackers) > 0:
+    from src.orbit_determination.ekf_processor import process_measurements_with_ekf, perturb_initial_state
+    from src.orbit_determination.measurement_simulator import MeasurementSimulator
+
+    # Use JPL Horizons as truth for measurement simulation
+    if result_jpl_horizons_ephemeris is not None and result_jpl_horizons_ephemeris.success:
+      print("\n" + "-" * 60)
+      print("Orbit Determination with Extended Kalman Filter")
+      print("-" * 60)
+
+      # Use first tracker for orbit determination
+      tracker_od = trackers[0]
+      print(f"\n  Using tracker: {tracker_od.name}")
+
+      # Simulate measurements from JPL Horizons truth
+      print(f"  Simulating measurements from JPL Horizons ephemeris")
+      simulator = MeasurementSimulator(result_jpl_horizons_ephemeris, tracker_od, config.time_o_dt)
+      noise_config = simulator.get_tracker_noise_config()
+      measurements = simulator.simulate(noise_config=noise_config, seed=42, include_rates=True)
+
+      # Filter measurements to only include times when tracker has visibility
+      measurements.truth    = measurements.get_visible_truth()
+      measurements.measured = measurements.get_visible_measured()
+
+      # Store measurement times for plotting (only visible times)
+      od_measurement_times = measurements.measured.time_s.copy()
+
+      # Use ephemeris initial state as initial guess (this is what we would have from propagation)
+      print(f"  Using ephemeris initial state as initial guess")
+      initial_guess = initial_state.copy()
+
+      # Process with EKF
+      print(f"  Processing {len(measurements.measured.time_s)} measurements with EKF")
+      od_estimated_states, od_covariances, od_estimation_times = process_measurements_with_ekf(
+        measurements       = measurements,
+        tracker            = tracker_od,
+        initial_state      = initial_guess,
+        epoch_dt_utc       = config.time_o_dt,
+        ephemeris_times    = result_jpl_horizons_ephemeris.plot_time_s,
+        propagation_times  = None,  # Use ephemeris_times
+        initial_covariance = None,  # Use defaults
+        process_noise      = None,  # Use defaults
+      )
+
+      # Replace high-fidelity propagation result with OD estimates
+      result_high_fidelity_propagation = od_estimated_states
+
+      print(f"  ✓ Orbit determination complete")
+      print(f"    Initial position uncertainty: ±{1000.0:.0f} m (1-sigma)")
+      print(f"    Initial velocity uncertainty: ±{10.0:.1f} m/s (1-sigma)")
+
+      # Compute final uncertainties
+      final_cov = od_covariances[:, :, -1]
+      final_pos_sigma = (final_cov[0, 0] + final_cov[1, 1] + final_cov[2, 2])**0.5 / 3**0.5
+      final_vel_sigma = (final_cov[3, 3] + final_cov[4, 4] + final_cov[5, 5])**0.5 / 3**0.5
+      print(f"    Final position uncertainty: ±{final_pos_sigma:.1f} m (1-sigma)")
+      print(f"    Final velocity uncertainty: ±{final_vel_sigma:.4f} m/s (1-sigma)")
+
   # Generate plots
   generate_plots(
     result_jpl_horizons_ephemeris    = result_jpl_horizons_ephemeris,
@@ -346,6 +410,10 @@ def main(
     object_name_display              = config.object_name_display,
     trackers                         = trackers,
     include_tracker_on_body          = include_tracker_on_body,
+    od_covariances                   = od_covariances,
+    od_estimation_times              = od_estimation_times,
+    od_measurement_times             = od_measurement_times,
+    include_orbit_determination      = include_orbit_determination,
   )
   
   # Cleanup: Unload all files (SPICE kernels)
@@ -386,4 +454,5 @@ if __name__ == "__main__":
     args.tracker_filename,
     args.tracker_filepath,
     args.include_tracker_on_body,
+    args.include_orbit_determination,
   )
