@@ -6,11 +6,12 @@ Dataclasses for propagation inputs, outputs, and configuration.
 """
 
 from dataclasses import dataclass
-from datetime    import datetime
-from typing      import Optional
+from datetime    import datetime, timedelta
+from typing      import Optional, cast
 import numpy as np
 
-from src.schemas.state import ClassicalOrbitalElements, ModifiedEquinoctialElements
+from src.schemas.state      import ClassicalOrbitalElements, ModifiedEquinoctialElements
+from src.model.time_converter import utc_to_et
 
 
 @dataclass
@@ -19,28 +20,71 @@ class TimeGrid:
   Time grid for propagation.
 
   Attributes:
-    epoch_dt         : reference epoch as datetime (UTC)
-    epoch_et         : reference epoch as ephemeris time [s past J2000]
-    delta_time_epoch : time values relative to epoch, shape (N,)
-    time_et          : absolute ephemeris times [s past J2000], shape (N,)
+    initial    : Initial time as datetime (UTC), size (1,)
+    final      : Final time as datetime (UTC), size (1,)
+    deltas     : Time deltas relative to initial [s], shape (N,)
+    times      : Absolute times as datetime (UTC), shape (N,), computed as initial + deltas
+    times_et   : Absolute ephemeris times [s past J2000], shape (N,), computed from initial + deltas
+    steps      : Time steps between consecutive points [s], shape (N-1,), computed as diff(deltas)
+    duration   : Total duration as timedelta, computed as final - initial
+
+  Invariants:
+    - initial <= final
+    - initial <= times <= final
+    - times[0] == initial
+    - times[-1] == final (approximately, within numerical precision)
+    - times == initial + deltas
   """
-  epoch_dt         : datetime
-  epoch_et         : float
-  delta_time_epoch : np.ndarray
-  time_et          : Optional[np.ndarray] = None
+  initial : datetime
+  final   : datetime
+  deltas  : np.ndarray
+  _times_et_cached : Optional[np.ndarray] = None
+  _steps_cached    : Optional[np.ndarray] = None
+  _duration_cached : Optional[timedelta]  = None
 
   def __post_init__(self):
-    self.delta_time_epoch = np.asarray(self.delta_time_epoch)
-    if self.time_et is None:
-      self.time_et = self.epoch_et + self.delta_time_epoch
+    self.deltas = np.asarray(self.deltas)
 
   @property
-  def n_points(self) -> int:
-    return len(self.delta_time_epoch)
+  def times(self) -> np.ndarray:
+    """
+    Absolute times as datetime objects, computed from initial + deltas.
+    Shape: (N,)
+    """
+    return np.array([self.initial + timedelta(seconds=float(dt)) for dt in self.deltas])
 
   @property
-  def duration_s(self) -> float:
-    return self.delta_time_epoch[-1] - self.delta_time_epoch[0]
+  def times_et(self) -> np.ndarray:
+    """
+    Absolute ephemeris times [s past J2000], computed from initial + deltas.
+    Cached after first computation.
+    Shape: (N,)
+    """
+    if self._times_et_cached is None:
+      initial_et = utc_to_et(self.initial)
+      self._times_et_cached = initial_et + self.deltas
+    return cast(np.ndarray, self._times_et_cached)
+
+  @property
+  def steps(self) -> np.ndarray:
+    """
+    Time steps between consecutive points [s].
+    Cached after first computation.
+    Shape: (N-1,)
+    """
+    if self._steps_cached is None:
+      self._steps_cached = np.diff(self.deltas)
+    return cast(np.ndarray, self._steps_cached)
+
+  @property
+  def duration(self) -> timedelta:
+    """
+    Total duration as timedelta.
+    Cached after first computation.
+    """
+    if self._duration_cached is None:
+      self._duration_cached = self.final - self.initial
+    return cast(timedelta, self._duration_cached)
 
 
 @dataclass
