@@ -41,7 +41,7 @@ def plot_time_series(
   fig = plt.figure(figsize=(24, 10))
   
   # Extract data
-  time   = result.plot_time_s
+  time   = result.plot_delta_time
   states = result.state
   pos_x, pos_y, pos_z = states[0, :], states[1, :], states[2, :]
   vel_x, vel_y, vel_z = states[3, :], states[4, :], states[5, :]
@@ -214,9 +214,9 @@ def plot_time_series_error(
   Input:
   ------
     result_ref : PropagationResult
-      Reference result with 'plot_time_s' and 'state'/'coe'/'mee'.
+      Reference result with 'plot_delta_time' and 'state'/'coe'/'mee'.
     result_comp : PropagationResult
-      Comparison result with 'plot_time_s' and 'state'/'coe'/'mee'.
+      Comparison result with 'plot_delta_time' and 'state'/'coe'/'mee'.
     epoch : datetime, optional
       Reference epoch for time axis.
     title : str
@@ -229,9 +229,9 @@ def plot_time_series_error(
     fig : matplotlib.figure.Figure
       Figure object containing the time series error plots.
   """
-  # Use plot_time_s for both datasets
-  time_ref  = result_ref.plot_time_s
-  time_comp = result_comp.plot_time_s
+  # Use plot_delta_time for both datasets
+  time_ref  = result_ref.plot_delta_time
+  time_comp = result_comp.plot_delta_time
   
   state_ref  = result_ref.state
   state_comp = result_comp.state

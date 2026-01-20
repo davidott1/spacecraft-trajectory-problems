@@ -996,9 +996,9 @@ def get_horizons_ephemeris(
   if result_horizons and result_horizons.get('success'):
     # Construct TimeGrid
     time_grid = TimeGrid(
-        epoch_dt = result_horizons['time_o'],
-        epoch_et = utc_to_et(result_horizons['time_o']),
-        time_s   = result_horizons['delta_time']
+        epoch_dt         = result_horizons['time_o'],
+        epoch_et         = utc_to_et(result_horizons['time_o']),
+        delta_time_epoch = result_horizons['delta_time']
     )
 
     # Construct COE object
@@ -1024,14 +1024,14 @@ def get_horizons_ephemeris(
     )
 
     return PropagationResult(
-        success     = True,
-        message     = "JPL Horizons ephemeris loaded successfully",
-        time_grid   = time_grid,
-        time        = result_horizons['delta_time'],
-        state       = result_horizons['state'],
-        coe         = coe_obj,
-        mee         = mee_obj,
-        plot_time_s = result_horizons['delta_time']
+        success         = True,
+        message         = "JPL Horizons ephemeris loaded successfully",
+        time_grid       = time_grid,
+        time            = result_horizons['delta_time'],
+        state           = result_horizons['state'],
+        coe             = coe_obj,
+        mee             = mee_obj,
+        plot_delta_time = result_horizons['delta_time']
     )
   else:
     msg = result_horizons.get('message') if result_horizons else "Failed to process Horizons data"
@@ -1052,7 +1052,7 @@ def process_horizons_result(
   Output:
   -------
     result_horizons : dict
-      Processed Horizons result with added 'coe', 'mee', and 'plot_time_s' fields.
+      Processed Horizons result with added 'coe', 'mee', and 'plot_delta_time' fields.
   """
   if result_horizons and result_horizons.get('success'):
     actual_start = result_horizons['time_o']
@@ -1075,8 +1075,8 @@ def process_horizons_result(
     print(f"          Duration : {duration_s:.1f} s")
     print(f"          Grid     : {len(result_horizons['delta_time'])} points")
 
-    # Create plot_time_s for seconds-based, zero-start plotting time
-    result_horizons['plot_time_s'] = result_horizons['delta_time'] - result_horizons['delta_time'][0]
+    # Create plot_delta_time for seconds-based, zero-start plotting time
+    result_horizons['plot_delta_time'] = result_horizons['delta_time'] - result_horizons['delta_time'][0]
     
     # Compute classical orbital elements for Horizons data
     num_points = result_horizons['state'].shape[1]

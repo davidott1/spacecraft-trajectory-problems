@@ -376,7 +376,7 @@ def build_config(
   # Unpack timespan
   time_o_dt    = timespan_dt[0]
   time_f_dt    = timespan_dt[1]
-  delta_time_s = (time_f_dt - time_o_dt).total_seconds()
+  delta_time_epoch = (time_f_dt - time_o_dt).total_seconds()
   
   # Set up foldernames, folderpaths, filenames, and filepaths
   paths = setup_paths(

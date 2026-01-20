@@ -17,61 +17,61 @@ from src.schemas.state import ClassicalOrbitalElements, ModifiedEquinoctialEleme
 class TimeGrid:
   """
   Time grid for propagation.
-  
+
   Attributes:
-    epoch_dt : Reference epoch as datetime (UTC)
-    epoch_et : Reference epoch as ephemeris time [s past J2000]
-    time_s   : Time values relative to epoch [s], shape (N,)
-    time_et  : Absolute ephemeris times [s past J2000], shape (N,)
+    epoch_dt         : reference epoch as datetime (UTC)
+    epoch_et         : reference epoch as ephemeris time [s past J2000]
+    delta_time_epoch : time values relative to epoch, shape (N,)
+    time_et          : absolute ephemeris times [s past J2000], shape (N,)
   """
-  epoch_dt : datetime
-  epoch_et : float
-  time_s   : np.ndarray
-  time_et  : Optional[np.ndarray] = None
-  
+  epoch_dt         : datetime
+  epoch_et         : float
+  delta_time_epoch : np.ndarray
+  time_et          : Optional[np.ndarray] = None
+
   def __post_init__(self):
-    self.time_s = np.asarray(self.time_s)
+    self.delta_time_epoch = np.asarray(self.delta_time_epoch)
     if self.time_et is None:
-      self.time_et = self.epoch_et + self.time_s
-  
+      self.time_et = self.epoch_et + self.delta_time_epoch
+
   @property
   def n_points(self) -> int:
-    return len(self.time_s)
-  
+    return len(self.delta_time_epoch)
+
   @property
   def duration_s(self) -> float:
-    return self.time_s[-1] - self.time_s[0]
+    return self.delta_time_epoch[-1] - self.delta_time_epoch[0]
 
 
 @dataclass
 class PropagationResult:
   """
   Result of orbit propagation.
-  
+
   Attributes:
-    success        : Whether propagation completed successfully
-    message        : Status or error message
-    time_grid      : Time grid used for propagation
-    time           : Time array [s] (raw output from integrator/SGP4)
-    state          : Cartesian state array, shape (6, N)
-    coe            : Classical orbital elements at each time
-    mee            : Modified equinoctial elements at each time
-    at_ephem_times : Results interpolated to ephemeris times (optional, PropagationResult)
-    plot_time_s    : Time array for plotting [s from epoch] (optional)
-    integ_time_et  : Integration time in ET (optional)
-    integ_time_s   : Integration time in seconds from TLE epoch (optional)
+    success              : Whether propagation completed successfully
+    message              : Status or error message
+    time_grid            : Time grid used for propagation
+    time                 : Time array (raw output from integrator/SGP4)
+    state                : Cartesian state array, shape (6, N)
+    coe                  : Classical orbital elements at each time
+    mee                  : Modified equinoctial elements at each time
+    at_ephem_times       : Results interpolated to ephemeris times (optional, PropagationResult)
+    plot_delta_time      : Time array for plotting relative to epoch (optional)
+    integ_time_et        : Integration time in ET (optional)
+    integ_delta_time_tle : Integration time relative to TLE epoch (optional)
   """
-  success        : bool
-  message        : str                  = ""
-  time_grid      : Optional[TimeGrid]   = None
-  time           : Optional[np.ndarray] = None
-  state          : Optional[np.ndarray] = None
-  coe            : Optional[ClassicalOrbitalElements]    = None
-  mee            : Optional[ModifiedEquinoctialElements] = None
-  at_ephem_times : Optional['PropagationResult'] = None
-  plot_time_s    : Optional[np.ndarray] = None
-  integ_time_et  : Optional[np.ndarray] = None
-  integ_time_s   : Optional[np.ndarray] = None
+  success              : bool
+  message              : str                  = ""
+  time_grid            : Optional[TimeGrid]   = None
+  time                 : Optional[np.ndarray] = None
+  state                : Optional[np.ndarray] = None
+  coe                  : Optional[ClassicalOrbitalElements]    = None
+  mee                  : Optional[ModifiedEquinoctialElements] = None
+  at_ephem_times       : Optional['PropagationResult'] = None
+  plot_delta_time      : Optional[np.ndarray] = None
+  integ_time_et        : Optional[np.ndarray] = None
+  integ_delta_time_tle : Optional[np.ndarray] = None
 
 
 @dataclass

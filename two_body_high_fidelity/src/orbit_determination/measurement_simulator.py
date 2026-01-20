@@ -46,7 +46,7 @@ class MeasurementSimulator:
     Input:
     ------
       result : PropagationResult
-        Propagation result containing state (6xN) and plot_time_s.
+        Propagation result containing state (6xN) and plot_delta_time.
       tracker : TrackerStation
         Ground tracking station with position and performance limits.
       epoch_dt_utc : datetime, optional
@@ -90,7 +90,7 @@ class MeasurementSimulator:
     j2000_state   = self.result.state
     j2000_pos_vec = j2000_state[0:3, :]
     j2000_vel_vec = j2000_state[3:6, :]
-    time_s        = self.result.plot_time_s
+    time_s        = self.result.plot_delta_time
     n_points      = j2000_state.shape[1]
 
     # Transform positions and velocities from J2000 to body-fixed frame
@@ -117,13 +117,13 @@ class MeasurementSimulator:
 
       # Store and return
       self._truth = TopocentricState(
-        time_s        = time_s,
-        azimuth       = azimuth,
-        elevation     = elevation,
-        range         = range_arr,
-        azimuth_dot   = az_dot,
-        elevation_dot = el_dot,
-        range_dot     = rng_dot,
+        delta_time_epoch = time_s,
+        azimuth          = azimuth,
+        elevation        = elevation,
+        range            = range_arr,
+        azimuth_dot      = az_dot,
+        elevation_dot    = el_dot,
+        range_dot        = rng_dot,
       )
     else:
       # Use TopocentricConverter for az, el, range only
@@ -136,10 +136,10 @@ class MeasurementSimulator:
 
       # Store and return
       self._truth = TopocentricState(
-        time_s    = time_s,
-        azimuth   = azimuth,
-        elevation = elevation,
-        range     = range_arr,
+        delta_time_epoch = time_s,
+        azimuth          = azimuth,
+        elevation        = elevation,
+        range            = range_arr,
       )
 
     return self._truth
@@ -288,20 +288,20 @@ class MeasurementSimulator:
     # Generate noisy measurements by adding Gaussian noise to truth
     if include_rates and truth.has_rates:
       measured = TopocentricState(
-        time_s        = truth.time_s.copy(),
-        azimuth       = truth.azimuth       + np.random.randn(n_points) * noise_config.azimuth,
-        elevation     = truth.elevation     + np.random.randn(n_points) * noise_config.elevation,
-        range         = truth.range         + np.random.randn(n_points) * noise_config.range,
-        azimuth_dot   = truth.azimuth_dot   + np.random.randn(n_points) * noise_config.azimuth_dot,
-        elevation_dot = truth.elevation_dot + np.random.randn(n_points) * noise_config.elevation_dot,
-        range_dot     = truth.range_dot     + np.random.randn(n_points) * noise_config.range_dot,
+        delta_time_epoch = truth.delta_time_epoch.copy(),
+        azimuth          = truth.azimuth       + np.random.randn(n_points) * noise_config.azimuth,
+        elevation        = truth.elevation     + np.random.randn(n_points) * noise_config.elevation,
+        range            = truth.range         + np.random.randn(n_points) * noise_config.range,
+        azimuth_dot      = truth.azimuth_dot   + np.random.randn(n_points) * noise_config.azimuth_dot,
+        elevation_dot    = truth.elevation_dot + np.random.randn(n_points) * noise_config.elevation_dot,
+        range_dot        = truth.range_dot     + np.random.randn(n_points) * noise_config.range_dot,
       )
     else:
       measured = TopocentricState(
-        time_s    = truth.time_s.copy(),
-        azimuth   = truth.azimuth   + np.random.randn(n_points) * noise_config.azimuth,
-        elevation = truth.elevation + np.random.randn(n_points) * noise_config.elevation,
-        range     = truth.range     + np.random.randn(n_points) * noise_config.range,
+        delta_time_epoch = truth.delta_time_epoch.copy(),
+        azimuth          = truth.azimuth   + np.random.randn(n_points) * noise_config.azimuth,
+        elevation        = truth.elevation + np.random.randn(n_points) * noise_config.elevation,
+        range            = truth.range     + np.random.randn(n_points) * noise_config.range,
       )
 
     # Combine truth, measurements, config, visibility, tracker

@@ -153,7 +153,7 @@ def plot_3d_trajectories(
   Input:
   ------
     result : PropagationResult
-      Propagation result containing 'state' (6xN array) and 'plot_time_s'.
+      Propagation result containing 'state' (6xN array) and 'plot_delta_time'.
     epoch : datetime, optional
       Reference epoch (start time) for labeling.
     frame : str
@@ -172,11 +172,11 @@ def plot_3d_trajectories(
   vel_x, vel_y, vel_z = posvel_vec[3, :], posvel_vec[4, :], posvel_vec[5, :]
   
   # Build info string with frame and time if epoch is provided
-  plot_time_s = result.plot_time_s
+  plot_delta_time = result.plot_delta_time
   info_text = f"Frame: {frame}"
-  if epoch is not None and plot_time_s is not None:
+  if epoch is not None and plot_delta_time is not None:
     start_utc = epoch.strftime('%Y-%m-%d %H:%M:%S UTC')
-    end_time  = epoch + timedelta(seconds=plot_time_s[-1])
+    end_time  = epoch + timedelta(seconds=plot_delta_time[-1])
     end_utc   = end_time.strftime('%Y-%m-%d %H:%M:%S UTC')
     info_text += f"  |  Initial: {start_utc}  |  Final: {end_utc}"
   
@@ -240,11 +240,11 @@ def plot_3d_trajectories(
   ax1.plot_surface(np.full_like(U_disk, min_limit), U_disk, V_disk, color='black', alpha=earth_shadow_alpha, shade=False)  # type: ignore
 
   # Add sun direction markers on box walls (only if we have epoch and are in J2000 frame)
-  if epoch is not None and frame == "J2000" and plot_time_s is not None:
+  if epoch is not None and frame == "J2000" and plot_delta_time is not None:
     try:
       # Get start and end times
       epoch_et_start = utc_to_et(epoch)
-      epoch_et_end = epoch_et_start + plot_time_s[-1]
+      epoch_et_end = epoch_et_start + plot_delta_time[-1]
       
       # Get sun position at start time (returns in km)
       sun_pos_start_km, _ = spice.spkpos('SUN', epoch_et_start, 'J2000', 'NONE', 'EARTH')
@@ -351,7 +351,7 @@ def plot_3d_trajectories_body_fixed(
   Input:
   ------
     result : PropagationResult
-      Propagation result containing 'state' (6xN array) and 'plot_time_s'.
+      Propagation result containing 'state' (6xN array) and 'plot_delta_time'.
     epoch_dt_utc : datetime, optional
       Reference epoch (start time) for time conversion to ET.
       
@@ -366,7 +366,7 @@ def plot_3d_trajectories_body_fixed(
   j2000_state   = result.state
   j2000_pos_vec = j2000_state[0:3, :]
   j2000_vel_vec = j2000_state[3:6, :]
-  time_s        = result.plot_time_s
+  time_s        = result.plot_delta_time
   n_points      = j2000_state.shape[1]
   
   # Convert epoch to ET
@@ -519,7 +519,7 @@ def plot_3d_trajectory_sun_centered(
   Input:
   ------
     result : PropagationResult
-      Propagation result containing 'state' (6xN array) and 'plot_time_s'.
+      Propagation result containing 'state' (6xN array) and 'plot_delta_time'.
     epoch : datetime, optional
       Reference epoch (start time) for labeling and Moon position computation.
       
@@ -532,7 +532,7 @@ def plot_3d_trajectory_sun_centered(
   
   # Extract state vectors
   posvel_vec = result.state
-  time_s     = result.plot_time_s
+  time_s     = result.plot_delta_time
   
   # Build info string
   info_text = "Frame: J2000 - Sun-Centered"
@@ -875,7 +875,7 @@ def plot_3d_error(
   # Interpolate comparison result to reference time points
   from scipy.interpolate import interp1d
   
-  time_ref   = result_ref.plot_time_s
+  time_ref   = result_ref.plot_delta_time
   time_comp  = result_comp.time
   state_comp = result_comp.state
   

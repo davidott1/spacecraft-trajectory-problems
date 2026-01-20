@@ -206,7 +206,7 @@ def process_measurements_with_ekf(
   )
 
   # Get measurement times (subset of propagation_times when tracker has visibility)
-  measurement_times = measurements.measured.time_s
+  measurement_times = measurements.measured.delta_time_epoch
   n_measurements = len(measurement_times)
   n_propagation = len(propagation_times)
 
@@ -341,7 +341,7 @@ def process_measurements_with_ekf(
   # Create PropagationResult at estimation_times (with repeated measurement times)
   result = PropagationResult(
     state       = estimated_states,
-    plot_time_s = estimation_times,
+    plot_delta_time = estimation_times,
     coe         = coe_time_series,
     mee         = mee_time_series,
     success     = True,
@@ -365,7 +365,7 @@ def process_measurements_with_ekf(
   ephem_indices = np.array(ephem_indices)
   result.at_ephem_times = PropagationResult(
     state       = estimated_states[:, ephem_indices],
-    plot_time_s = ephemeris_times,
+    plot_delta_time = ephemeris_times,
     coe         = ClassicalOrbitalElements(
       sma  = coe_sma[ephem_indices],
       ecc  = coe_ecc[ephem_indices],
