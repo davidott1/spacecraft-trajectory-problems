@@ -132,7 +132,6 @@ def propagate_tle(
       return PropagationResult(
         success = False,
         message = f'SGP4 error code: {error_code_arr[idx]} at index {idx}',
-        time    = time[:idx],
         state   = np.zeros((6, idx)),
       )
 
@@ -201,11 +200,12 @@ def propagate_tle(
       p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L
     )
 
-    # Return result object
+    # Return result object with time_grid
+    # Note: time array is in seconds from TLE epoch
+    # Caller will need to create TimeGrid with appropriate initial/final datetimes
     return PropagationResult(
       success = True,
       message = 'SGP4 propagation successful',
-      time    = time,
       state   = posvel_vec_array,
       coe     = coe_time_series,
       mee     = mee_time_series,
@@ -215,7 +215,6 @@ def propagate_tle(
     return PropagationResult(
       success = False,
       message = str(e),
-      time    = np.array([]),
       state   = np.array([]),
     )
 
@@ -415,10 +414,11 @@ def propagate_state_numerical_integration(
       p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L
     )
   
+  # Return result without time_grid - caller will create it with appropriate initial/final times
+  # solution.t contains the raw time array (in the same units as time_o/time_f)
   return PropagationResult(
     success = solution.success,
     message = solution.message,
-    time    = solution.t,
     state   = solution.y,
     coe     = coe_time_series,
     mee     = mee_time_series,
@@ -549,19 +549,15 @@ def run_high_fidelity_propagation(
   )
 
   if result_high_fidelity.success:
-    # Extract raw time array (absolute ET) before we clear it
-    time_et_array = result_high_fidelity.time
-
     # Create time grid with deltas (seconds from time_o)
-    if time_et_array is not None:
-      deltas = time_et_array - time_et_o
-      result_high_fidelity.time_grid = TimeGrid(
-        initial = propagation_config.time_o_dt,
-        final   = propagation_config.time_f_dt,
-        deltas  = deltas,
-      )
-      # Clear the raw time array now that we have time_grid
-      result_high_fidelity.time = None
+    # t_eval_grid is the time array we passed in (absolute ET values)
+    time_et_array = t_eval_grid
+    deltas = time_et_array - time_et_o
+    result_high_fidelity.time_grid = TimeGrid(
+      initial = propagation_config.time_o_dt,
+      final   = propagation_config.time_f_dt,
+      deltas  = deltas,
+    )
 
     # If comparing to Horizons, interpolate to ephemeris times and store separately
     if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
@@ -866,7 +862,7 @@ def run_sgp4_propagation(
 
   print("\n  Compute")
   print("    SGP4 Propagation Running ... ", end='', flush=True)
-  
+
   result_sgp4 = propagate_tle(
     tle_line_1 = tle_line_1,
     tle_line_2 = tle_line_2,
@@ -874,24 +870,19 @@ def run_sgp4_propagation(
     time_eval  = sgp4_times_grid,
   )
   print("Complete")
-  
+
   if not result_sgp4.success:
     print(f"  SGP4 propagation failed: {result_sgp4.message}")
     return None
 
-  # Extract raw time array (seconds from TLE epoch) before we clear it
-  time_sgp4_array = result_sgp4.time
-
   # Create time grid (seconds from time_o)
-  if time_sgp4_array is not None:
-    deltas_sgp4 = time_sgp4_array - time_offset_o_s
-    result_sgp4.time_grid = TimeGrid(
-      initial = propagation_config.time_o_dt,
-      final   = propagation_config.time_f_dt,
-      deltas  = deltas_sgp4,
-    )
-    # Clear the raw time array now that we have time_grid
-    result_sgp4.time = None
+  # sgp4_times_grid is in seconds from TLE epoch, convert to seconds from time_o
+  deltas_sgp4 = sgp4_times_grid - time_offset_o_s
+  result_sgp4.time_grid = TimeGrid(
+    initial = propagation_config.time_o_dt,
+    final   = propagation_config.time_f_dt,
+    deltas  = deltas_sgp4,
+  )
 
   # If comparing to Horizons, also propagate at ephemeris times
   if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success and result_jpl_horizons_ephemeris.time_grid is not None:

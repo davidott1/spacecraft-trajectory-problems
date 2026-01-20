@@ -876,7 +876,7 @@ def plot_3d_error(
   from scipy.interpolate import interp1d
 
   time_ref   = result_ref.time_grid.deltas
-  time_comp  = result_comp.time
+  time_comp  = result_comp.time_grid.deltas
   state_comp = result_comp.state
   
   # Interpolate each state component
