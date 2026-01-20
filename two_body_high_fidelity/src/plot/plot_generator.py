@@ -500,7 +500,7 @@ def generate_plots(
             title_text   = pass_ts_title,
           )
           if fig_pass_ts is not None:
-            filename = f'time_series_meas_{tracker_name_sanitized}_high_fidelity_{name_lower}.png'
+            filename = f'timeseries_meas_{tracker_name_sanitized}_high_fidelity_{name_lower}.png'
             fig_pass_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
             plt.close(fig_pass_ts)
             filenames.append(filename)
@@ -515,7 +515,7 @@ def generate_plots(
             title_text   = pass_ts_title,
           )
           if fig_pass_ts_sgp4 is not None:
-            filename = f'time_series_meas_{tracker_name_sanitized}_sgp4_{name_lower}.png'
+            filename = f'timeseries_meas_{tracker_name_sanitized}_sgp4_{name_lower}.png'
             fig_pass_ts_sgp4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
             plt.close(fig_pass_ts_sgp4)
             filenames.append(filename)
@@ -530,7 +530,7 @@ def generate_plots(
             title_text   = pass_ts_title,
           )
           if fig_pass_ts_horizons is not None:
-            filename = f'time_series_meas_{tracker_name_sanitized}_jpl_horizons_{name_lower}.png'
+            filename = f'timeseries_meas_{tracker_name_sanitized}_jpl_horizons_{name_lower}.png'
             fig_pass_ts_horizons.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
             plt.close(fig_pass_ts_horizons)
             filenames.append(filename)

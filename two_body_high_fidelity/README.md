@@ -474,7 +474,7 @@ output/20251216_143052/
 │   ├── error_timeseries_high_fidelity_rel_sgp4_iss.png
 │   ├── groundtrack_high_fidelity_iss.png
 │   ├── skyplot_canberra_dsn_high_fidelity_iss.png
-│   ├── time_series_meas_canberra_dsn_high_fidelity_iss.png
+│   ├── timeseries_meas_canberra_dsn_high_fidelity_iss.png
 │   └── skyplot_svalbard_arctic_high_fidelity_iss.png
 └── files/
     └── output.log
