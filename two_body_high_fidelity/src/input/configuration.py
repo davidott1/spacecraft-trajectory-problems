@@ -169,10 +169,13 @@ def print_paths(
   print("-" * len(title))
   print()
 
+  # Calculate folder paths
+  data_folderpath  = config.output_paths.spice_kernels_folderpath.parent
+  input_folderpath = data_folderpath.parent / 'input'
+
   # Progress subsection
   print("  Progress")
   print("    Calculate data folder path")
-  data_folderpath = config.output_paths.spice_kernels_folderpath.parent
   print()
 
   # Summary subsection
@@ -188,7 +191,8 @@ def print_paths(
   print(f"      Gravity Folderpath       : <data_folderpath>/{config.gravity.folderpath.relative_to(data_folderpath)}")
   print(f"      JPL Horizons Folderpath  : <data_folderpath>/{config.output_paths.jpl_horizons_folderpath.relative_to(data_folderpath)}")
   print(f"      TLEs Folderpath          : <data_folderpath>/{config.output_paths.tles_folderpath.relative_to(data_folderpath)}")
-  print(f"      State Vectors Folderpath : <data_folderpath>/{config.output_paths.state_vectors_folderpath.relative_to(data_folderpath)}")
+  print(f"    Input Folderpath           : {input_folderpath}")
+  print(f"      State Vectors Folderpath : <input_folderpath>/{config.output_paths.state_vectors_folderpath.relative_to(input_folderpath)}")
 
 
 def print_configuration(
@@ -593,7 +597,7 @@ def setup_paths(
     include_tracker_skyplots : bool
       Flag to enable skyplot generation.
     tracker_filename : str | None
-      Tracker YAML filename (assumes data/trackers/ folder).
+      Tracker YAML filename (assumes input/trackers/ folder).
     tracker_filepath : str | None
       Absolute path to tracker YAML file.
       
@@ -628,8 +632,9 @@ def setup_paths(
   # TLEs folderpath
   tles_folderpath = data_folderpath / 'tles'
 
-  # State Vectors folderpath
-  state_vectors_folderpath = data_folderpath / 'state_vectors'
+  # State Vectors folderpath (in input/ folder)
+  input_folderpath = project_root / 'input'
+  state_vectors_folderpath = input_folderpath / 'state_vectors'
   
   custom_state_vector_filepath = None
   if initial_state_source == 'custom_state_vector':
@@ -644,7 +649,7 @@ def setup_paths(
   jpl_horizons_folderpath = data_folderpath / 'ephems'
   
   # Tracker filepath - determine based on skyplot settings
-  trackers_folderpath = data_folderpath / 'trackers'
+  trackers_folderpath = input_folderpath / 'trackers'
   resolved_tracker_filepath = None
   
   if include_tracker_skyplots:
@@ -652,10 +657,10 @@ def setup_paths(
       # Absolute path provided
       resolved_tracker_filepath = Path(tracker_filepath)
     elif tracker_filename is not None:
-      # Relative filename provided - look in data/trackers/
+      # Relative filename provided - look in input/trackers/
       resolved_tracker_filepath = trackers_folderpath / tracker_filename
     else:
-      # No path specified - find first .yaml in data/trackers/
+      # No path specified - find first .yaml in input/trackers/
       if trackers_folderpath.exists():
         yaml_files = list(trackers_folderpath.glob('*.yaml'))
         if yaml_files:

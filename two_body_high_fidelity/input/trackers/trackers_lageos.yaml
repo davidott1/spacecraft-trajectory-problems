@@ -1,0 +1,57 @@
+# Tracker stations configured for LAGEOS-2 (MEO satellite at ~5,900 km altitude)
+# Range constraints set to 15,000 km to accommodate slant range at low elevations
+# These represent SLR (Satellite Laser Ranging) stations that track LAGEOS
+
+- name                          : "Yarragadee SLR"
+  position                      :
+    latitude__deg               : -29.0
+    longitude__deg              : 115.3
+    altitude__m                 : 244.0
+  performance                   :
+    constraints                 :
+      range_min_max__m          : 0.0, 15.0e6
+      azimuth_min_max__deg      : -180.0, 180.0
+      elevation_min_max__deg    : 10.0, 90.0
+    uncertainty                 :
+      range__m                  : 0.01
+      range_rate__m_per_s       : 0.001
+      azimuth__deg              : 0.001
+      azimuth_rate__deg_per_s   : 0.0001
+      elevation__deg            : 0.001
+      elevation_rate__deg_per_s : 0.0001
+
+- name                          : "Greenbelt SLR"
+  position                      :
+    latitude__deg               : 39.0
+    longitude__deg              : -76.8
+    altitude__m                 : 19.0
+  performance                   :
+    constraints                 :
+      range_min_max__m          : 0.0, 15.0e6
+      azimuth_min_max__deg      : -180.0, 180.0
+      elevation_min_max__deg    : 10.0, 90.0
+    uncertainty                 :
+      range__m                  : 0.01
+      range_rate__m_per_s       : 0.001
+      azimuth__deg              : 0.001
+      azimuth_rate__deg_per_s   : 0.0001
+      elevation__deg            : 0.001
+      elevation_rate__deg_per_s : 0.0001
+
+- name                          : "Zimmerwald SLR"
+  position                      :
+    latitude__deg               : 46.9
+    longitude__deg              : 7.5
+    altitude__m                 : 951.0
+  performance                   :
+    constraints                 :
+      range_min_max__m          : 0.0, 15.0e6
+      azimuth_min_max__deg      : -180.0, 180.0
+      elevation_min_max__deg    : 10.0, 90.0
+    uncertainty                 :
+      range__m                  : 0.01
+      range_rate__m_per_s       : 0.001
+      azimuth__deg              : 0.001
+      azimuth_rate__deg_per_s   : 0.0001
+      elevation__deg            : 0.001
+      elevation_rate__deg_per_s : 0.0001

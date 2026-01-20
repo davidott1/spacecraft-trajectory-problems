@@ -227,10 +227,10 @@ python -m src.main \
 
 ### Custom State Vectors
 
-Create a YAML file in `data/state_vectors/`:
+Create a YAML file in `input/state_vectors/`:
 
 ```yaml
-# data/state_vectors/equatorial.yaml
+# input/state_vectors/equatorial.yaml
 frame             : J2000
 epoch             : 2025-10-01T00:00:00Z
 coordinate_system : cartesian
@@ -304,7 +304,7 @@ These measurements are fundamental for:
 
 ### Tracker Configuration
 
-Ground station configurations are defined in YAML files located in `data/trackers/`. Multiple tracker sets are available:
+Ground station configurations are defined in YAML files located in `input/trackers/`. Multiple tracker sets are available:
 
 **trackers_set1.yaml** - Standard network:
 ```yaml
