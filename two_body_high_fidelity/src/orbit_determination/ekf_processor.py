@@ -12,7 +12,7 @@ from typing   import Optional, Tuple
 from src.orbit_determination.extended_kalman_filter import ExtendedKalmanFilter, EKFMeasurement, EKFConfig
 from src.orbit_determination.measurement_simulator import MeasurementSimulator
 from src.schemas.measurement                     import SimulatedMeasurements
-from src.schemas.propagation                     import PropagationResult
+from src.schemas.propagation                     import PropagationResult, TimeGrid
 from src.schemas.state                           import TrackerStation, ClassicalOrbitalElements, ModifiedEquinoctialElements
 from src.model.orbit_converter                   import OrbitConverter
 from src.model.constants                         import SOLARSYSTEMCONSTANTS
@@ -339,13 +339,20 @@ def process_measurements_with_ekf(
   mee_time_series = ModifiedEquinoctialElements(p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L)
 
   # Create PropagationResult at estimation_times (with repeated measurement times)
+  # Create time grid for estimation times
+  from datetime import timedelta
+  estimation_time_grid = TimeGrid(
+    initial = epoch_dt_utc,
+    final   = epoch_dt_utc + timedelta(seconds=float(estimation_times[-1])),
+    deltas  = estimation_times,
+  )
   result = PropagationResult(
-    state       = estimated_states,
-    plot_delta_time = estimation_times,
-    coe         = coe_time_series,
-    mee         = mee_time_series,
-    success     = True,
-    message     = 'EKF orbit determination successful',
+    state     = estimated_states,
+    time_grid = estimation_time_grid,
+    coe       = coe_time_series,
+    mee       = mee_time_series,
+    success   = True,
+    message   = 'EKF orbit determination successful',
   )
 
   # Create at_ephem_times with states at ephemeris_times only (post-update at meas times)
@@ -363,10 +370,16 @@ def process_measurements_with_ekf(
       out_idx += 1
 
   ephem_indices = np.array(ephem_indices)
+  # Create time grid for ephemeris times
+  ephem_time_grid = TimeGrid(
+    initial = epoch_dt_utc,
+    final   = epoch_dt_utc + timedelta(seconds=float(ephemeris_times[-1])),
+    deltas  = ephemeris_times,
+  )
   result.at_ephem_times = PropagationResult(
-    state       = estimated_states[:, ephem_indices],
-    plot_delta_time = ephemeris_times,
-    coe         = ClassicalOrbitalElements(
+    state     = estimated_states[:, ephem_indices],
+    time_grid = ephem_time_grid,
+    coe       = ClassicalOrbitalElements(
       sma  = coe_sma[ephem_indices],
       ecc  = coe_ecc[ephem_indices],
       inc  = coe_inc[ephem_indices],
@@ -376,7 +389,7 @@ def process_measurements_with_ekf(
       ta   = coe_ta[ephem_indices],
       ea   = coe_ea[ephem_indices],
     ),
-    mee         = ModifiedEquinoctialElements(
+    mee       = ModifiedEquinoctialElements(
       p = mee_p[ephem_indices],
       f = mee_f[ephem_indices],
       g = mee_g[ephem_indices],

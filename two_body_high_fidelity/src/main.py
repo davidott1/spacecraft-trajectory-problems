@@ -377,7 +377,7 @@ def main(
         tracker            = tracker_od,
         initial_state      = initial_guess,
         epoch_dt_utc       = config.time_o_dt,
-        ephemeris_times    = result_jpl_horizons_ephemeris.plot_delta_time,
+        ephemeris_times    = result_jpl_horizons_ephemeris.time_grid.deltas,
         propagation_times  = None,  # Use ephemeris_times
         initial_covariance = None,  # Use defaults
         process_noise      = None,  # Use defaults
