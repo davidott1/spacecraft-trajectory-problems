@@ -258,7 +258,63 @@ class TwoBodyGravity:
     dposveldotvec__dposvelvec[3:6, 0:3] = daccvec__dposvec  # d(vel_dot_vec)/d(pos_vec) = d(acc_vec)/d(pos_vec)
     
     return dposveldotvec__dposvelvec
+ 
+  def oblate_j2(
+      self,
+      time_et       : float,
+      j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    J2 oblateness perturbation
+    
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in Inertial frame (J2000).
+    
+    Output:
+    -------
+      acc_vec : np.ndarray
+        Acceleration vector [m/s²] in J2000 frame.
 
+    Notes:
+    ------
+      Zonal harmonics are defined in the Body-Fixed frame. This method transforms
+      the position to IAU_EARTH, computes the acceleration, then transforms back
+      to J2000 to properly account for precession/nutation.
+    """
+    if self.j2 == 0.0:
+      return np.zeros(3)
+    
+    # Get rotation matrix from J2000 to Body-Fixed (IAU_EARTH)
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      # Fallback to J2000 if transformation fails (kernels not loaded)
+      rot_mat_j2000_to_iau_earth = np.eye(3)
+    
+    # Transform position to body-fixed frame
+    pos_vec = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    
+    pos_mag      = np.linalg.norm(pos_vec)
+    pos_mag_pwr2 = pos_mag**2
+    pos_mag_pwr5 = pos_mag_pwr2 * pos_mag_pwr2 * pos_mag
+    
+    factor = 1.5 * self.j2 * self.gp * self.pos_ref**2 / pos_mag_pwr5
+    
+    # Compute acceleration in body-fixed frame
+    iau_earth_acc_vec    = np.zeros(3)
+    iau_earth_acc_vec[0] = factor * pos_vec[0] * (5 * pos_vec[2]**2 / pos_mag_pwr2 - 1)
+    iau_earth_acc_vec[1] = factor * pos_vec[1] * (5 * pos_vec[2]**2 / pos_mag_pwr2 - 1)
+    iau_earth_acc_vec[2] = factor * pos_vec[2] * (5 * pos_vec[2]**2 / pos_mag_pwr2 - 3)
+    
+    # Transform acceleration back to J2000
+    j2000_acc_vec = rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
+    
+    return j2000_acc_vec
+  
   def oblate_j2_jacobian(
     self,
     time_et : float,
@@ -338,311 +394,6 @@ class TwoBodyGravity:
     j2000_jac = rot_T @ jac_bf @ rot_mat_j2000_to_iau_earth
 
     return j2000_jac
- 
-  def oblate_j2(
-      self,
-      time_et       : float,
-      j2000_pos_vec : np.ndarray,
-  ) -> np.ndarray:
-    """
-    J2 oblateness perturbation
-    
-    Input:
-    ------
-      time_et : float
-        Current Ephemeris Time (ET) [s]
-      j2000_pos_vec : np.ndarray
-        Position vector [m] in Inertial frame (J2000).
-    
-    Output:
-    -------
-      acc_vec : np.ndarray
-        Acceleration vector [m/s²] in J2000 frame.
-
-    Notes:
-    ------
-      Zonal harmonics are defined in the Body-Fixed frame. This method transforms
-      the position to IAU_EARTH, computes the acceleration, then transforms back
-      to J2000 to properly account for precession/nutation.
-    """
-    if self.j2 == 0.0:
-      return np.zeros(3)
-    
-    # Get rotation matrix from J2000 to Body-Fixed (IAU_EARTH)
-    try:
-      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
-    except Exception:
-      # Fallback to J2000 if transformation fails (kernels not loaded)
-      rot_mat_j2000_to_iau_earth = np.eye(3)
-    
-    # Transform position to body-fixed frame
-    pos_vec = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
-    
-    pos_mag      = np.linalg.norm(pos_vec)
-    pos_mag_pwr2 = pos_mag**2
-    pos_mag_pwr5 = pos_mag_pwr2 * pos_mag_pwr2 * pos_mag
-    
-    factor = 1.5 * self.j2 * self.gp * self.pos_ref**2 / pos_mag_pwr5
-    
-    # Compute acceleration in body-fixed frame
-    iau_earth_acc_vec    = np.zeros(3)
-    iau_earth_acc_vec[0] = factor * pos_vec[0] * (5 * pos_vec[2]**2 / pos_mag_pwr2 - 1)
-    iau_earth_acc_vec[1] = factor * pos_vec[1] * (5 * pos_vec[2]**2 / pos_mag_pwr2 - 1)
-    iau_earth_acc_vec[2] = factor * pos_vec[2] * (5 * pos_vec[2]**2 / pos_mag_pwr2 - 3)
-    
-    # Transform acceleration back to J2000
-    j2000_acc_vec = rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
-    
-    return j2000_acc_vec
-  
-  def tesseral_21(
-    self,
-    time_et       : float,
-    j2000_pos_vec : np.ndarray,
-  ) -> np.ndarray:
-    """
-    Compute C21 and S21 tesseral harmonic perturbation acceleration.
-    
-    Input:
-    ------
-      time_et : float
-        Current Ephemeris Time (ET) [s]
-      j2000_pos_vec : np.ndarray
-        Position vector [m] in inertial frame (J2000).
-    
-    Output:
-    -------
-      acc_vec : np.ndarray
-        Acceleration vector [m/s²] in Inertial frame.
-    """
-    if self.c21 == 0.0 and self.s21 == 0.0:
-      return np.zeros(3)
-
-    try:
-      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
-    except Exception:
-      return np.zeros(3)
-
-    iau_earth_pos_vec   = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
-    pos_x, pos_y, pos_z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
-    
-    pos_mag_pwr2 = pos_x**2 + pos_y**2 + pos_z**2
-    pos_mag      = np.sqrt(pos_mag_pwr2)
-    pos_mag_pwr7 = pos_mag_pwr2**3 * pos_mag
-    
-    term_common = self.c21 * pos_x + self.s21 * pos_y
-    factor      = 3.0 * self.gp * self.pos_ref**2 / pos_mag_pwr7
-    
-    iau_earth_acc_x   = factor * pos_z * (self.c21 * pos_mag_pwr2 - 5.0 * pos_x * term_common)
-    iau_earth_acc_y   = factor * pos_z * (self.s21 * pos_mag_pwr2 - 5.0 * pos_y * term_common)
-    iau_earth_acc_z   = factor * (term_common * pos_mag_pwr2 - 5.0 * pos_z**2 * term_common)
-    iau_earth_acc_vec = np.array([iau_earth_acc_x, iau_earth_acc_y, iau_earth_acc_z])
-    
-    return rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
-
-  def tesseral_22(
-    self,
-    time_et       : float,
-    j2000_pos_vec : np.ndarray,
-  ) -> np.ndarray:
-    """
-    Compute C22 and S22 tesseral harmonic perturbation acceleration.
-    
-    Input:
-    ------
-      time_et : float
-        Current Ephemeris Time (ET) [s]
-      j2000_pos_vec : np.ndarray
-        Position vector [m] in inertial frame (J2000).
-    
-    Output:
-    -------
-      acc_vec : np.ndarray
-        Acceleration vector [m/s²] in Inertial frame.
-    """
-    if self.c22 == 0.0 and self.s22 == 0.0:
-      return np.zeros(3)
-
-    # Get rotation matrix from J2000 to Body-Fixed (IAU_EARTH)
-    try:
-      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
-    except Exception:
-      # Fallback or return zero if kernels not loaded/available
-      return np.zeros(3)
-
-    # Rotate position to Body-Fixed frame
-    iau_earth_pos_vec   = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
-    pos_x, pos_y, pos_z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
-    
-    pos_mag_pwr2 = pos_x**2 + pos_y**2 + pos_z**2
-    pos_mag      = np.sqrt(pos_mag_pwr2)
-    pos_mag_pwr7 = pos_mag_pwr2**3 * pos_mag
-    
-    # Pre-compute terms for efficiency
-    term_common = self.c22 * (pos_x**2 - pos_y**2) + 2.0 * self.s22 * pos_x * pos_y
-    factor      = 3.0 * self.gp * self.pos_ref**2 / pos_mag_pwr7
-    
-    # Acceleration
-    #   potential -> acc_vec = gradient(potential) 
-    #     U22 = (3 * gp * earth_radius^2 / pos_mag^5) * (C22*(pos_x^2 - pos_y^2) + 2*S22*pos_x*pos_y)
-    #     acc_vec = d/dpos_vec(U22)
-    iau_earth_acc_x   = factor * (-5.0 * pos_x * term_common + pos_mag_pwr2 * ( 2.0 * self.c22 * pos_x + 2.0 * self.s22 * pos_y))
-    iau_earth_acc_y   = factor * (-5.0 * pos_y * term_common + pos_mag_pwr2 * (-2.0 * self.c22 * pos_y + 2.0 * self.s22 * pos_x))
-    iau_earth_acc_z   = factor * (-5.0 * pos_z * term_common)
-    iau_earth_acc_vec = np.array([iau_earth_acc_x, iau_earth_acc_y, iau_earth_acc_z])
-    
-    # Rotate acceleration back to inertial frame
-    j2000_acc_vec = rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
-    
-    # Return acceleration vector in inertial frame
-    return j2000_acc_vec
-
-  def tesseral_31(
-    self,
-    time_et       : float,
-    j2000_pos_vec : np.ndarray,
-  ) -> np.ndarray:
-    """
-    Compute C31 and S31 tesseral harmonic perturbation acceleration.
-    
-    Input:
-    ------
-      time_et : float
-        Current Ephemeris Time (ET) [s]
-      j2000_pos_vec : np.ndarray
-        Position vector [m] in inertial frame (J2000).
-    
-    Output:
-    -------
-      acc_vec : np.ndarray
-        Acceleration vector [m/s²] in Inertial frame.
-    """
-    if self.c31 == 0.0 and self.s31 == 0.0:
-      return np.zeros(3)
-
-    try:
-      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
-    except Exception:
-      return np.zeros(3)
-
-    iau_earth_pos_vec   = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
-    pos_x, pos_y, pos_z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
-    
-    pos_mag_pwr2 = pos_x**2 + pos_y**2 + pos_z**2
-    pos_mag      = np.sqrt(pos_mag_pwr2)
-    pos_mag_pwr9 = pos_mag_pwr2**4 * pos_mag
-    
-    term_common = self.c31 * pos_x + self.s31 * pos_y
-    factor      = 1.5 * self.gp * self.pos_ref**3 / pos_mag_pwr9
-    
-    # (5z^2 - r^2) term
-    z2_term = 5.0 * pos_z**2 - pos_mag_pwr2
-    
-    iau_earth_acc_x   = factor * (self.c31 * z2_term - 7.0 * pos_x * term_common * z2_term / pos_mag_pwr2 + 10.0 * pos_x * pos_z**2 * term_common / pos_mag_pwr2)
-    iau_earth_acc_y   = factor * (self.s31 * z2_term - 7.0 * pos_y * term_common * z2_term / pos_mag_pwr2 + 10.0 * pos_y * pos_z**2 * term_common / pos_mag_pwr2)
-    iau_earth_acc_z   = factor * (10.0 * pos_z * term_common - 7.0 * pos_z * term_common * z2_term / pos_mag_pwr2)
-    iau_earth_acc_vec = np.array([iau_earth_acc_x, iau_earth_acc_y, iau_earth_acc_z])
-    
-    return rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
-
-  def tesseral_32(
-    self,
-    time_et       : float,
-    j2000_pos_vec : np.ndarray,
-  ) -> np.ndarray:
-    """
-    Compute C32 and S32 tesseral harmonic perturbation acceleration.
-    
-    Input:
-    ------
-      time_et : float
-        Current Ephemeris Time (ET) [s]
-      j2000_pos_vec : np.ndarray
-        Position vector [m] in inertial frame (J2000).
-    
-    Output:
-    -------
-      acc_vec : np.ndarray
-        Acceleration vector [m/s²] in Inertial frame.
-    """
-    if self.c32 == 0.0 and self.s32 == 0.0:
-      return np.zeros(3)
-
-    try:
-      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
-    except Exception:
-      return np.zeros(3)
-
-    iau_earth_pos_vec   = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
-    pos_x, pos_y, pos_z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
-    
-    pos_mag_pwr2 = pos_x**2 + pos_y**2 + pos_z**2
-    pos_mag      = np.sqrt(pos_mag_pwr2)
-    pos_mag_pwr9 = pos_mag_pwr2**4 * pos_mag
-    
-    term_common = self.c32 * (pos_x**2 - pos_y**2) + 2.0 * self.s32 * pos_x * pos_y
-    factor      = 3.0 * self.gp * self.pos_ref**3 / pos_mag_pwr9
-    
-    iau_earth_acc_x   = factor * pos_z * (2.0 * self.c32 * pos_x + 2.0 * self.s32 * pos_y - 7.0 * pos_x * term_common / pos_mag_pwr2)
-    iau_earth_acc_y   = factor * pos_z * (-2.0 * self.c32 * pos_y + 2.0 * self.s32 * pos_x - 7.0 * pos_y * term_common / pos_mag_pwr2)
-    iau_earth_acc_z   = factor * (term_common - 7.0 * pos_z**2 * term_common / pos_mag_pwr2)
-    iau_earth_acc_vec = np.array([iau_earth_acc_x, iau_earth_acc_y, iau_earth_acc_z])
-    
-    return rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
-
-  def tesseral_33(
-    self,
-    time_et       : float,
-    j2000_pos_vec : np.ndarray,
-  ) -> np.ndarray:
-    """
-    Compute C33 and S33 tesseral harmonic perturbation acceleration.
-    
-    Input:
-    ------
-      time_et : float
-        Current Ephemeris Time (ET) [s]
-      j2000_pos_vec : np.ndarray
-        Position vector [m] in inertial frame (J2000).
-    
-    Output:
-    -------
-      acc_vec : np.ndarray
-        Acceleration vector [m/s²] in Inertial frame.
-    """
-    if self.c33 == 0.0 and self.s33 == 0.0:
-      return np.zeros(3)
-
-    try:
-      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
-    except Exception:
-      return np.zeros(3)
-
-    iau_earth_pos_vec   = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
-    pos_x, pos_y, pos_z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
-    
-    pos_mag_pwr2 = pos_x**2 + pos_y**2 + pos_z**2
-    pos_mag      = np.sqrt(pos_mag_pwr2)
-    pos_mag_pwr9 = pos_mag_pwr2**4 * pos_mag
-    
-    # cos(3*lon) term: x*(x^2-3y^2), sin(3*lon) term: y*(3x^2-y^2)
-    term_c33    = pos_x * (pos_x**2 - 3.0 * pos_y**2)
-    term_s33    = pos_y * (3.0 * pos_x**2 - pos_y**2)
-    term_common = self.c33 * term_c33 + self.s33 * term_s33
-    factor      = 1.0 * self.gp * self.pos_ref**3 / pos_mag_pwr9
-    
-    # Partial derivatives of term_c33 and term_s33
-    d_term_c33_dx = 3.0 * pos_x**2 - 3.0 * pos_y**2
-    d_term_c33_dy = -6.0 * pos_x * pos_y
-    d_term_s33_dx = 6.0 * pos_x * pos_y
-    d_term_s33_dy = 3.0 * pos_x**2 - 3.0 * pos_y**2
-    
-    iau_earth_acc_x   = factor * (self.c33 * d_term_c33_dx + self.s33 * d_term_s33_dx - 7.0 * pos_x * term_common / pos_mag_pwr2)
-    iau_earth_acc_y   = factor * (self.c33 * d_term_c33_dy + self.s33 * d_term_s33_dy - 7.0 * pos_y * term_common / pos_mag_pwr2)
-    iau_earth_acc_z   = factor * (-7.0 * pos_z * term_common / pos_mag_pwr2)
-    iau_earth_acc_vec = np.array([iau_earth_acc_x, iau_earth_acc_y, iau_earth_acc_z])
-    
-    return rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
 
   def oblate_j3(
     self,
@@ -697,9 +448,686 @@ class TwoBodyGravity:
     
     # Transform acceleration back to J2000
     j2000_acc_vec = rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
-    
+
     return j2000_acc_vec
+
+  def oblate_j3_jacobian(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Analytical 3x3 Jacobian matrix for J3 oblateness perturbation.
+
+    Computes ∂a_J3/∂r, the partial derivative of J3 acceleration with respect
+    to position. This is added to the gravity gradient in the STM A matrix.
+
+    The J3 acceleration in body-fixed frame is:
+      a_x = k * x * z * (3 - 7z²/r²)
+      a_y = k * y * z * (3 - 7z²/r²)
+      a_z = k * (3z² - 7z⁴/r² - 0.6r²)
+
+    where k = 2.5 * J3 * μ * R_e³ / r⁷
+
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in Inertial frame (J2000).
+
+    Output:
+    -------
+      daccvec__dposvec : np.ndarray (3x3)
+        Jacobian matrix ∂a_J3/∂r in J2000 frame
+    """
+    if self.j3 == 0.0:
+      return np.zeros((3, 3))
+
+    # Get rotation matrix from J2000 to Body-Fixed (IAU_EARTH)
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      rot_mat_j2000_to_iau_earth = np.eye(3)
+
+    # Transform position to body-fixed frame
+    pos_vec = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    x, y, z = pos_vec[0], pos_vec[1], pos_vec[2]
+
+    pos_mag      = np.linalg.norm(pos_vec)
+    pos_mag_pwr2 = pos_mag**2
+    pos_mag_pwr4 = pos_mag_pwr2**2
+    pos_mag_pwr7 = pos_mag_pwr4 * pos_mag_pwr2 * pos_mag
+    pos_mag_pwr9 = pos_mag_pwr7 * pos_mag_pwr2
+
+    # Common factors
+    k  = 2.5 * self.j3 * self.gp * self.pos_ref**3
+    z2 = z**2
+    z2_over_r2 = z2 / pos_mag_pwr2
+
+    # Jacobian in body-fixed frame
+    jac_bf = np.zeros((3, 3))
+
+    # Common terms
+    term1 = 3.0 - 7.0 * z2_over_r2
+
+    # ∂a_x/∂x, ∂a_x/∂y, ∂a_x/∂z
+    jac_bf[0, 0] = k / pos_mag_pwr7 * z * (term1 - 7.0 * x**2 / pos_mag_pwr2 * (1.0 - 9.0 * z2_over_r2))
+    jac_bf[0, 1] = k / pos_mag_pwr7 * z * (-7.0 * x * y / pos_mag_pwr2 * (1.0 - 9.0 * z2_over_r2))
+    jac_bf[0, 2] = k / pos_mag_pwr7 * x * (3.0 * pos_mag_pwr2 - 21.0 * z2 + 14.0 * z * x * z / pos_mag_pwr2 * (1.0 - 9.0 * z2_over_r2))
+
+    # ∂a_y/∂x, ∂a_y/∂y, ∂a_y/∂z
+    jac_bf[1, 0] = k / pos_mag_pwr7 * z * (-7.0 * y * x / pos_mag_pwr2 * (1.0 - 9.0 * z2_over_r2))
+    jac_bf[1, 1] = k / pos_mag_pwr7 * z * (term1 - 7.0 * y**2 / pos_mag_pwr2 * (1.0 - 9.0 * z2_over_r2))
+    jac_bf[1, 2] = k / pos_mag_pwr7 * y * (3.0 * pos_mag_pwr2 - 21.0 * z2 + 14.0 * z * y * z / pos_mag_pwr2 * (1.0 - 9.0 * z2_over_r2))
+
+    # ∂a_z/∂x, ∂a_z/∂y, ∂a_z/∂z
+    jac_bf[2, 0] = k / pos_mag_pwr7 * x * (-1.2 * pos_mag_pwr2 + 21.0 * z2 - 28.0 * z2_over_r2**2)
+    jac_bf[2, 1] = k / pos_mag_pwr7 * y * (-1.2 * pos_mag_pwr2 + 21.0 * z2 - 28.0 * z2_over_r2**2)
+    jac_bf[2, 2] = k / pos_mag_pwr7 * (6.0 * z * pos_mag_pwr2 - 42.0 * z2_over_r2 * z + 14.0 * z / pos_mag_pwr2 * (3.0 * z2 - 7.0 * z2_over_r2**2 - 0.6 * pos_mag_pwr2))
+
+    # Transform Jacobian back to J2000 frame
+    rot_T = rot_mat_j2000_to_iau_earth.T
+    j2000_jac = rot_T @ jac_bf @ rot_mat_j2000_to_iau_earth
+
+    return j2000_jac
+
+  def tesseral_21(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Compute C21 and S21 tesseral harmonic perturbation acceleration.
     
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in inertial frame (J2000).
+    
+    Output:
+    -------
+      acc_vec : np.ndarray
+        Acceleration vector [m/s²] in Inertial frame.
+    """
+    if self.c21 == 0.0 and self.s21 == 0.0:
+      return np.zeros(3)
+
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      return np.zeros(3)
+
+    iau_earth_pos_vec   = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    pos_x, pos_y, pos_z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
+    
+    pos_mag_pwr2 = pos_x**2 + pos_y**2 + pos_z**2
+    pos_mag      = np.sqrt(pos_mag_pwr2)
+    pos_mag_pwr7 = pos_mag_pwr2**3 * pos_mag
+    
+    term_common = self.c21 * pos_x + self.s21 * pos_y
+    factor      = 3.0 * self.gp * self.pos_ref**2 / pos_mag_pwr7
+    
+    iau_earth_acc_x   = factor * pos_z * (self.c21 * pos_mag_pwr2 - 5.0 * pos_x * term_common)
+    iau_earth_acc_y   = factor * pos_z * (self.s21 * pos_mag_pwr2 - 5.0 * pos_y * term_common)
+    iau_earth_acc_z   = factor * (term_common * pos_mag_pwr2 - 5.0 * pos_z**2 * term_common)
+    iau_earth_acc_vec = np.array([iau_earth_acc_x, iau_earth_acc_y, iau_earth_acc_z])
+
+    return rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
+
+  def tesseral_21_jacobian(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Analytical 3x3 Jacobian matrix for C21 and S21 tesseral harmonic perturbation.
+
+    Computes ∂a_T21/∂r, the partial derivative of T21 acceleration with respect
+    to position.
+
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in inertial frame (J2000).
+
+    Output:
+    -------
+      daccvec__dposvec : np.ndarray (3x3)
+        Jacobian matrix ∂a_T21/∂r in J2000 frame
+    """
+    if self.c21 == 0.0 and self.s21 == 0.0:
+      return np.zeros((3, 3))
+
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      return np.zeros((3, 3))
+
+    iau_earth_pos_vec = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    x, y, z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
+
+    pos_mag_pwr2 = x**2 + y**2 + z**2
+    pos_mag      = np.sqrt(pos_mag_pwr2)
+    pos_mag_pwr7 = pos_mag_pwr2**3 * pos_mag
+    pos_mag_pwr9 = pos_mag_pwr7 * pos_mag_pwr2
+
+    term_common = self.c21 * x + self.s21 * y
+    factor      = 3.0 * self.gp * self.pos_ref**2 / pos_mag_pwr7
+
+    # Jacobian in body-fixed frame
+    jac_bf = np.zeros((3, 3))
+
+    # ∂a_x/∂x, ∂a_x/∂y, ∂a_x/∂z
+    jac_bf[0, 0] = factor * z * (self.c21 * 2.0 * x - 5.0 * (self.c21 * x + term_common * x / pos_mag_pwr2) - 7.0 * x / pos_mag_pwr2 * (self.c21 * pos_mag_pwr2 - 5.0 * x * term_common))
+    jac_bf[0, 1] = factor * z * (self.c21 * 2.0 * y - 5.0 * (self.s21 * x + term_common * y / pos_mag_pwr2) - 7.0 * y / pos_mag_pwr2 * (self.c21 * pos_mag_pwr2 - 5.0 * x * term_common))
+    jac_bf[0, 2] = factor * (self.c21 * pos_mag_pwr2 - 5.0 * x * term_common - 7.0 * z**2 / pos_mag_pwr2 * (self.c21 * pos_mag_pwr2 - 5.0 * x * term_common) + 10.0 * z * term_common)
+
+    # ∂a_y/∂x, ∂a_y/∂y, ∂a_y/∂z
+    jac_bf[1, 0] = factor * z * (self.s21 * 2.0 * x - 5.0 * (self.c21 * y + term_common * x / pos_mag_pwr2) - 7.0 * x / pos_mag_pwr2 * (self.s21 * pos_mag_pwr2 - 5.0 * y * term_common))
+    jac_bf[1, 1] = factor * z * (self.s21 * 2.0 * y - 5.0 * (self.s21 * y + term_common * y / pos_mag_pwr2) - 7.0 * y / pos_mag_pwr2 * (self.s21 * pos_mag_pwr2 - 5.0 * y * term_common))
+    jac_bf[1, 2] = factor * (self.s21 * pos_mag_pwr2 - 5.0 * y * term_common - 7.0 * z**2 / pos_mag_pwr2 * (self.s21 * pos_mag_pwr2 - 5.0 * y * term_common) + 10.0 * z * term_common)
+
+    # ∂a_z/∂x, ∂a_z/∂y, ∂a_z/∂z
+    jac_bf[2, 0] = factor * (self.c21 * 2.0 * x - 5.0 * term_common * 2.0 * x / pos_mag_pwr2 - 7.0 * x / pos_mag_pwr2 * (term_common * pos_mag_pwr2 - 5.0 * z**2 * term_common))
+    jac_bf[2, 1] = factor * (self.s21 * 2.0 * y - 5.0 * term_common * 2.0 * y / pos_mag_pwr2 - 7.0 * y / pos_mag_pwr2 * (term_common * pos_mag_pwr2 - 5.0 * z**2 * term_common))
+    jac_bf[2, 2] = factor * (-10.0 * z * term_common - 7.0 * z / pos_mag_pwr2 * (term_common * pos_mag_pwr2 - 5.0 * z**2 * term_common) + 10.0 * term_common * 2.0 * z)
+
+    # Transform Jacobian back to J2000 frame
+    rot_T = rot_mat_j2000_to_iau_earth.T
+    j2000_jac = rot_T @ jac_bf @ rot_mat_j2000_to_iau_earth
+
+    return j2000_jac
+
+  def tesseral_22(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Compute C22 and S22 tesseral harmonic perturbation acceleration.
+    
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in inertial frame (J2000).
+    
+    Output:
+    -------
+      acc_vec : np.ndarray
+        Acceleration vector [m/s²] in Inertial frame.
+    """
+    if self.c22 == 0.0 and self.s22 == 0.0:
+      return np.zeros(3)
+
+    # Get rotation matrix from J2000 to Body-Fixed (IAU_EARTH)
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      # Fallback or return zero if kernels not loaded/available
+      return np.zeros(3)
+
+    # Rotate position to Body-Fixed frame
+    iau_earth_pos_vec   = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    pos_x, pos_y, pos_z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
+    
+    pos_mag_pwr2 = pos_x**2 + pos_y**2 + pos_z**2
+    pos_mag      = np.sqrt(pos_mag_pwr2)
+    pos_mag_pwr7 = pos_mag_pwr2**3 * pos_mag
+    
+    # Pre-compute terms for efficiency
+    term_common = self.c22 * (pos_x**2 - pos_y**2) + 2.0 * self.s22 * pos_x * pos_y
+    factor      = 3.0 * self.gp * self.pos_ref**2 / pos_mag_pwr7
+    
+    # Acceleration
+    #   potential -> acc_vec = gradient(potential) 
+    #     U22 = (3 * gp * earth_radius^2 / pos_mag^5) * (C22*(pos_x^2 - pos_y^2) + 2*S22*pos_x*pos_y)
+    #     acc_vec = d/dpos_vec(U22)
+    iau_earth_acc_x   = factor * (-5.0 * pos_x * term_common + pos_mag_pwr2 * ( 2.0 * self.c22 * pos_x + 2.0 * self.s22 * pos_y))
+    iau_earth_acc_y   = factor * (-5.0 * pos_y * term_common + pos_mag_pwr2 * (-2.0 * self.c22 * pos_y + 2.0 * self.s22 * pos_x))
+    iau_earth_acc_z   = factor * (-5.0 * pos_z * term_common)
+    iau_earth_acc_vec = np.array([iau_earth_acc_x, iau_earth_acc_y, iau_earth_acc_z])
+    
+    # Rotate acceleration back to inertial frame
+    j2000_acc_vec = rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
+
+    # Return acceleration vector in inertial frame
+    return j2000_acc_vec
+
+  def tesseral_22_jacobian(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Analytical 3x3 Jacobian matrix for C22 and S22 tesseral harmonic perturbation.
+
+    Computes ∂a_T22/∂r, the partial derivative of T22 acceleration with respect
+    to position.
+
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in inertial frame (J2000).
+
+    Output:
+    -------
+      daccvec__dposvec : np.ndarray (3x3)
+        Jacobian matrix ∂a_T22/∂r in J2000 frame
+    """
+    if self.c22 == 0.0 and self.s22 == 0.0:
+      return np.zeros((3, 3))
+
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      return np.zeros((3, 3))
+
+    iau_earth_pos_vec = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    x, y, z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
+
+    pos_mag_pwr2 = x**2 + y**2 + z**2
+    pos_mag      = np.sqrt(pos_mag_pwr2)
+    pos_mag_pwr7 = pos_mag_pwr2**3 * pos_mag
+
+    term_common = self.c22 * (x**2 - y**2) + 2.0 * self.s22 * x * y
+    factor      = 3.0 * self.gp * self.pos_ref**2 / pos_mag_pwr7
+
+    # Derivatives of term_common
+    d_term_dx = 2.0 * self.c22 * x + 2.0 * self.s22 * y
+    d_term_dy = -2.0 * self.c22 * y + 2.0 * self.s22 * x
+
+    # Jacobian in body-fixed frame
+    jac_bf = np.zeros((3, 3))
+
+    # ∂a_x/∂x, ∂a_x/∂y, ∂a_x/∂z
+    jac_bf[0, 0] = factor * (-5.0 * d_term_dx * x - 5.0 * term_common + 2.0 * self.c22 * pos_mag_pwr2 + 2.0 * d_term_dx * x - 7.0 * x / pos_mag_pwr2 * (-5.0 * x * term_common + pos_mag_pwr2 * d_term_dx))
+    jac_bf[0, 1] = factor * (-5.0 * d_term_dy * x - 7.0 * y / pos_mag_pwr2 * (-5.0 * x * term_common + pos_mag_pwr2 * d_term_dx) + 2.0 * self.s22 * pos_mag_pwr2 + 2.0 * d_term_dy * x)
+    jac_bf[0, 2] = factor * (-7.0 * z / pos_mag_pwr2 * (-5.0 * x * term_common + pos_mag_pwr2 * d_term_dx))
+
+    # ∂a_y/∂x, ∂a_y/∂y, ∂a_y/∂z
+    jac_bf[1, 0] = factor * (-5.0 * d_term_dx * y - 7.0 * x / pos_mag_pwr2 * (-5.0 * y * term_common + pos_mag_pwr2 * d_term_dy) + 2.0 * self.s22 * pos_mag_pwr2 + 2.0 * d_term_dx * y)
+    jac_bf[1, 1] = factor * (-5.0 * d_term_dy * y - 5.0 * term_common - 2.0 * self.c22 * pos_mag_pwr2 + 2.0 * d_term_dy * y - 7.0 * y / pos_mag_pwr2 * (-5.0 * y * term_common + pos_mag_pwr2 * d_term_dy))
+    jac_bf[1, 2] = factor * (-7.0 * z / pos_mag_pwr2 * (-5.0 * y * term_common + pos_mag_pwr2 * d_term_dy))
+
+    # ∂a_z/∂x, ∂a_z/∂y, ∂a_z/∂z
+    jac_bf[2, 0] = factor * (-5.0 * d_term_dx * z - 7.0 * x / pos_mag_pwr2 * (-5.0 * z * term_common))
+    jac_bf[2, 1] = factor * (-5.0 * d_term_dy * z - 7.0 * y / pos_mag_pwr2 * (-5.0 * z * term_common))
+    jac_bf[2, 2] = factor * (-5.0 * term_common - 7.0 * z / pos_mag_pwr2 * (-5.0 * z * term_common))
+
+    # Transform Jacobian back to J2000 frame
+    rot_T = rot_mat_j2000_to_iau_earth.T
+    j2000_jac = rot_T @ jac_bf @ rot_mat_j2000_to_iau_earth
+
+    return j2000_jac
+
+  def tesseral_31(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Compute C31 and S31 tesseral harmonic perturbation acceleration.
+    
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in inertial frame (J2000).
+    
+    Output:
+    -------
+      acc_vec : np.ndarray
+        Acceleration vector [m/s²] in Inertial frame.
+    """
+    if self.c31 == 0.0 and self.s31 == 0.0:
+      return np.zeros(3)
+
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      return np.zeros(3)
+
+    iau_earth_pos_vec   = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    pos_x, pos_y, pos_z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
+    
+    pos_mag_pwr2 = pos_x**2 + pos_y**2 + pos_z**2
+    pos_mag      = np.sqrt(pos_mag_pwr2)
+    pos_mag_pwr9 = pos_mag_pwr2**4 * pos_mag
+    
+    term_common = self.c31 * pos_x + self.s31 * pos_y
+    factor      = 1.5 * self.gp * self.pos_ref**3 / pos_mag_pwr9
+    
+    # (5z^2 - r^2) term
+    z2_term = 5.0 * pos_z**2 - pos_mag_pwr2
+    
+    iau_earth_acc_x   = factor * (self.c31 * z2_term - 7.0 * pos_x * term_common * z2_term / pos_mag_pwr2 + 10.0 * pos_x * pos_z**2 * term_common / pos_mag_pwr2)
+    iau_earth_acc_y   = factor * (self.s31 * z2_term - 7.0 * pos_y * term_common * z2_term / pos_mag_pwr2 + 10.0 * pos_y * pos_z**2 * term_common / pos_mag_pwr2)
+    iau_earth_acc_z   = factor * (10.0 * pos_z * term_common - 7.0 * pos_z * term_common * z2_term / pos_mag_pwr2)
+    iau_earth_acc_vec = np.array([iau_earth_acc_x, iau_earth_acc_y, iau_earth_acc_z])
+
+    return rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
+
+  def tesseral_31_jacobian(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Analytical 3x3 Jacobian matrix for C31 and S31 tesseral harmonic perturbation.
+
+    Computes ∂a_T31/∂r, the partial derivative of T31 acceleration with respect
+    to position.
+
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in inertial frame (J2000).
+
+    Output:
+    -------
+      daccvec__dposvec : np.ndarray (3x3)
+        Jacobian matrix ∂a_T31/∂r in J2000 frame
+    """
+    if self.c31 == 0.0 and self.s31 == 0.0:
+      return np.zeros((3, 3))
+
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      return np.zeros((3, 3))
+
+    iau_earth_pos_vec = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    x, y, z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
+
+    pos_mag_pwr2 = x**2 + y**2 + z**2
+    pos_mag      = np.sqrt(pos_mag_pwr2)
+    pos_mag_pwr9 = pos_mag_pwr2**4 * pos_mag
+
+    term_common = self.c31 * x + self.s31 * y
+    factor      = 1.5 * self.gp * self.pos_ref**3 / pos_mag_pwr9
+    z2_term     = 5.0 * z**2 - pos_mag_pwr2
+
+    # Jacobian in body-fixed frame
+    jac_bf = np.zeros((3, 3))
+
+    # ∂a_x/∂x, ∂a_x/∂y, ∂a_x/∂z
+    jac_bf[0, 0] = factor * (self.c31 * z2_term - 2.0 * self.c31 * x - 7.0 * x * term_common * z2_term / pos_mag_pwr2 + 14.0 * x**2 * term_common * z2_term / pos_mag_pwr2**2 + 10.0 * x * z**2 * term_common / pos_mag_pwr2 - 20.0 * x**3 * z**2 * term_common / pos_mag_pwr2**2 + 20.0 * z**2 * term_common / pos_mag_pwr2 - 9.0 * x / pos_mag_pwr2 * (self.c31 * z2_term - 7.0 * x * term_common * z2_term / pos_mag_pwr2 + 10.0 * x * z**2 * term_common / pos_mag_pwr2))
+    jac_bf[0, 1] = factor * (self.s31 * z2_term - 2.0 * self.c31 * y - 7.0 * y * term_common * z2_term / pos_mag_pwr2 + 14.0 * x * y * term_common * z2_term / pos_mag_pwr2**2 + 10.0 * y * z**2 * term_common / pos_mag_pwr2 - 20.0 * x**2 * y * z**2 * term_common / pos_mag_pwr2**2 - 9.0 * y / pos_mag_pwr2 * (self.c31 * z2_term - 7.0 * x * term_common * z2_term / pos_mag_pwr2 + 10.0 * x * z**2 * term_common / pos_mag_pwr2))
+    jac_bf[0, 2] = factor * (10.0 * self.c31 * z - 14.0 * z * term_common * z2_term / pos_mag_pwr2 + 14.0 * x * z / pos_mag_pwr2 * term_common * z2_term * (1.0 - z**2 / pos_mag_pwr2) + 20.0 * x * z * term_common / pos_mag_pwr2 - 20.0 * x * z**3 * term_common / pos_mag_pwr2**2 - 9.0 * z / pos_mag_pwr2 * (self.c31 * z2_term - 7.0 * x * term_common * z2_term / pos_mag_pwr2 + 10.0 * x * z**2 * term_common / pos_mag_pwr2))
+
+    # ∂a_y/∂x, ∂a_y/∂y, ∂a_y/∂z (similar structure)
+    jac_bf[1, 0] = factor * (self.s31 * z2_term - 2.0 * self.s31 * x - 7.0 * x * term_common * z2_term / pos_mag_pwr2 + 14.0 * x * y * term_common * z2_term / pos_mag_pwr2**2 + 10.0 * x * z**2 * term_common / pos_mag_pwr2 - 20.0 * x * y**2 * z**2 * term_common / pos_mag_pwr2**2 - 9.0 * x / pos_mag_pwr2 * (self.s31 * z2_term - 7.0 * y * term_common * z2_term / pos_mag_pwr2 + 10.0 * y * z**2 * term_common / pos_mag_pwr2))
+    jac_bf[1, 1] = factor * (self.s31 * z2_term - 2.0 * self.s31 * y - 7.0 * y * term_common * z2_term / pos_mag_pwr2 + 14.0 * y**2 * term_common * z2_term / pos_mag_pwr2**2 + 10.0 * y * z**2 * term_common / pos_mag_pwr2 - 20.0 * y**3 * z**2 * term_common / pos_mag_pwr2**2 + 20.0 * z**2 * term_common / pos_mag_pwr2 - 9.0 * y / pos_mag_pwr2 * (self.s31 * z2_term - 7.0 * y * term_common * z2_term / pos_mag_pwr2 + 10.0 * y * z**2 * term_common / pos_mag_pwr2))
+    jac_bf[1, 2] = factor * (10.0 * self.s31 * z - 14.0 * z * term_common * z2_term / pos_mag_pwr2 + 14.0 * y * z / pos_mag_pwr2 * term_common * z2_term * (1.0 - z**2 / pos_mag_pwr2) + 20.0 * y * z * term_common / pos_mag_pwr2 - 20.0 * y * z**3 * term_common / pos_mag_pwr2**2 - 9.0 * z / pos_mag_pwr2 * (self.s31 * z2_term - 7.0 * y * term_common * z2_term / pos_mag_pwr2 + 10.0 * y * z**2 * term_common / pos_mag_pwr2))
+
+    # ∂a_z/∂x, ∂a_z/∂y, ∂a_z/∂z
+    jac_bf[2, 0] = factor * (10.0 * self.c31 * z - 7.0 * self.c31 * z * z2_term / pos_mag_pwr2 + 14.0 * self.c31 * z * x / pos_mag_pwr2 - 7.0 * x * term_common * z2_term / pos_mag_pwr2 + 14.0 * x * z * term_common * z2_term / pos_mag_pwr2**2 - 9.0 * x / pos_mag_pwr2 * (10.0 * z * term_common - 7.0 * z * term_common * z2_term / pos_mag_pwr2))
+    jac_bf[2, 1] = factor * (10.0 * self.s31 * z - 7.0 * self.s31 * z * z2_term / pos_mag_pwr2 + 14.0 * self.s31 * z * y / pos_mag_pwr2 - 7.0 * y * term_common * z2_term / pos_mag_pwr2 + 14.0 * y * z * term_common * z2_term / pos_mag_pwr2**2 - 9.0 * y / pos_mag_pwr2 * (10.0 * z * term_common - 7.0 * z * term_common * z2_term / pos_mag_pwr2))
+    jac_bf[2, 2] = factor * (10.0 * term_common - 7.0 * term_common * z2_term / pos_mag_pwr2 + 20.0 * term_common * z**2 / pos_mag_pwr2 - 14.0 * term_common * z**2 * z2_term / pos_mag_pwr2**2 - 9.0 * z / pos_mag_pwr2 * (10.0 * z * term_common - 7.0 * z * term_common * z2_term / pos_mag_pwr2))
+
+    # Transform Jacobian back to J2000 frame
+    rot_T = rot_mat_j2000_to_iau_earth.T
+    j2000_jac = rot_T @ jac_bf @ rot_mat_j2000_to_iau_earth
+
+    return j2000_jac
+
+  def tesseral_32(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Compute C32 and S32 tesseral harmonic perturbation acceleration.
+    
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in inertial frame (J2000).
+    
+    Output:
+    -------
+      acc_vec : np.ndarray
+        Acceleration vector [m/s²] in Inertial frame.
+    """
+    if self.c32 == 0.0 and self.s32 == 0.0:
+      return np.zeros(3)
+
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      return np.zeros(3)
+
+    iau_earth_pos_vec   = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    pos_x, pos_y, pos_z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
+    
+    pos_mag_pwr2 = pos_x**2 + pos_y**2 + pos_z**2
+    pos_mag      = np.sqrt(pos_mag_pwr2)
+    pos_mag_pwr9 = pos_mag_pwr2**4 * pos_mag
+    
+    term_common = self.c32 * (pos_x**2 - pos_y**2) + 2.0 * self.s32 * pos_x * pos_y
+    factor      = 3.0 * self.gp * self.pos_ref**3 / pos_mag_pwr9
+    
+    iau_earth_acc_x   = factor * pos_z * (2.0 * self.c32 * pos_x + 2.0 * self.s32 * pos_y - 7.0 * pos_x * term_common / pos_mag_pwr2)
+    iau_earth_acc_y   = factor * pos_z * (-2.0 * self.c32 * pos_y + 2.0 * self.s32 * pos_x - 7.0 * pos_y * term_common / pos_mag_pwr2)
+    iau_earth_acc_z   = factor * (term_common - 7.0 * pos_z**2 * term_common / pos_mag_pwr2)
+    iau_earth_acc_vec = np.array([iau_earth_acc_x, iau_earth_acc_y, iau_earth_acc_z])
+
+    return rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
+
+  def tesseral_32_jacobian(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Analytical 3x3 Jacobian matrix for C32 and S32 tesseral harmonic perturbation.
+
+    Computes ∂a_T32/∂r, the partial derivative of T32 acceleration with respect
+    to position.
+
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in inertial frame (J2000).
+
+    Output:
+    -------
+      daccvec__dposvec : np.ndarray (3x3)
+        Jacobian matrix ∂a_T32/∂r in J2000 frame
+    """
+    if self.c32 == 0.0 and self.s32 == 0.0:
+      return np.zeros((3, 3))
+
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      return np.zeros((3, 3))
+
+    iau_earth_pos_vec = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    x, y, z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
+
+    pos_mag_pwr2 = x**2 + y**2 + z**2
+    pos_mag      = np.sqrt(pos_mag_pwr2)
+    pos_mag_pwr9 = pos_mag_pwr2**4 * pos_mag
+
+    term_common = self.c32 * (x**2 - y**2) + 2.0 * self.s32 * x * y
+    factor      = 3.0 * self.gp * self.pos_ref**3 / pos_mag_pwr9
+
+    # Derivatives of term_common
+    d_term_dx = 2.0 * self.c32 * x + 2.0 * self.s32 * y
+    d_term_dy = -2.0 * self.c32 * y + 2.0 * self.s32 * x
+
+    # Jacobian in body-fixed frame
+    jac_bf = np.zeros((3, 3))
+
+    # ∂a_x/∂x, ∂a_x/∂y, ∂a_x/∂z
+    jac_bf[0, 0] = factor * z * (2.0 * self.c32 + 2.0 * d_term_dx - 7.0 * d_term_dx * x / pos_mag_pwr2 + 14.0 * x**2 / pos_mag_pwr2**2 * (2.0 * self.c32 * x + 2.0 * self.s32 * y - 7.0 * x * term_common / pos_mag_pwr2) - 9.0 * x / pos_mag_pwr2 * (2.0 * self.c32 * x + 2.0 * self.s32 * y - 7.0 * x * term_common / pos_mag_pwr2))
+    jac_bf[0, 1] = factor * z * (2.0 * self.s32 + 2.0 * d_term_dy - 7.0 * d_term_dy * x / pos_mag_pwr2 + 14.0 * x * y / pos_mag_pwr2**2 * (2.0 * self.c32 * x + 2.0 * self.s32 * y - 7.0 * x * term_common / pos_mag_pwr2) - 9.0 * y / pos_mag_pwr2 * (2.0 * self.c32 * x + 2.0 * self.s32 * y - 7.0 * x * term_common / pos_mag_pwr2))
+    jac_bf[0, 2] = factor * (2.0 * self.c32 * x + 2.0 * self.s32 * y - 7.0 * x * term_common / pos_mag_pwr2 + 14.0 * x * z**2 / pos_mag_pwr2**2 * term_common - 9.0 * z / pos_mag_pwr2 * (2.0 * self.c32 * x + 2.0 * self.s32 * y - 7.0 * x * term_common / pos_mag_pwr2))
+
+    # ∂a_y/∂x, ∂a_y/∂y, ∂a_y/∂z
+    jac_bf[1, 0] = factor * z * (2.0 * self.s32 - 2.0 * d_term_dx - 7.0 * d_term_dx * y / pos_mag_pwr2 + 14.0 * x * y / pos_mag_pwr2**2 * (-2.0 * self.c32 * y + 2.0 * self.s32 * x - 7.0 * y * term_common / pos_mag_pwr2) - 9.0 * x / pos_mag_pwr2 * (-2.0 * self.c32 * y + 2.0 * self.s32 * x - 7.0 * y * term_common / pos_mag_pwr2))
+    jac_bf[1, 1] = factor * z * (-2.0 * self.c32 - 2.0 * d_term_dy - 7.0 * d_term_dy * y / pos_mag_pwr2 + 14.0 * y**2 / pos_mag_pwr2**2 * (-2.0 * self.c32 * y + 2.0 * self.s32 * x - 7.0 * y * term_common / pos_mag_pwr2) - 9.0 * y / pos_mag_pwr2 * (-2.0 * self.c32 * y + 2.0 * self.s32 * x - 7.0 * y * term_common / pos_mag_pwr2))
+    jac_bf[1, 2] = factor * (-2.0 * self.c32 * y + 2.0 * self.s32 * x - 7.0 * y * term_common / pos_mag_pwr2 + 14.0 * y * z**2 / pos_mag_pwr2**2 * term_common - 9.0 * z / pos_mag_pwr2 * (-2.0 * self.c32 * y + 2.0 * self.s32 * x - 7.0 * y * term_common / pos_mag_pwr2))
+
+    # ∂a_z/∂x, ∂a_z/∂y, ∂a_z/∂z
+    jac_bf[2, 0] = factor * (d_term_dx - 7.0 * d_term_dx * z**2 / pos_mag_pwr2 + 14.0 * x * z**2 / pos_mag_pwr2**2 * term_common - 9.0 * x / pos_mag_pwr2 * (term_common - 7.0 * z**2 * term_common / pos_mag_pwr2))
+    jac_bf[2, 1] = factor * (d_term_dy - 7.0 * d_term_dy * z**2 / pos_mag_pwr2 + 14.0 * y * z**2 / pos_mag_pwr2**2 * term_common - 9.0 * y / pos_mag_pwr2 * (term_common - 7.0 * z**2 * term_common / pos_mag_pwr2))
+    jac_bf[2, 2] = factor * (-14.0 * z * term_common / pos_mag_pwr2 + 14.0 * z**3 / pos_mag_pwr2**2 * term_common - 9.0 * z / pos_mag_pwr2 * (term_common - 7.0 * z**2 * term_common / pos_mag_pwr2))
+
+    # Transform Jacobian back to J2000 frame
+    rot_T = rot_mat_j2000_to_iau_earth.T
+    j2000_jac = rot_T @ jac_bf @ rot_mat_j2000_to_iau_earth
+
+    return j2000_jac
+
+  def tesseral_33(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Compute C33 and S33 tesseral harmonic perturbation acceleration.
+    
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in inertial frame (J2000).
+    
+    Output:
+    -------
+      acc_vec : np.ndarray
+        Acceleration vector [m/s²] in Inertial frame.
+    """
+    if self.c33 == 0.0 and self.s33 == 0.0:
+      return np.zeros(3)
+
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      return np.zeros(3)
+
+    iau_earth_pos_vec   = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    pos_x, pos_y, pos_z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
+    
+    pos_mag_pwr2 = pos_x**2 + pos_y**2 + pos_z**2
+    pos_mag      = np.sqrt(pos_mag_pwr2)
+    pos_mag_pwr9 = pos_mag_pwr2**4 * pos_mag
+    
+    # cos(3*lon) term: x*(x^2-3y^2), sin(3*lon) term: y*(3x^2-y^2)
+    term_c33    = pos_x * (pos_x**2 - 3.0 * pos_y**2)
+    term_s33    = pos_y * (3.0 * pos_x**2 - pos_y**2)
+    term_common = self.c33 * term_c33 + self.s33 * term_s33
+    factor      = 1.0 * self.gp * self.pos_ref**3 / pos_mag_pwr9
+    
+    # Partial derivatives of term_c33 and term_s33
+    d_term_c33_dx = 3.0 * pos_x**2 - 3.0 * pos_y**2
+    d_term_c33_dy = -6.0 * pos_x * pos_y
+    d_term_s33_dx = 6.0 * pos_x * pos_y
+    d_term_s33_dy = 3.0 * pos_x**2 - 3.0 * pos_y**2
+    
+    iau_earth_acc_x   = factor * (self.c33 * d_term_c33_dx + self.s33 * d_term_s33_dx - 7.0 * pos_x * term_common / pos_mag_pwr2)
+    iau_earth_acc_y   = factor * (self.c33 * d_term_c33_dy + self.s33 * d_term_s33_dy - 7.0 * pos_y * term_common / pos_mag_pwr2)
+    iau_earth_acc_z   = factor * (-7.0 * pos_z * term_common / pos_mag_pwr2)
+    iau_earth_acc_vec = np.array([iau_earth_acc_x, iau_earth_acc_y, iau_earth_acc_z])
+
+    return rot_mat_j2000_to_iau_earth.T @ iau_earth_acc_vec
+
+  def tesseral_33_jacobian(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Analytical 3x3 Jacobian matrix for C33 and S33 tesseral harmonic perturbation.
+
+    Computes ∂a_T33/∂r, the partial derivative of T33 acceleration with respect
+    to position.
+
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in inertial frame (J2000).
+
+    Output:
+    -------
+      daccvec__dposvec : np.ndarray (3x3)
+        Jacobian matrix ∂a_T33/∂r in J2000 frame
+    """
+    if self.c33 == 0.0 and self.s33 == 0.0:
+      return np.zeros((3, 3))
+
+    try:
+      rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      return np.zeros((3, 3))
+
+    iau_earth_pos_vec = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    x, y, z = iau_earth_pos_vec[0], iau_earth_pos_vec[1], iau_earth_pos_vec[2]
+
+    pos_mag_pwr2 = x**2 + y**2 + z**2
+    pos_mag      = np.sqrt(pos_mag_pwr2)
+    pos_mag_pwr9 = pos_mag_pwr2**4 * pos_mag
+
+    # cos(3*lon) term: x*(x^2-3y^2), sin(3*lon) term: y*(3x^2-y^2)
+    term_c33    = x * (x**2 - 3.0 * y**2)
+    term_s33    = y * (3.0 * x**2 - y**2)
+    term_common = self.c33 * term_c33 + self.s33 * term_s33
+    factor      = 1.0 * self.gp * self.pos_ref**3 / pos_mag_pwr9
+
+    # Partial derivatives of term_c33 and term_s33
+    d_term_c33_dx = 3.0 * x**2 - 3.0 * y**2
+    d_term_c33_dy = -6.0 * x * y
+    d_term_s33_dx = 6.0 * x * y
+    d_term_s33_dy = 3.0 * x**2 - 3.0 * y**2
+
+    d_term_common_dx = self.c33 * d_term_c33_dx + self.s33 * d_term_s33_dx
+    d_term_common_dy = self.c33 * d_term_c33_dy + self.s33 * d_term_s33_dy
+
+    # Jacobian in body-fixed frame
+    jac_bf = np.zeros((3, 3))
+
+    # ∂a_x/∂x, ∂a_x/∂y, ∂a_x/∂z
+    jac_bf[0, 0] = factor * (d_term_common_dx - 7.0 * d_term_common_dx * x / pos_mag_pwr2 + 14.0 * x**2 / pos_mag_pwr2**2 * (self.c33 * d_term_c33_dx + self.s33 * d_term_s33_dx - 7.0 * x * term_common / pos_mag_pwr2) + self.c33 * 6.0 * x - 9.0 * x / pos_mag_pwr2 * (self.c33 * d_term_c33_dx + self.s33 * d_term_s33_dx - 7.0 * x * term_common / pos_mag_pwr2))
+    jac_bf[0, 1] = factor * (d_term_common_dy - 7.0 * d_term_common_dy * x / pos_mag_pwr2 + 14.0 * x * y / pos_mag_pwr2**2 * (self.c33 * d_term_c33_dx + self.s33 * d_term_s33_dx - 7.0 * x * term_common / pos_mag_pwr2) + self.c33 * (-6.0 * y) + self.s33 * 6.0 * x - 9.0 * y / pos_mag_pwr2 * (self.c33 * d_term_c33_dx + self.s33 * d_term_s33_dx - 7.0 * x * term_common / pos_mag_pwr2))
+    jac_bf[0, 2] = factor * (-7.0 * z / pos_mag_pwr2 * (self.c33 * d_term_c33_dx + self.s33 * d_term_s33_dx) + 14.0 * x * z**2 / pos_mag_pwr2**2 * term_common - 9.0 * z / pos_mag_pwr2 * (self.c33 * d_term_c33_dx + self.s33 * d_term_s33_dx - 7.0 * x * term_common / pos_mag_pwr2))
+
+    # ∂a_y/∂x, ∂a_y/∂y, ∂a_y/∂z
+    jac_bf[1, 0] = factor * (d_term_common_dx - 7.0 * d_term_common_dx * y / pos_mag_pwr2 + 14.0 * x * y / pos_mag_pwr2**2 * (self.c33 * d_term_c33_dy + self.s33 * d_term_s33_dy - 7.0 * y * term_common / pos_mag_pwr2) + self.c33 * (-6.0 * y) + self.s33 * 6.0 * y - 9.0 * x / pos_mag_pwr2 * (self.c33 * d_term_c33_dy + self.s33 * d_term_s33_dy - 7.0 * y * term_common / pos_mag_pwr2))
+    jac_bf[1, 1] = factor * (d_term_common_dy - 7.0 * d_term_common_dy * y / pos_mag_pwr2 + 14.0 * y**2 / pos_mag_pwr2**2 * (self.c33 * d_term_c33_dy + self.s33 * d_term_s33_dy - 7.0 * y * term_common / pos_mag_pwr2) + self.s33 * (-6.0 * y) - 9.0 * y / pos_mag_pwr2 * (self.c33 * d_term_c33_dy + self.s33 * d_term_s33_dy - 7.0 * y * term_common / pos_mag_pwr2))
+    jac_bf[1, 2] = factor * (-7.0 * z / pos_mag_pwr2 * (self.c33 * d_term_c33_dy + self.s33 * d_term_s33_dy) + 14.0 * y * z**2 / pos_mag_pwr2**2 * term_common - 9.0 * z / pos_mag_pwr2 * (self.c33 * d_term_c33_dy + self.s33 * d_term_s33_dy - 7.0 * y * term_common / pos_mag_pwr2))
+
+    # ∂a_z/∂x, ∂a_z/∂y, ∂a_z/∂z
+    jac_bf[2, 0] = factor * (-7.0 * d_term_common_dx * z / pos_mag_pwr2 + 14.0 * x * z**2 / pos_mag_pwr2**2 * term_common - 9.0 * x / pos_mag_pwr2 * (-7.0 * z * term_common / pos_mag_pwr2))
+    jac_bf[2, 1] = factor * (-7.0 * d_term_common_dy * z / pos_mag_pwr2 + 14.0 * y * z**2 / pos_mag_pwr2**2 * term_common - 9.0 * y / pos_mag_pwr2 * (-7.0 * z * term_common / pos_mag_pwr2))
+    jac_bf[2, 2] = factor * (-7.0 * term_common / pos_mag_pwr2 + 14.0 * z**3 / pos_mag_pwr2**2 * term_common - 9.0 * z / pos_mag_pwr2 * (-7.0 * z * term_common / pos_mag_pwr2))
+
+    # Transform Jacobian back to J2000 frame
+    rot_T = rot_mat_j2000_to_iau_earth.T
+    j2000_jac = rot_T @ jac_bf @ rot_mat_j2000_to_iau_earth
+
+    return j2000_jac
+
 
 class ThirdBodyGravity:
     """
