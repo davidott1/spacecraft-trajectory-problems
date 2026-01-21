@@ -1463,6 +1463,113 @@ class SolidEarthTides:
     return acc_vec
 
 
+class OceanTides:
+  """
+  Ocean tide model following IERS 2010 Conventions.
+
+  Computes the time-varying gravitational acceleration due to ocean tides
+  caused by the Moon and Sun. Ocean tides represent the redistribution of
+  ocean mass in response to tidal forces.
+
+  This uses a simplified degree-2 model. The ocean tide Love number k2
+  has opposite sign to solid Earth tides (k2 ≈ -0.31 for oceans vs +0.30 for solid Earth).
+  """
+
+  def __init__(self):
+    """
+    Initialize ocean tide model using constants.
+
+    Input:
+    ------
+      None
+
+    Output:
+    -------
+      None
+    """
+    self.gp           = SOLARSYSTEMCONSTANTS.EARTH.GP
+    self.earth_radius = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
+    # Ocean tide Love numbers from IERS 2010 Conventions
+    # k2_ocean is negative (mass deficit below tidal bulge)
+    self.k2_ocean     = -0.3075  # Degree-2 ocean tide Love number
+
+  def compute(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Compute ocean tide acceleration on satellite.
+
+    Uses degree-2 approximation following IERS 2010 simplified model.
+    The formula is identical to solid Earth tides but with different Love number.
+
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Satellite position vector [m] in J2000 frame
+
+    Output:
+    -------
+      acc_vec : np.ndarray
+        Ocean tide acceleration [m/s²] in J2000 frame
+
+    References:
+    -----------
+      - IERS Conventions 2010, Chapter 6
+      - Petit, G., & Luzum, B. (2010). IERS Conventions (2010).
+        IERS Technical Note No. 36.
+    """
+    # Initialize acceleration vector
+    acc_vec = np.zeros(3)
+
+    # Compute satellite position magnitude and direction once
+    j2000_pos_mag = np.linalg.norm(j2000_pos_vec)
+    if j2000_pos_mag == 0:
+      return acc_vec
+    j2000_pos_dir = j2000_pos_vec / j2000_pos_mag
+
+    # Get positions of tide-generating bodies (Moon and Sun)
+    for body_name, body_gp in [('MOON', SOLARSYSTEMCONSTANTS.MOON.GP),
+                               ('SUN',  SOLARSYSTEMCONSTANTS.SUN.GP)]:
+      try:
+        # Get body position relative to Earth using SPICE
+        state, _ = spice.spkez(
+          targ   = NAIFIDS.NAME_TO_ID[body_name],
+          et     = time_et,
+          ref    = 'J2000',
+          abcorr = 'NONE',
+          obs    = 399  # Earth
+        )
+        body_pos_vec = np.array(state[0:3]) * CONVERTER.M_PER_KM
+      except:
+        continue
+
+      # Distance from Earth center to tide-generating body
+      body_pos_mag = np.linalg.norm(body_pos_vec)
+
+      if body_pos_mag == 0:
+        continue
+
+      # Unit vector toward perturbing body
+      body_pos_dir = body_pos_vec / body_pos_mag
+
+      # Degree-2 ocean tide acceleration (same formula as solid tides, different k2)
+      cos_psi = np.dot(j2000_pos_dir, body_pos_dir)
+
+      # Ocean tide factor (note: k2_ocean is negative)
+      factor = (1.5 * self.k2_ocean * body_gp) * (self.earth_radius**5 / (j2000_pos_mag**4 * body_pos_mag**3))
+
+      # Acceleration components
+      acc_tide = factor * ((5.0 * cos_psi**2 - 1.0) * j2000_pos_dir - 2.0 * cos_psi * body_pos_dir)
+
+      acc_vec += acc_tide
+
+    return acc_vec
+
+
 def _get_harmonic_coefficients(
   gravity_harmonics_list : list,
 ) -> dict:
@@ -1599,6 +1706,13 @@ class Gravity:
       else:
         self.solid_tides = None
 
+      # Ocean tides
+      self.enable_ocean_tides = gravity_config.ocean_tides.enabled
+      if self.enable_ocean_tides:
+        self.ocean_tides = OceanTides()
+      else:
+        self.ocean_tides = None
+
     def compute(
       self,
       time        : float,
@@ -1669,6 +1783,10 @@ class Gravity:
       # Solid Earth tides
       if self.enable_solid_tides and self.solid_tides is not None:
         acc_vec += self.solid_tides.compute(time, pos_vec)
+
+      # Ocean tides
+      if self.enable_ocean_tides and self.ocean_tides is not None:
+        acc_vec += self.ocean_tides.compute(time, pos_vec)
 
       # Return just acceleration if STM not requested
       if not include_stm:

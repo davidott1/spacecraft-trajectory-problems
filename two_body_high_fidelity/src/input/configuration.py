@@ -7,7 +7,7 @@ from datetime import datetime
 from typing   import Optional
 
 from src.schemas.config        import OutputPaths, SimulationConfig, InitialStateConfig, ComparisonConfig
-from src.schemas.gravity       import GravityModelConfig, SphericalHarmonicsConfig, ThirdBodyConfig, RelativityConfig, SolidEarthTidesConfig
+from src.schemas.gravity       import GravityModelConfig, SphericalHarmonicsConfig, ThirdBodyConfig, RelativityConfig, SolidEarthTidesConfig, OceanTidesConfig
 from src.schemas.spacecraft    import SpacecraftProperties, DragConfig, SRPConfig
 from src.schemas.propagation   import PropagationConfig
 from src.schemas.state         import TLEData
@@ -282,6 +282,7 @@ def build_config(
   include_srp                    : bool           = False,
   include_relativity             : bool           = False,
   include_solid_tides            : bool           = False,
+  include_ocean_tides            : bool           = False,
   auto_download                  : bool           = False,
   initial_state_source           : str            = 'jpl_horizons',
   gravity_harmonics_degree_order : Optional[list] = None,
@@ -548,6 +549,9 @@ def build_config(
     ),
     solid_tides = SolidEarthTidesConfig(
       enabled = include_solid_tides,
+    ),
+    ocean_tides = OceanTidesConfig(
+      enabled = include_ocean_tides,
     ),
   )
 
