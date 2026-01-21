@@ -15,7 +15,7 @@ Class Structure:
 ----------------
 Acceleration Hierarchy:
     GeneralStateEquationsOfMotion (ODE interface)
-    └── Acceleration (coordinator)
+    └── AccelerationSTMDot (coordinator)
         ├── Gravity
         │   ├── TwoBodyGravity
         │   │   ├── point_mass()
@@ -61,7 +61,7 @@ Main Components:
 
 Usage Example:
 --------------
-  from src.model.dynamics import Acceleration, GeneralStateEquationsOfMotion
+  from src.model.dynamics import AccelerationSTMDot, GeneralStateEquationsOfMotion
   from src.model.constants import SOLARSYSTEMCONSTANTS
   from src.schemas.spacecraft import SpacecraftProperties, DragConfig
   
@@ -72,7 +72,7 @@ Usage Example:
   )
   
   # Initialize acceleration model
-  acceleration = Acceleration(
+  acceleration = AccelerationSTMDot(
       gp                = SOLARSYSTEMCONSTANTS.EARTH.GP,
       spacecraft        = spacecraft,
       j2                = SOLARSYSTEMCONSTANTS.EARTH.J2,
@@ -1328,11 +1328,11 @@ class SolarRadiationPressure:
 # Top-Level Coordinator
 # =============================================================================
 
-class Acceleration:
+class AccelerationSTMDot:
     """
-    Acceleration coordinator - orchestrates all acceleration components
+    Acceleration and STM time-derivative coordinator - orchestrates all acceleration components
     
-    Computes total acceleration as:
+    Computes total acceleration (velocity time-derivative) as:
       total = gravity + drag + solar_radiation_pressure
     
     where:
@@ -1341,6 +1341,8 @@ class Acceleration:
     
     Or if a spherical harmonics gravity model is provided:
       gravity = spherical_harmonics_model + third_body_point_mass
+    
+    Also computes STM time-derivative for EKF orbit determination.
     """
     
     def __init__(
@@ -1452,15 +1454,15 @@ class GeneralStateEquationsOfMotion:
 
   def __init__(
     self,
-    acceleration : Acceleration,
+    acceleration : AccelerationSTMDot,
   ):
     """
     Initialize equations of motion
 
     Input:
     ------
-      acceleration : Acceleration
-        Acceleration coordinator instance
+      acceleration : AccelerationSTMDot
+        Acceleration and STM time-derivative coordinator instance
 
     Output:
     -------

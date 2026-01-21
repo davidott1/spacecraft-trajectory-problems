@@ -33,7 +33,7 @@ Usage:
 import pytest
 import numpy as np
 
-from src.model.dynamics     import TwoBodyGravity, AtmosphericDrag, Acceleration
+from src.model.dynamics     import TwoBodyGravity, AtmosphericDrag, AccelerationSTMDot
 from src.model.constants    import SOLARSYSTEMCONSTANTS
 from src.schemas.gravity    import GravityModelConfig
 from src.schemas.spacecraft import SpacecraftProperties, DragConfig
@@ -203,7 +203,7 @@ class TestAccelerationCoordinator:
     """
     gravity_config = GravityModelConfig(gp=SOLARSYSTEMCONSTANTS.EARTH.GP)
     spacecraft     = SpacecraftProperties(mass=1000.0)
-    accel          = Acceleration(gravity_config=gravity_config, spacecraft=spacecraft)
+    accel          = AccelerationSTMDot(gravity_config=gravity_config, spacecraft=spacecraft)
     
     pos_vec = np.array([7000e3, 0.0, 0.0])
     vel_vec = np.array([0.0, 7500.0, 0.0])
@@ -229,8 +229,8 @@ class TestAccelerationCoordinator:
       drag = DragConfig(enabled=True, cd=2.2, area=10.0),
     )
     
-    accel_no_drag   = Acceleration(gravity_config=gravity_config, spacecraft=spacecraft_no_drag)
-    accel_with_drag = Acceleration(gravity_config=gravity_config, spacecraft=spacecraft_with_drag)
+    accel_no_drag   = AccelerationSTMDot(gravity_config=gravity_config, spacecraft=spacecraft_no_drag)
+    accel_with_drag = AccelerationSTMDot(gravity_config=gravity_config, spacecraft=spacecraft_with_drag)
     
     pos_vec = np.array([6578e3, 0.0, 0.0])  # Low altitude for drag
     vel_vec = np.array([0.0, 7800.0, 0.0])

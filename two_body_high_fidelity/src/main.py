@@ -66,6 +66,10 @@ from src.utility.logger                import start_logging, stop_logging
 from src.schemas.propagation           import PropagationConfig, PropagationResult
 from src.schemas.state                 import TLEData
 
+from src.orbit_determination.ekf_processor         import process_measurements_with_ekf
+from src.orbit_determination.measurement_simulator import MeasurementSimulator
+from src.model.dynamics                            import AccelerationSTMDot, GeneralStateEquationsOfMotion
+
 
 def check_data_availability(
   result              : Union[TLEData, PropagationResult, None],
@@ -340,10 +344,7 @@ def main(
   od_estimation_times = None
   od_measurement_times = None
   if include_orbit_determination and trackers is not None and len(trackers) > 0:
-    from src.orbit_determination.ekf_processor import process_measurements_with_ekf, perturb_initial_state
-    from src.orbit_determination.measurement_simulator import MeasurementSimulator
-    from src.model.dynamics import Acceleration, GeneralStateEquationsOfMotion
-
+    
     # Use JPL Horizons as truth for measurement simulation
     if result_jpl_horizons_ephemeris is not None and result_jpl_horizons_ephemeris.success:
       section_title = "Orbit Determination with Extended Kalman Filter"
@@ -374,7 +375,7 @@ def main(
 
       # Create high-fidelity dynamics model for EKF propagation
       print(f"  Initializing high-fidelity dynamics for EKF")
-      od_acceleration = Acceleration(
+      od_acceleration = AccelerationSTMDot(
         gravity_config = config.gravity,
         spacecraft     = config.spacecraft,
       )

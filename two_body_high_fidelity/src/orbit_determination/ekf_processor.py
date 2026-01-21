@@ -16,7 +16,7 @@ from src.schemas.propagation                        import PropagationResult, Ti
 from src.schemas.state                              import TrackerStation, ClassicalOrbitalElements, ModifiedEquinoctialElements
 from src.model.orbit_converter                      import OrbitConverter
 from src.model.constants                            import SOLARSYSTEMCONSTANTS
-from src.model.dynamics                             import Acceleration, GeneralStateEquationsOfMotion
+from src.model.dynamics                             import AccelerationSTMDot, GeneralStateEquationsOfMotion
 from src.model.time_converter                       import utc_to_et
 
 
