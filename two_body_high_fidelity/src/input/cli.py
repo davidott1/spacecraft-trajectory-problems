@@ -67,6 +67,7 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
     'include_srp': 'include_srp',
     'include_relativity': 'include_relativity',
     'include_solid_tides': 'include_solid_tides',
+    'include_ocean_tides': 'include_ocean_tides',
     'compare_tle': 'compare_tle',
     'compare_jpl_horizons': 'compare_jpl_horizons',
     'auto_download': 'auto_download',
@@ -156,7 +157,7 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
         else:
           setattr(args, arg_name, config_value)
 
-    elif arg_name in ['include_drag', 'include_srp', 'include_relativity', 'include_solid_tides', 'compare_tle', 'compare_jpl_horizons',
+    elif arg_name in ['include_drag', 'include_srp', 'include_relativity', 'include_solid_tides', 'include_ocean_tides', 'compare_tle', 'compare_jpl_horizons',
                       'auto_download', 'include_tracker_skyplots', 'include_tracker_on_body',
                       'include_orbit_determination']:
       # Boolean flags - only override if CLI kept the default False
@@ -327,6 +328,15 @@ def parse_command_line_arguments(
     action  = 'store_true',
     default = False,
     help    = "Enable solid Earth tide corrections (IERS 2010) (disabled by default).",
+  )
+
+  parser.add_argument(
+    '--include-ocean-tides',
+    '--ocean-tides',
+    dest    = 'include_ocean_tides',
+    action  = 'store_true',
+    default = False,
+    help    = "Enable ocean tide corrections (IERS 2010) (disabled by default).",
   )
 
   parser.add_argument(

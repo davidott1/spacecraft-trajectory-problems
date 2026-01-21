@@ -19,10 +19,10 @@ def get_initial_state(
   initial_state_source          : str = 'jpl_horizons',
   custom_state_vector           : Optional[np.ndarray] = None,
   initial_state_filename        : Optional[str] = None,
-) -> np.ndarray:
+) -> tuple[np.ndarray, datetime]:
   """
-  Get initial state vector from specified source.
-  
+  Get initial state vector and epoch from specified source.
+
   Input:
   ------
     tle_line_1 : str | None
@@ -30,7 +30,7 @@ def get_initial_state(
     tle_line_2 : str | None
       TLE line 2.
     time_o_dt : datetime
-      Initial time for propagation.
+      Desired initial time for propagation.
     result_jpl_horizons_ephemeris : PropagationResult | None
       JPL Horizons ephemeris result.
     initial_state_source : str
@@ -39,11 +39,13 @@ def get_initial_state(
       Custom state vector if source is 'custom_state_vector'.
     initial_state_filename : str | None
       Filename of custom state vector file.
-      
+
   Output:
   -------
     initial_state : np.ndarray
       Initial state vector [pos_x, pos_y, pos_z, vel_x, vel_y, vel_z] in m and m/s.
+    initial_epoch : datetime
+      Actual epoch of the initial state.
   """
   title = "Initial State"
   print("\n" + "-" * len(title))
@@ -102,7 +104,7 @@ def get_initial_state(
     if coe.pa is not None:
       print(f"      PA   :  {coe.pa:19.12e} -")
 
-    return custom_state_vector
+    return custom_state_vector, time_o_dt
 
   # Determine if we should use Horizons
   use_jpl_horizons = 'jpl_horizons' in initial_state_source.lower()
@@ -159,7 +161,7 @@ def get_initial_state(
       print(f"      HA   :  {coe.ha   * CONVERTER.DEG_PER_RAD:19.12e} deg")
     if coe.pa is not None:
       print(f"      PA   :  {coe.pa:19.12e} -")
-    return horizons_initial_state
+    return horizons_initial_state, epoch_dt
 
   # Fallback to TLE
   print("    Propagate TLE to desired epoch")
@@ -236,4 +238,4 @@ def get_initial_state(
   if coe.pa is not None:
     print(f"      PA   :  {coe.pa:19.12e} -")
 
-  return tle_initial_state
+  return tle_initial_state, time_o_dt

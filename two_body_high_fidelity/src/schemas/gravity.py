@@ -84,6 +84,17 @@ class SolidEarthTidesConfig:
 
 
 @dataclass
+class OceanTidesConfig:
+  """
+  Configuration for ocean tide corrections.
+
+  Attributes:
+    enabled : Whether ocean tides are enabled
+  """
+  enabled : bool = False
+
+
+@dataclass
 class GravityModelConfig:
   """
   Complete gravity model configuration.
@@ -95,6 +106,7 @@ class GravityModelConfig:
     third_body          : Third-body configuration
     relativity          : General relativity configuration
     solid_tides         : Solid Earth tides configuration
+    ocean_tides         : Ocean tides configuration
     folderpath          : Path to gravity model files
     filename            : Gravity model filename (e.g., 'EGM2008.gfc')
   """
@@ -104,6 +116,7 @@ class GravityModelConfig:
   third_body          : ThirdBodyConfig           = field(default_factory=ThirdBodyConfig)
   relativity          : RelativityConfig          = field(default_factory=RelativityConfig)
   solid_tides         : SolidEarthTidesConfig     = field(default_factory=SolidEarthTidesConfig)
+  ocean_tides         : OceanTidesConfig          = field(default_factory=OceanTidesConfig)
   folderpath          : Optional[Path]            = None
   filename            : Optional[str]             = None
   

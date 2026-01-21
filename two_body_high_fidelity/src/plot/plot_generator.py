@@ -644,15 +644,18 @@ def generate_plots(
       for filename in filenames:
         print(f"        <figures_folderpath>/{filename}")
 
-  # Print Pass Time-Series
+  # Print Pass Time-Series (only if there are actual files)
   if pass_timeseries_files:
-    print()
-    print("    Pass Time-Series")
-    for tracker_name, filenames in pass_timeseries_files.items():
-      if filenames:
-        print(f"      Tracker {tracker_name}")
-        for filename in filenames:
-          print(f"        <figures_folderpath>/{filename}")
+    # Check if there are any actual files to print
+    has_files = any(filenames for filenames in pass_timeseries_files.values())
+    if has_files:
+      print()
+      print("    Pass Time-Series")
+      for tracker_name, filenames in pass_timeseries_files.items():
+        if filenames:
+          print(f"      Tracker {tracker_name}")
+          for filename in filenames:
+            print(f"        <figures_folderpath>/{filename}")
 
   # Print Covariance Plots
   if covariance_files:

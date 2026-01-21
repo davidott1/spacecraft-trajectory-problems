@@ -8,22 +8,23 @@ initial_state_source: jpl_horizons
 initial_state_norad_id: 22195  # LAGEOS-2
 
 # Time span for propagation
-timespan: 2025-01-15T00:00:00 2025-01-15T12:00:00
+timespan: 2024-01-15T00:00:00 2024-01-15T12:00:00
 
 # Gravity model configuration
 # gravity_harmonics_coefficients: J2 J3 C21 S21 C22 S22 C31 S31 C32 S32 C33 S33
-gravity_harmonics_degree_order: 20, 20
+gravity_harmonics_degree_order: 20 20
 gravity_harmonics_filename: EGM2008.gfc
 
 # Gravity third-bodies
-include_third_body_gravity: false
+include_third_body_gravity: true
 third_body_bodies: Sun Moon
 
 # Perturbation forces (LAGEOS has minimal drag due to high altitude)
 include_drag: false
-include_srp: false
+include_srp: true
 include_relativity: false
 include_solid_tides: false
+include_ocean_tides: true
 
 # Comparison options
 compare_jpl_horizons: true

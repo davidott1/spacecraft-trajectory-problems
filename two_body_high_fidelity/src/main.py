@@ -149,6 +149,7 @@ def main(
   include_srp                    : bool           = False,
   include_relativity             : bool           = False,
   include_solid_tides            : bool           = False,
+  include_ocean_tides            : bool           = False,
   auto_download                  : bool           = False,
   initial_state_source           : str            = 'jpl_horizons',
   gravity_harmonics_degree_order : Optional[list] = None,
@@ -218,6 +219,7 @@ def main(
     include_srp,
     include_relativity,
     include_solid_tides,
+    include_ocean_tides,
     auto_download,
     initial_state_source,
     gravity_harmonics_degree_order,
@@ -313,7 +315,7 @@ def main(
       return error
 
   # Determine initial state: JPL Horizons, TLE, or Custom State Vector
-  initial_state = get_initial_state(
+  initial_state, initial_epoch_dt = get_initial_state(
     tle_line_1                    = config.tle_line_1,
     tle_line_2                    = config.tle_line_2,
     time_o_dt                     = config.time_o_dt,
@@ -323,9 +325,9 @@ def main(
     initial_state_filename        = config.initial_state.filename,
   )
 
-  # Create PropagationConfig for the propagator
+  # Create PropagationConfig for the propagator using actual initial epoch
   propagation_config = PropagationConfig(
-    time_o_dt = config.time_o_dt,
+    time_o_dt = initial_epoch_dt,
     time_f_dt = config.time_f_dt,
   )
 
@@ -462,6 +464,7 @@ if __name__ == "__main__":
     args.include_srp,
     args.include_relativity,
     args.include_solid_tides,
+    args.include_ocean_tides,
     args.auto_download,
     args.initial_state_source,
     args.gravity_harmonics_degree_order,
