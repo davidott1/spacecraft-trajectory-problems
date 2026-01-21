@@ -15,7 +15,8 @@ timespan: 2025-01-15T00:00:00 2025-01-15T12:00:00
 # gravity_harmonics_filename: EGM2008.gfc
 
 # Gravity model configuration (use J2 only for speed)
-gravity_harmonics_coefficients: J2
+gravity_harmonics_coefficients: J2 J3 C21 S21 C22 S22 C31 S31 C32 S32 C33 S33
+gravity_harmonics_filename: EGM2008.gfc
 
 # Perturbation forces (LAGEOS has minimal drag due to high altitude)
 include_drag: false
