@@ -7,7 +7,7 @@ from datetime import datetime
 from typing   import Optional
 
 from src.schemas.config        import OutputPaths, SimulationConfig, InitialStateConfig, ComparisonConfig
-from src.schemas.gravity       import GravityModelConfig, SphericalHarmonicsConfig, ThirdBodyConfig
+from src.schemas.gravity       import GravityModelConfig, SphericalHarmonicsConfig, ThirdBodyConfig, RelativityConfig, SolidEarthTidesConfig
 from src.schemas.spacecraft    import SpacecraftProperties, DragConfig, SRPConfig
 from src.schemas.propagation   import PropagationConfig
 from src.schemas.state         import TLEData
@@ -28,6 +28,7 @@ def print_input_configuration(
   gravity_harmonics_list     : list,
   two_body_gravity_model     : GravityModelConfig,
   include_srp                : bool,
+  include_relativity         : bool,
   auto_download              : bool,
 ) -> None:
   """
@@ -84,6 +85,7 @@ def print_input_configuration(
     'third_bodies'               : [],
     'include_drag'               : False,
     'include_srp'                : False,
+    'include_relativity'         : False,
     'compare_jpl_horizons'       : False,
     'compare_tle'                : False,
     'auto_download'              : False,
@@ -109,6 +111,7 @@ def print_input_configuration(
     ('third_bodies',           third_str,                  defaults['third_bodies'],               third_bodies_list          is not None and len(third_bodies_list) > 0),
     ('include_drag',           include_drag,               defaults['include_drag'],               include_drag               != defaults['include_drag']),
     ('include_srp',            include_srp,                defaults['include_srp'],                include_srp                != defaults['include_srp']),
+    ('include_relativity',     include_relativity,         defaults['include_relativity'],         include_relativity         != defaults['include_relativity']),
     ('compare_jpl_horizons',   compare_jpl_horizons,       defaults['compare_jpl_horizons'],       compare_jpl_horizons       != defaults['compare_jpl_horizons']),
     ('compare_tle',            compare_tle,                defaults['compare_tle'],                compare_tle                != defaults['compare_tle']),
     ('auto_download',          auto_download,              defaults['auto_download'],              auto_download              != defaults['auto_download']),
@@ -222,6 +225,7 @@ def print_configuration(
     gravity_harmonics_list = config.gravity.spherical_harmonics.coefficients,
     two_body_gravity_model = config.gravity,
     include_srp            = config.include_srp,
+    include_relativity     = config.gravity.relativity.enabled,
     auto_download          = config.auto_download,
   )
   
@@ -276,6 +280,8 @@ def build_config(
   third_bodies                   : Optional[list] = None,
   gravity_harmonics              : Optional[list] = None,
   include_srp                    : bool           = False,
+  include_relativity             : bool           = False,
+  include_solid_tides            : bool           = False,
   auto_download                  : bool           = False,
   initial_state_source           : str            = 'jpl_horizons',
   gravity_harmonics_degree_order : Optional[list] = None,
@@ -536,6 +542,12 @@ def build_config(
     third_body = ThirdBodyConfig(
       enabled = include_third_body,
       bodies  = third_bodies_list,
+    ),
+    relativity = RelativityConfig(
+      enabled = include_relativity,
+    ),
+    solid_tides = SolidEarthTidesConfig(
+      enabled = include_solid_tides,
     ),
   )
 

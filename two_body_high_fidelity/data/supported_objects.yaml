@@ -76,7 +76,7 @@
     coeff    : 2.2
     area__m2 : 0.28
   srp        :
-    coeff    : 1.13
+    coeff    : 1.103
     area__m2 : 0.28
 
 # GEO satellites (Geostationary Earth Orbit, ~35,786 km altitude)

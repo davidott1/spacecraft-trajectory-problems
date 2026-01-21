@@ -176,6 +176,10 @@ class SOLARSYSTEMCONSTANTS:
     G_SC         = 1361.0                                    # solar constant [W/m²] at 1 AU
     PRESSURE_SRP = G_SC / PHYSICALCONSTANTS.speed_of_light   # solar radiation pressure at 1 AU [N/m²]. approx 4.56e-6 N/m².
 
+    # Love numbers for solid Earth tides (IERS 2010 Conventions)
+    K2_LOVE = 0.302                                          # Degree-2 gravitational Love number
+    K3_LOVE = 0.093                                          # Degree-3 gravitational Love number
+
   class MOON:
     class RADIUS:
       EQUATOR = 1737400.0                   # Moon's equatorial radius [m]

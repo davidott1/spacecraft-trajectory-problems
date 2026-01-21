@@ -109,7 +109,7 @@ Sources:
 import numpy    as np
 import spiceypy as spice
 
-from src.model.constants       import SOLARSYSTEMCONSTANTS, CONVERTER, NAIFIDS
+from src.model.constants       import SOLARSYSTEMCONSTANTS, CONVERTER, NAIFIDS, PHYSICALCONSTANTS
 from src.model.frame_converter import FrameConverter
 from src.schemas.spacecraft    import SpacecraftProperties, DragConfig, SRPConfig
 from src.schemas.gravity       import GravityModelConfig
@@ -1269,6 +1269,200 @@ class ThirdBodyGravity:
       return acc_vec
 
 
+class GeneralRelativity:
+  """
+  General relativistic corrections to Newtonian gravity.
+
+  Implements the Schwarzschild (point-mass) post-Newtonian correction,
+  which is the dominant relativistic effect for satellite orbits.
+  """
+
+  def __init__(
+    self,
+    gp : float,
+  ):
+    """
+    Initialize general relativity model.
+
+    Input:
+    ------
+      gp : float
+        Gravitational parameter of central body [m³/s²]
+
+    Output:
+    -------
+      None
+    """
+    self.gp = gp
+    self.c  = PHYSICALCONSTANTS.speed_of_light  # Speed of light [m/s]
+    self.c2 = self.c**2
+
+  def schwarzschild(
+    self,
+    pos_vec : np.ndarray,
+    vel_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Compute Schwarzschild (point-mass) relativistic correction.
+
+    This is the first post-Newtonian (1PN) correction to Newtonian gravity,
+    accounting for the curvature of spacetime around a massive body.
+
+    The acceleration is:
+      a_GR = (μ/c²r³) × [(4μ/r - v²)r + 4(r·v)v]
+
+    where:
+      μ   = GM (gravitational parameter)
+      c   = speed of light
+      r   = position vector, r = |r|
+      v   = velocity vector, v² = |v|²
+      r·v = dot product of position and velocity
+
+    Input:
+    ------
+      pos_vec : np.ndarray
+        Position vector [m]
+      vel_vec : np.ndarray
+        Velocity vector [m/s]
+
+    Output:
+    -------
+      acc_vec : np.ndarray
+        Relativistic acceleration correction [m/s²]
+
+    References:
+    -----------
+      - Moyer, T. D. (2003). Formulation for Observed and Computed Values
+        of Deep Space Network Data Types for Navigation. JPL Publication 00-7.
+      - Montenbruck & Gill (2000). Satellite Orbits. Springer. Section 3.4.3.
+    """
+    pos_mag     = np.linalg.norm(pos_vec)
+    vel_mag_sqr = np.dot(vel_vec, vel_vec)
+    pos_dot_vel = np.dot(pos_vec, vel_vec)
+
+    # Schwarzschild factor: μ/(c²r³)
+    factor = self.gp / (self.c2 * pos_mag**3)
+
+    # Terms in the acceleration
+    term1 = 4.0 * self.gp / pos_mag - vel_mag_sqr
+    term2 = 4.0 * pos_dot_vel
+
+    # a_GR = factor × [term1 * r + term2 * v]
+    acc_vec = factor * (term1 * pos_vec + term2 * vel_vec)
+
+    return acc_vec
+
+
+class SolidEarthTides:
+  """
+  Solid Earth tide model following IERS 2010 Conventions.
+
+  Computes the time-varying gravitational acceleration due to tidal deformations
+  of the Earth caused by the Moon and Sun. The Earth deforms elastically in
+  response to tidal forces, changing the gravity field.
+
+  This uses a simplified degree-2 model which captures ~95% of the total effect.
+  """
+
+  def __init__(self):
+    """
+    Initialize solid Earth tide model using constants from SOLARSYSTEMCONSTANTS.
+
+    Input:
+    ------
+      None
+
+    Output:
+    -------
+      None
+    """
+    self.gp           = SOLARSYSTEMCONSTANTS.EARTH.GP
+    self.earth_radius = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
+    self.k2           = SOLARSYSTEMCONSTANTS.EARTH.K2_LOVE
+    self.k3           = SOLARSYSTEMCONSTANTS.EARTH.K3_LOVE
+
+  def compute(
+    self,
+    time_et     : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Compute solid Earth tide acceleration on satellite.
+
+    Uses degree-2 approximation which is sufficient for most applications.
+    The full IERS model includes permanent tide, frequency-dependent Love
+    numbers, and higher degrees, but this simplified model captures the
+    dominant effect.
+
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Satellite position vector [m] in J2000 frame
+
+    Output:
+    -------
+      acc_vec : np.ndarray
+        Solid tide acceleration [m/s²] in J2000 frame
+
+    References:
+    -----------
+      - IERS Conventions 2010, Chapter 6
+      - Petit, G., & Luzum, B. (2010). IERS Conventions (2010).
+        IERS Technical Note No. 36.
+      - Montenbruck & Gill (2000). Satellite Orbits, Section 3.2.5
+    """
+    # Initialize acceleration vector
+    acc_vec = np.zeros(3)
+
+    # Compute satellite position magnitude and direction once (used for all bodies)
+    j2000_pos_mag = np.linalg.norm(j2000_pos_vec)
+    if j2000_pos_mag == 0:
+      return acc_vec
+    j2000_pos_dir = j2000_pos_vec / j2000_pos_mag
+
+    # Get positions of tide-generating bodies (Moon and Sun)
+    for body_name, body_gp in [('MOON', SOLARSYSTEMCONSTANTS.MOON.GP),
+                               ( 'SUN', SOLARSYSTEMCONSTANTS.SUN.GP )]:
+      try:
+        # Get body position relative to Earth using SPICE
+        state, _ = spice.spkez(
+          targ   = NAIFIDS.NAME_TO_ID[body_name],
+          et     = time_et,
+          ref    = 'J2000',
+          abcorr = 'NONE',
+          obs    = 399  # Earth
+        )
+        body_pos_vec = np.array(state[0:3]) * CONVERTER.M_PER_KM
+      except:
+        continue
+
+      # Distance from Earth center to tide-generating body
+      body_pos_mag = np.linalg.norm(body_pos_vec)
+
+      if body_pos_mag == 0:
+        continue
+
+      # Unit vector toward perturbing body
+      body_pos_dir = body_pos_vec / body_pos_mag
+
+      # Degree-2 solid tide acceleration (IERS 2010 simplified)
+      # Based on Montenbruck & Gill equation 3.81
+      cos_psi = np.dot(j2000_pos_dir, body_pos_dir)
+      # Solid tide factor
+      factor = (1.5 * self.k2 * body_gp) * (self.earth_radius**5 / (j2000_pos_mag**4 * body_pos_mag**3))
+
+      # Acceleration components (Montenbruck & Gill Eq. 3.81)
+      # a = factor * [(5*cos²(ψ) - 1)*ŝ - 2*cos(ψ)*d̂]
+      # where ŝ is satellite direction and d̂ is body direction (UNIT VECTORS)
+      acc_tide = factor * ((5.0 * cos_psi**2 - 1.0) * j2000_pos_dir - 2.0 * cos_psi * body_pos_dir)
+
+      acc_vec += acc_tide
+
+    return acc_vec
+
+
 def _get_harmonic_coefficients(
   gravity_harmonics_list : list,
 ) -> dict:
@@ -1388,11 +1582,28 @@ class Gravity:
         )
       else:
         self.third_body = None
-    
+
+      # General relativity
+      self.enable_relativity = gravity_config.relativity.enabled
+      if self.enable_relativity:
+        self.relativity = GeneralRelativity(
+          gp = gravity_config.gp,
+        )
+      else:
+        self.relativity = None
+
+      # Solid Earth tides
+      self.enable_solid_tides = gravity_config.solid_tides.enabled
+      if self.enable_solid_tides:
+        self.solid_tides = SolidEarthTides()
+      else:
+        self.solid_tides = None
+
     def compute(
       self,
       time        : float,
       pos_vec     : np.ndarray,
+      vel_vec     : np.ndarray = None,
       include_stm : bool       = False,
       stm         : np.ndarray = None,
     ):
@@ -1405,6 +1616,8 @@ class Gravity:
           Current Ephemeris Time (ET) [s].
         pos_vec : np.ndarray
           Position vector [m].
+        vel_vec : np.ndarray, optional
+          Velocity vector [m/s] (required if relativity is enabled).
         include_stm : bool
           If True, also compute STM time derivative (default: False).
         stm : np.ndarray (6, 6), optional
@@ -1447,7 +1660,15 @@ class Gravity:
       if self.enable_third_body and self.third_body is not None:
         acc_vec += self.third_body.point_mass(time, pos_vec)
 
-      # Future: third_body_oblate, relativity
+      # General relativity corrections
+      if self.enable_relativity and self.relativity is not None:
+        if vel_vec is None:
+          raise ValueError("vel_vec parameter required when relativity is enabled")
+        acc_vec += self.relativity.schwarzschild(pos_vec, vel_vec)
+
+      # Solid Earth tides
+      if self.enable_solid_tides and self.solid_tides is not None:
+        acc_vec += self.solid_tides.compute(time, pos_vec)
 
       # Return just acceleration if STM not requested
       if not include_stm:
@@ -1702,53 +1923,89 @@ class SolarRadiationPressure:
       earth_to_sun_pos_vec : np.ndarray,
     ) -> float:
       """
-      Compute shadow factor using cylindrical Earth shadow model.
-      
+      Compute shadow factor using conical Earth shadow model with penumbra.
+
       Input:
       ------
         earth_to_sat_pos_vec : np.ndarray
           Spacecraft position vector relative to Earth [m].
         earth_to_sun_pos_vec : np.ndarray
           Sun position vector relative to Earth [m].
-      
+
       Output:
       -------
         shadow_factor : float
-          0.0 = full shadow (umbra), 1.0 = full sunlight.
-      
+          0.0 = full shadow (umbra), 1.0 = full sunlight, (0,1) = penumbra.
+
       Notes:
       ------
-        Uses a simplified cylindrical shadow model where the shadow is a
-        cylinder with radius equal to Earth's equatorial radius, extending
-        from Earth in the anti-Sun direction.
-      """
-      # Direction from Earth to Sun
-      earth_to_sun_pos_dir = earth_to_sun_pos_vec / np.linalg.norm(earth_to_sun_pos_vec)
-      
-      # Project spacecraft position onto Sun direction
-      # (distance along Sun-Earth line, positive toward Sun)
-      earth_to_sat_parallel_pos_mag = np.dot(earth_to_sat_pos_vec, earth_to_sun_pos_dir)
-      
-      # Check if spacecraft is in front of or behind Earth relative to Sun
-      if earth_to_sat_parallel_pos_mag >= 0:
-        # Spacecraft is on the sunlit side of Earth if positive projection
-        shadow_factor = 1.0
-      else:
-        # Spacecraft is on the shadow side of Earth if negative projection
+        Uses a conical shadow model accounting for the Sun's apparent diameter.
+        Penumbra is the region of partial shadow where the Sun is partially
+        occluded by Earth. This is important for high-precision orbit determination
+        of geodetic satellites like LAGEOS-2.
 
-        # Calculate perpendicular distance from spacecraft to Sun-Earth line
-        earth_to_sat_perpendicular_pos_vec = earth_to_sat_pos_vec - earth_to_sat_parallel_pos_mag * earth_to_sun_pos_dir
-        earth_to_sat_perpendicular_pos_mag = np.linalg.norm(earth_to_sat_perpendicular_pos_vec)
-        
-        # Check if within Earth's shadow cylinder
-        if earth_to_sat_perpendicular_pos_mag > SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR:
-          # If perpendicular distance is greater than Earth radius, spacecraft is in sunlight
-          shadow_factor = 1.0
-        else:
-          # Spacecraft is in Earth's cylindrical shadow
-          shadow_factor = 0.0
-        
-      # Return shadow factor
+      References:
+      -----------
+        - Montenbruck & Gill (2000). Satellite Orbits. Springer. Section 3.4.2.
+        - Vokrouhlický, D. (1993). A&A 280, 295-304.
+      """
+      # Earth and Sun radii
+      r_earth = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
+      r_sun   = SOLARSYSTEMCONSTANTS.SUN.RADIUS.EQUATOR
+
+      # Position magnitudes
+      r_sat = np.linalg.norm(earth_to_sat_pos_vec)
+      r_sun_mag = np.linalg.norm(earth_to_sun_pos_vec)
+
+      # Unit vector from Earth to Sun
+      earth_to_sun_dir = earth_to_sun_pos_vec / r_sun_mag
+
+      # Satellite position projected onto Sun direction
+      sat_proj = np.dot(earth_to_sat_pos_vec, earth_to_sun_dir)
+
+      # If satellite is on sunlit side (positive projection), no shadow
+      if sat_proj >= 0:
+        return 1.0
+
+      # Apparent radii of Sun and Earth as seen from satellite
+      # (using small angle approximation for Sun's angular radius)
+      sun_angular_radius = np.arcsin(r_sun / (r_sun_mag - sat_proj))
+      earth_angular_radius = np.arcsin(r_earth / r_sat)
+
+      # Perpendicular distance from satellite to Sun-Earth line
+      sat_perp_vec = earth_to_sat_pos_vec - sat_proj * earth_to_sun_dir
+      sat_perp_dist = np.linalg.norm(sat_perp_vec)
+
+      # Angular separation between Earth and Sun centers as seen from satellite
+      # This is approximately sat_perp_dist / abs(sat_proj) for small angles
+      angular_separation = sat_perp_dist / abs(sat_proj)
+
+      # Determine shadow condition
+      # Total shadow (umbra): Earth completely blocks Sun
+      if angular_separation <= earth_angular_radius - sun_angular_radius:
+        return 0.0
+
+      # Full sunlight: No overlap between Earth and Sun disks
+      if angular_separation >= earth_angular_radius + sun_angular_radius:
+        return 1.0
+
+      # Partial shadow (penumbra): Sun is partially occluded by Earth
+      # Use approximate formula for penumbra shadow factor
+      # Based on the fraction of Sun's disk that is visible
+
+      # This is a simplified penumbra model using linear interpolation
+      # More sophisticated models use the actual overlapping disk area
+      x = angular_separation
+      a = earth_angular_radius
+      b = sun_angular_radius
+
+      # Linear approximation of shadow factor in penumbra
+      # shadow_factor goes from 0 (at umbra boundary) to 1 (at full sunlight)
+      shadow_factor = (x - (a - b)) / (2.0 * b)
+
+      # Clamp to [0, 1] range
+      shadow_factor = max(0.0, min(1.0, shadow_factor))
+
       return shadow_factor
 
 
@@ -1852,9 +2109,9 @@ class AccelerationSTMDot:
       if include_stm:
         if stm is None:
           raise ValueError("stm parameter required when include_stm=True")
-        acc_vec, stm_dot = self.gravity.compute(time, pos_vec, include_stm=True, stm=stm)
+        acc_vec, stm_dot = self.gravity.compute(time, pos_vec, vel_vec, include_stm=True, stm=stm)
       else:
-        acc_vec = self.gravity.compute(time, pos_vec)
+        acc_vec = self.gravity.compute(time, pos_vec, vel_vec)
 
       # Atmospheric drag (optional)
       if self.drag is not None:

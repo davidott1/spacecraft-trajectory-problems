@@ -755,6 +755,14 @@ def run_high_fidelity_propagation(
       print(f"          Area  : {spacecraft.srp.area:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} m²")
       print(f"          Mass  : {spacecraft.mass:{PRINTFORMATTER.SCIENTIFIC_NOTATION}} kg")
 
+    if two_body_gravity_model.relativity.enabled:
+      print(f"        General Relativity")
+      print(f"          Model : Schwarzschild (Post-Newtonian)")
+
+    if two_body_gravity_model.solid_tides.enabled:
+      print(f"        Solid Earth Tides")
+      print(f"          Model : IERS 2010 (Degree-2)")
+
     print(f"      Numerical Integration")
     print(f"        Method     : {propagation_config.method}")
     print(f"        Tolerances : rtol={propagation_config.rtol}, atol={propagation_config.atol}")
