@@ -1,8 +1,14 @@
 import sys
+import re
 import argparse
 import yaml
 from pathlib import Path
-from src.utility.time_helper import parse_time
+def parse_time(time_str: str):
+  """
+  Parse time string to datetime object.
+  """
+  from dateutil import parser
+  return parser.parse(time_str)
 
 
 def load_config_file(config_path: str) -> dict:
@@ -145,10 +151,10 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
     elif arg_name in ['third_bodies', 'gravity_harmonics_coefficients', 'gravity_harmonics_degree_order']:
       # List arguments - only override if CLI didn't provide values
       if current_value is None or (isinstance(current_value, list) and len(current_value) == 0):
-        # Handle string "val1, val2" format
+        # Handle string "val1, val2" or "val1 val2" format
         if isinstance(config_value, str):
-          # Parse comma-separated string
-          parsed_values = [x.strip() for x in config_value.split(',')]
+          # Parse comma-separated or space-separated string
+          parsed_values = [x.strip() for x in re.split(r'[,\s]+', config_value) if x.strip()]
           # Convert to appropriate type
           if arg_name == 'gravity_harmonics_degree_order':
             # Convert to integers for degree/order
