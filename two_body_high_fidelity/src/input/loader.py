@@ -711,6 +711,14 @@ def load_spice_files(
   else:
     raise FileNotFoundError(f"No PCK files (pck*.tpc) found in {spice_kernels_folderpath}")
 
+  # Load binary PCK (High-precision Earth orientation)
+  # Load AFTER text PCK to ensure precedence
+  bpc_files = sorted(list(spice_kernels_folderpath.glob('earth_*.bpc')))
+  if bpc_files:
+    for bpc_file in bpc_files:
+      spice.furnsh(str(bpc_file))
+      print(f"      Loaded Binary PCK : {bpc_file.name}")
+
 
 def unload_spice_files() -> None:
   """

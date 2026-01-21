@@ -450,7 +450,7 @@ def main(
 if __name__ == "__main__":
   # Parse command-line arguments
   args = parse_command_line_arguments()
-  
+
   # Run main function
   main(
     args.initial_state_norad_id,
