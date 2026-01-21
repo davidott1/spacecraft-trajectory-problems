@@ -499,14 +499,14 @@ Run the test suite:
 
 ```bash
 # Run all tests
-python -m pytest src/validation/ -v
+python -m pytest src/verification/ -v
 
 # Run specific test module
-python -m pytest src/validation/test_dynamics.py -v
+python -m pytest src/verification/test_dynamics.py -v
 
 # Run with coverage
 pip install pytest-cov
-python -m pytest src/validation/ --cov=src --cov-report=html
+python -m pytest src/verification/ --cov=src --cov-report=html
 ```
 
 ### Test Coverage

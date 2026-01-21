@@ -1,6 +1,6 @@
 """
-Validation Package
-==================
+Verification Package
+====================
 
 Test suite for the high-fidelity orbit propagator.
 
@@ -14,17 +14,17 @@ Modules:
 Usage:
 ------
 Run all tests:
-  python -m pytest src/validation/ -v
+  python -m pytest src/verification/ -v
 
 Run a specific test module:
-  python -m pytest src/validation/test_dynamics -v
+  python -m pytest src/verification/test_dynamics -v
 
 Run a specific test class:
-  python -m pytest src/validation/test_dynamics::TestTwoBodyGravity -v
+  python -m pytest src/verification/test_dynamics::TestTwoBodyGravity -v
 
 Run a specific test:
-  python -m pytest src/validation/test_dynamics::TestTwoBodyGravity::test_sanity_check_point_mass_direction -v
+  python -m pytest src/verification/test_dynamics::TestTwoBodyGravity::test_sanity_check_point_mass_direction -v
 
 Run with coverage:
-  python -m pytest src/validation/ --cov=src --cov-report=html
+  python -m pytest src/verification/ --cov=src --cov-report=html
 """

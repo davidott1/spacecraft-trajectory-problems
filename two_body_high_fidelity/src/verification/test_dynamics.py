@@ -28,7 +28,7 @@ TestEnergyConservation
 
 Usage:
 ------
-  python -m pytest src/validation/test_dynamics.py -v
+  python -m pytest src/verification/test_dynamics.py -v
 """
 import pytest
 import numpy as np

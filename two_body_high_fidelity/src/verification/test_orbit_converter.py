@@ -23,7 +23,7 @@ TestAnomalyConversions
 
 Usage:
 ------
-  python -m pytest src/validation/test_orbit_converter.py -v
+  python -m pytest src/verification/test_orbit_converter.py -v
 """
 import pytest
 import numpy as np
