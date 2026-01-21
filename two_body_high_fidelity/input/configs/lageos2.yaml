@@ -8,10 +8,10 @@ initial_state_source: jpl_horizons
 initial_state_norad_id: 22195  # LAGEOS-2
 
 # Time span for propagation
-timespan: 2025-01-15T00:00:00 2025-01-16T00:00:00
+timespan: 2025-01-15T00:00:00 2025-01-15T12:00:00
 
 # Gravity model configuration (high precision for geodetic satellite)
-gravity_harmonics_degree_order: 20, 20
+gravity_harmonics_degree_order: 0, 0
 gravity_harmonics_filename: EGM2008.gfc
 
 # Perturbation forces (LAGEOS has minimal drag due to high altitude)

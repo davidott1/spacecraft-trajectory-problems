@@ -342,6 +342,7 @@ def main(
   if include_orbit_determination and trackers is not None and len(trackers) > 0:
     from src.orbit_determination.ekf_processor import process_measurements_with_ekf, perturb_initial_state
     from src.orbit_determination.measurement_simulator import MeasurementSimulator
+    from src.model.dynamics import Acceleration, GeneralStateEquationsOfMotion
 
     # Use JPL Horizons as truth for measurement simulation
     if result_jpl_horizons_ephemeris is not None and result_jpl_horizons_ephemeris.success:
@@ -371,6 +372,14 @@ def main(
       print(f"  Using ephemeris initial state as initial guess")
       initial_guess = initial_state.copy()
 
+      # Create high-fidelity dynamics model for EKF propagation
+      print(f"  Initializing high-fidelity dynamics for EKF")
+      od_acceleration = Acceleration(
+        gravity_config = config.gravity,
+        spacecraft     = config.spacecraft,
+      )
+      od_dynamics = GeneralStateEquationsOfMotion(acceleration=od_acceleration)
+
       # Process with EKF
       print(f"  Processing {len(measurements.measured.delta_time_epoch)} measurements with EKF")
       od_estimated_states, od_covariances, od_estimation_times = process_measurements_with_ekf(
@@ -382,6 +391,7 @@ def main(
         propagation_times  = None,  # Use ephemeris_times
         initial_covariance = None,  # Use defaults
         process_noise      = None,  # Use defaults
+        dynamics           = od_dynamics,  # High-fidelity dynamics
       )
 
       # Replace high-fidelity propagation result with OD estimates
