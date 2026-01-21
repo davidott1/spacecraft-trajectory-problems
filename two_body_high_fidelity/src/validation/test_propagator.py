@@ -28,7 +28,7 @@ import numpy as np
 
 from scipy.integrate import solve_ivp
 
-from src.model.dynamics        import Acceleration, GeneralStateEquationsOfMotion
+from src.model.dynamics        import AccelerationSTMDot, GeneralStateEquationsOfMotion
 from src.model.orbit_converter import OrbitConverter
 from src.model.constants       import SOLARSYSTEMCONSTANTS, CONVERTER
 from src.schemas.gravity       import GravityModelConfig, SphericalHarmonicsConfig
@@ -60,7 +60,7 @@ class TestKeplerianPropagation:
     # Create acceleration model (point mass only)
     gravity_config = GravityModelConfig(gp=gp)
     spacecraft     = SpacecraftProperties(mass=1000.0)
-    accel          = Acceleration(gravity_config=gravity_config, spacecraft=spacecraft)
+    accel          = AccelerationSTMDot(gravity_config=gravity_config, spacecraft=spacecraft)
     eom            = GeneralStateEquationsOfMotion(accel)
     
     # Propagate for one period
@@ -107,7 +107,7 @@ class TestKeplerianPropagation:
     # Initialize propagation
     gravity_config = GravityModelConfig(gp=gp)
     spacecraft     = SpacecraftProperties(mass=1000.0)
-    accel          = Acceleration(gravity_config=gravity_config, spacecraft=spacecraft)
+    accel          = AccelerationSTMDot(gravity_config=gravity_config, spacecraft=spacecraft)
     eom            = GeneralStateEquationsOfMotion(accel)
     
     period = 2 * np.pi * np.sqrt(sma**3 / gp)
@@ -148,7 +148,7 @@ class TestKeplerianPropagation:
     # Intialize propagation
     gravity_config = GravityModelConfig(gp=gp)
     spacecraft     = SpacecraftProperties(mass=1000.0)
-    accel          = Acceleration(gravity_config=gravity_config, spacecraft=spacecraft)
+    accel          = AccelerationSTMDot(gravity_config=gravity_config, spacecraft=spacecraft)
     eom            = GeneralStateEquationsOfMotion(accel)
     
     pos_mag = np.linalg.norm(state_o[0:3])
@@ -210,7 +210,7 @@ class TestJ2Perturbation:
       spherical_harmonics = spherical_harmonics,
     )
     spacecraft = SpacecraftProperties(mass=1000.0)
-    accel      = Acceleration(gravity_config=gravity_config, spacecraft=spacecraft)
+    accel      = AccelerationSTMDot(gravity_config=gravity_config, spacecraft=spacecraft)
     eom        = GeneralStateEquationsOfMotion(accel)
     
     period = 2 * np.pi * np.sqrt(sma**3 / gp)
@@ -266,7 +266,7 @@ class TestJ2Perturbation:
       spherical_harmonics = spherical_harmonics,
     )
     spacecraft = SpacecraftProperties(mass=1000.0)
-    accel      = Acceleration(gravity_config=gravity_config, spacecraft=spacecraft)
+    accel      = AccelerationSTMDot(gravity_config=gravity_config, spacecraft=spacecraft)
     eom        = GeneralStateEquationsOfMotion(accel)
     
     period = 2 * np.pi * np.sqrt(sma**3 / gp)

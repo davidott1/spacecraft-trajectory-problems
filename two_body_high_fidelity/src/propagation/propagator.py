@@ -12,7 +12,7 @@ from scipy.integrate   import solve_ivp
 from scipy.interpolate import interp1d
 from sgp4.api          import jday
 
-from src.model.dynamics        import GeneralStateEquationsOfMotion, Acceleration
+from src.model.dynamics        import GeneralStateEquationsOfMotion, AccelerationSTMDot
 from src.model.orbit_converter import OrbitConverter
 from src.model.constants       import PRINTFORMATTER, SOLARSYSTEMCONSTANTS, CONVERTER
 from src.model.time_converter  import utc_to_et, et_to_utc
@@ -302,7 +302,7 @@ def propagate_state_numerical_integration(
   initial_state       : np.ndarray,
   initial_dt          : datetime,
   final_dt            : datetime,
-  dynamics            : Acceleration,
+  dynamics            : AccelerationSTMDot,
   method              : str                  = 'DOP853', # DOP853 RK45
   rtol                : float                = 1e-12,
   atol                : float                = 1e-15,
@@ -323,7 +323,7 @@ def propagate_state_numerical_integration(
       Initial time as datetime (UTC).
     final_dt : datetime
       Final time as datetime (UTC).
-    dynamics : Acceleration
+    dynamics : AccelerationSTMDot
       Acceleration model containing all force models.
     method : str
       Integration method for scipy.solve_ivp (default: 'DOP853').
@@ -525,7 +525,7 @@ def run_high_fidelity_propagation(
   print("    Initialize acceleration model")
 
   # Initialize acceleration model
-  acceleration = Acceleration(
+  acceleration = AccelerationSTMDot(
     gravity_config = two_body_gravity_model,
     spacecraft     = spacecraft,
   )
