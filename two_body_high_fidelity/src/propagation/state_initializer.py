@@ -109,18 +109,17 @@ def get_initial_state(
 
   # Use Horizons if available and requested
   if use_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
-    print("    Extract initial state from JPL Horizons ephemeris")
+    print("    Extract initial state from Horizons ephemeris")
     print("    Convert to classical orbital elements for display")
     print()
-    # Use the first available state from the ephemeris (not interpolated)
+
+    # Get the Horizons time grid
+    if not result_jpl_horizons_ephemeris.time_grid:
+      raise ValueError("Horizons ephemeris missing time grid data")
+
+    # Use the first state from the filtered Horizons data
     horizons_initial_state = result_jpl_horizons_ephemeris.state[:, 0]
-    
-    # Get the actual epoch from the ephemeris
-    if result_jpl_horizons_ephemeris.time_grid:
-      epoch_dt = result_jpl_horizons_ephemeris.time_grid.initial
-    else:
-      # Fallback if time_grid is missing (shouldn't happen for valid Horizons result)
-      epoch_dt = time_o_dt
+    epoch_dt = result_jpl_horizons_ephemeris.time_grid.initial
 
     try:
       epoch_et = utc_to_et(epoch_dt)
