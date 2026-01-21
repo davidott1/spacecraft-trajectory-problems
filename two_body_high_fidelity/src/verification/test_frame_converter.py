@@ -20,7 +20,7 @@ TestVectorConverter
 
 Usage:
 ------
-  python -m pytest src/validation/test_frame_converter.py -v
+  python -m pytest src/verification/test_frame_converter.py -v
 """
 import pytest
 import numpy as np

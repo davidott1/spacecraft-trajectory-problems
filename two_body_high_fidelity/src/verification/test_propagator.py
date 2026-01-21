@@ -17,7 +17,7 @@ TestJ2Perturbation
 
 Usage:
 ------
-  python -m pytest src/validation/test_propagator.py -v
+  python -m pytest src/verification/test_propagator.py -v
 
 Note:
 -----

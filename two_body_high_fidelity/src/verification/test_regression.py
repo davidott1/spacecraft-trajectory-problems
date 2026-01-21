@@ -17,7 +17,7 @@ TestCLIIntegration
 
 Usage:
 ------
-  python -m pytest src/validation/test_regression.py -v
+  python -m pytest src/verification/test_regression.py -v
 
 Note:
 -----
@@ -37,7 +37,7 @@ class TestRegressionEndToEnd:
 
   Usage:
   ------
-  python -m pytest src/validation/test_regression.py::TestRegressionEndToEnd
+  python -m pytest src/verification/test_regression.py::TestRegressionEndToEnd
   """
   
   def test_regression_two_body_propagation_completes(self):
@@ -46,7 +46,7 @@ class TestRegressionEndToEnd:
 
     Usage:
     ------
-    python -m pytest src/validation/test_regression.py::TestRegressionEndToEnd::test_regression_two_body_propagation_completes -v
+    python -m pytest src/verification/test_regression.py::TestRegressionEndToEnd::test_regression_two_body_propagation_completes -v
 
     CLI Equivalent:
     ---------------
@@ -75,7 +75,7 @@ class TestRegressionEndToEnd:
 
     Usage:
     ------
-    python -m pytest src/validation/test_regression.py::TestRegressionEndToEnd::test_regression_propagation_with_j2_completes -v
+    python -m pytest src/verification/test_regression.py::TestRegressionEndToEnd::test_regression_propagation_with_j2_completes -v
 
     CLI Equivalent:
     ---------------
@@ -105,7 +105,7 @@ class TestRegressionEndToEnd:
 
     Usage:
     ------
-    python -m pytest src/validation/test_regression.py::TestRegressionEndToEnd::test_regression_propagation_with_full_forces_completes -v
+    python -m pytest src/verification/test_regression.py::TestRegressionEndToEnd::test_regression_propagation_with_full_forces_completes -v
 
     CLI Equivalent:
     ---------------
@@ -146,7 +146,7 @@ class TestRegressionEndToEnd:
 
     Usage:
     ------
-    python -m pytest src/validation/test_regression.py::TestRegressionEndToEnd::test_regression_full_forces_with_comparisons -v
+    python -m pytest src/verification/test_regression.py::TestRegressionEndToEnd::test_regression_full_forces_with_comparisons -v
 
     CLI Equivalent:
     ---------------
@@ -182,7 +182,7 @@ class TestCLIIntegration:
 
   Usage:
   ------
-  python -m pytest src/validation/test_regression.py::TestCLIIntegration
+  python -m pytest src/verification/test_regression.py::TestCLIIntegration
   """
   
   def test_regression_cli_basic_propagation(self):
@@ -191,7 +191,7 @@ class TestCLIIntegration:
 
     Usage:
     ------
-    python -m pytest src/validation/test_regression.py::TestCLIIntegration::test_regression_cli_basic_propagation -v
+    python -m pytest src/verification/test_regression.py::TestCLIIntegration::test_regression_cli_basic_propagation -v
 
     CLI Equivalent:
     ---------------
