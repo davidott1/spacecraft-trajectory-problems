@@ -226,7 +226,51 @@ class TwoBodyGravity:
     """
     pos_mag = np.linalg.norm(pos_vec)
     return -self.gp * pos_vec / pos_mag**3
-  
+
+  def point_mass_jacobian(
+    self,
+    pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Analytical 6x6 Jacobian matrix A for two-body point mass gravity.
+
+    The state transition matrix Φ satisfies: dΦ/dt = A Φ
+
+    where the A matrix (Jacobian of state derivative w.r.t. state) is:
+      A = [      0   I  ]
+          [  ∂a/∂r   0  ]
+
+    The gravity gradient ∂a/∂r for a = -μr/r³ is:
+      ∂a/∂r = -μ/r³ * I + 3μ/r⁵ * (r ⊗ r)
+
+    where r ⊗ r is the outer product of position with itself.
+
+    Input:
+    ------
+      pos_vec : np.ndarray
+        Position vector [m]
+
+    Output:
+    -------
+      dposveldotvec__dposvelvec : np.ndarray (6x6)
+        Jacobian matrix for STM propagation
+    """
+    pos_mag      = np.linalg.norm(pos_vec)
+    pos_mag_pwr3 = pos_mag**3
+    pos_mag_pwr5 = pos_mag**5
+
+    # d(acc_vec)/d(pos_vec)
+    daccvec__dposvec = \
+      -self.gp / pos_mag_pwr3 * np.eye(3) \
+      + 3.0 * self.gp / pos_mag_pwr5 * np.outer(pos_vec, pos_vec)
+    
+    # Build 6x6 Jacobian: d(posveldotvec)/d(posvelvec)
+    dposveldotvec__dposvelvec           = np.zeros((6, 6))
+    dposveldotvec__dposvelvec[0:3, 3:6] = np.eye(3)         # d(pos_dot_vec)/d(vel_vec) = I
+    dposveldotvec__dposvelvec[3:6, 0:3] = daccvec__dposvec  # d(vel_dot_vec)/d(pos_vec) = d(acc_vec)/d(pos_vec)
+    
+    return dposveldotvec__dposvelvec
+ 
   def oblate_j2(
       self,
       time_et       : float,
@@ -1037,27 +1081,36 @@ class Gravity:
     
     def compute(
       self,
-      time    : float,
-      pos_vec : np.ndarray,
-    ) -> np.ndarray:
+      time        : float,
+      pos_vec     : np.ndarray,
+      include_stm : bool       = False,
+      stm         : np.ndarray = None,
+    ):
       """
-      Compute total gravity acceleration.
-      
+      Compute total gravity acceleration, optionally with STM time derivative.
+
       Input:
       ------
         time : float
           Current Ephemeris Time (ET) [s].
         pos_vec : np.ndarray
           Position vector [m].
-      
+        include_stm : bool
+          If True, also compute STM time derivative (default: False).
+        stm : np.ndarray (6, 6), optional
+          State transition matrix (required if include_stm=True).
+
       Output:
       -------
         acc_vec : np.ndarray
           Total gravity acceleration [m/s²].
+        OR
+        (acc_vec, stm_dot) : tuple
+          If include_stm=True, returns tuple of acceleration and STM time derivative.
       """
       # Initialize acceleration vector
       acc_vec = np.zeros(3)
-      
+
       # Use spherical harmonics model if available
       if self.spherical_harmonics_model is not None:
         # Spherical harmonics includes point mass and all harmonic terms
@@ -1066,35 +1119,51 @@ class Gravity:
         # Fall back to analytical two-body terms
         # Two-body point mass
         acc_vec += self.two_body.point_mass(pos_vec)
-        
+
         # Two-body oblateness (J2, J3, J4, J5, J6)
         acc_vec += self.two_body.oblate_j2(time, pos_vec)
         acc_vec += self.two_body.oblate_j3(time, pos_vec)
         acc_vec += self.two_body.oblate_j4(time, pos_vec)
         acc_vec += self.two_body.oblate_j5(time, pos_vec)
         acc_vec += self.two_body.oblate_j6(time, pos_vec)
-        
+
         # Two-body tesseral (C21, S21, C22, S22)
         acc_vec += self.two_body.tesseral_21(time, pos_vec)
         acc_vec += self.two_body.tesseral_22(time, pos_vec)
-        
+
         # Two-body tesseral (C31, S31, C32, S32, C33, S33)
         acc_vec += self.two_body.tesseral_31(time, pos_vec)
         acc_vec += self.two_body.tesseral_32(time, pos_vec)
         acc_vec += self.two_body.tesseral_33(time, pos_vec)
-      
+
       # Third-body contributions
       if self.enable_third_body and self.third_body is not None:
         acc_vec += self.third_body.point_mass(time, pos_vec)
-      
+
       # Future: third_body_oblate, relativity
-      
-      return acc_vec
+
+      # Return just acceleration if STM not requested
+      if not include_stm:
+        return acc_vec
+
+      # Compute STM time derivative if requested
+      if stm is None:
+        raise ValueError("stm parameter required when include_stm=True")
+
+      # Compute Jacobian matrix (currently uses analytical point-mass only)
+      # Higher-order harmonics, third-body, and other Jacobians can be added later
+      A_matrix = self.two_body.point_mass_jacobian(pos_vec)
+
+      # STM time derivative: dΦ/dt = A * Φ
+      stm_dot = A_matrix @ stm
+
+      return acc_vec, stm_dot
     
 
 # =============================================================================
 # Non-Gravitational Accelerations
 # =============================================================================
+
 
 class AtmosphericDrag:
     """
@@ -1435,13 +1504,15 @@ class Acceleration:
     
     def compute(
       self,
-      time    : float,
-      pos_vec : np.ndarray,
-      vel_vec : np.ndarray,
-    ) -> np.ndarray:
+      time        : float,
+      pos_vec     : np.ndarray,
+      vel_vec     : np.ndarray,
+      include_stm : bool       = False,
+      stm         : np.ndarray = None,
+    ):
       """
-      Compute total acceleration from all components
-      
+      Compute total acceleration from all components, optionally with STM time derivative.
+
       Input:
       ------
         time : float
@@ -1450,24 +1521,40 @@ class Acceleration:
           Position vector [m]
         vel_vec : np.ndarray
           Velocity vector [m/s]
-      
+        include_stm : bool
+          If True, also compute STM time derivative (default: False)
+        stm : np.ndarray (6, 6), optional
+          State transition matrix (required if include_stm=True)
+
       Output:
       -------
         acc_vec : np.ndarray
           Total acceleration [m/s²]
+        OR
+        (acc_vec, stm_dot) : tuple
+          If include_stm=True, returns tuple of acceleration and STM time derivative
       """
-      # Gravity (always)
-      acc_vec = self.gravity.compute(time, pos_vec)
-      
+      # Compute gravity acceleration and optionally STM derivative
+      if include_stm:
+        if stm is None:
+          raise ValueError("stm parameter required when include_stm=True")
+        acc_vec, stm_dot = self.gravity.compute(time, pos_vec, include_stm=True, stm=stm)
+      else:
+        acc_vec = self.gravity.compute(time, pos_vec)
+
       # Atmospheric drag (optional)
       if self.drag is not None:
         acc_vec += self.drag.compute(pos_vec, vel_vec)
-      
+
       # Solar radiation pressure (optional)
       if self.srp is not None:
         acc_vec += self.srp.compute(time, pos_vec)
-      
-      return acc_vec
+
+      # Return based on whether STM was requested
+      if include_stm:
+        return acc_vec, stm_dot
+      else:
+        return acc_vec
 
 
 # =============================================================================
@@ -1478,25 +1565,25 @@ class GeneralStateEquationsOfMotion:
   """
   General state equations of motion for orbit propagation
   """
-  
+
   def __init__(
     self,
     acceleration : Acceleration,
   ):
     """
     Initialize equations of motion
-    
+
     Input:
     ------
       acceleration : Acceleration
         Acceleration coordinator instance
-            
+
     Output:
     -------
       None
     """
     self.acceleration = acceleration
-  
+
   def state_time_derivative(
       self,
       time      : float,
@@ -1504,14 +1591,14 @@ class GeneralStateEquationsOfMotion:
   ) -> np.ndarray:
     """
     Compute state time derivative for ODE integration
-    
+
     Input:
     ------
       time : float
         Current Ephemeris Time (ET) [s]
       state_vec : np.ndarray
         Current state vector [pos, vel] [m, m/s]
-    
+
     Output:
     -------
       state_dot_vec : np.ndarray
@@ -1520,12 +1607,52 @@ class GeneralStateEquationsOfMotion:
     pos_vec = state_vec[0:3]
     vel_vec = state_vec[3:6]
     acc_vec = self.acceleration.compute(time, pos_vec, vel_vec)
-    
+
     state_dot_vec      = np.zeros(6)
     state_dot_vec[0:3] = vel_vec
     state_dot_vec[3:6] = acc_vec
-    
+
     return state_dot_vec
+
+  def state_stm_time_derivative(
+      self,
+      time_et   : float,
+      state_stm : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Compute combined state and STM time derivative for EKF integration
+
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s past J2000]
+      state_stm : np.ndarray (42,)
+        Combined state and STM vector
+
+    Output:
+    -------
+      state_stm_dot : np.ndarray (42,)
+        Time derivative of combined state and STM
+    """
+    # Extract state components
+    pos_vec = state_stm[0:3]
+    vel_vec = state_stm[3:6]
+    stm     = state_stm[6:42].reshape((6, 6))
+
+    # Compute acceleration and STM time derivative
+    acc_vec, stm_dot = self.acceleration.compute(time_et, pos_vec, vel_vec, include_stm=True, stm=stm)
+
+    # State time derivative
+    state_dot      = np.zeros(6)
+    state_dot[0:3] = vel_vec
+    state_dot[3:6] = acc_vec
+
+    # Combine
+    state_stm_dot       = np.zeros(42)
+    state_stm_dot[0:6]  = state_dot
+    state_stm_dot[6:42] = stm_dot.flatten()
+
+    return state_stm_dot
 
 
 

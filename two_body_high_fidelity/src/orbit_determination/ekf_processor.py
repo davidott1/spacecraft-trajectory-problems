@@ -6,16 +6,18 @@ with the Extended Kalman Filter to produce state estimates.
 """
 import numpy as np
 
-from datetime import datetime
-from typing   import Optional, Tuple
+from datetime         import datetime, timedelta
+from scipy.integrate  import solve_ivp
+from typing           import Optional, Tuple, Callable
 
 from src.orbit_determination.extended_kalman_filter import ExtendedKalmanFilter, EKFMeasurement, EKFConfig
-from src.orbit_determination.measurement_simulator import MeasurementSimulator
-from src.schemas.measurement                     import SimulatedMeasurements
-from src.schemas.propagation                     import PropagationResult, TimeGrid
-from src.schemas.state                           import TrackerStation, ClassicalOrbitalElements, ModifiedEquinoctialElements
-from src.model.orbit_converter                   import OrbitConverter
-from src.model.constants                         import SOLARSYSTEMCONSTANTS
+from src.schemas.measurement                        import SimulatedMeasurements
+from src.schemas.propagation                        import PropagationResult, TimeGrid
+from src.schemas.state                              import TrackerStation, ClassicalOrbitalElements, ModifiedEquinoctialElements
+from src.model.orbit_converter                      import OrbitConverter
+from src.model.constants                            import SOLARSYSTEMCONSTANTS
+from src.model.dynamics                             import Acceleration, GeneralStateEquationsOfMotion
+from src.model.time_converter                       import utc_to_et
 
 
 def create_measurement_noise_covariance(tracker: TrackerStation) -> np.ndarray:
@@ -116,6 +118,87 @@ def create_default_initial_covariance(
   return P0
 
 
+def create_high_fidelity_propagator(
+  dynamics     : GeneralStateEquationsOfMotion,
+  epoch_dt_utc : datetime,
+) -> Callable[[np.ndarray, float, float], Tuple[np.ndarray, np.ndarray]]:
+  """
+  Create a high-fidelity propagator function with STM for use with EKF.
+
+  The returned function integrates the state and state transition matrix (STM)
+  using the provided dynamics model. Uses the dynamics object's built-in
+  state+STM integration method for efficiency.
+
+  Input:
+  ------
+    dynamics : GeneralStateEquationsOfMotion
+      High-fidelity dynamics model (gravity harmonics, drag, SRP, third-body).
+    epoch_dt_utc : datetime
+      Reference epoch (UTC) for converting delta times to ephemeris times.
+
+  Output:
+  -------
+    propagator : Callable[[np.ndarray, float, float], Tuple[np.ndarray, np.ndarray]]
+      Function with signature (x, t0, tf) -> (x_f, Phi) where:
+        x    : Initial state [6]
+        t0   : Initial time [s] relative to epoch
+        tf   : Final time [s] relative to epoch
+        x_f  : Final state [6]
+        Phi  : State transition matrix [6x6]
+  """
+
+  # Get epoch in ephemeris time
+  epoch_et = utc_to_et(epoch_dt_utc)
+
+  def propagator(
+      x  : np.ndarray,
+      t0 : float,
+      tf : float,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Propagate state and STM using high-fidelity dynamics.
+
+    Input:
+    ------
+      x  : State vector [r, v] at t0
+      t0 : Initial time [s] relative to epoch
+      tf : Final time [s] relative to epoch
+
+    Returns:
+    --------
+      x_f : State vector at tf
+      Phi : State transition matrix (6x6)
+    """
+    # Convert delta times to ephemeris times
+    et0 = epoch_et + t0
+    etf = epoch_et + tf
+
+    # Initial conditions: state + identity STM
+    stm_initial = np.eye(6)
+    y0          = np.zeros(42)
+    y0[0:6]     = x
+    y0[6:42]    = stm_initial.flatten()
+
+    # Integrate using dynamics object's state+STM derivative method
+    sol = solve_ivp(
+      fun    = dynamics.state_stm_time_derivative,
+      t_span = [et0, etf],
+      y0     = y0,
+      method = 'DOP853',
+      rtol   = 1e-12,
+      atol   = 1e-12,
+    )
+
+    # Extract final state and STM
+    y_final   = sol.y[:, -1]
+    x_f       = y_final[0:6]
+    stm_final = y_final[6:42].reshape((6, 6))
+
+    return x_f, stm_final
+
+  return propagator
+
+
 def process_measurements_with_ekf(
   measurements        : SimulatedMeasurements,
   tracker             : TrackerStation,
@@ -126,6 +209,7 @@ def process_measurements_with_ekf(
   initial_covariance  : Optional[np.ndarray] = None,
   process_noise       : Optional[np.ndarray] = None,
   process_noise_scale : float = 1.0,
+  dynamics            : Optional[GeneralStateEquationsOfMotion] = None,
 ) -> Tuple[PropagationResult, np.ndarray, np.ndarray]:
   """
   Process simulated measurements with EKF to produce state estimates.
@@ -159,6 +243,8 @@ def process_measurements_with_ekf(
       Process noise covariance Q. If None, uses default scaled by process_noise_scale.
     process_noise_scale : float
       Scaling factor for default process noise (default 1.0).
+    dynamics : GeneralStateEquationsOfMotion, optional
+      High-fidelity dynamics model. If None, uses simple two-body dynamics.
 
   Output:
   -------
@@ -189,11 +275,16 @@ def process_measurements_with_ekf(
   pos_noise_sigma = np.sqrt(process_noise[0, 0])  # Position process noise [m]
   vel_noise_sigma = np.sqrt(process_noise[3, 3])  # Velocity process noise [m/s]
 
+  # Create propagator: high-fidelity if dynamics provided, otherwise two-body
+  propagator = None
+  if dynamics is not None:
+    propagator = create_high_fidelity_propagator(dynamics, epoch_dt_utc)
+
   config = EKFConfig(
     process_noise_pos = pos_noise_sigma,
     process_noise_vel = vel_noise_sigma,
     epoch_dt_utc      = epoch_dt_utc,
-    propagator        = None,  # Will use default two-body propagation
+    propagator        = propagator,  # High-fidelity if dynamics provided, else two-body
     use_joseph_form   = True,
   )
 
@@ -211,13 +302,13 @@ def process_measurements_with_ekf(
   n_propagation = len(propagation_times)
 
   # Build measurement lookup: which propagation indices have measurements
-  # Use tolerance for floating point comparison
+  # Use dict lookup for O(n+m) instead of nested loop O(n*m)
+  meas_time_to_idx = {round(mt, 2): j for j, mt in enumerate(measurement_times)}
   meas_data_idx = {}  # Maps propagation index to measurement data index
   for i, t in enumerate(propagation_times):
-    for j, mt in enumerate(measurement_times):
-      if abs(t - mt) < 0.01:  # 10ms tolerance
-        meas_data_idx[i] = j
-        break
+    rounded_t = round(t, 2)
+    if rounded_t in meas_time_to_idx:
+      meas_data_idx[i] = meas_time_to_idx[rounded_t]
 
   # Build estimation_times: propagation_times with measurement times repeated
   # At measurement times: [t, t] for pre-update and post-update
@@ -338,14 +429,14 @@ def process_measurements_with_ekf(
   coe_time_series = ClassicalOrbitalElements(sma=coe_sma, ecc=coe_ecc, inc=coe_inc, raan=coe_raan, aop=coe_aop, ma=coe_ma, ta=coe_ta, ea=coe_ea)
   mee_time_series = ModifiedEquinoctialElements(p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L)
 
-  # Create PropagationResult at estimation_times (with repeated measurement times)
   # Create time grid for estimation times
-  from datetime import timedelta
   estimation_time_grid = TimeGrid(
     initial = epoch_dt_utc,
     final   = epoch_dt_utc + timedelta(seconds=float(estimation_times[-1])),
     deltas  = estimation_times,
   )
+
+  # Create PropagationResult at estimation_times
   result = PropagationResult(
     state     = estimated_states,
     time_grid = estimation_time_grid,
@@ -356,8 +447,7 @@ def process_measurements_with_ekf(
   )
 
   # Create at_ephem_times with states at ephemeris_times only (post-update at meas times)
-  # This is used for error comparison against truth ephemeris
-  # We need to extract one value per ephemeris time (post-update for measurement times)
+  # for error comparison against truth ephemeris
   ephem_indices = []
   out_idx = 0
   for i in range(n_propagation):
@@ -380,14 +470,14 @@ def process_measurements_with_ekf(
     state     = estimated_states[:, ephem_indices],
     time_grid = ephem_time_grid,
     coe       = ClassicalOrbitalElements(
-      sma  = coe_sma[ephem_indices],
-      ecc  = coe_ecc[ephem_indices],
-      inc  = coe_inc[ephem_indices],
+      sma  = coe_sma [ephem_indices],
+      ecc  = coe_ecc [ephem_indices],
+      inc  = coe_inc [ephem_indices],
       raan = coe_raan[ephem_indices],
-      aop  = coe_aop[ephem_indices],
-      ma   = coe_ma[ephem_indices],
-      ta   = coe_ta[ephem_indices],
-      ea   = coe_ea[ephem_indices],
+      aop  = coe_aop [ephem_indices],
+      ma   = coe_ma  [ephem_indices],
+      ta   = coe_ta  [ephem_indices],
+      ea   = coe_ea  [ephem_indices],
     ),
     mee       = ModifiedEquinoctialElements(
       p = mee_p[ephem_indices],

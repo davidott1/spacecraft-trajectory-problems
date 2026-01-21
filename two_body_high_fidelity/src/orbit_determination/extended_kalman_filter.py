@@ -22,15 +22,13 @@ Measurements:
 
 import numpy as np
 
-from dataclasses import dataclass, field
-from datetime    import datetime
-from typing      import Optional, Callable, List, Tuple
-
+from dataclasses     import dataclass, field
+from datetime        import datetime
+from typing          import Optional, Callable, List, Tuple
 from scipy.integrate import solve_ivp
 
-from src.model.constants       import CONVERTER
 from src.model.orbit_converter import TopocentricConverter
-from src.model.frame_converter import FrameConverter, VectorConverter
+from src.model.frame_converter import VectorConverter
 from src.model.time_converter  import utc_to_et
 from src.schemas.state         import TrackerStation
 
