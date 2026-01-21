@@ -270,6 +270,86 @@ class TwoBodyGravity:
     dposveldotvec__dposvelvec[3:6, 0:3] = daccvec__dposvec  # d(vel_dot_vec)/d(pos_vec) = d(acc_vec)/d(pos_vec)
     
     return dposveldotvec__dposvelvec
+
+  def oblate_j2_jacobian(
+    self,
+    time_et : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Analytical 3x3 Jacobian matrix for J2 oblateness perturbation.
+
+    Computes ∂a_J2/∂r, the partial derivative of J2 acceleration with respect
+    to position. This is added to the gravity gradient in the STM A matrix.
+
+    The J2 acceleration in body-fixed frame is:
+      a_x = k * x * (5z²/r² - 1)
+      a_y = k * y * (5z²/r² - 1)
+      a_z = k * z * (5z²/r² - 3)
+
+    where k = (3/2) * J2 * μ * R_e² / r⁵
+
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in Inertial frame (J2000).
+
+    Output:
+    -------
+      daccvec__dposvec : np.ndarray (3x3)
+        Jacobian matrix ∂a_J2/∂r in J2000 frame
+    """
+    if self.j2 == 0.0:
+      return np.zeros((3, 3))
+
+    # Get rotation matrix from J2000 to Body-Fixed (IAU_EARTH)
+    rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(time_et)
+
+    # Transform position to body-fixed frame
+    pos_vec = rot_mat_j2000_to_iau_earth @ j2000_pos_vec
+    x, y, z = pos_vec[0], pos_vec[1], pos_vec[2]
+
+    pos_mag      = np.linalg.norm(pos_vec)
+    pos_mag_pwr2 = pos_mag**2
+    pos_mag_pwr5 = pos_mag_pwr2 * pos_mag_pwr2 * pos_mag
+    pos_mag_pwr7 = pos_mag_pwr5 * pos_mag_pwr2
+
+    # Common factors
+    k  = 1.5 * self.j2 * self.gp * self.pos_ref**2
+    z2 = z**2
+    z2_over_r2 = z2 / pos_mag_pwr2
+
+    # Jacobian in body-fixed frame
+    # Derived from partial derivatives of J2 acceleration equations
+    jac_bf = np.zeros((3, 3))
+
+    # Common terms
+    term1 = 5.0 * z2_over_r2 - 1.0
+    term2 = 5.0 * z2_over_r2 - 3.0
+
+    # ∂a_x/∂x, ∂a_x/∂y, ∂a_x/∂z
+    jac_bf[0, 0] = k / pos_mag_pwr5 * (term1 - 5.0 * x**2 / pos_mag_pwr2 * (7.0 * z2_over_r2 - 1.0))
+    jac_bf[0, 1] = k / pos_mag_pwr5 * (-5.0 * x * y / pos_mag_pwr2 * (7.0 * z2_over_r2 - 1.0))
+    jac_bf[0, 2] = k / pos_mag_pwr5 * (10.0 * x * z / pos_mag_pwr2 * (1.0 - 7.0 * z2_over_r2 / 2.0 + 0.5))
+
+    # ∂a_y/∂x, ∂a_y/∂y, ∂a_y/∂z
+    jac_bf[1, 0] = k / pos_mag_pwr5 * (-5.0 * y * x / pos_mag_pwr2 * (7.0 * z2_over_r2 - 1.0))
+    jac_bf[1, 1] = k / pos_mag_pwr5 * (term1 - 5.0 * y**2 / pos_mag_pwr2 * (7.0 * z2_over_r2 - 1.0))
+    jac_bf[1, 2] = k / pos_mag_pwr5 * (10.0 * y * z / pos_mag_pwr2 * (1.0 - 7.0 * z2_over_r2 / 2.0 + 0.5))
+
+    # ∂a_z/∂x, ∂a_z/∂y, ∂a_z/∂z
+    jac_bf[2, 0] = k / pos_mag_pwr5 * (-5.0 * z * x / pos_mag_pwr2 * (7.0 * z2_over_r2 - 3.0))
+    jac_bf[2, 1] = k / pos_mag_pwr5 * (-5.0 * z * y / pos_mag_pwr2 * (7.0 * z2_over_r2 - 3.0))
+    jac_bf[2, 2] = k / pos_mag_pwr5 * (term2 + 10.0 * z2 / pos_mag_pwr2 * (1.0 - 7.0 * z2_over_r2 / 2.0 + 1.5))
+
+    # Transform Jacobian back to J2000 frame
+    # For a tensor transformation: J_j2000 = R^T * J_bf * R
+    rot_T = rot_mat_j2000_to_iau_earth.T
+    j2000_jac = rot_T @ jac_bf @ rot_mat_j2000_to_iau_earth
+
+    return j2000_jac
  
   def oblate_j2(
       self,
@@ -1150,9 +1230,14 @@ class Gravity:
       if stm is None:
         raise ValueError("stm parameter required when include_stm=True")
 
-      # Compute Jacobian matrix (currently uses analytical point-mass only)
-      # Higher-order harmonics, third-body, and other Jacobians can be added later
-      A_matrix = self.two_body.point_mass_jacobian(pos_vec)
+      # Compute Jacobian matrix A for STM propagation
+      if self.spherical_harmonics_model is not None:
+        # No analytical Jacobian for spherical harmonics - use point-mass approximation
+        A_matrix = self.two_body.point_mass_jacobian(pos_vec)
+      else:
+        # Use analytical Jacobians matching the acceleration model
+        A_matrix = self.two_body.point_mass_jacobian(pos_vec)
+        A_matrix[3:6, 0:3] += self.two_body.oblate_j2_jacobian(time, pos_vec)
 
       # STM time derivative: dΦ/dt = A * Φ
       stm_dot = A_matrix @ stm
