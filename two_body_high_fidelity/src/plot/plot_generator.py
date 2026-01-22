@@ -421,19 +421,6 @@ def generate_plots(
           plt.close(fig_skyplot_horizons)
           filenames.append(filename)
 
-          # Generate error skyplot
-          error_skyplot_title = f'Measurement Errors - {object_name_display} - JPL Horizons - {tracker.name}'
-          fig_error_skyplot = plot_measurement_errors(
-            measurements = measurements,
-            tracker      = tracker,
-            epoch_dt_utc = time_o_dt,
-            title_text   = error_skyplot_title,
-          )
-          error_filename = f'error_skyplot_{tracker_name_sanitized}_jpl_horizons_{name_lower}.png'
-          fig_error_skyplot.savefig(figures_folderpath / error_filename, dpi=300, bbox_inches='tight')
-          plt.close(fig_error_skyplot)
-          filenames.append(error_filename)
-
         skyplot_files[tracker.name] = filenames
 
       except Exception as e:
