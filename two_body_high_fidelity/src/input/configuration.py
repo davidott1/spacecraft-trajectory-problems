@@ -387,7 +387,6 @@ def build_config(
   # Unpack timespan
   time_o_dt    = timespan_dt[0]
   time_f_dt    = timespan_dt[1]
-  delta_time_epoch = (time_f_dt - time_o_dt).total_seconds()
   
   # Set up foldernames, folderpaths, filenames, and filepaths
   paths = setup_paths(
@@ -401,7 +400,6 @@ def build_config(
 
   # Initialize variables
   obj_props           = {}
-  custom_state_vector = None
 
   # --- Logic for Custom State Vector ---
   if initial_state_source == 'custom_state_vector':
@@ -452,10 +450,10 @@ def build_config(
 
     obj_props = sv_data
     
-    # Extract state
+    # Extract state (validation only)
     # Support 'state' (6-element list) OR 'pos_vec__m' and 'vel_vec__m_per_s'
     if 'state' in sv_data:
-        custom_state_vector = np.array(sv_data['state'])
+        _ = np.array(sv_data['state'])
     elif 'pos_vec__m' in sv_data and ('vel_vec__m_per_s' in sv_data or 'vec_vec__m_per_s' in sv_data):
         # Handle potential typo in YAML key
         vel_key = 'vel_vec__m_per_s' if 'vel_vec__m_per_s' in sv_data else 'vec_vec__m_per_s'
@@ -476,7 +474,7 @@ def build_config(
 
         pos = parse_vec3(pos_raw)
         vel = parse_vec3(vel_raw)
-        custom_state_vector = np.concatenate((pos, vel))
+        _ = np.concatenate((pos, vel))
     else:
       raise ValueError(f"Custom state vector file {initial_state_filename} must contain 'state' or 'pos_vec__m'/'vel_vec__m_per_s'.")
 
