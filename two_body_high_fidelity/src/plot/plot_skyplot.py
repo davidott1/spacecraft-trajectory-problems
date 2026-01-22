@@ -1268,8 +1268,6 @@ def plot_error_skyplot(
       # Histogram
       ax_hist_meas = axes[row_meas, col_hist]
       _plot_hist_and_gaussian(ax_hist_meas, seg_data[meas_key], ylim)
-      # if row_meas == 0:
-      #   ax_hist_meas.set_title("Dist", fontsize=10)
 
       # ---- Rate error row ----
       # Time Series
