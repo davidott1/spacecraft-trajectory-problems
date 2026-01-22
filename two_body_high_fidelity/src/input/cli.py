@@ -6,9 +6,12 @@ from pathlib import Path
 def parse_time(time_str: str):
   """
   Parse time string to datetime object.
+  Always returns a timezone-naive datetime (assumed UTC).
   """
   from dateutil import parser
-  return parser.parse(time_str)
+  dt = parser.parse(time_str)
+  # Strip timezone info to maintain consistency with internal naive-UTC convention
+  return dt.replace(tzinfo=None)
 
 
 def load_config_file(config_path: str) -> dict:
