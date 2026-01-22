@@ -6,22 +6,20 @@
 # - J2 gravity perturbation only for simplicity
 
 # Initial state
-initial_state_source: sv
-initial_state_filename: inclined_45deg.yaml
+initial_state_source   : sv
+initial_state_filename : inclined_45deg.yaml
 
 # Time span (1 day propagation)
-timespan:
-  - "2025-10-01T00:00:00"
-  - "2025-10-02T00:00:00"
+timespan: 2025-10-01T00:00:00 2025-10-02T00:00:00
 
 # Force models (J2 only for simplicity)
-gravity_harmonics_coefficients: [J2]
+gravity_harmonics_coefficients: J2
 include_drag: false
 include_srp: false
 include_relativity: false
 
 # Maneuver file
-maneuver_filename: test_single_burn.yaml
+maneuver_filename: single_burn.yaml
 
 # Numerical integration
 atol: 1.0e-12
