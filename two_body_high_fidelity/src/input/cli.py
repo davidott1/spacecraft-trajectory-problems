@@ -210,6 +210,8 @@ def parse_command_line_arguments(
   # Configuration file argument
   parser.add_argument(
     '--config',
+    '--config-filename',
+    '--config-filepath',
     dest    = 'config',
     type    = str,
     default = None,
