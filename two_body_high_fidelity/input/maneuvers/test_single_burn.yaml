@@ -6,5 +6,5 @@
 maneuvers:
   # Prograde burn at midpoint
   - time_iso_utc: "2025-10-01T12:00:00"
-    delta_vel__m_per_s: [0.0, 10.0, 0.0]  # 10 m/s in-track (prograde)
+    delta_vel__m_per_s: [0.0, 100.0, 0.0]  # 10 m/s in-track (prograde)
     frame: "RIC"

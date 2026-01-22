@@ -1,13 +1,13 @@
 # Test Configuration: State Vector with Single In-Track Maneuver
 #
 # This configuration demonstrates:
-# - Custom state vector initial conditions
+# - Custom state vector initial conditions (45° inclined orbit)
 # - Single impulsive maneuver at mid-propagation
 # - J2 gravity perturbation only for simplicity
 
 # Initial state
 initial_state_source: sv
-initial_state_filename: equatorial.yaml
+initial_state_filename: inclined_45deg.yaml
 
 # Time span (1 day propagation)
 timespan:
