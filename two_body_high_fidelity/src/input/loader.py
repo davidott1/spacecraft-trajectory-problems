@@ -266,6 +266,90 @@ def load_tracker_station(
     return [tracker]
 
 
+def load_maneuvers(
+  maneuver_filepath : Path,
+) -> list:  # list[ImpulsiveManeuver]
+  """
+  Load impulsive maneuver data from YAML configuration file.
+
+  Input:
+  ------
+    maneuver_filepath : Path
+      Path to the maneuver YAML file.
+
+  Output:
+  -------
+    maneuvers : list[ImpulsiveManeuver]
+      List of impulsive maneuver dataclasses.
+
+  Raises:
+  -------
+    FileNotFoundError
+      If the maneuver file is not found.
+    ValueError
+      If required fields are missing or invalid.
+
+  YAML Format:
+  ------------
+    maneuvers:
+      - time_iso_utc: "2025-10-01T06:00:00"
+        delta_vel__m_per_s: [0.0, 50.0, 0.0]
+        frame: "RIC"
+      - time_iso_utc: "2025-10-01T12:00:00"
+        delta_vel__m_per_s: [0.0, 30.0, 0.0]
+        frame: "RIC"
+  """
+  from src.schemas.spacecraft import ImpulsiveManeuver
+
+  if not maneuver_filepath.exists():
+    raise FileNotFoundError(f"Maneuver file not found: {maneuver_filepath}")
+
+  with open(maneuver_filepath, 'r') as f:
+    data = yaml.safe_load(f)
+
+  # Expect a 'maneuvers' key with list of maneuvers
+  if 'maneuvers' not in data:
+    raise ValueError("Maneuver file must contain 'maneuvers' key")
+
+  maneuver_list_data = data['maneuvers']
+
+  if not isinstance(maneuver_list_data, list):
+    raise ValueError("'maneuvers' must be a list")
+
+  maneuvers = []
+  for i, maneuver_data in enumerate(maneuver_list_data):
+    try:
+      # Parse required fields
+      if 'time_iso_utc' not in maneuver_data:
+        raise ValueError("Missing required field 'time_iso_utc'")
+      if 'delta_vel__m_per_s' not in maneuver_data:
+        raise ValueError("Missing required field 'delta_vel__m_per_s'")
+
+      # Parse time
+      time_dt = parse_time(maneuver_data['time_iso_utc'])
+
+      # Parse Delta-V
+      delta_vel_vec = np.array(maneuver_data['delta_vel__m_per_s'], dtype=float)
+      if len(delta_vel_vec) != 3:
+        raise ValueError(f"delta_vel__m_per_s must have 3 components, got {len(delta_vel_vec)}")
+
+      # Parse frame (optional, default J2000)
+      frame = maneuver_data.get('frame', 'J2000')
+
+      # Create ImpulsiveManeuver object
+      maneuver = ImpulsiveManeuver(
+        time_dt       = time_dt,
+        delta_vel_vec = delta_vel_vec,
+        frame         = frame,
+      )
+      maneuvers.append(maneuver)
+
+    except Exception as e:
+      raise ValueError(f"Error parsing maneuver {i}: {e}")
+
+  return maneuvers
+
+
 def load_gravity_field_model(
   gravity_model_folderpath : Path,
   gravity_model_filename   : str,

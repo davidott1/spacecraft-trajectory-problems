@@ -42,6 +42,7 @@ The tool supports validation against JPL Horizons ephemerides and SGP4/TLE propa
 
 - **Configurable Force Models**: Enable/disable individual perturbations
 - **Multiple Initial State Sources**: JPL Horizons, TLE/SGP4, or custom state vectors
+- **Impulsive Maneuvers**: Delta-V burns with multi-frame support (J2000, RIC, RTN)
 - **Reference Comparisons**: Validate against JPL Horizons or SGP4 propagation
 - **Comprehensive Visualization**: 3D trajectories, time series, error plots, skyplots, and covariance plots
 - **Frame Conversions**: J2000/GCRS, TEME, IAU_EARTH, and RIC/RTN frames
@@ -71,7 +72,8 @@ two_body_high_fidelity/
 ├── input/                           # User configuration files
 │   ├── configs/                     # Run configuration YAML files
 │   ├── state_vectors/               # Custom initial state vector YAML files
-│   └── trackers/                    # Ground station tracker configurations
+│   ├── trackers/                    # Ground station tracker configurations
+│   └── maneuvers/                   # Impulsive maneuver specifications
 │
 ├── output/                          # Generated output (gitignored)
 │   └── <timestamp>/                 # Timestamped run folders
@@ -221,6 +223,7 @@ Optional Arguments:
   --compare-tle                  Compare results with SGP4/TLE propagation
   --include-orbit-determination  Run Extended Kalman Filter for orbit determination
   --tracker-filename FILE        Ground station tracker configuration file
+  --maneuver-filename FILE       Impulsive maneuver YAML file (assumes input/maneuvers/ folder)
 ```
 
 ### Examples
@@ -286,6 +289,15 @@ python -m src.main \
   --gravity-harmonics J2 \
   --include-orbit-determination \
   --tracker-filename trackers_set1.yaml
+```
+
+**8. Propagation with impulsive maneuvers:**
+```bash
+python -m src.main \
+  --initial-state-norad-id 25544 \
+  --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00 \
+  --gravity-harmonics J2 \
+  --maneuver-filename example_hohmann_transfer.yaml
 ```
 
 ### Configuration Files
@@ -400,6 +412,48 @@ Solid body tides due to third-body gravitational effects:
 Ocean loading effects on Earth's gravitational field:
 - Time-varying mass redistribution
 - Additional perturbations for LEO satellites
+
+## Impulsive Maneuvers
+
+The propagator supports impulsive Delta-V maneuvers at specified times. Maneuvers are modeled as instantaneous velocity changes and can be specified in multiple reference frames.
+
+### Maneuver Specification
+
+Maneuvers are defined in YAML files placed in `input/maneuvers/`:
+
+```yaml
+maneuvers:
+  - time_iso_utc: "2025-10-01T06:00:00"
+    delta_vel__m_per_s: [0.0, 50.0, 0.0]  # In-track burn
+    frame: "RIC"
+
+  - time_iso_utc: "2025-10-01T12:00:00"
+    delta_vel__m_per_s: [0.0, 30.0, 0.0]  # Circularization burn
+    frame: "RIC"
+```
+
+### Reference Frames
+
+- **J2000**: Inertial frame (X, Y, Z components)
+- **RIC**: Radial-In-track-Cross-track (orbit-aligned)
+  - R: Radial direction (away from Earth center)
+  - I: In-track direction (along velocity vector)
+  - C: Cross-track direction (perpendicular to orbital plane)
+- **RTN**: Radial-Tangential-Normal (orbit-aligned, similar to RIC)
+
+### Implementation
+
+- Maneuvers are applied as instantaneous velocity changes
+- Propagation is automatically segmented around maneuver times
+- Frame conversions (RIC/RTN → J2000) are handled automatically
+- Multiple maneuvers can be specified in sequence
+
+### Example Maneuver Files
+
+The propagator includes example maneuver files:
+
+- `example_hohmann_transfer.yaml`: Two-burn Hohmann transfer
+- `example_plane_change.yaml`: Single out-of-plane maneuver
 
 
 ## Orbit Determination

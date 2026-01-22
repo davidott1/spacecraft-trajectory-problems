@@ -1,0 +1,32 @@
+# Test Configuration: State Vector with Single In-Track Maneuver
+#
+# This configuration demonstrates:
+# - Custom state vector initial conditions
+# - Single impulsive maneuver at mid-propagation
+# - J2 gravity perturbation only for simplicity
+
+# Initial state
+initial_state_source: sv
+initial_state_filename: equatorial.yaml
+
+# Time span (1 day propagation)
+timespan:
+  - "2025-10-01T00:00:00"
+  - "2025-10-02T00:00:00"
+
+# Force models (J2 only for simplicity)
+gravity_harmonics_coefficients: [J2]
+include_drag: false
+include_srp: false
+include_relativity: false
+
+# Maneuver file
+maneuver_filename: test_single_burn.yaml
+
+# Numerical integration
+atol: 1.0e-12
+rtol: 1.0e-10
+
+# No comparisons
+compare_jpl_horizons: false
+compare_tle: false

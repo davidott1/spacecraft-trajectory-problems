@@ -469,6 +469,305 @@ def propagate_state_numerical_integration(
   )
 
 
+def propagate_with_maneuvers(
+  initial_state       : np.ndarray,
+  initial_dt          : datetime,
+  final_dt            : datetime,
+  dynamics            : AccelerationSTMDot,
+  maneuvers           : list,  # List[ImpulsiveManeuver]
+  method              : str                  = 'DOP853',
+  rtol                : float                = 1e-12,
+  atol                : float                = 1e-15,
+  dense_output        : bool                 = False,
+  get_coe_time_series : bool                 = False,
+  num_points          : Optional[int]        = None,
+  gp                  : float                = SOLARSYSTEMCONSTANTS.EARTH.GP,
+) -> PropagationResult:
+  """
+  Propagate orbit with impulsive maneuvers.
+
+  This function segments the propagation around each maneuver, applies
+  instantaneous Delta-V changes, and concatenates the results.
+
+  Strategy:
+  ---------
+  1. Sort maneuvers by execution time
+  2. Propagate from initial time to first maneuver
+  3. Apply Delta-V (instantaneous velocity change)
+  4. Continue propagation from maneuver to next maneuver (or final time)
+  5. Repeat for all maneuvers
+  6. Concatenate all segments into a single PropagationResult
+
+  Input:
+  ------
+    initial_state : np.ndarray
+      Initial state vector [pos, vel] in meters and m/s.
+    initial_dt : datetime
+      Initial time as datetime (UTC).
+    final_dt : datetime
+      Final time as datetime (UTC).
+    dynamics : AccelerationSTMDot
+      Acceleration model containing all force models.
+    maneuvers : List[ImpulsiveManeuver]
+      List of impulsive maneuvers to apply during propagation.
+    method : str
+      Integration method for scipy.solve_ivp (default: 'DOP853').
+    rtol : float
+      Relative tolerance for integration.
+    atol : float
+      Absolute tolerance for integration.
+    dense_output : bool
+      Enable dense output for interpolation.
+    get_coe_time_series : bool
+      If True, convert states to classical orbital elements.
+    num_points : int, optional
+      Number of output points per segment.
+    gp : float, optional
+      Gravitational parameter for orbital element conversion [m³/s²].
+
+  Output:
+  -------
+    result : PropagationResult
+      Combined propagation result from all segments.
+
+  Notes:
+  ------
+    - Maneuvers outside the propagation time span are ignored
+    - Delta-V is applied in the maneuver's specified reference frame
+    - Frame conversion (RIC/RTN -> J2000) is automatic
+  """
+  from src.schemas.spacecraft import ImpulsiveManeuver
+  from src.model.frame_converter import FrameConverter
+
+  # Filter maneuvers within time span and sort by time
+  valid_maneuvers = [m for m in maneuvers if initial_dt <= m.time_dt <= final_dt]
+  valid_maneuvers.sort(key=lambda m: m.time_dt)
+
+  # If no maneuvers, use standard propagation
+  if not valid_maneuvers:
+    return propagate_state_numerical_integration(
+      initial_state       = initial_state,
+      initial_dt          = initial_dt,
+      final_dt            = final_dt,
+      dynamics            = dynamics,
+      method              = method,
+      rtol                = rtol,
+      atol                = atol,
+      dense_output        = dense_output,
+      get_coe_time_series = get_coe_time_series,
+      num_points          = num_points,
+      gp                  = gp,
+    )
+
+  # Build segment time boundaries
+  segment_times = [initial_dt] + [m.time_dt for m in valid_maneuvers] + [final_dt]
+
+  # Storage for all segments
+  all_states = []
+  all_times  = []
+  all_coe    = [] if get_coe_time_series else None
+  all_mee    = [] if get_coe_time_series else None
+
+  current_state = initial_state.copy()
+
+  # Propagate through each segment
+  for i in range(len(segment_times) - 1):
+    seg_start_dt = segment_times[i]
+    seg_end_dt   = segment_times[i + 1]
+
+    # Propagate this segment
+    result = propagate_state_numerical_integration(
+      initial_state       = current_state,
+      initial_dt          = seg_start_dt,
+      final_dt            = seg_end_dt,
+      dynamics            = dynamics,
+      method              = method,
+      rtol                = rtol,
+      atol                = atol,
+      dense_output        = dense_output,
+      get_coe_time_series = get_coe_time_series,
+      num_points          = num_points,
+      gp                  = gp,
+    )
+
+    if not result.success:
+      return result  # Propagation failed
+
+    # Store segment results (avoid duplicate time points at boundaries)
+    if i == 0:
+      # First segment: keep all points
+      all_states.append(result.state)
+      all_times.append(result.time_grid.deltas)
+      if get_coe_time_series:
+        all_coe.append(result.coe)
+        all_mee.append(result.mee)
+    else:
+      # Later segments: skip first point (duplicate from previous segment's end)
+      all_states.append(result.state[:, 1:])
+      all_times.append(result.time_grid.deltas[1:] + (seg_start_dt - initial_dt).total_seconds())
+      if get_coe_time_series:
+        all_coe.append(_skip_first_coe(result.coe))
+        all_mee.append(_skip_first_mee(result.mee))
+
+    # If there's a maneuver after this segment, apply it
+    if i < len(valid_maneuvers):
+      maneuver = valid_maneuvers[i]
+
+      # Get final state from segment
+      pos_vec = result.state[0:3, -1]
+      vel_vec = result.state[3:6, -1]
+
+      # Convert Delta-V to J2000 frame if needed
+      j2000_delta_vel_vec = _convert_delta_vel_vec_to_j2000(
+        delta_vel_vec     = maneuver.delta_vel_vec,
+        frame             = maneuver.frame,
+        pos_vec           = pos_vec,
+        vel_vec           = vel_vec,
+        time_maneuver_dt  = maneuver.time_dt,
+      )
+
+      # Apply impulsive maneuver (instantaneous velocity change)
+      vel_vec_new = vel_vec + j2000_delta_vel_vec
+
+      # Update current state for next segment
+      current_state = np.concatenate([pos_vec, vel_vec_new])
+
+  # Concatenate all segments
+  combined_state  = np.hstack(all_states)
+  combined_deltas = np.concatenate(all_times)
+
+  # Combine orbital elements if requested
+  combined_coe = None
+  combined_mee = None
+  if get_coe_time_series:
+    combined_coe = _concatenate_coe(all_coe)
+    combined_mee = _concatenate_mee(all_mee)
+
+  # Create time grid
+  time_grid = TimeGrid(
+    initial = initial_dt,
+    final   = final_dt,
+    deltas  = combined_deltas,
+  )
+
+  return PropagationResult(
+    success   = True,
+    message   = f"Propagation successful with {len(valid_maneuvers)} maneuver(s)",
+    time_grid = time_grid,
+    state     = combined_state,
+    coe       = combined_coe,
+    mee       = combined_mee,
+  )
+
+
+def _convert_delta_vel_vec_to_j2000(
+  delta_vel_vec    : np.ndarray,
+  frame            : str,
+  pos_vec          : np.ndarray,
+  vel_vec          : np.ndarray,
+  time_maneuver_dt : datetime,
+) -> np.ndarray:
+  """
+  Convert Delta-V from specified frame to J2000 inertial frame.
+
+  Input:
+  ------
+    delta_vel_vec : np.ndarray
+      Delta-V vector in specified frame [m/s]
+    frame : str
+      Reference frame ('J2000', 'RIC', 'RTN')
+    pos_vec : np.ndarray
+      Position vector at maneuver time in J2000 [m]
+    vel_vec : np.ndarray
+      Velocity vector at maneuver time in J2000 [m/s]
+    time_maneuver_dt : datetime
+      Maneuver execution time (UTC)
+
+  Output:
+  -------
+    j2000_delta_vel_vec : np.ndarray
+      Delta-V vector in J2000 frame [m/s]
+  """
+  from src.model.frame_converter import FrameConverter
+
+  if frame == 'J2000':
+    return delta_vel_vec
+
+  elif frame == 'RIC':
+    # Convert from RIC to J2000
+    # RIC frame: R (radial), I (in-track), C (cross-track)
+    rotation_matrix = FrameConverter.ric_to_xyz(
+      ric_ref_pos_vec = pos_vec,
+      ric_ref_vel_vec = vel_vec,
+    )
+    return rotation_matrix @ delta_vel_vec
+
+  elif frame == 'RTN':
+    # Convert from RTN to J2000
+    # RTN frame: R (radial), T (tangential), N (normal)
+    # RTN is equivalent to RIC for our purposes
+    rotation_matrix = FrameConverter.ric_to_xyz(
+      ric_ref_pos_vec = pos_vec,
+      ric_ref_vel_vec = vel_vec,
+    )
+    return rotation_matrix @ delta_vel_vec
+
+  else:
+    raise ValueError(f"Unknown frame: {frame}")
+
+
+def _skip_first_coe(coe: ClassicalOrbitalElements) -> ClassicalOrbitalElements:
+  """Skip first element of COE time series."""
+  return ClassicalOrbitalElements(
+    sma  = coe.sma[1:],
+    ecc  = coe.ecc[1:],
+    inc  = coe.inc[1:],
+    raan = coe.raan[1:],
+    aop  = coe.aop[1:],
+    ma   = coe.ma[1:],
+    ta   = coe.ta[1:],
+    ea   = coe.ea[1:],
+  )
+
+
+def _skip_first_mee(mee: ModifiedEquinoctialElements) -> ModifiedEquinoctialElements:
+  """Skip first element of MEE time series."""
+  return ModifiedEquinoctialElements(
+    p = mee.p[1:],
+    f = mee.f[1:],
+    g = mee.g[1:],
+    h = mee.h[1:],
+    k = mee.k[1:],
+    L = mee.L[1:],
+  )
+
+
+def _concatenate_coe(coe_list: list) -> ClassicalOrbitalElements:
+  """Concatenate list of COE time series."""
+  return ClassicalOrbitalElements(
+    sma  = np.concatenate([c.sma for c in coe_list]),
+    ecc  = np.concatenate([c.ecc for c in coe_list]),
+    inc  = np.concatenate([c.inc for c in coe_list]),
+    raan = np.concatenate([c.raan for c in coe_list]),
+    aop  = np.concatenate([c.aop for c in coe_list]),
+    ma   = np.concatenate([c.ma for c in coe_list]),
+    ta   = np.concatenate([c.ta for c in coe_list]),
+    ea   = np.concatenate([c.ea for c in coe_list]),
+  )
+
+
+def _concatenate_mee(mee_list: list) -> ModifiedEquinoctialElements:
+  """Concatenate list of MEE time series."""
+  return ModifiedEquinoctialElements(
+    p = np.concatenate([m.p for m in mee_list]),
+    f = np.concatenate([m.f for m in mee_list]),
+    g = np.concatenate([m.g for m in mee_list]),
+    h = np.concatenate([m.h for m in mee_list]),
+    k = np.concatenate([m.k for m in mee_list]),
+    L = np.concatenate([m.L for m in mee_list]),
+  )
+
+
 def run_high_fidelity_propagation(
   initial_state                 : np.ndarray,
   propagation_config            : PropagationConfig,
@@ -577,20 +876,41 @@ def run_high_fidelity_propagation(
 
   print("    Run numerical integration")
 
+  # Check if spacecraft has maneuvers
+  has_maneuvers = spacecraft.maneuvers and len(spacecraft.maneuvers) > 0
+
   # Propagate on equal-spaced grid with dense output for interpolation
-  result_high_fidelity = propagate_state_numerical_integration(
-    initial_state       = initial_state,
-    initial_dt          = propagation_config.time_o_dt,
-    final_dt            = propagation_config.time_f_dt,
-    dynamics            = acceleration,
-    method              = propagation_config.method,
-    rtol                = propagation_config.rtol,
-    atol                = propagation_config.atol,
-    dense_output        = True,
-    t_eval              = t_eval_grid,
-    get_coe_time_series = True,
-    gp                  = SOLARSYSTEMCONSTANTS.EARTH.GP,
-  )
+  if has_maneuvers:
+    # Use maneuver-aware propagation
+    result_high_fidelity = propagate_with_maneuvers(
+      initial_state       = initial_state,
+      initial_dt          = propagation_config.time_o_dt,
+      final_dt            = propagation_config.time_f_dt,
+      dynamics            = acceleration,
+      maneuvers           = spacecraft.maneuvers,
+      method              = propagation_config.method,
+      rtol                = propagation_config.rtol,
+      atol                = propagation_config.atol,
+      dense_output        = True,
+      get_coe_time_series = True,
+      num_points          = None,  # Use adaptive timesteps
+      gp                  = SOLARSYSTEMCONSTANTS.EARTH.GP,
+    )
+  else:
+    # Standard propagation without maneuvers
+    result_high_fidelity = propagate_state_numerical_integration(
+      initial_state       = initial_state,
+      initial_dt          = propagation_config.time_o_dt,
+      final_dt            = propagation_config.time_f_dt,
+      dynamics            = acceleration,
+      method              = propagation_config.method,
+      rtol                = propagation_config.rtol,
+      atol                = propagation_config.atol,
+      dense_output        = True,
+      t_eval              = t_eval_grid,
+      get_coe_time_series = True,
+      gp                  = SOLARSYSTEMCONSTANTS.EARTH.GP,
+    )
 
   if result_high_fidelity.success:
     # t_eval_grid is the time array we passed in (absolute ET values)
