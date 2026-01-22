@@ -8,49 +8,49 @@
     altitude__m                 : 244.0
   performance                   :
     constraints                 :
-      range_min_max__m          :    0.0,  5000.0e3  # 5,000 km max range for LEO
+      range_min_max__m          :    0.0,  1600.0e3  # 5,000 km max range for LEO
       azimuth_min_max__deg      : -180.0,   180.0
       elevation_min_max__deg    :   10.0,    90.0
     uncertainty                 :
       range__m                  : 10.0               # GPS-like / Radar uncertainty
-      range_rate__m_per_s       : 1.0
-      azimuth__deg              : 0.1
-      azimuth_rate__deg_per_s   : 0.01
-      elevation__deg            : 0.1
-      elevation_rate__deg_per_s : 0.01
+      range_rate__m_per_s       :  1.0
+      azimuth__deg              :  0.1
+      azimuth_rate__deg_per_s   :  0.01
+      elevation__deg            :  0.1
+      elevation_rate__deg_per_s :  0.01
 
 - name                          : "Greenbelt"
   position                      :
-    latitude__deg               : 39.0
+    latitude__deg               :  39.0
     longitude__deg              : -76.8
-    altitude__m                 : 19.0
+    altitude__m                 :  19.0
   performance                   :
     constraints                 :
-      range_min_max__m          :   0.0,   5000.0e3
+      range_min_max__m          :   0.0,   1500.0e3
       azimuth_min_max__deg      : -180.0,   180.0
       elevation_min_max__deg    :   10.0,    90.0
     uncertainty                 :
       range__m                  : 10.0
-      range_rate__m_per_s       : 1.0
-      azimuth__deg              : 0.1
-      azimuth_rate__deg_per_s   : 0.01
-      elevation__deg            : 0.1
-      elevation_rate__deg_per_s : 0.01
+      range_rate__m_per_s       :  1.0
+      azimuth__deg              :  0.1
+      azimuth_rate__deg_per_s   :  0.01
+      elevation__deg            :  0.1
+      elevation_rate__deg_per_s :  0.01
 
 - name                          : "Zimmerwald"
   position                      :
-    latitude__deg               : 46.9
-    longitude__deg              : 7.5
+    latitude__deg               :  46.9
+    longitude__deg              :   7.5
     altitude__m                 : 951.0
   performance                   :
     constraints                 :
-      range_min_max__m          :    0.0,  5000.0e3
+      range_min_max__m          :    0.0,  2000.0e3
       azimuth_min_max__deg      : -180.0,   180.0
       elevation_min_max__deg    :   10.0,    90.0
     uncertainty                 :
       range__m                  : 10.0
-      range_rate__m_per_s       : 1.0
-      azimuth__deg              : 0.1
-      azimuth_rate__deg_per_s   : 0.01
-      elevation__deg            : 0.1
-      elevation_rate__deg_per_s : 0.01
+      range_rate__m_per_s       :  1.0
+      azimuth__deg              :  0.1
+      azimuth_rate__deg_per_s   :  0.01
+      elevation__deg            :  0.1
+      elevation_rate__deg_per_s :  0.01
