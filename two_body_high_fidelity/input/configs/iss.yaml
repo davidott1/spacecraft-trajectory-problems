@@ -30,7 +30,7 @@ compare_tle: false
 
 # Visualization options
 include_tracker_skyplots: true
-tracker_filename: trackers_lageos.yaml
+tracker_filename: trackers_iss.yaml
 include_tracker_on_body: true
 
 # Orbit determination
