@@ -358,7 +358,6 @@ class TwoBodyGravity:
     pos_mag      = np.linalg.norm(pos_vec)
     pos_mag_pwr2 = pos_mag**2
     pos_mag_pwr5 = pos_mag_pwr2 * pos_mag_pwr2 * pos_mag
-    pos_mag_pwr7 = pos_mag_pwr5 * pos_mag_pwr2
 
     # Common factors
     k  = 1.5 * self.j2 * self.gp * self.pos_ref**2
@@ -498,7 +497,6 @@ class TwoBodyGravity:
     pos_mag_pwr2 = pos_mag**2
     pos_mag_pwr4 = pos_mag_pwr2**2
     pos_mag_pwr7 = pos_mag_pwr4 * pos_mag_pwr2 * pos_mag
-    pos_mag_pwr9 = pos_mag_pwr7 * pos_mag_pwr2
 
     # Common factors
     k  = 2.5 * self.j3 * self.gp * self.pos_ref**3
@@ -614,7 +612,6 @@ class TwoBodyGravity:
     pos_mag_pwr2 = x**2 + y**2 + z**2
     pos_mag      = np.sqrt(pos_mag_pwr2)
     pos_mag_pwr7 = pos_mag_pwr2**3 * pos_mag
-    pos_mag_pwr9 = pos_mag_pwr7 * pos_mag_pwr2
 
     term_common = self.c21 * x + self.s21 * y
     factor      = 3.0 * self.gp * self.pos_ref**2 / pos_mag_pwr7
@@ -1991,12 +1988,9 @@ class SolarRadiationPressure:
       if shadow_factor == 0.0:
         return np.zeros(3)
       
-      # Distance from Sun to spacecraft [m]
-      sun_to_sat_pos_mag = sat_to_sun_pos_mag
-      
       # Solar radiation pressure at spacecraft distance
       #   P = P_at_1au * ( 1_au / r_au )^2 = 4.56e-6 N/m² * ( 149597870700 m / r_m )^2
-      pressure_srp  = SOLARSYSTEMCONSTANTS.EARTH.PRESSURE_SRP * (CONVERTER.M_PER_AU * CONVERTER.ONE_AU / sun_to_sat_pos_mag)**2
+      pressure_srp  = SOLARSYSTEMCONSTANTS.EARTH.PRESSURE_SRP * (CONVERTER.M_PER_AU * CONVERTER.ONE_AU / sat_to_sun_pos_mag)**2
       
       # SRP acceleration magnitude
       acc_mag = (pressure_srp * self.cr * self.area / self.mass) * shadow_factor
