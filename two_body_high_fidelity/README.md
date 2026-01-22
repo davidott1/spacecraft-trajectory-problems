@@ -29,10 +29,12 @@ A Python-based high-fidelity orbital mechanics propagation and orbit determinati
 
 This propagator integrates spacecraft equations of motion using high-fidelity force models including:
 
-- **Central body gravity** with zonal harmonics (J2, J3, J4)
+- **Central body gravity** with zonal harmonics (J2, J3, J4) or full spherical harmonic gravity field models (EGM2008)
 - **Third-body perturbations** from Sun, Moon, and planets (via SPICE ephemerides)
 - **Atmospheric drag** with exponential density model
 - **Solar radiation pressure** with cylindrical Earth shadow model
+- **General relativity** effects (optional)
+- **Solid and ocean tides** (optional)
 
 The tool supports validation against JPL Horizons ephemerides and SGP4/TLE propagation for comparison studies.
 
@@ -41,13 +43,15 @@ The tool supports validation against JPL Horizons ephemerides and SGP4/TLE propa
 - **Configurable Force Models**: Enable/disable individual perturbations
 - **Multiple Initial State Sources**: JPL Horizons, TLE/SGP4, or custom state vectors
 - **Reference Comparisons**: Validate against JPL Horizons or SGP4 propagation
-- **Comprehensive Visualization**: 3D trajectories, time series, error plots, and skyplots
+- **Comprehensive Visualization**: 3D trajectories, time series, error plots, skyplots, and covariance plots
 - **Frame Conversions**: J2000/GCRS, TEME, IAU_EARTH, and RIC/RTN frames
 - **Orbital Element Computation**: Classical and Modified Equinoctial Elements
 - **SPICE Integration**: High-accuracy planetary ephemerides via DE440
-- **Orbit Determination**: Ground station tracking with topocentric coordinates (azimuth, elevation, range)
+- **Orbit Determination**: Ground station tracking with topocentric coordinates and Extended Kalman Filter (EKF)
+- **Extended Kalman Filter**: Sequential state estimation from ground-based tracking measurements
 - **Skyplot Visualization**: Polar plots showing satellite visibility from ground stations
 - **Geographic Coordinate Conversion**: Geodetic and geocentric coordinate systems with WGS84 ellipsoid
+- **Configuration File Support**: YAML-based configuration files for complex run scenarios
 
 ## Project Structure
 
@@ -57,10 +61,15 @@ two_body_high_fidelity/
 ├── requirements.txt                 # Python dependencies
 ├── .gitignore                       # Git ignore patterns
 │
-├── data/                            # Input data (mostly gitignored)
+├── data/                            # Downloaded data (gitignored)
 │   ├── ephems/                      # JPL Horizons ephemeris files
 │   ├── tles/                        # Two-Line Element files
-│   ├── spice_kernels/               # SPICE kernel files (DE440, leap seconds)
+│   ├── spice_kernels/               # SPICE kernel files (DE440, leap seconds, PCK, BPC)
+│   ├── gravity_models/              # Gravity field coefficient files (EGM2008)
+│   └── supported_objects.yaml       # Satellite catalog with physical properties
+│
+├── input/                           # User configuration files
+│   ├── configs/                     # Run configuration YAML files
 │   ├── state_vectors/               # Custom initial state vector YAML files
 │   └── trackers/                    # Ground station tracker configurations
 │
@@ -73,6 +82,13 @@ two_body_high_fidelity/
     ├── __init__.py
     ├── main.py                      # Main entry point
     │
+    ├── download/                    # Data download utilities
+    │   ├── kernels/                 # SPICE kernel downloader
+    │   ├── ephems/                  # Ephemeris downloader
+    │   ├── tles/                    # TLE downloader
+    │   ├── ephems_and_tles/         # Combined downloader
+    │   └── gravity_models.py        # Gravity model downloader
+    │
     ├── input/                       # Input handling
     │   ├── cli.py                   # Command-line argument parsing
     │   ├── configuration.py         # Configuration management
@@ -80,10 +96,11 @@ two_body_high_fidelity/
     │
     ├── model/                       # Core physics models
     │   ├── constants.py             # Physical constants and unit conversions
-    │   ├── dynamics.py              # Acceleration models (gravity, drag, SRP)
+    │   ├── dynamics.py              # Acceleration models (gravity, drag, SRP, relativity, tides)
     │   ├── frame_converter.py       # Reference frame transformations
     │   ├── orbit_converter.py       # Orbital element conversions
-    │   └── time_converter.py        # Time system conversions
+    │   ├── time_converter.py        # Time system conversions
+    │   └── gravity_field.py         # Spherical harmonic gravity field models
     │
     ├── propagation/                 # Numerical integration
     │   ├── propagator.py            # ODE integration and SGP4 wrapper
@@ -91,10 +108,17 @@ two_body_high_fidelity/
     │
     ├── orbit_determination/         # Orbit determination
     │   ├── topocentric.py           # Topocentric coordinate computation
-    │   └── measurement_simulator.py # Measurement simulation
+    │   ├── measurement_simulator.py # Measurement simulation
+    │   ├── extended_kalman_filter.py # EKF implementation
+    │   └── ekf_processor.py         # EKF processing and workflow
     │
     ├── plot/                        # Visualization
-    │   ├── trajectory.py            # Trajectory, error, and skyplot plotting
+    │   ├── plot_3d.py               # 3D trajectory plots
+    │   ├── plot_timeseries.py       # Time series plots
+    │   ├── plot_groundtrack.py      # Ground track plots
+    │   ├── plot_skyplot.py          # Skyplot visualization
+    │   ├── plot_covariance.py       # Covariance plots for EKF
+    │   ├── plot_generator.py        # Plot generation orchestration
     │   └── utility.py               # Plot helper functions
     │
     ├── schemas/                     # Data schemas
@@ -143,10 +167,17 @@ two_body_high_fidelity/
    ```
 
 3. **Download SPICE kernels**:
-   
-   Download and place in `data/spice_kernels/`:
+
+   Use the automated download script:
+   ```bash
+   python -m src.download.kernels
+   ```
+
+   Or manually download and place in `data/spice_kernels/`:
    - **DE440 ephemeris**: `de440.bsp` from [NAIF](https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/)
    - **Leap seconds kernel**: `naif0012.tls` from [NAIF](https://naif.jpl.nasa.gov/pub/naif/generic_kernels/lsk/)
+   - **Planetary constants**: `pck00010.tpc`
+   - **Earth orientation**: `earth_latest_high_prec.bpc`
 
 ## Quick Start
 
@@ -173,15 +204,23 @@ Required Arguments:
   --timespan START END           Start and end times in ISO format
 
 Optional Arguments:
+  --config FILE                  Load configuration from YAML file (CLI args override config)
   --initial-state-source SOURCE  Initial state source: jpl_horizons, tle, or sv
                                  (default: jpl_horizons)
   --initial-state-filename FILE  YAML file for custom state vector (required if source=sv)
   --gravity-harmonics J2 J3 J4   Enable gravity harmonics (specify which ones)
+  --gravity-harmonics-degree-order N M  Use spherical harmonics up to degree N, order M
+  --gravity-model-filename FILE  Gravity field coefficient file (e.g., EGM2008)
   --third-bodies sun moon        Enable third-body gravity (specify bodies)
   --drag                         Enable atmospheric drag
   --srp                          Enable solar radiation pressure
+  --relativity                   Enable general relativity effects
+  --solid-tides                  Enable solid Earth tides
+  --ocean-tides                  Enable ocean tides
   --compare-jpl-horizons         Compare results with JPL Horizons ephemeris
   --compare-tle                  Compare results with SGP4/TLE propagation
+  --include-orbit-determination  Run Extended Kalman Filter for orbit determination
+  --tracker-filename FILE        Ground station tracker configuration file
 ```
 
 ### Examples
@@ -225,6 +264,71 @@ python -m src.main \
   --gravity-harmonics J2 J3 J4
 ```
 
+**5. Using configuration file:**
+```bash
+python -m src.main --config my_scenario.yaml
+```
+
+**6. High-fidelity gravity field:**
+```bash
+python -m src.main \
+  --initial-state-norad-id 25544 \
+  --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00 \
+  --gravity-harmonics-degree-order 50 50 \
+  --gravity-model-filename EGM2008.gfc
+```
+
+**7. Orbit determination with EKF:**
+```bash
+python -m src.main \
+  --initial-state-norad-id 25544 \
+  --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00 \
+  --gravity-harmonics J2 \
+  --include-orbit-determination \
+  --tracker-filename trackers_set1.yaml
+```
+
+### Configuration Files
+
+For complex scenarios, use YAML configuration files instead of long command lines. Configuration files support all command-line options and can be placed in `input/configs/`.
+
+```yaml
+# input/configs/iss_high_fidelity.yaml
+initial_state_source: jpl_horizons
+initial_state_norad_id: 25544
+timespan:
+  - "2025-10-01T00:00:00"
+  - "2025-10-08T00:00:00"
+
+# Force models
+gravity_harmonics_degree_order: [50, 50]
+gravity_harmonics_filename: EGM2008.gfc
+third_bodies: [sun, moon]
+include_drag: true
+include_srp: true
+include_relativity: true
+
+# Comparisons
+compare_jpl_horizons: true
+compare_tle: false
+
+# Orbit determination
+include_orbit_determination: true
+tracker_filename: trackers_set1.yaml
+include_tracker_skyplots: true
+
+# Numerical integration
+atol: 1.0e-12
+rtol: 1.0e-10
+```
+
+Run with:
+```bash
+python -m src.main --config iss_high_fidelity.yaml
+```
+
+Command-line arguments override configuration file values.
+
 ### Custom State Vectors
 
 Create a YAML file in `input/state_vectors/`:
@@ -256,6 +360,7 @@ srp               :
 | J3 | North-south asymmetry |
 | J4 | Higher-order oblateness |
 | C22, S22 | Ellipticity of the equator (tesseral harmonics) |
+| EGM2008 | Full spherical harmonic model (degree/order up to 2190) |
 
 ### Third-Body Gravity
 
@@ -277,6 +382,24 @@ Cannonball model with:
 - Configurable reflectivity coefficient (Cr)
 - Cylindrical Earth shadow model
 - Inverse-square intensity scaling
+
+### General Relativity
+
+Schwarzschild and Lense-Thirring relativistic corrections:
+- Schwarzschild effect (gravitational time dilation)
+- Lense-Thirring effect (frame-dragging)
+
+### Solid Earth Tides
+
+Solid body tides due to third-body gravitational effects:
+- Deformation of Earth's shape
+- Time-varying gravitational potential
+
+### Ocean Tides
+
+Ocean loading effects on Earth's gravitational field:
+- Time-varying mass redistribution
+- Additional perturbations for LEO satellites
 
 
 ## Orbit Determination
@@ -357,6 +480,34 @@ The skyplot shows:
 - **Angular direction**: Azimuth (North=top, East=right, South=bottom, West=left)
 - **Color gradient**: Elevation angle (low to high)
 - **FOV cone**: Ground station's field-of-view projection
+
+### Extended Kalman Filter (EKF)
+
+The propagator includes a full Extended Kalman Filter implementation for sequential orbit determination from ground-based tracking measurements.
+
+**State Vector**:
+- Position and velocity (6 states): `[r_x, r_y, r_z, v_x, v_y, v_z]`
+- Optional augmentation: drag coefficient (C_d), SRP coefficient (C_r)
+
+**Measurements**:
+- Range, azimuth, elevation
+- Range rate, azimuth rate, elevation rate
+- Configurable measurement subsets based on tracker capabilities
+
+**Features**:
+- Linearized dynamics via state transition matrix (STM)
+- Measurement Jacobian for topocentric observations
+- Process noise and measurement noise covariance
+- Covariance propagation and filtering
+- Multiple ground station support
+
+**Usage**:
+Enable EKF orbit determination with the `--include-orbit-determination` flag. Results include:
+- State estimate time series
+- Covariance evolution plots
+- Estimation error analysis
+- Residual statistics
+
 ## Data Sources
 
 ### JPL Horizons
@@ -378,9 +529,30 @@ Required kernels in `data/spice_kernels/`:
 - `de440.bsp` - Planetary ephemerides
 - `naif0012.tls` - Leap seconds
 
+### Gravity Field Models
+
+For high-fidelity gravity field propagation, download coefficient files:
+- `EGM2008.gfc` - Earth Gravitational Model 2008 (spherical harmonics up to degree/order 2190)
+
+Place files in `data/gravity_models/`
+
 ## Data Download Tools
 
-The project includes automated download scripts for ephemeris and TLE data. These tools can fetch data directly from JPL Horizons and CelesTrak without manual browsing.
+The project includes automated download scripts for ephemeris, TLE, SPICE kernels, and gravity field data. These tools can fetch data directly from JPL Horizons, CelesTrak, NAIF, and ICGEM without manual browsing.
+
+### Download SPICE Kernels
+
+```bash
+python -m src.download.kernels
+```
+
+Downloads all required SPICE kernels:
+- DE440 planetary ephemeris (~120 MB)
+- Leap seconds kernel (naif0012.tls)
+- Planetary constants (pck00010.tpc)
+- Earth orientation data (earth_latest_high_prec.bpc)
+
+Files are saved to `data/spice_kernels/`.
 
 ### Download Both Ephemeris and TLE
 
@@ -414,6 +586,14 @@ Example:
 ```bash
 python -m src.download.tles 25544 "2025-10-01T00:00:00Z" "2025-10-02T00:00:00Z"
 ```
+
+### Download Gravity Models
+
+```bash
+python -m src.download.gravity_models
+```
+
+This downloads the EGM2008 gravity field coefficient file (~100 MB) from ICGEM and saves it to `data/gravity_models/EGM2008.gfc`.
 
 ### Download Parameters
 
@@ -492,6 +672,8 @@ output/20251216_143052/
 | Ground Track | Geographic ground track with latitude/longitude |
 | Skyplots | Polar plots showing satellite visibility from ground stations with azimuth/elevation tracks |
 | Measurement Time Series | Range, azimuth, and elevation measurements from ground stations vs time |
+| Covariance Plots | EKF state covariance evolution (position and velocity uncertainties) |
+| Residual Plots | EKF measurement residuals and innovation statistics |
 
 ## Testing
 
