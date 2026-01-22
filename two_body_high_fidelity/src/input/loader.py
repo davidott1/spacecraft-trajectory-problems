@@ -1214,8 +1214,12 @@ def find_compatible_horizons_file(
       file_end_dt   = datetime.strptime(end_str_clean, '%Y%m%dT%H%M%S')
       
       # Check if this file contains the desired timespan (with tolerance)
-      start_ok = file_start_dt <= (time_start_dt + time_tolerance)
-      end_ok   = file_end_dt   >= (time_end_dt   - time_tolerance)
+      # Ensure datetimes are timezone-naive for comparison (file times are parsed as naive UTC)
+      ts_dt_naive = time_start_dt.replace(tzinfo=None) if time_start_dt.tzinfo else time_start_dt
+      te_dt_naive = time_end_dt.replace(tzinfo=None) if time_end_dt.tzinfo else time_end_dt
+      
+      start_ok = file_start_dt <= (ts_dt_naive + time_tolerance)
+      end_ok   = file_end_dt   >= (te_dt_naive - time_tolerance)
       
       if start_ok and end_ok:
         return filepath

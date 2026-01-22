@@ -33,11 +33,21 @@ class FrameConverter:
     ------
       Requires SPICE kernels (PCK) to be loaded.
       The 6x6 sxform matrix properly handles Earth's rotation rate for velocity.
+      
+      Prefers 'ITRF93' high-precision frame if available (binary PCK), 
+      falls back to 'IAU_EARTH' (text PCK) otherwise.
     """
-    if include_rates:
-      return spice.sxform('J2000', 'IAU_EARTH', time_et)
-    else:
-      return spice.pxform('J2000', 'IAU_EARTH', time_et)
+    try:
+      frame = 'ITRF93'
+      if include_rates:
+        return spice.sxform('J2000', frame, time_et)
+      else:
+        return spice.pxform('J2000', frame, time_et)
+    except Exception:
+      if include_rates:
+        return spice.sxform('J2000', 'IAU_EARTH', time_et)
+      else:
+        return spice.pxform('J2000', 'IAU_EARTH', time_et)
 
   @staticmethod
   def iau_earth_to_j2000(
@@ -65,11 +75,21 @@ class FrameConverter:
     ------
       Requires SPICE kernels (PCK) to be loaded.
       The 6x6 sxform matrix properly handles Earth's rotation rate for velocity.
+      
+      Prefers 'ITRF93' high-precision frame if available (binary PCK), 
+      falls back to 'IAU_EARTH' (text PCK) otherwise.
     """
-    if include_rates:
-      return spice.sxform('IAU_EARTH', 'J2000', time_et)
-    else:
-      return spice.pxform('IAU_EARTH', 'J2000', time_et)
+    try:
+      frame = 'ITRF93'
+      if include_rates:
+        return spice.sxform(frame, 'J2000', time_et)
+      else:
+        return spice.pxform(frame, 'J2000', time_et)
+    except Exception:
+      if include_rates:
+        return spice.sxform('IAU_EARTH', 'J2000', time_et)
+      else:
+        return spice.pxform('IAU_EARTH', 'J2000', time_et)
 
   @staticmethod
   def xyz_to_ric(

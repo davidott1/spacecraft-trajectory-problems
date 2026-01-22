@@ -600,8 +600,10 @@ def run_high_fidelity_propagation(
     if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success:
       print("    Interpolate to ephemeris time points")
 
-      ephem_times_s = result_jpl_horizons_ephemeris.time_grid.deltas
-      ephem_times_et = ephem_times_s + time_et_o
+      # Use the absolute ephemeris times from the Horizons result (TDB/ET)
+      # This ensures we compare the simulation state at Time T with the Horizons state at Time T,
+      # accounting for any offset between the simulation start time and the first Horizons data point.
+      ephem_times_et = result_jpl_horizons_ephemeris.time_grid.times_et
 
       # Interpolate state to ephemeris times (use time_et_array from above)
       state_at_ephem = np.zeros((6, len(ephem_times_et)))
@@ -674,7 +676,7 @@ def run_high_fidelity_propagation(
         ephem_time_grid = TimeGrid(
           initial = result_jpl_horizons_ephemeris.time_grid.initial,
           final   = result_jpl_horizons_ephemeris.time_grid.final,
-          deltas  = ephem_times_s,
+          deltas  = result_jpl_horizons_ephemeris.time_grid.deltas,
         )
         result_high_fidelity.at_ephem_times = PropagationResult(
           success   = True,

@@ -17,6 +17,7 @@ KERNELS = {
   'naif0012.tls'                  : 'lsk/naif0012.tls',
   'de440.bsp'                     : 'spk/planets/de440.bsp',
   'pck00010.tpc'                  : 'pck/pck00010.tpc',
+  'earth_latest_high_prec.bpc'    : 'pck/earth_latest_high_prec.bpc',
 }
 
 # Output directory
