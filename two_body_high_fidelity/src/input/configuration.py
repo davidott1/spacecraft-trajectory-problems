@@ -10,9 +10,9 @@ from src.schemas.config        import OutputPaths, SimulationConfig, InitialStat
 from src.schemas.gravity       import GravityModelConfig, SphericalHarmonicsConfig, ThirdBodyConfig, RelativityConfig, SolidEarthTidesConfig, OceanTidesConfig
 from src.schemas.spacecraft    import SpacecraftProperties, DragConfig, SRPConfig
 from src.schemas.propagation   import PropagationConfig
-from src.schemas.state         import TLEData
+from src.schemas.state         import TLEData, CartesianState
 from src.model.constants       import SOLARSYSTEMCONSTANTS
-from src.input.loader          import load_supported_objects
+from src.input.loader          import load_supported_objects, load_maneuvers
 from src.utility.string_helper import sanitize_filename
 
 
@@ -293,6 +293,7 @@ def build_config(
   tracker_filename               : Optional[str]  = None,
   tracker_filepath               : Optional[str]  = None,
   include_tracker_on_body        : bool           = False,
+  maneuver_filename              : Optional[str]  = None,
 ) -> SimulationConfig:
   """
   Parse, validate, and set up input parameters for orbit propagation.
@@ -399,7 +400,9 @@ def build_config(
   )
 
   # Initialize variables
-  obj_props           = {}
+  obj_props               = {}
+  custom_state_vec        = None
+  custom_cartesian_state  = None
 
   # --- Logic for Custom State Vector ---
   if initial_state_source == 'custom_state_vector':
@@ -450,17 +453,17 @@ def build_config(
 
     obj_props = sv_data
     
-    # Extract state (validation only)
+    # Extract state
     # Support 'state' (6-element list) OR 'pos_vec__m' and 'vel_vec__m_per_s'
     if 'state' in sv_data:
-        _ = np.array(sv_data['state'])
+        custom_state_vec = np.array(sv_data['state'])
     elif 'pos_vec__m' in sv_data and ('vel_vec__m_per_s' in sv_data or 'vec_vec__m_per_s' in sv_data):
         # Handle potential typo in YAML key
         vel_key = 'vel_vec__m_per_s' if 'vel_vec__m_per_s' in sv_data else 'vec_vec__m_per_s'
-        
+
         pos_raw = sv_data['pos_vec__m']
         vel_raw = sv_data[vel_key]
-        
+
         # Helper to parse "x, y, z" string or [x, y, z] list
         def parse_vec3(raw_val):
           if isinstance(raw_val, str):
@@ -474,9 +477,16 @@ def build_config(
 
         pos = parse_vec3(pos_raw)
         vel = parse_vec3(vel_raw)
-        _ = np.concatenate((pos, vel))
+        custom_state_vec = np.concatenate((pos, vel))
     else:
       raise ValueError(f"Custom state vector file {initial_state_filename} must contain 'state' or 'pos_vec__m'/'vel_vec__m_per_s'.")
+
+    # Create CartesianState from parsed vector
+    custom_cartesian_state = CartesianState(
+      position = custom_state_vec[0:3],
+      velocity = custom_state_vec[3:6],
+      frame    = sv_data.get('frame', 'J2000'),
+    )
 
   # --- Logic for Standard Sources (Horizons/TLE) ---
   else:
@@ -503,21 +513,38 @@ def build_config(
       tracker_filepath         = tracker_filepath,
     )
   
+  # Load maneuvers if specified
+  maneuvers = []
+  if maneuver_filename:
+    # Construct maneuver file path (assumes input/maneuvers/ folder)
+    project_root = Path(__file__).parent.parent.parent
+    maneuver_filepath = project_root / 'input' / 'maneuvers' / maneuver_filename
+
+    if maneuver_filepath.exists():
+      print(f"  Loading maneuvers from: {maneuver_filepath.name}")
+      maneuvers = load_maneuvers(maneuver_filepath)
+      print(f"  Loaded {len(maneuvers)} maneuver(s)")
+      for i, m in enumerate(maneuvers):
+        print(f"    Maneuver {i+1}: {m.time_dt.isoformat()} | ΔV = {m.delta_v_magnitude:.3f} m/s | Frame = {m.frame}")
+    else:
+      print(f"  Warning: Maneuver file not found: {maneuver_filepath}")
+
   # Create SpacecraftProperties object
   spacecraft = SpacecraftProperties(
-    mass     = obj_props['mass__kg'],
-    drag     = DragConfig(
+    mass      = obj_props['mass__kg'],
+    drag      = DragConfig(
       enabled = include_drag,
       cd      = obj_props['drag']['coeff'],
       area    = obj_props['drag']['area__m2']
     ),
-    srp      = SRPConfig(
+    srp       = SRPConfig(
       enabled = include_srp,
       cr      = obj_props['srp']['coeff'],
       area    = obj_props['srp']['area__m2']
     ),
-    norad_id = initial_state_norad_id,
-    name     = object_name
+    maneuvers = maneuvers,
+    norad_id  = initial_state_norad_id,
+    name      = object_name
   )
 
   # Create PropagationConfig object
@@ -558,6 +585,7 @@ def build_config(
     source   = initial_state_source,
     norad_id = initial_state_norad_id,
     filename = initial_state_filename,
+    state    = custom_cartesian_state,
   )
   
   # Create ComparisonConfig

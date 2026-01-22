@@ -87,6 +87,7 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
     'tracker_filepath': 'tracker_filepath',
     'include_tracker_on_body': 'include_tracker_on_body',
     'include_orbit_determination': 'include_orbit_determination',
+    'maneuver_filename': 'maneuver_filename',
   }
 
   # Process each config key
@@ -145,7 +146,7 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
           setattr(args, arg_name, [start, end])
 
     elif arg_name in ['initial_state_source', 'initial_state_norad_id', 'initial_state_filename',
-                      'gravity_model_filename', 'tracker_filename', 'tracker_filepath']:
+                      'gravity_model_filename', 'tracker_filename', 'tracker_filepath', 'maneuver_filename']:
       # String arguments - only override if CLI didn't provide a value
       if current_value is None or (arg_name == 'initial_state_source' and current_value == 'horizons'):
         # Convert to string (YAML may parse NORAD ID as int)
@@ -394,6 +395,14 @@ def parse_command_line_arguments(
     type     = str,
     required = False,
     help     = 'Absolute path to tracker station YAML file.',
+  )
+
+  parser.add_argument(
+    '--maneuver-filename',
+    dest     = 'maneuver_filename',
+    type     = str,
+    required = False,
+    help     = 'Maneuver YAML filename (assumes input/maneuvers/ folder). E.g., example_hohmann_transfer.yaml',
   )
 
   parser.add_argument(

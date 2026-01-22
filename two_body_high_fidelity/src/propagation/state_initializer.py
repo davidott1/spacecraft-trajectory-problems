@@ -9,6 +9,7 @@ from src.model.time_converter   import utc_to_et
 from src.model.orbit_converter  import OrbitConverter
 from src.model.constants        import SOLARSYSTEMCONSTANTS, CONVERTER
 from src.schemas.propagation    import PropagationResult
+from src.schemas.state           import CartesianState
 
 
 def get_initial_state(
@@ -64,6 +65,14 @@ def get_initial_state(
     if custom_state_vector is None:
       raise ValueError("Custom state vector source selected but no vector provided.")
 
+    # Handle CartesianState object or numpy array
+    if isinstance(custom_state_vector, CartesianState):
+      state_vec = custom_state_vector.state_vector
+      frame_name = custom_state_vector.frame
+    else:
+      state_vec = custom_state_vector
+      frame_name = "J2000 (Assumed)"
+
     # Get ET for display
     try:
       epoch_et = utc_to_et(time_o_dt)
@@ -73,8 +82,8 @@ def get_initial_state(
 
     # Convert position, velocity to classical orbital elements for display
     coe = OrbitConverter.pv_to_coe(
-      pos_vec = custom_state_vector[0:3],
-      vel_vec = custom_state_vector[3:6],
+      pos_vec = state_vec[0:3],
+      vel_vec = state_vec[3:6],
       gp      = SOLARSYSTEMCONSTANTS.EARTH.GP,
     )
 
@@ -83,10 +92,10 @@ def get_initial_state(
     print(f"    Source : Custom State Vector File")
     print(f"    File   : {initial_state_filename}")
     print(f"    Epoch  : {time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC{et_str}")
-    print(f"    Frame  : J2000 (Assumed)")
+    print(f"    Frame  : {frame_name}")
     print(f"    Cartesian State")
-    print(f"      Position :  {custom_state_vector[0]:>19.12e}  {custom_state_vector[1]:>19.12e}  {custom_state_vector[2]:>19.12e} m")
-    print(f"      Velocity :  {custom_state_vector[3]:>19.12e}  {custom_state_vector[4]:>19.12e}  {custom_state_vector[5]:>19.12e} m/s")
+    print(f"      Position :  {state_vec[0]:>19.12e}  {state_vec[1]:>19.12e}  {state_vec[2]:>19.12e} m")
+    print(f"      Velocity :  {state_vec[3]:>19.12e}  {state_vec[4]:>19.12e}  {state_vec[5]:>19.12e} m/s")
     print(f"    Classical Orbital Elements")
     print(f"      SMA  :  {coe.sma:19.12e} m")
     print(f"      ECC  :  {coe.ecc:19.12e} -")
@@ -104,7 +113,7 @@ def get_initial_state(
     if coe.pa is not None:
       print(f"      PA   :  {coe.pa:19.12e} -")
 
-    return custom_state_vector, time_o_dt
+    return state_vec, time_o_dt
 
   # Determine if we should use Horizons
   use_jpl_horizons = 'jpl_horizons' in initial_state_source.lower()

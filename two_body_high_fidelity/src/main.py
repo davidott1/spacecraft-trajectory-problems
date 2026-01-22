@@ -161,6 +161,7 @@ def main(
   tracker_filepath               : Optional[str]  = None,
   include_tracker_on_body        : bool           = False,
   include_orbit_determination    : bool           = False,
+  maneuver_filename              : Optional[str]  = None,
 ) -> PropagationResult:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -230,6 +231,7 @@ def main(
     tracker_filename,
     tracker_filepath,
     include_tracker_on_body,
+    maneuver_filename,
   )
 
   # Start logging to file
@@ -476,4 +478,5 @@ if __name__ == "__main__":
     args.tracker_filepath,
     args.include_tracker_on_body,
     args.include_orbit_determination,
+    args.maneuver_filename,
   )

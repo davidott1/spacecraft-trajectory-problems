@@ -1,0 +1,10 @@
+# Example: Plane Change Maneuver
+#
+# Single burn to change orbital inclination.
+# Cross-track component changes the orbital plane.
+
+maneuvers:
+  # Plane change burn (out-of-plane component)
+  - time_iso_utc: "2025-10-01T12:00:00"
+    delta_vel__m_per_s: [0.0, 0.0, 25.0]  # 25 m/s cross-track
+    frame: "RIC"
