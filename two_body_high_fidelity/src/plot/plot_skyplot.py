@@ -9,6 +9,7 @@ import warnings
 import numpy             as np
 import matplotlib.pyplot as plt
 import matplotlib.dates  as mdates
+from scipy.stats         import norm
 
 from datetime          import datetime, timedelta
 from typing            import Optional
@@ -19,6 +20,40 @@ from src.orbit_determination.topocentric   import compute_topocentric_coordinate
 from src.schemas.propagation               import PropagationResult
 from src.schemas.state                     import TrackerStation
 from src.schemas.measurement               import SimulatedMeasurements
+
+
+def _plot_hist_and_gaussian(ax, data, limits=None):
+  """
+  Helper for plotting histogram + gaussian on an axis.
+  """
+  if data is None or len(data) < 2 or not np.isfinite(data).all():
+    return
+  
+  # Horizontal Histogram
+  ax.hist(data, bins=30, orientation='horizontal', density=True, color='b', alpha=0.3)
+  
+  # Gaussian Fit
+  try:
+    mu, std = norm.fit(data)
+    if std > 0:
+      if limits:
+        ymin, ymax = limits
+      else:
+        ymin, ymax = min(data), max(data)
+        
+      y_pts = np.linspace(ymin, ymax, 200)
+      p = norm.pdf(y_pts, mu, std)
+      ax.plot(p, y_pts, 'b-', linewidth=1.5, alpha=0.8)
+  except Exception:
+    pass
+
+  if limits:
+    ax.set_ylim(limits)
+    
+  ax.axhline(y=0, color='k', linestyle='--', linewidth=0.5, alpha=0.5)
+  ax.set_yticklabels([])
+  ax.set_xticks([])
+  ax.grid(True, alpha=0.3)
 
 
 def plot_skyplot(
@@ -1130,6 +1165,9 @@ def plot_error_skyplot(
     pad = (dmax - dmin) * pad_frac if dmax != dmin else abs(dmax) * 0.1 + 0.001
     return (dmin - pad, dmax + pad)
 
+  # Helper for plotting histogram + gaussian
+  # (Refactored to module level _plot_hist_and_gaussian)
+
   range_err_ylim   = get_limits(all_range_err)
   az_err_ylim      = get_limits(all_az_err)
   el_err_ylim      = get_limits(all_el_err)
@@ -1137,29 +1175,37 @@ def plot_error_skyplot(
   az_dot_err_ylim  = get_limits(all_az_dot_err)
   el_dot_err_ylim  = get_limits(all_el_dot_err)
 
-  # Create figure: 6 rows × num_passes columns
+  # Create figure: 6 rows × (2 * num_passes) columns
   num_rows = 6
-  fig_width = max(3.5 * num_passes, 10)
+  num_cols = 2 * num_passes
+  
+  # Width ratios: Time Series (3) vs Histogram (1)
+  width_ratios = []
+  for _ in range(num_passes):
+    width_ratios.extend([3, 1])
+
+  fig_width = max((3.5 + 1.5) * num_passes, 14)
   fig_height = 12
-  fig, axes = plt.subplots(num_rows, num_passes, figsize=(fig_width, fig_height), squeeze=False)
+  fig, axes = plt.subplots(num_rows, num_cols, figsize=(fig_width, fig_height), squeeze=False, gridspec_kw={'width_ratios': width_ratios})
 
   # Convert time to UTC datetime if epoch provided
   if epoch_dt_utc is not None:
     time_utc = [epoch_dt_utc + timedelta(seconds=float(t)) for t in delta_time_epoch]
 
   # Y-label alignment coordinate
-  ylabel_x = -0.15
+  ylabel_x = -0.11
 
   # Row configuration: (error_data, ylabel, ylim)
   row_configs = [
-    ('range_err',     'rng_dot_err',  'Range Err [km]',       'Range Rate Err [km/s]',     range_err_ylim,   rng_dot_err_ylim),
-    ('az_err',        'az_dot_err',   'Azimuth Err [deg]',    'Azimuth Rate Err [deg/s]',  az_err_ylim,      az_dot_err_ylim),
-    ('el_err',        'el_dot_err',   'Elevation Err [deg]',  'Elevation Rate Err [deg/s]',el_err_ylim,      el_dot_err_ylim),
+    ('range_err',     'rng_dot_err',  'Range Error\n[km]',       'Range Rate Error\n[km/s]',     range_err_ylim,   rng_dot_err_ylim),
+    ('az_err',        'az_dot_err',   'Azimuth Error\n[deg]',    'Azimuth Rate Error\n[deg/s]',  az_err_ylim,      az_dot_err_ylim),
+    ('el_err',        'el_dot_err',   'Elevation Error\n[deg]',  'Elevation Rate Error\n[deg/s]',el_err_ylim,      el_dot_err_ylim),
   ]
 
   # Plot each pass
   for pass_idx, (seg_start, seg_end) in enumerate(zip(valid_segment_starts, valid_segment_ends)):
-    col = pass_idx
+    col_ts   = pass_idx * 2
+    col_hist = pass_idx * 2 + 1
 
     # Extract segment error data
     seg_time_s      = delta_time_epoch[seg_start:seg_end]
@@ -1199,36 +1245,55 @@ def plot_error_skyplot(
       row_rate = meas_idx * 2 + 1  # 1, 3, 5
 
       # ---- Measurement error row ----
-      ax_meas = axes[row_meas, col]
+      # Time Series
+      ax_meas = axes[row_meas, col_ts]
       ax_meas.plot(seg_time, seg_data[meas_key], 'b-', linewidth=2.0)
       ax_meas.axhline(y=0, color='k', linestyle='--', linewidth=0.5, alpha=0.5)
       ax_meas.set_ylim(ylim)
-      if col == 0:
+      if col_ts == 0:
         ax_meas.set_ylabel(ylabel, fontsize=10)
         ax_meas.yaxis.set_label_coords(ylabel_x, 0.5)
       else:
-        ax_meas.set_yticklabels([])
+        # If not first pass column, maybe hide Y labels? 
+        # But here col_ts is variable. It is 0, 2, 4...
+        # Only show Y label on absolute column 0
+        if col_ts > 0:
+           ax_meas.set_yticklabels([])
+
       ax_meas.grid(True, alpha=0.3)
       ax_meas.set_xticklabels([])
       if row_meas == 0:
         ax_meas.set_title(pass_label, fontsize=10)
+      
+      # Histogram
+      ax_hist_meas = axes[row_meas, col_hist]
+      _plot_hist_and_gaussian(ax_hist_meas, seg_data[meas_key], ylim)
+      # if row_meas == 0:
+      #   ax_hist_meas.set_title("Dist", fontsize=10)
 
       # ---- Rate error row ----
-      ax_rate = axes[row_rate, col]
+      # Time Series
+      ax_rate = axes[row_rate, col_ts]
       if seg_data[rate_key] is not None:
         ax_rate.plot(seg_time, seg_data[rate_key], 'b-', linewidth=2.0)
       ax_rate.axhline(y=0, color='k', linestyle='--', linewidth=0.5, alpha=0.5)
       ax_rate.set_ylim(rate_ylim)
-      if col == 0:
+      if col_ts == 0:
         ax_rate.set_ylabel(rate_ylabel, fontsize=10)
         ax_rate.yaxis.set_label_coords(ylabel_x, 0.5)
       else:
-        ax_rate.set_yticklabels([])
+        if col_ts > 0:
+           ax_rate.set_yticklabels([])
+
       ax_rate.grid(True, alpha=0.3)
       ax_rate.set_xticklabels([])
 
-    # Bottom row (el_dot_err) gets x-axis labels
-    ax_bottom = axes[5, col]
+      # Histogram
+      ax_hist_rate = axes[row_rate, col_hist]
+      _plot_hist_and_gaussian(ax_hist_rate, seg_data[rate_key], rate_ylim)
+
+    # Bottom row (el_dot_err) gets x-axis labels (only on TS column)
+    ax_bottom = axes[5, col_ts]
     if epoch_dt_utc is not None:
       ax_bottom.tick_params(axis='x', rotation=45)
       ax_bottom.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
@@ -1316,94 +1381,84 @@ def plot_measurement_errors(
   azimuth_rate_error_deg_per_s = azimuth_rate_error * CONVERTER.DEG_PER_RAD if azimuth_rate_error is not None else None
   elevation_rate_error_deg_per_s = elevation_rate_error * CONVERTER.DEG_PER_RAD if elevation_rate_error is not None else None
 
-  # Create 3x2 subplot grid
-  # Row 0: Range, Range Rate
-  # Row 1: Azimuth, Azimuth Rate
-  # Row 2: Elevation, Elevation Rate
+  # Create 3x5 subplot grid (TS, Hist, Spacer, TS, Hist)
+  # Row 0: Range (0,1), Range Rate (3,4)
+  # Row 1: Azimuth (0,1), Azimuth Rate (3,4)
+  # Row 2: Elevation (0,1), Elevation Rate (3,4)
+  # Spacer is column 2
+  
+  fig, axes = plt.subplots(3, 5, figsize=(20, 12), gridspec_kw={'width_ratios': [3, 1, 0.4, 3, 1]})
 
-  # Range error
-  ax1 = fig.add_subplot(3, 2, 1)
-  ax1.plot(time_x, range_error, 'b-', linewidth=1.5, alpha=0.7)
-  ax1.axhline(y=0, color='k', linestyle='--', linewidth=1.0, alpha=0.5)
-  ax1.set_ylabel('Range Error [m]', fontsize=11)
-  ax1.grid(True, alpha=0.3)
-  ax1.set_title('Range Error vs Time', fontsize=12)
-  if epoch_dt_utc is not None:
-    ax1.tick_params(axis='x', rotation=45)
-    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
-  else:
-    ax1.set_xticklabels([])
+  # Helper to set limits
+  def get_data_limits(data, pad_frac=0.05):
+    if data is None or len(data) == 0: return (-1, 1)
+    dmin, dmax = np.min(data), np.max(data)
+    pad = (dmax - dmin) * pad_frac if dmax != dmin else abs(dmax) * 0.1 + 0.001
+    return dmin - pad, dmax + pad
 
-  # Range rate error
-  ax2 = fig.add_subplot(3, 2, 2)
-  if range_rate_error is not None:
-    ax2.plot(time_x, range_rate_error, 'b-', linewidth=1.5, alpha=0.7)
-    ax2.axhline(y=0, color='k', linestyle='--', linewidth=1.0, alpha=0.5)
-  ax2.set_ylabel('Range Rate Error [m/s]', fontsize=11)
-  ax2.grid(True, alpha=0.3)
-  ax2.set_title('Range Rate Error vs Time', fontsize=12)
-  if epoch_dt_utc is not None:
-    ax2.tick_params(axis='x', rotation=45)
-    ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
-  else:
-    ax2.set_xticklabels([])
+  # Calculate limits for consistent scaling between TS and Hist
+  range_ylim     = get_data_limits(range_error)
+  range_rate_ylim= get_data_limits(range_rate_error) if range_rate_error is not None else None
+  az_ylim        = get_data_limits(azimuth_error_deg)
+  az_rate_ylim   = get_data_limits(azimuth_rate_error_deg_per_s) if azimuth_rate_error_deg_per_s is not None else None
+  el_ylim        = get_data_limits(elevation_error_deg)
+  el_rate_ylim   = get_data_limits(elevation_rate_error_deg_per_s) if elevation_rate_error_deg_per_s is not None else None
 
-  # Azimuth error
-  ax3 = fig.add_subplot(3, 2, 3)
-  ax3.plot(time_x, azimuth_error_deg, 'b-', linewidth=1.5, alpha=0.7)
-  ax3.axhline(y=0, color='k', linestyle='--', linewidth=1.0, alpha=0.5)
-  ax3.set_ylabel('Azimuth Error [deg]', fontsize=11)
-  ax3.grid(True, alpha=0.3)
-  ax3.set_title('Azimuth Error vs Time', fontsize=12)
-  if epoch_dt_utc is not None:
-    ax3.tick_params(axis='x', rotation=45)
-    ax3.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
-  else:
-    ax3.set_xticklabels([])
+  # Plot Config: (TS_Col, Hist_Col, Row, Data, Label, YLim, Title)
+  # Note: Right graphs are now at columns 3 and 4
+  plot_defs = [
+    # Row 0: Range, Range Rate
+    (0, 1, 0, range_error, 'Range Error [m]', range_ylim, 'Range Error vs Time'),
+    (3, 4, 0, range_rate_error, 'Range Rate Error [m/s]', range_rate_ylim, 'Range Rate Error vs Time'),
+    # Row 1: Azimuth, Azimuth Rate
+    (0, 1, 1, azimuth_error_deg, 'Azimuth Error [deg]', az_ylim, 'Azimuth Error vs Time'),
+    (3, 4, 1, azimuth_rate_error_deg_per_s, 'Azimuth Rate Error [deg/s]', az_rate_ylim, 'Azimuth Rate Error vs Time'),
+    # Row 2: Elevation, Elevation Rate
+    (0, 1, 2, elevation_error_deg, 'Elevation Error [deg]', el_ylim, 'Elevation Error vs Time'),
+    (3, 4, 2, elevation_rate_error_deg_per_s, 'Elevation Rate Error [deg/s]', el_rate_ylim, 'Elevation Rate Error vs Time'),
+  ]
+  
+  # Hide all axes in spacer column (col 2)
+  for r in range(3):
+    axes[r, 2].axis('off')
 
-  # Azimuth rate error
-  ax4 = fig.add_subplot(3, 2, 4)
-  if azimuth_rate_error_deg_per_s is not None:
-    ax4.plot(time_x, azimuth_rate_error_deg_per_s, 'b-', linewidth=1.5, alpha=0.7)
-    ax4.axhline(y=0, color='k', linestyle='--', linewidth=1.0, alpha=0.5)
-  ax4.set_ylabel('Azimuth Rate Error [deg/s]', fontsize=11)
-  ax4.grid(True, alpha=0.3)
-  ax4.set_title('Azimuth Rate Error vs Time', fontsize=12)
-  if epoch_dt_utc is not None:
-    ax4.tick_params(axis='x', rotation=45)
-    ax4.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
-  else:
-    ax4.set_xticklabels([])
+  for ts_col, hist_col, row, data, ylabel, ylim, title in plot_defs:
+    # Time Series
+    ax_ts = axes[row, ts_col]
+    if data is not None:
+      ax_ts.plot(time_x, data, 'b-', linewidth=1.5, alpha=0.7)
+      if ylim: ax_ts.set_ylim(ylim)
+    
+    ax_ts.axhline(y=0, color='k', linestyle='--', linewidth=1.0, alpha=0.5)
+    ax_ts.set_ylabel(ylabel, fontsize=11)
+    ax_ts.grid(True, alpha=0.3)
+    ax_ts.set_title(title, fontsize=12)
+    
+    if epoch_dt_utc is not None:
+      ax_ts.tick_params(axis='x', rotation=45)
+      ax_ts.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+    else:
+      # Only show label on bottom row if not date
+      if row != 2:
+        ax_ts.set_xticklabels([])
+    
+    if row == 2:
+      ax_ts.set_xlabel(xlabel, fontsize=11)
 
-  # Elevation error
-  ax5 = fig.add_subplot(3, 2, 5)
-  ax5.plot(time_x, elevation_error_deg, 'b-', linewidth=1.5, alpha=0.7)
-  ax5.axhline(y=0, color='k', linestyle='--', linewidth=1.0, alpha=0.5)
-  ax5.set_ylabel('Elevation Error [deg]', fontsize=11)
-  ax5.set_xlabel(xlabel, fontsize=11)
-  ax5.grid(True, alpha=0.3)
-  ax5.set_title('Elevation Error vs Time', fontsize=12)
-  if epoch_dt_utc is not None:
-    ax5.tick_params(axis='x', rotation=45)
-    ax5.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
-
-  # Elevation rate error
-  ax6 = fig.add_subplot(3, 2, 6)
-  if elevation_rate_error_deg_per_s is not None:
-    ax6.plot(time_x, elevation_rate_error_deg_per_s, 'b-', linewidth=1.5, alpha=0.7)
-    ax6.axhline(y=0, color='k', linestyle='--', linewidth=1.0, alpha=0.5)
-  ax6.set_ylabel('Elevation Rate Error [deg/s]', fontsize=11)
-  ax6.set_xlabel(xlabel, fontsize=11)
-  ax6.grid(True, alpha=0.3)
-  ax6.set_title('Elevation Rate Error vs Time', fontsize=12)
-  if epoch_dt_utc is not None:
-    ax6.tick_params(axis='x', rotation=45)
-    ax6.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+    # Histogram
+    ax_hist = axes[row, hist_col]
+    if data is not None:
+      _plot_hist_and_gaussian(ax_hist, data, ylim)
+    else:
+      ax_hist.axis('off')
 
   # Add overall title
   fig.suptitle(title_text, fontsize=14, y=0.995)
 
   # Adjust layout
-  plt.tight_layout(rect=(0, 0, 1, 0.99))
+  with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message=".*tight_layout.*")
+    plt.tight_layout(rect=(0, 0, 1, 0.99))
+    plt.subplots_adjust(wspace=0.1, hspace=0.4)
 
   return fig
