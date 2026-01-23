@@ -183,6 +183,114 @@ def plot_measurement_residual_ratio(
   return fig
 
 
+def plot_innovation_covariance_evolution(
+  innovation_covariances : List[np.ndarray],
+  measurement_times      : np.ndarray,
+  title_text             : str = "Innovation Covariance Evolution",
+  measurement_types      : Optional[List[str]] = None,
+) -> Figure:
+  """
+  Plot evolution of innovation covariance (sqrt of diagonal) over time.
+
+  This helps diagnose why residual ratios may not be normally distributed.
+  If innovation covariance varies significantly, residuals will appear non-normal
+  even if the filter is working correctly.
+
+  Input:
+  ------
+    innovation_covariances : List[np.ndarray]
+      List of innovation covariance matrices from EKF.
+    measurement_times : np.ndarray
+      Times when measurements were processed [s].
+    title_text : str
+      Plot title.
+    measurement_types : List[str], optional
+      Names of measurement types.
+
+  Output:
+  -------
+    fig : matplotlib.figure.Figure
+      Figure containing innovation covariance evolution plots.
+  """
+  # Default measurement types for 6-element measurement vector
+  if measurement_types is None:
+    measurement_types = [
+      'Range',
+      'Range Rate',
+      'Azimuth',
+      'Azimuth Rate',
+      'Elevation',
+      'Elevation Rate',
+    ]
+
+  n_measurements = len(innovation_covariances)
+  if n_measurements == 0:
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.text(0.5, 0.5, 'No measurements available',
+            ha='center', va='center', fontsize=14)
+    ax.set_title(title_text)
+    return fig
+
+  n_types = innovation_covariances[0].shape[0]
+
+  # Extract standard deviations from innovation covariances
+  innovation_stdevs = np.zeros((n_types, n_measurements))
+
+  for i in range(n_measurements):
+    S = innovation_covariances[i]
+    for j in range(n_types):
+      innovation_stdevs[j, i] = np.sqrt(S[j, j])
+
+  # Convert measurement times to minutes
+  times_minutes = measurement_times / 60.0
+
+  # Create figure with subplots for each measurement type
+  fig, axes = plt.subplots(n_types, 1, figsize=(12, 2*n_types), sharex=True)
+  if n_types == 1:
+    axes = [axes]
+
+  # Plot innovation covariance evolution for each measurement type
+  for j, meas_type in enumerate(measurement_types):
+    ax = axes[j]
+
+    # Plot innovation standard deviation
+    ax.plot(times_minutes, innovation_stdevs[j, :], 'o-',
+            linewidth=2, markersize=4, color='C1', label='Innovation Std (√S)')
+
+    # Formatting
+    ax.set_ylabel(f'{meas_type}\nStd Dev', fontsize=10)
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc='upper right', fontsize=9)
+
+    # Use log scale if variation is large
+    if innovation_stdevs[j, :].max() / innovation_stdevs[j, :].min() > 10:
+      ax.set_yscale('log')
+      ax.set_ylabel(f'{meas_type}\nStd Dev (log)', fontsize=10)
+
+    # Add statistics text
+    mean_val = np.mean(innovation_stdevs[j, :])
+    std_val = np.std(innovation_stdevs[j, :])
+    min_val = np.min(innovation_stdevs[j, :])
+    max_val = np.max(innovation_stdevs[j, :])
+
+    stats_text = f'mean={mean_val:.2e}\nmin={min_val:.2e}\nmax={max_val:.2e}\nvariation={max_val/min_val:.1f}x'
+    ax.text(0.02, 0.98, stats_text,
+            transform=ax.transAxes, fontsize=8,
+            verticalalignment='top', horizontalalignment='left',
+            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+  # Set x-label on bottom plot
+  axes[-1].set_xlabel('Time Since Epoch (minutes)', fontsize=11)
+
+  # Set title
+  fig.suptitle(title_text, fontsize=14, y=0.995)
+
+  # Adjust layout
+  fig.tight_layout(rect=[0, 0, 1, 0.99])
+
+  return fig
+
+
 def compute_residual_statistics(
   residuals              : List[np.ndarray],
   innovation_covariances : List[np.ndarray],

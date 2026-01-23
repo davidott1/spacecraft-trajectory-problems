@@ -17,7 +17,7 @@ from src.plot.plot_groundtrack                 import plot_ground_track
 from src.plot.plot_skyplot                     import plot_skyplot, plot_pass_timeseries, plot_measurement_errors, plot_error_skyplot
 from src.plot.plot_covariance                  import plot_covariance_combined, plot_covariance_filter_vs_smoother
 from src.plot.plot_od_comparison               import plot_filter_smoother_error_comparison, plot_filter_smoother_rss_comparison
-from src.plot.plot_residual_ratio              import plot_measurement_residual_ratio
+from src.plot.plot_residual_ratio              import plot_measurement_residual_ratio, plot_innovation_covariance_evolution
 from src.schemas.propagation                   import PropagationResult
 from src.schemas.state                         import TrackerStation
 from src.orbit_determination.measurement_simulator import MeasurementSimulator
@@ -558,6 +558,18 @@ def generate_plots(
         fig_residual.savefig(figures_folderpath / filename_residual, dpi=300, bbox_inches='tight')
         plt.close(fig_residual)
         residual_ratio_files.append(filename_residual)
+
+        # Also plot innovation covariance evolution to diagnose filter behavior
+        innov_cov_title = f'Innovation Covariance Evolution - {object_name_display}'
+        fig_innov_cov = plot_innovation_covariance_evolution(
+          innovation_covariances = od_residual_data['innovation_covariances'],
+          measurement_times      = od_residual_data['measurement_times'],
+          title_text             = innov_cov_title,
+        )
+        filename_innov_cov = f'timeseries_innovation_covariance_{name_lower}.png'
+        fig_innov_cov.savefig(figures_folderpath / filename_innov_cov, dpi=300, bbox_inches='tight')
+        plt.close(fig_innov_cov)
+        residual_ratio_files.append(filename_innov_cov)
 
     except Exception as e:
       print(f"      [WARNING] Failed to generate residual ratio plots: {e}")
