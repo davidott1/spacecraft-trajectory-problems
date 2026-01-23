@@ -8,11 +8,11 @@ from typing   import Optional
 
 from src.schemas.config        import OutputPaths, SimulationConfig, InitialStateConfig, ComparisonConfig
 from src.schemas.gravity       import GravityModelConfig, SphericalHarmonicsConfig, ThirdBodyConfig, RelativityConfig, SolidEarthTidesConfig, OceanTidesConfig
-from src.schemas.spacecraft    import SpacecraftProperties, DragConfig, SRPConfig
+from src.schemas.spacecraft    import SpacecraftProperties, DragConfig, SRPConfig, ManeuversConfig
 from src.schemas.propagation   import PropagationConfig
 from src.schemas.state         import TLEData, CartesianState
 from src.model.constants       import SOLARSYSTEMCONSTANTS
-from src.input.loader          import load_supported_objects, load_maneuvers
+from src.input.loader          import load_supported_objects
 from src.utility.string_helper import sanitize_filename
 
 
@@ -30,6 +30,8 @@ def print_input_configuration(
   include_srp                : bool,
   include_relativity         : bool,
   auto_download              : bool,
+  maneuver_filename          : Optional[str] = None,
+  maneuvers                  : Optional[list] = None,
 ) -> None:
   """
   Print the input configuration in a formatted table.
@@ -89,6 +91,7 @@ def print_input_configuration(
     'compare_jpl_horizons'       : False,
     'compare_tle'                : False,
     'auto_download'              : False,
+    'maneuver_filename'          : None,
   }
 
   # Format values for display
@@ -101,20 +104,21 @@ def print_input_configuration(
   # Build configuration entries: (name, value, default, user_set)
   print("    Build configuration table entries")
   entries = [
-    ('initial_state_source',   initial_state_source,       defaults['initial_state_source'],       initial_state_source       != defaults['initial_state_source']),
-    ('initial_state_norad_id', initial_state_norad_id,     defaults['initial_state_norad_id'],     initial_state_norad_id     is not None),
-    ('initial_state_filename', initial_state_filename,     defaults['initial_state_filename'],     initial_state_filename     is not None),
-    ('timespan',               timespan_str,               defaults['timespan'],                   desired_timespan           is not None),
-    ('gravity_harmonics',      harmonics_str,              defaults['gravity_harmonics'],          gravity_harmonics_list     is not None and len(gravity_harmonics_list) > 0),
-    ('gravity_degree_order',   gh_deg_order_str,           "None",                                 two_body_gravity_model.spherical_harmonics.degree is not None),
+    ('initial_state_source',   initial_state_source,            defaults['initial_state_source'],       initial_state_source       != defaults['initial_state_source']),
+    ('initial_state_norad_id', initial_state_norad_id,          defaults['initial_state_norad_id'],     initial_state_norad_id     is not None),
+    ('initial_state_filename', initial_state_filename,          defaults['initial_state_filename'],     initial_state_filename     is not None),
+    ('timespan',               timespan_str,                    defaults['timespan'],                   desired_timespan           is not None),
+    ('gravity_harmonics',      harmonics_str,                   defaults['gravity_harmonics'],          gravity_harmonics_list     is not None and len(gravity_harmonics_list) > 0),
+    ('gravity_degree_order',   gh_deg_order_str,                "None",                                 two_body_gravity_model.spherical_harmonics.degree is not None),
     ('gravity_file',           two_body_gravity_model.filename, defaults['gravity_harmonics_filename'], two_body_gravity_model.filename != defaults['gravity_harmonics_filename']),
-    ('third_bodies',           third_str,                  defaults['third_bodies'],               third_bodies_list          is not None and len(third_bodies_list) > 0),
-    ('include_drag',           include_drag,               defaults['include_drag'],               include_drag               != defaults['include_drag']),
-    ('include_srp',            include_srp,                defaults['include_srp'],                include_srp                != defaults['include_srp']),
-    ('include_relativity',     include_relativity,         defaults['include_relativity'],         include_relativity         != defaults['include_relativity']),
-    ('compare_jpl_horizons',   compare_jpl_horizons,       defaults['compare_jpl_horizons'],       compare_jpl_horizons       != defaults['compare_jpl_horizons']),
-    ('compare_tle',            compare_tle,                defaults['compare_tle'],                compare_tle                != defaults['compare_tle']),
-    ('auto_download',          auto_download,              defaults['auto_download'],              auto_download              != defaults['auto_download']),
+    ('third_bodies',           third_str,                       defaults['third_bodies'],               third_bodies_list          is not None and len(third_bodies_list) > 0),
+    ('include_drag',           include_drag,                    defaults['include_drag'],               include_drag               != defaults['include_drag']),
+    ('include_srp',            include_srp,                     defaults['include_srp'],                include_srp                != defaults['include_srp']),
+    ('include_relativity',     include_relativity,              defaults['include_relativity'],         include_relativity         != defaults['include_relativity']),
+    ('maneuver_filename',      maneuver_filename,               defaults['maneuver_filename'],          maneuver_filename          is not None),
+    ('compare_jpl_horizons',   compare_jpl_horizons,            defaults['compare_jpl_horizons'],       compare_jpl_horizons       != defaults['compare_jpl_horizons']),
+    ('compare_tle',            compare_tle,                     defaults['compare_tle'],                compare_tle                != defaults['compare_tle']),
+    ('auto_download',          auto_download,                   defaults['auto_download'],              auto_download              != defaults['auto_download']),
   ]
 
   # Convert entries to strings for width calculation
@@ -149,6 +153,16 @@ def print_input_configuration(
   for row in rows:
     row_line = "    " + "".join(row[col_idx].ljust(col_widths[col_idx]) for col_idx in range(len(row)))
     print(row_line)
+
+  # Maneuvers subsection (if any)
+  if maneuvers is not None and len(maneuvers) > 0:
+    print()
+    print(f"  Maneuvers ({len(maneuvers)})")
+    for idx, mnvr in enumerate(maneuvers, 1):
+      print(f"    Maneuver {i}")
+      print(f"      Time     : {mnvr.time_dt.isoformat()}")
+      print(f"      ΔV       : {mnvr.mag():.3f} m/s")
+      print(f"      Frame    : {mnvr.frame}")
 
 
 def print_paths(
@@ -203,12 +217,12 @@ def print_configuration(
 ) -> None:
   """
   Print the complete configuration (input arguments and paths).
-  
+
   Input:
   ------
     config : SimulationConfig
       Configuration object containing all input and path attributes.
-      
+
   Output:
   -------
     None
@@ -227,8 +241,10 @@ def print_configuration(
     include_srp            = config.include_srp,
     include_relativity     = config.gravity.relativity.enabled,
     auto_download          = config.auto_download,
+    maneuver_filename      = config.spacecraft.maneuvers.filename,
+    maneuvers              = config.spacecraft.maneuvers,
   )
-  
+
   print_paths(config)
 
 
@@ -513,23 +529,7 @@ def build_config(
       tracker_filepath         = tracker_filepath,
     )
   
-  # Load maneuvers if specified
-  maneuvers = []
-  if maneuver_filename:
-    # Construct maneuver file path (assumes input/maneuvers/ folder)
-    project_root = Path(__file__).parent.parent.parent
-    maneuver_filepath = project_root / 'input' / 'maneuvers' / maneuver_filename
-
-    if maneuver_filepath.exists():
-      print(f"  Loading maneuvers from: {maneuver_filepath.name}")
-      maneuvers = load_maneuvers(maneuver_filepath)
-      print(f"  Loaded {len(maneuvers)} maneuver(s)")
-      for i, m in enumerate(maneuvers):
-        print(f"    Maneuver {i+1}: {m.time_dt.isoformat()} | ΔV = {m.delta_v_magnitude:.3f} m/s | Frame = {m.frame}")
-    else:
-      print(f"  Warning: Maneuver file not found: {maneuver_filepath}")
-
-  # Create SpacecraftProperties object
+  # Create SpacecraftProperties object (maneuvers will be loaded later in load_files)
   spacecraft = SpacecraftProperties(
     mass      = obj_props['mass__kg'],
     drag      = DragConfig(
@@ -542,7 +542,7 @@ def build_config(
       cr      = obj_props['srp']['coeff'],
       area    = obj_props['srp']['area__m2']
     ),
-    maneuvers = maneuvers,
+    maneuvers = ManeuversConfig(filename=maneuver_filename),  # items populated in load_files
     norad_id  = initial_state_norad_id,
     name      = object_name
   )

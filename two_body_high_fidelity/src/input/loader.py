@@ -487,6 +487,7 @@ def load_files(
   gravity_model_order       : Optional[int]  = None,
   gravity_coefficient_names : Optional[list] = None,
   tracker_filepath          : Optional[Path] = None,
+  maneuver_filename         : Optional[str]  = None,
 ):
   """
   Load necessary files for the simulation, including SPICE kernels, gravity model, and tracker.
@@ -510,6 +511,8 @@ def load_files(
       If provided, creates a model with only these coefficients.
     tracker_filepath : Path, optional
       Path to tracker station YAML file.
+    maneuver_filename : str, optional
+      Filename of maneuver YAML file (in input/maneuvers/ folder).
 
   Output:
   -------
@@ -517,6 +520,8 @@ def load_files(
       Loaded gravity model or None if not requested/failed.
     trackers : list[TrackerStation] | None
       List of loaded tracker stations or None if not requested/failed.
+    maneuvers : list[ImpulsiveManeuver] | None
+      List of loaded maneuvers or None if not requested/failed.
 
   Raises:
   -------
@@ -536,6 +541,8 @@ def load_files(
   if tracker_filepath is not None:
     print("    Load tracker station configuration")
     print("    Normalize tracker azimuth constraints")
+  if maneuver_filename is not None:
+    print("    Load maneuver configuration")
   print()
 
   # Summary subsection
@@ -603,8 +610,37 @@ def load_files(
     trackers = [validate_tracker_input(t) for t in trackers]
     trackers = [normalize_tracker_azimuth(t) for t in trackers]
 
-  # Return loaded model and trackers (or None if not requested)
-  return spherical_harmonics_model, trackers
+  # Load maneuvers
+  maneuvers = []
+  if maneuver_filename is not None:
+    from pathlib import Path as PathLib
+    project_root = PathLib(__file__).parent.parent.parent
+    maneuver_filepath = project_root / 'input' / 'maneuvers' / maneuver_filename
+
+    if maneuver_filepath.exists():
+      maneuvers = load_maneuvers(maneuver_filepath)
+
+      # Format filepath relative to project root
+      try:
+        relative_path = maneuver_filepath.relative_to(PathLib.cwd())
+        formatted_path = f"<project_folderpath>/{relative_path}"
+      except ValueError:
+        formatted_path = str(maneuver_filepath)
+
+      print(f"    Maneuvers")
+      print(f"      Filepath : {formatted_path}")
+      print(f"      Count    : {len(maneuvers)}")
+      for i, mnvr in enumerate(maneuvers, 1):
+        print(f"      Maneuver {i}")
+        print(f"        Time   : {mnvr.time_dt.isoformat()}")
+        print(f"        ΔV     : {mnvr.mag():.3f} m/s")
+        print(f"        Frame  : {mnvr.frame}")
+    else:
+      print(f"    Maneuvers")
+      print(f"      Status   : File not found - {maneuver_filename}")
+
+  # Return loaded model, trackers, and maneuvers (or None if not requested)
+  return spherical_harmonics_model, trackers, maneuvers
 
 
 def validate_tracker_input(tracker):
