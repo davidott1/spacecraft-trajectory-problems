@@ -272,3 +272,101 @@ def plot_covariance_combined(
   fig.tight_layout(rect=[0, 0, 1, 0.96])
 
   return fig
+
+
+def plot_covariance_filter_vs_smoother(
+  filter_covariances  : np.ndarray,
+  smoother_covariances: np.ndarray,
+  delta_time_epoch    : np.ndarray,
+  title_text          : str = "Filter vs Smoother Uncertainty",
+  measurement_times   : Optional[np.ndarray] = None,
+) -> Figure:
+  """
+  Plot filter and smoother covariance comparison.
+
+  Creates a 1x2 grid showing:
+    - Left: Position uncertainties (filter RSS vs smoother RSS)
+    - Right: Velocity uncertainties (filter RSS vs smoother RSS)
+
+  Input:
+  ------
+    filter_covariances : np.ndarray (6, 6, N)
+      Forward-filtered state covariance matrices.
+    smoother_covariances : np.ndarray (6, 6, N)
+      Backward-smoothed state covariance matrices.
+    delta_time_epoch : np.ndarray (N,)
+      Time array relative to epoch [s].
+    title_text : str
+      Title for the figure.
+    measurement_times : np.ndarray, optional
+      Times when measurements were incorporated [s].
+
+  Output:
+  -------
+    fig : Figure
+      Matplotlib figure containing the comparison plots.
+  """
+  # Extract filter standard deviations
+  sigma_x_filt  = np.sqrt(filter_covariances[0, 0, :])
+  sigma_y_filt  = np.sqrt(filter_covariances[1, 1, :])
+  sigma_z_filt  = np.sqrt(filter_covariances[2, 2, :])
+  sigma_vx_filt = np.sqrt(filter_covariances[3, 3, :])
+  sigma_vy_filt = np.sqrt(filter_covariances[4, 4, :])
+  sigma_vz_filt = np.sqrt(filter_covariances[5, 5, :])
+
+  # Extract smoother standard deviations
+  sigma_x_smooth  = np.sqrt(smoother_covariances[0, 0, :])
+  sigma_y_smooth  = np.sqrt(smoother_covariances[1, 1, :])
+  sigma_z_smooth  = np.sqrt(smoother_covariances[2, 2, :])
+  sigma_vx_smooth = np.sqrt(smoother_covariances[3, 3, :])
+  sigma_vy_smooth = np.sqrt(smoother_covariances[4, 4, :])
+  sigma_vz_smooth = np.sqrt(smoother_covariances[5, 5, :])
+
+  # Compute RSS uncertainties
+  sigma_pos_filt   = np.sqrt(sigma_x_filt**2 + sigma_y_filt**2 + sigma_z_filt**2)
+  sigma_vel_filt   = np.sqrt(sigma_vx_filt**2 + sigma_vy_filt**2 + sigma_vz_filt**2)
+  sigma_pos_smooth = np.sqrt(sigma_x_smooth**2 + sigma_y_smooth**2 + sigma_z_smooth**2)
+  sigma_vel_smooth = np.sqrt(sigma_vx_smooth**2 + sigma_vy_smooth**2 + sigma_vz_smooth**2)
+
+  # Convert time to minutes
+  time_min = delta_time_epoch / 60.0
+
+  # Create figure with 1x2 subplots
+  fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+  # Left: Position uncertainties
+  ax1 = axes[0]
+  ax1.semilogy(time_min, sigma_pos_filt, 'b-', linewidth=2.5, label='Filter (EKF)', alpha=0.7)
+  ax1.semilogy(time_min, sigma_pos_smooth, 'r-', linewidth=2.5, label='Smoother (RTS)', alpha=0.7)
+  ax1.set_xlabel('Time [min]', fontsize=12)
+  ax1.set_ylabel('Position Uncertainty [m]', fontsize=12)
+  ax1.set_title('Position Uncertainty (1-σ RSS)', fontsize=13, fontweight='bold')
+  ax1.grid(True, which='both', linestyle=':', alpha=0.5)
+  ax1.legend(loc='best', fontsize=11)
+
+  # Add measurement markers
+  if measurement_times is not None:
+    meas_time_min = measurement_times / 60.0
+    for mt in meas_time_min:
+      ax1.axvline(mt, color='green', alpha=0.15, linewidth=0.8, linestyle='-')
+
+  # Right: Velocity uncertainties
+  ax2 = axes[1]
+  ax2.semilogy(time_min, sigma_vel_filt, 'b-', linewidth=2.5, label='Filter (EKF)', alpha=0.7)
+  ax2.semilogy(time_min, sigma_vel_smooth, 'r-', linewidth=2.5, label='Smoother (RTS)', alpha=0.7)
+  ax2.set_xlabel('Time [min]', fontsize=12)
+  ax2.set_ylabel('Velocity Uncertainty [m/s]', fontsize=12)
+  ax2.set_title('Velocity Uncertainty (1-σ RSS)', fontsize=13, fontweight='bold')
+  ax2.grid(True, which='both', linestyle=':', alpha=0.5)
+  ax2.legend(loc='best', fontsize=11)
+
+  # Add measurement markers
+  if measurement_times is not None:
+    for mt in meas_time_min:
+      ax2.axvline(mt, color='green', alpha=0.15, linewidth=0.8, linestyle='-')
+
+  # Overall figure title
+  fig.suptitle(title_text, fontsize=14, fontweight='bold')
+  fig.tight_layout(rect=[0, 0, 1, 0.96])
+
+  return fig
