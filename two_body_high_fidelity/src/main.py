@@ -65,6 +65,7 @@ from src.propagation.state_initializer import get_initial_state
 from src.utility.logger                import start_logging, stop_logging
 from src.schemas.propagation           import PropagationConfig, PropagationResult
 from src.schemas.state                 import TLEData
+from src.schemas.spacecraft            import ManeuversConfig
 
 from src.orbit_determination.ekf_processor         import process_measurements_with_ekf
 from src.orbit_determination.measurement_simulator import MeasurementSimulator
@@ -242,9 +243,9 @@ def main(
   # Print input configuration and paths
   print_configuration(config)
 
-  # Load files: SPICE, spherical harmonics coefficients, trackers
+  # Load files: SPICE, spherical harmonics coefficients, trackers, maneuvers
   # Note: Tracker azimuth normalization happens inside load_files()
-  spherical_harmonics_model, trackers = load_files(
+  spherical_harmonics_model, trackers, maneuvers_from_file = load_files(
     spice_kernels_folderpath  = config.output_paths.spice_kernels_folderpath,
     lsk_filepath              = config.output_paths.lsk_filepath,
     gravity_model_folderpath  = config.gravity.folderpath,
@@ -253,6 +254,7 @@ def main(
     gravity_model_order       = config.gravity.spherical_harmonics.order,
     gravity_coefficient_names = config.gravity.spherical_harmonics.coefficients if config.gravity.spherical_harmonics.enabled else None,
     tracker_filepath          = config.output_paths.tracker_filepath,
+    maneuver_filename         = maneuver_filename,
   )
 
   # Update gravity model with loaded values
@@ -260,6 +262,10 @@ def main(
     config.gravity.spherical_harmonics.model  = spherical_harmonics_model
     config.gravity.spherical_harmonics.gp     = spherical_harmonics_model.gp
     config.gravity.spherical_harmonics.radius = spherical_harmonics_model.radius
+
+  # Update spacecraft with loaded maneuvers
+  if maneuvers_from_file:
+    config.spacecraft.maneuvers._items = maneuvers_from_file
 
   # Get Horizons ephemeris (only if needed for initial state or comparison)
   result_jpl_horizons_ephemeris = None

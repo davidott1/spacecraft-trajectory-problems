@@ -57,6 +57,62 @@ class SRPConfig:
 
 
 @dataclass
+class ManeuversConfig:
+  """
+  Maneuvers configuration with list-like behavior.
+
+  This class acts like a list of maneuvers but also stores metadata like the filename.
+  You can iterate over it, index it, and check its length just like a list.
+
+  Attributes:
+    filename : Maneuver configuration filename (for reference)
+    _items   : Internal list of impulsive maneuvers
+
+  Example:
+    maneuvers = ManeuversConfig(filename='burns.yaml')
+    maneuvers.append(ImpulsiveManeuver(...))
+
+    # Use like a list
+    for maneuver in maneuvers:
+      print(f"ΔV = {maneuver.mag():.1f} m/s")
+
+    # Access metadata
+    print(maneuvers.filename)
+  """
+  filename : Optional[str]                       = None
+  _items   : Optional[List['ImpulsiveManeuver']] = None
+
+  def __post_init__(self):
+    if self._items is None:
+      self._items = []
+
+  def __len__(self) -> int:
+    """Return number of maneuvers."""
+    return len(self._items)
+
+  def __iter__(self):
+    """Make iterable: for m in maneuvers."""
+    return iter(self._items)
+
+  def __getitem__(self, index):
+    """Support indexing: maneuvers[0]."""
+    return self._items[index]
+
+  def __bool__(self) -> bool:
+    """Return True if maneuvers exist."""
+    return len(self._items) > 0
+
+  def append(self, maneuver: 'ImpulsiveManeuver'):
+    """Add a maneuver to the list."""
+    self._items.append(maneuver)
+
+  @property
+  def is_valid(self) -> bool:
+    """Check if maneuvers configuration is valid."""
+    return len(self._items) > 0
+
+
+@dataclass
 class ImpulsiveManeuver:
   """
   Impulsive Delta-V maneuver specification.
@@ -100,8 +156,7 @@ class ImpulsiveManeuver:
     if not isinstance(self.delta_vel_vec, np.ndarray):
       self.delta_vel_vec = np.array(self.delta_vel_vec)
 
-  @property
-  def delta_v_magnitude(self) -> float:
+  def mag(self) -> float:
     """
     Compute Delta-V magnitude.
 
@@ -122,16 +177,16 @@ class SpacecraftProperties:
     mass      : Spacecraft mass [kg]
     drag      : Drag configuration
     srp       : Solar radiation pressure configuration
-    maneuvers : List of impulsive maneuvers to apply during propagation
+    maneuvers : Maneuvers configuration (acts like a list with metadata)
     norad_id  : NORAD catalog ID (if applicable)
     name      : Spacecraft name
   """
-  mass      : float                          = 1000.0
-  drag      : Optional[DragConfig]           = None
-  srp       : Optional[SRPConfig]            = None
-  maneuvers : Optional[List[ImpulsiveManeuver]] = None
-  norad_id  : Optional[str]                  = None
-  name      : Optional[str]                  = None
+  mass      : float                   = 1000.0
+  drag      : Optional[DragConfig]    = None
+  srp       : Optional[SRPConfig]     = None
+  maneuvers : Optional[ManeuversConfig] = None
+  norad_id  : Optional[str]           = None
+  name      : Optional[str]           = None
 
   def __post_init__(self):
     if self.drag is None:
@@ -139,4 +194,4 @@ class SpacecraftProperties:
     if self.srp is None:
       self.srp = SRPConfig()
     if self.maneuvers is None:
-      self.maneuvers = []
+      self.maneuvers = ManeuversConfig()

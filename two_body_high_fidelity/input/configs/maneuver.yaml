@@ -28,3 +28,6 @@ rtol: 1.0e-10
 # No comparisons
 compare_jpl_horizons: false
 compare_tle: false
+
+# Orbit determination
+include_orbit_determination: true

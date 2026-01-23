@@ -129,7 +129,7 @@ class SimulationConfig:
   tle_line_1          : Optional[str]                = None
   tle_line_2          : Optional[str]                = None
   tle_epoch_dt        : Optional[datetime]           = None
-  
+
   def __post_init__(self):
     if self.gravity is None:
       from src.model.constants import SOLARSYSTEMCONSTANTS
