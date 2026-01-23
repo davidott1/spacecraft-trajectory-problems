@@ -16,9 +16,11 @@ standard deviation 1 if the filter is performing well.
 """
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy import stats
 
 from typing import List, Optional
 from matplotlib.figure import Figure
+from matplotlib.gridspec import GridSpec
 
 
 def plot_measurement_residual_ratio(
@@ -106,38 +108,71 @@ def plot_measurement_residual_ratio(
   # Convert measurement times to minutes for plotting
   times_minutes = measurement_times / 60.0
 
-  # Create figure with subplots for each measurement type
-  fig, axes = plt.subplots(n_types, 1, figsize=(12, 2.5*n_types), sharex=True)
+  # Create figure with GridSpec for timeseries (left) and histograms (right)
+  fig = plt.figure(figsize=(15, 2.5*n_types))
+  gs = GridSpec(n_types, 2, figure=fig, width_ratios=[3, 1], hspace=0.3, wspace=0.3)
 
-  # Handle single subplot case
-  if n_types == 1:
-    axes = [axes]
+  # Create axes for timeseries and histograms
+  ts_axes = []
+  hist_axes = []
+  for i in range(n_types):
+    ts_ax = fig.add_subplot(gs[i, 0])
+    hist_ax = fig.add_subplot(gs[i, 1], sharey=ts_ax)
+    ts_axes.append(ts_ax)
+    hist_axes.append(hist_ax)
 
-  # Plot residual ratio for each measurement type
-  for i, (ax, meas_type) in enumerate(zip(axes, measurement_types)):
+  # Plot residual ratio timeseries and histograms for each measurement type
+  for i, meas_type in enumerate(measurement_types):
+    ax_ts = ts_axes[i]
+    ax_hist = hist_axes[i]
+
+    # ===== TIMESERIES PLOT =====
     # Plot residual ratio
-    ax.plot(times_minutes, residual_ratios[i, :], 'o-',
-            linewidth=1, markersize=3, label='Residual Ratio')
+    ax_ts.plot(times_minutes, residual_ratios[i, :], 'o-',
+               linewidth=1, markersize=3, label='Residual Ratio', color='C0')
 
     # Add ±1σ, ±2σ, ±3σ bounds
-    ax.axhline(y=0, color='k', linestyle='-', linewidth=0.8, alpha=0.5)
-    ax.axhline(y=1, color='g', linestyle='--', linewidth=0.8, alpha=0.5, label='±1σ')
-    ax.axhline(y=-1, color='g', linestyle='--', linewidth=0.8, alpha=0.5)
-    ax.axhline(y=2, color='orange', linestyle='--', linewidth=0.8, alpha=0.5, label='±2σ')
-    ax.axhline(y=-2, color='orange', linestyle='--', linewidth=0.8, alpha=0.5)
-    ax.axhline(y=3, color='r', linestyle='--', linewidth=0.8, alpha=0.5, label='±3σ')
-    ax.axhline(y=-3, color='r', linestyle='--', linewidth=0.8, alpha=0.5)
+    ax_ts.axhline(y=0, color='k', linestyle='-', linewidth=0.8, alpha=0.5)
+    ax_ts.axhline(y=1, color='g', linestyle='--', linewidth=0.8, alpha=0.5, label='±1σ')
+    ax_ts.axhline(y=-1, color='g', linestyle='--', linewidth=0.8, alpha=0.5)
+    ax_ts.axhline(y=2, color='orange', linestyle='--', linewidth=0.8, alpha=0.5, label='±2σ')
+    ax_ts.axhline(y=-2, color='orange', linestyle='--', linewidth=0.8, alpha=0.5)
+    ax_ts.axhline(y=3, color='r', linestyle='--', linewidth=0.8, alpha=0.5, label='±3σ')
+    ax_ts.axhline(y=-3, color='r', linestyle='--', linewidth=0.8, alpha=0.5)
 
-    # Formatting
-    ax.set_ylabel(f'{meas_type}\n(σ)', fontsize=10)
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc='upper right', fontsize=8, ncol=4)
+    # Formatting timeseries
+    ax_ts.set_ylabel(f'{meas_type}\n(σ)', fontsize=10)
+    ax_ts.grid(True, alpha=0.3)
+    ax_ts.legend(loc='upper right', fontsize=8, ncol=4)
+    ax_ts.set_ylim([-3.5, 3.5])
 
-    # Set y-limits to show ±3.5σ range
-    ax.set_ylim([-3.5, 3.5])
+    # ===== HISTOGRAM PLOT =====
+    # Plot histogram (horizontal orientation to match timeseries y-axis)
+    data = residual_ratios[i, :]
+    ax_hist.hist(data, bins=20, orientation='horizontal', density=True,
+                 alpha=0.7, color='C0', edgecolor='black', linewidth=0.5)
 
-  # Set common x-label
-  axes[-1].set_xlabel('Time Since Epoch (minutes)', fontsize=11)
+    # Overlay theoretical normal distribution N(0,1)
+    y_range = np.linspace(-3.5, 3.5, 100)
+    normal_pdf = stats.norm.pdf(y_range, loc=0, scale=1)
+    ax_hist.plot(normal_pdf, y_range, 'r-', linewidth=2, label='N(0,1)')
+
+    # Add statistics text
+    mean_val = np.mean(data)
+    std_val = np.std(data)
+    ax_hist.text(0.95, 0.95, f'μ={mean_val:.2f}\nσ={std_val:.2f}',
+                 transform=ax_hist.transAxes, fontsize=8,
+                 verticalalignment='top', horizontalalignment='right',
+                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+    # Formatting histogram
+    ax_hist.set_xlabel('Density', fontsize=9)
+    ax_hist.grid(True, alpha=0.3, axis='x')
+    ax_hist.legend(loc='lower right', fontsize=8)
+    ax_hist.tick_params(labelleft=False)  # Hide y-axis labels (shared with timeseries)
+
+  # Set x-label only on bottom timeseries plot
+  ts_axes[-1].set_xlabel('Time Since Epoch (minutes)', fontsize=11)
 
   # Set title
   fig.suptitle(title_text, fontsize=14, y=0.995)
