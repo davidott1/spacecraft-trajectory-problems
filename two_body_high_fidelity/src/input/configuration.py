@@ -398,6 +398,10 @@ def build_config(
     gravity_harmonics_order  = None
 
   # Handle third bodies logic
+  # If third_bodies contains None (from --third-bodies None), treat as disabled
+  if third_bodies is not None and len(third_bodies) > 0 and third_bodies[0] is None:
+    third_bodies = None
+
   include_third_body = third_bodies is not None and len(third_bodies) > 0
   third_bodies_list  = [b.upper() for b in third_bodies] if third_bodies is not None else []
 
