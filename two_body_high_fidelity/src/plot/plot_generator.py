@@ -17,6 +17,7 @@ from src.plot.plot_groundtrack                 import plot_ground_track
 from src.plot.plot_skyplot                     import plot_skyplot, plot_pass_timeseries, plot_measurement_errors, plot_error_skyplot
 from src.plot.plot_covariance                  import plot_covariance_combined, plot_covariance_filter_vs_smoother
 from src.plot.plot_od_comparison               import plot_filter_smoother_error_comparison, plot_filter_smoother_rss_comparison
+from src.plot.plot_residual_ratio              import plot_measurement_residual_ratio
 from src.schemas.propagation                   import PropagationResult
 from src.schemas.state                         import TrackerStation
 from src.orbit_determination.measurement_simulator import MeasurementSimulator
@@ -288,6 +289,7 @@ def generate_plots(
   od_smoother_covariances          : Optional['np.ndarray'] = None,
   od_estimation_times              : Optional['np.ndarray'] = None,
   od_measurement_times             : Optional['np.ndarray'] = None,
+  od_residual_data                 : Optional[dict] = None,
   include_orbit_determination      : bool = False,
 ) -> None:
   """
@@ -531,6 +533,35 @@ def generate_plots(
       except Exception as e:
         print(f"      [WARNING] Failed to generate pass time-series for {tracker.name}: {e}")
 
+  # Generate measurement residual ratio plots if orbit determination was performed
+  residual_ratio_files = []
+  if include_orbit_determination and od_residual_data is not None:
+    print("    Generate measurement residual ratio plots")
+
+    name_lower = object_name.lower().replace(' ', '_').replace('-', '_')
+
+    try:
+      residuals = od_residual_data.get('residuals', [])
+      innovation_covariances = od_residual_data.get('innovation_covariances', [])
+      residual_times = od_residual_data.get('measurement_times', np.array([]))
+
+      if len(residuals) > 0:
+        # Generate residual ratio plot
+        residual_title = f'Measurement Residual Ratio - {object_name_display} - EKF'
+        fig_residual = plot_measurement_residual_ratio(
+          residuals              = residuals,
+          innovation_covariances = innovation_covariances,
+          measurement_times      = residual_times,
+          title_text             = residual_title,
+        )
+        filename_residual = f'timeseries_residual_ratio_{name_lower}.png'
+        fig_residual.savefig(figures_folderpath / filename_residual, dpi=300, bbox_inches='tight')
+        plt.close(fig_residual)
+        residual_ratio_files.append(filename_residual)
+
+    except Exception as e:
+      print(f"      [WARNING] Failed to generate residual ratio plots: {e}")
+
   # Generate covariance plots if orbit determination was performed
   covariance_files = []
   od_comparison_files = []
@@ -726,6 +757,13 @@ def generate_plots(
           print(f"      Tracker {tracker_name}")
           for filename in filenames:
             print(f"        <figures_folderpath>/{filename}")
+
+  # Print Measurement Residual Ratio Plots
+  if residual_ratio_files:
+    print()
+    print("    Measurement Residual Ratio Plots (Orbit Determination)")
+    for filename in residual_ratio_files:
+      print(f"      <figures_folderpath>/{filename}")
 
   # Print Covariance Plots
   if covariance_files:
