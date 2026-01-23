@@ -211,7 +211,7 @@ def process_measurements_with_ekf(
   process_noise       : Optional[np.ndarray] = None,
   process_noise_scale : float = 1.0,
   dynamics            : Optional[GeneralStateEquationsOfMotion] = None,
-) -> Tuple[PropagationResult, np.ndarray, np.ndarray]:
+) -> Tuple[PropagationResult, np.ndarray, np.ndarray, dict]:
   """
   Process simulated measurements with EKF to produce state estimates.
 
@@ -256,6 +256,11 @@ def process_measurements_with_ekf(
       State covariance matrices at estimation_times.
     estimation_times : np.ndarray (n_estimation,)
       Output time array [s]. Measurement times are repeated (pre/post update).
+    residual_data : dict
+      Dictionary containing:
+        'residuals': List[np.ndarray] - Measurement residuals (innovations)
+        'innovation_covariances': List[np.ndarray] - Innovation covariances S = H*P*H^T + R
+        'measurement_times': np.ndarray - Times when measurements were processed [s]
   """
   # Default propagation times to ephemeris times
   if propagation_times is None:
@@ -492,7 +497,17 @@ def process_measurements_with_ekf(
     message     = 'EKF states at ephemeris_times (post-update at measurement times)',
   )
 
-  return result, estimated_covariances, estimation_times
+  # Extract residuals and innovation covariances from EKF
+  residuals, innovation_covariances, residual_times = ekf.get_residuals()
+
+  # Package residual data
+  residual_data = {
+    'residuals': residuals,
+    'innovation_covariances': innovation_covariances,
+    'measurement_times': np.array(residual_times),
+  }
+
+  return result, estimated_covariances, estimation_times, residual_data
 
 
 def apply_rts_smoother(

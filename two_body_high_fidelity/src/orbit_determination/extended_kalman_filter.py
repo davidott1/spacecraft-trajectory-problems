@@ -163,6 +163,11 @@ class ExtendedKalmanFilter:
     self._state   : Optional[EKFState] = None
     self._history : List[EKFState]     = []
 
+    # Storage for measurement residuals and innovation covariances
+    self._residuals               : List[np.ndarray] = []  # Innovation (y = z - h(x))
+    self._innovation_covariances  : List[np.ndarray] = []  # S = H*P*H^T + R
+    self._measurement_times       : List[float]      = []  # Times when measurements were processed
+
     # Convert epoch to ET if provided
     if config.epoch_dt_utc is not None:
       self._epoch_et = utc_to_et(config.epoch_dt_utc)
@@ -210,6 +215,25 @@ class ExtendedKalmanFilter:
         List of state estimates at each update.
     """
     return [s.copy() for s in self._history]
+
+  def get_residuals(self) -> Tuple[List[np.ndarray], List[np.ndarray], List[float]]:
+    """
+    Get measurement residuals and innovation covariances from filter updates.
+
+    Returns:
+    --------
+      residuals : List[np.ndarray]
+        List of measurement residuals (innovations): y = z - h(x_pred)
+      innovation_covariances : List[np.ndarray]
+        List of innovation covariances: S = H*P*H^T + R
+      measurement_times : List[float]
+        Times [s] when measurements were processed
+    """
+    return (
+      [r.copy() for r in self._residuals],
+      [S.copy() for S in self._innovation_covariances],
+      self._measurement_times.copy()
+    )
 
   def predict(self, time_s: float) -> EKFState:
     """
@@ -297,6 +321,11 @@ class ExtendedKalmanFilter:
 
     # Innovation covariance: S = H @ P @ H^T + R
     S = H @ self._state.P @ H.T + measurement.R
+
+    # Store residual and innovation covariance for later analysis
+    self._residuals.append(y.copy())
+    self._innovation_covariances.append(S.copy())
+    self._measurement_times.append(measurement.time_s)
 
     # Kalman gain: K = P @ H^T @ S^(-1)
     K = self._state.P @ H.T @ np.linalg.inv(S)

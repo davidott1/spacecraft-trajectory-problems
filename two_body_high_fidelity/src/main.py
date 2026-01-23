@@ -359,6 +359,7 @@ def main(
   od_smoother_covariances = None
   od_estimation_times = None
   od_measurement_times = None
+  od_residual_data = None
   if include_orbit_determination and trackers is not None and len(trackers) > 0:
     
     # Use JPL Horizons as truth for measurement simulation
@@ -399,7 +400,7 @@ def main(
 
       # Process with EKF
       print(f"  Processing {len(measurements.measured.delta_time_epoch)} measurements with EKF")
-      od_filter_states, od_filter_covariances, od_estimation_times = process_measurements_with_ekf(
+      od_filter_states, od_filter_covariances, od_estimation_times, od_residual_data = process_measurements_with_ekf(
         measurements       = measurements,
         tracker            = tracker_od,
         initial_state      = initial_guess,
@@ -462,6 +463,7 @@ def main(
     od_smoother_covariances          = od_smoother_covariances,
     od_estimation_times              = od_estimation_times,
     od_measurement_times             = od_measurement_times,
+    od_residual_data                 = od_residual_data,
     include_orbit_determination      = include_orbit_determination,
   )
   
