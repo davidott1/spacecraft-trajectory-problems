@@ -89,8 +89,8 @@ def create_default_process_noise(scale: float = 1.0) -> np.ndarray:
 
 
 def create_default_initial_covariance(
-  position_sigma: float = 1000.0,
-  velocity_sigma: float = 10.0,
+  position_sigma: float = 100.0,
+  velocity_sigma: float = 1.0,
 ) -> np.ndarray:
   """
   Create default initial state covariance matrix P0.
@@ -98,9 +98,9 @@ def create_default_initial_covariance(
   Input:
   ------
     position_sigma : float
-      Initial position uncertainty (1-sigma) in meters (default 1 km).
+      Initial position uncertainty (1-sigma) in meters (default 100 m).
     velocity_sigma : float
-      Initial velocity uncertainty (1-sigma) in m/s (default 10 m/s).
+      Initial velocity uncertainty (1-sigma) in m/s (default 1 m/s).
 
   Output:
   -------

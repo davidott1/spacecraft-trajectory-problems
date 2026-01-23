@@ -413,14 +413,25 @@ def main(
       )
 
       print(f"  ✓ EKF filtering complete")
-      print(f"    Initial position uncertainty: ±{1000.0:.0f} m (1-sigma)")
-      print(f"    Initial velocity uncertainty: ±{10.0:.1f} m/s (1-sigma)")
+      print(f"    Initial position uncertainty: ±{100.0:.0f} m (1-sigma)")
+      print(f"    Initial velocity uncertainty: ±{1.0:.1f} m/s (1-sigma)")
 
       # Compute final filter uncertainties
       final_cov = od_filter_covariances[:, :, -1]
       final_pos_sigma = (final_cov[0, 0] + final_cov[1, 1] + final_cov[2, 2])**0.5 / 3**0.5
       final_vel_sigma = (final_cov[3, 3] + final_cov[4, 4] + final_cov[5, 5])**0.5 / 3**0.5
       print(f"    Final filter position uncertainty: ±{final_pos_sigma:.1f} m (1-sigma)")
+
+      # Analyze measurement residuals to diagnose filter performance
+      if od_residual_data is not None:
+        from src.analysis.residual_diagnostics import analyze_residual_behavior, print_residual_diagnostics
+
+        diagnostics = analyze_residual_behavior(
+          residuals              = od_residual_data['residuals'],
+          innovation_covariances = od_residual_data['innovation_covariances'],
+        )
+
+        print_residual_diagnostics(diagnostics)
       print(f"    Final filter velocity uncertainty: ±{final_vel_sigma:.4f} m/s (1-sigma)")
 
       # Apply RTS smoother to get smoothed estimates
