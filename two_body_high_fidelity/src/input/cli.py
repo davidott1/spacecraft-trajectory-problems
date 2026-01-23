@@ -3,6 +3,76 @@ import re
 import argparse
 import yaml
 from pathlib import Path
+
+
+class FlexibleBooleanAction(argparse.Action):
+  """
+  Custom argparse action that provides flexible boolean argument handling.
+
+  Supports all these variations:
+    --flag              -> True
+    --flag True         -> True
+    --flag true         -> True
+    --flag False        -> False
+    --flag false        -> False
+    --enable-flag       -> True
+    --enable-flag True  -> True
+    --enable-flag False -> False
+    --disable-flag      -> False (inverts the value)
+    --disable-flag True -> False (inverts the value)
+    --disable-flag False -> True (inverts the value)
+
+  Usage:
+    parser.add_argument('--include-srp', '--srp', '--enable-srp',
+                        dest='include_srp', action=FlexibleBooleanAction, default=False)
+    parser.add_argument('--disable-srp', dest='include_srp', action=FlexibleBooleanAction,
+                        default=argparse.SUPPRESS, invert=True)
+  """
+  def __init__(self, option_strings, dest, nargs=None, const=None, default=None,
+               type=None, choices=None, required=False, help=None, metavar=None, invert=False):
+    # Store whether this is a disable flag (inverts the logic)
+    self.invert = invert
+
+    # Support both no-argument and single-argument forms
+    if nargs is None:
+      nargs = '?'
+
+    # Default const:
+    # - For disable flags (invert=True): const=True, then inverted to False
+    # - For enable flags (invert=False): const=True
+    if const is None:
+      const = True
+
+    super().__init__(
+      option_strings=option_strings,
+      dest=dest,
+      nargs=nargs,
+      const=const,
+      default=default,
+      type=type,
+      choices=choices,
+      required=required,
+      help=help,
+      metavar=metavar
+    )
+
+  def __call__(self, parser, namespace, values, option_string=None):
+    """Process the argument value and set the destination attribute."""
+    # If no value provided, use const (True for enable, False for disable)
+    if values is None:
+      result = self.const
+    else:
+      # Parse boolean from string
+      if isinstance(values, str):
+        result = values.lower() in ('true', '1', 'yes', 'y', 't')
+      else:
+        result = bool(values)
+
+    # Invert if this is a disable flag
+    if self.invert:
+      result = not result
+
+    setattr(namespace, self.dest, result)
 def parse_time(time_str: str):
   """
   Parse time string to datetime object.
@@ -62,40 +132,57 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
     args : argparse.Namespace
       Merged arguments with CLI overriding config file.
   """
-  # Map config keys to argparse attribute names
+  # Track which arguments were explicitly set on the command line
+  # by checking which appear in sys.argv
+  import sys
+  cli_args_set = set()
+  for arg in sys.argv:
+    if arg.startswith('--'):
+      # Extract the flag name (handle both --flag and --flag=value formats)
+      flag = arg.split('=')[0]
+      cli_args_set.add(flag)
+
+  # Map config keys to argparse attribute names and their CLI flags
   config_mapping = {
-    'initial_state_source': 'initial_state_source',
-    'initial_state_norad_id': 'initial_state_norad_id',
-    'initial_state_filename': 'initial_state_filename',
-    'timespan': 'timespan',
-    'third_bodies': 'third_bodies',
-    'gravity_harmonics_coefficients': 'gravity_harmonics_coefficients',
-    'gravity_harmonics_degree_order': 'gravity_harmonics_degree_order',
-    'gravity_harmonics_filename': 'gravity_model_filename',
-    'include_drag': 'include_drag',
-    'include_srp': 'include_srp',
-    'include_relativity': 'include_relativity',
-    'include_solid_tides': 'include_solid_tides',
-    'include_ocean_tides': 'include_ocean_tides',
-    'compare_tle': 'compare_tle',
-    'compare_jpl_horizons': 'compare_jpl_horizons',
-    'auto_download': 'auto_download',
-    'atol': 'atol',
-    'rtol': 'rtol',
-    'include_tracker_skyplots': 'include_tracker_skyplots',
-    'tracker_filename': 'tracker_filename',
-    'tracker_filepath': 'tracker_filepath',
-    'include_tracker_on_body': 'include_tracker_on_body',
-    'include_orbit_determination': 'include_orbit_determination',
-    'maneuver_filename': 'maneuver_filename',
+    'initial_state_source': ('initial_state_source', ['--initial-state-source']),
+    'initial_state_norad_id': ('initial_state_norad_id', ['--initial-state-norad-id']),
+    'initial_state_filename': ('initial_state_filename', ['--initial-state-filename']),
+    'timespan': ('timespan', ['--timespan']),
+    'third_bodies': ('third_bodies', ['--third-bodies', '--include-third-bodies']),
+    'gravity_harmonics_coefficients': ('gravity_harmonics_coefficients', ['--gravity-harmonics-coefficients', '--gravity-harmonics-coeffs']),
+    'gravity_harmonics_degree_order': ('gravity_harmonics_degree_order', ['--gravity-harmonics-degree-order']),
+    'gravity_harmonics_filename': ('gravity_model_filename', ['--gravity-harmonics-filename']),
+    'include_drag': ('include_drag', ['--include-drag', '--drag', '--enable-drag', '--disable-drag']),
+    'include_srp': ('include_srp', ['--include-srp', '--srp', '--enable-srp', '--disable-srp']),
+    'include_relativity': ('include_relativity', ['--include-relativity', '--relativity', '--enable-relativity', '--disable-relativity']),
+    'include_solid_tides': ('include_solid_tides', ['--include-solid-tides', '--solid-tides', '--enable-solid-tides', '--disable-solid-tides']),
+    'include_ocean_tides': ('include_ocean_tides', ['--include-ocean-tides', '--ocean-tides', '--enable-ocean-tides', '--disable-ocean-tides']),
+    'compare_tle': ('compare_tle', ['--compare-tle', '--enable-compare-tle', '--disable-compare-tle']),
+    'compare_jpl_horizons': ('compare_jpl_horizons', ['--compare-horizons', '--compare-jpl-horizons', '--enable-compare-horizons', '--enable-compare-jpl-horizons', '--disable-compare-horizons', '--disable-compare-jpl-horizons']),
+    'auto_download': ('auto_download', ['--auto-download', '--enable-auto-download', '--disable-auto-download']),
+    'atol': ('atol', ['--atol']),
+    'rtol': ('rtol', ['--rtol']),
+    'include_tracker_skyplots': ('include_tracker_skyplots', ['--include-tracker-skyplots', '--enable-tracker-skyplots', '--disable-tracker-skyplots']),
+    'tracker_filename': ('tracker_filename', ['--tracker-filename']),
+    'tracker_filepath': ('tracker_filepath', ['--tracker-filepath']),
+    'include_tracker_on_body': ('include_tracker_on_body', ['--include-tracker-on-body', '--enable-tracker-on-body', '--disable-tracker-on-body']),
+    'include_orbit_determination': ('include_orbit_determination', ['--include-orbit-determination', '--enable-orbit-determination', '--disable-orbit-determination']),
+    'maneuver_filename': ('maneuver_filename', ['--maneuver-filename']),
   }
 
   # Process each config key
-  for config_key, arg_name in config_mapping.items():
+  for config_key, (arg_name, cli_flags) in config_mapping.items():
     if config_key not in config:
       continue
 
     config_value = config[config_key]
+
+    # Check if any of the CLI flags for this argument were used
+    cli_was_used = any(flag in cli_args_set for flag in cli_flags)
+
+    # If CLI was used, skip applying config value (CLI takes precedence)
+    if cli_was_used:
+      continue
 
     # Get the current argument value
     current_value = getattr(args, arg_name, None)
@@ -171,7 +258,8 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
                       'auto_download', 'include_tracker_skyplots', 'include_tracker_on_body',
                       'include_orbit_determination']:
       # Boolean flags - only override if CLI kept the default False
-      if not current_value:
+      # With FlexibleBooleanAction, check if the value is still False (default)
+      if current_value is False:
         setattr(args, arg_name, config_value)
 
     elif arg_name in ['atol', 'rtol']:
@@ -256,16 +344,23 @@ def parse_command_line_arguments(
     help     = "Start and end time for propagation in ISO format (e.g., '2025-10-01T00:00:00 2025-10-02T00:00:00'). Required unless provided in config file.",
   )
   
+  def parse_third_bodies(value):
+    """Parse third-bodies argument, handling None/empty to disable."""
+    if value.lower() in ('none', 'null', 'disable', 'disabled', 'false'):
+      return None
+    valid_bodies = ['SUN', 'MOON', 'MERCURY', 'VENUS', 'MARS', 'JUPITER', 'SATURN', 'URANUS', 'NEPTUNE', 'PLUTO']
+    if value.upper() not in valid_bodies:
+      raise argparse.ArgumentTypeError(f"Invalid third body: {value}. Choose from {', '.join(valid_bodies)} or 'None' to disable.")
+    return value
+
   parser.add_argument(
     '--third-bodies',
     '--include-third-bodies',
     dest    = 'third_bodies',
     nargs    = '+', # accepts 1 or more args.
-    type     = str,
-    choices  = ['SUN', 'MOON', 'MERCURY', 'VENUS', 'MARS', 'JUPITER', 'SATURN', 'URANUS', 'NEPTUNE', 'PLUTO',
-                'sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'],
+    type     = parse_third_bodies,
     default  = None,
-    help     = 'Enable third-body gravity perturbations. Options: SUN, MOON, MERCURY, VENUS, MARS, JUPITER, SATURN, URANUS, NEPTUNE, PLUTO',
+    help     = 'Enable third-body gravity perturbations. Options: SUN, MOON, MERCURY, VENUS, MARS, JUPITER, SATURN, URANUS, NEPTUNE, PLUTO. Use "None" to explicitly disable.',
   )
   parser.add_argument(
     '--gravity-harmonics-coefficients',
@@ -295,68 +390,142 @@ def parse_command_line_arguments(
   parser.add_argument(
     '--include-drag',
     '--drag',
+    '--enable-drag',
     dest    = 'include_drag',
-    action  = 'store_true',
+    action  = FlexibleBooleanAction,
     default = False,
-    help    = "Enable Atmospheric Drag (disabled by default).",
+    help    = "Enable Atmospheric Drag (disabled by default). Accepts True/False or use --disable-drag to disable.",
+  )
+  parser.add_argument(
+    '--disable-drag',
+    dest    = 'include_drag',
+    action  = FlexibleBooleanAction,
+    default = argparse.SUPPRESS,
+    invert  = True,
+    help    = argparse.SUPPRESS,  # Hidden from help
   )
   parser.add_argument(
     '--compare-tle',
+    '--enable-compare-tle',
     dest    = 'compare_tle',
-    action  = 'store_true',
+    action  = FlexibleBooleanAction,
     default = False,
-    help    = "Enable comparison with TLE/SGP4 propagation (disabled by default).",
+    help    = "Enable comparison with TLE/SGP4 propagation (disabled by default). Accepts True/False or use --disable-compare-tle to disable.",
+  )
+  parser.add_argument(
+    '--disable-compare-tle',
+    dest    = 'compare_tle',
+    action  = FlexibleBooleanAction,
+    default = argparse.SUPPRESS,
+    invert  = True,
+    help    = argparse.SUPPRESS,
   )
   parser.add_argument(
     '--compare-horizons',
     '--compare-jpl-horizons',
+    '--enable-compare-horizons',
+    '--enable-compare-jpl-horizons',
     dest    = 'compare_jpl_horizons',
-    action  = 'store_true',
+    action  = FlexibleBooleanAction,
     default = False,
-    help    = "Enable comparison with JPL Horizons ephemeris (disabled by default).",
+    help    = "Enable comparison with JPL Horizons ephemeris (disabled by default). Accepts True/False or use --disable-compare-horizons to disable.",
+  )
+  parser.add_argument(
+    '--disable-compare-horizons',
+    '--disable-compare-jpl-horizons',
+    dest    = 'compare_jpl_horizons',
+    action  = FlexibleBooleanAction,
+    default = argparse.SUPPRESS,
+    invert  = True,
+    help    = argparse.SUPPRESS,
   )
   parser.add_argument(
     '--include-srp',
     '--srp',
+    '--enable-srp',
     dest    = 'include_srp',
-    action  = 'store_true',
+    action  = FlexibleBooleanAction,
     default = False,
-    help    = "Enable Solar Radiation Pressure (disabled by default).",
+    help    = "Enable Solar Radiation Pressure (disabled by default). Accepts True/False or use --disable-srp to disable.",
+  )
+  parser.add_argument(
+    '--disable-srp',
+    dest    = 'include_srp',
+    action  = FlexibleBooleanAction,
+    default = argparse.SUPPRESS,
+    invert  = True,
+    help    = argparse.SUPPRESS,
   )
 
   parser.add_argument(
     '--include-relativity',
     '--relativity',
+    '--enable-relativity',
     dest    = 'include_relativity',
-    action  = 'store_true',
+    action  = FlexibleBooleanAction,
     default = False,
-    help    = "Enable general relativistic corrections (Schwarzschild) (disabled by default).",
+    help    = "Enable general relativistic corrections (Schwarzschild) (disabled by default). Accepts True/False or use --disable-relativity to disable.",
+  )
+  parser.add_argument(
+    '--disable-relativity',
+    dest    = 'include_relativity',
+    action  = FlexibleBooleanAction,
+    default = argparse.SUPPRESS,
+    invert  = True,
+    help    = argparse.SUPPRESS,
   )
 
   parser.add_argument(
     '--include-solid-tides',
     '--solid-tides',
+    '--enable-solid-tides',
     dest    = 'include_solid_tides',
-    action  = 'store_true',
+    action  = FlexibleBooleanAction,
     default = False,
-    help    = "Enable solid Earth tide corrections (IERS 2010) (disabled by default).",
+    help    = "Enable solid Earth tide corrections (IERS 2010) (disabled by default). Accepts True/False or use --disable-solid-tides to disable.",
+  )
+  parser.add_argument(
+    '--disable-solid-tides',
+    dest    = 'include_solid_tides',
+    action  = FlexibleBooleanAction,
+    default = argparse.SUPPRESS,
+    invert  = True,
+    help    = argparse.SUPPRESS,
   )
 
   parser.add_argument(
     '--include-ocean-tides',
     '--ocean-tides',
+    '--enable-ocean-tides',
     dest    = 'include_ocean_tides',
-    action  = 'store_true',
+    action  = FlexibleBooleanAction,
     default = False,
-    help    = "Enable ocean tide corrections (IERS 2010) (disabled by default).",
+    help    = "Enable ocean tide corrections (IERS 2010) (disabled by default). Accepts True/False or use --disable-ocean-tides to disable.",
+  )
+  parser.add_argument(
+    '--disable-ocean-tides',
+    dest    = 'include_ocean_tides',
+    action  = FlexibleBooleanAction,
+    default = argparse.SUPPRESS,
+    invert  = True,
+    help    = argparse.SUPPRESS,
   )
 
   parser.add_argument(
     '--auto-download',
+    '--enable-auto-download',
     dest    = 'auto_download',
-    action  = 'store_true',
+    action  = FlexibleBooleanAction,
     default = False,
-    help    = "Automatically download missing data (Horizons/TLE) without prompting.",
+    help    = "Automatically download missing data (Horizons/TLE) without prompting. Accepts True/False or use --disable-auto-download to disable.",
+  )
+  parser.add_argument(
+    '--disable-auto-download',
+    dest    = 'auto_download',
+    action  = FlexibleBooleanAction,
+    default = argparse.SUPPRESS,
+    invert  = True,
+    help    = argparse.SUPPRESS,
   )
   
   parser.add_argument(
@@ -377,10 +546,19 @@ def parse_command_line_arguments(
   
   parser.add_argument(
     '--include-tracker-skyplots',
+    '--enable-tracker-skyplots',
     dest    = 'include_tracker_skyplots',
-    action  = 'store_true',
+    action  = FlexibleBooleanAction,
     default = False,
-    help    = 'Enable skyplot generation (disabled by default). Uses tracker file from input/trackers/.',
+    help    = 'Enable skyplot generation (disabled by default). Uses tracker file from input/trackers/. Accepts True/False or use --disable-tracker-skyplots to disable.',
+  )
+  parser.add_argument(
+    '--disable-tracker-skyplots',
+    dest    = 'include_tracker_skyplots',
+    action  = FlexibleBooleanAction,
+    default = argparse.SUPPRESS,
+    invert  = True,
+    help    = argparse.SUPPRESS,
   )
   
   parser.add_argument(
@@ -409,18 +587,36 @@ def parse_command_line_arguments(
 
   parser.add_argument(
     '--include-tracker-on-body',
+    '--enable-tracker-on-body',
     dest    = 'include_tracker_on_body',
-    action  = 'store_true',
+    action  = FlexibleBooleanAction,
     default = False,
-    help    = 'Show tracker location on ground track and 3D body-fixed plots (disabled by default).',
+    help    = 'Show tracker location on ground track and 3D body-fixed plots (disabled by default). Accepts True/False or use --disable-tracker-on-body to disable.',
+  )
+  parser.add_argument(
+    '--disable-tracker-on-body',
+    dest    = 'include_tracker_on_body',
+    action  = FlexibleBooleanAction,
+    default = argparse.SUPPRESS,
+    invert  = True,
+    help    = argparse.SUPPRESS,
   )
 
   parser.add_argument(
     '--include-orbit-determination',
+    '--enable-orbit-determination',
     dest    = 'include_orbit_determination',
-    action  = 'store_true',
+    action  = FlexibleBooleanAction,
     default = False,
-    help    = 'Process measurements with EKF for orbit determination. When enabled, high-fidelity plots show estimated states instead of propagated states (disabled by default).',
+    help    = 'Process measurements with EKF for orbit determination. When enabled, high-fidelity plots show estimated states instead of propagated states (disabled by default). Accepts True/False or use --disable-orbit-determination to disable.',
+  )
+  parser.add_argument(
+    '--disable-orbit-determination',
+    dest    = 'include_orbit_determination',
+    action  = FlexibleBooleanAction,
+    default = argparse.SUPPRESS,
+    invert  = True,
+    help    = argparse.SUPPRESS,
   )
 
   # Parse arguments
