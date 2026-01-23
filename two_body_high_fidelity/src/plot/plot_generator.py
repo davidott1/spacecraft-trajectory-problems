@@ -15,7 +15,8 @@ from src.plot.plot_3d                          import plot_3d_trajectories, plot
 from src.plot.plot_timeseries                  import plot_time_series, plot_time_series_error
 from src.plot.plot_groundtrack                 import plot_ground_track
 from src.plot.plot_skyplot                     import plot_skyplot, plot_pass_timeseries, plot_measurement_errors, plot_error_skyplot
-from src.plot.plot_covariance                  import plot_covariance_combined
+from src.plot.plot_covariance                  import plot_covariance_combined, plot_covariance_filter_vs_smoother
+from src.plot.plot_od_comparison               import plot_filter_smoother_error_comparison, plot_filter_smoother_rss_comparison
 from src.schemas.propagation                   import PropagationResult
 from src.schemas.state                         import TrackerStation
 from src.orbit_determination.measurement_simulator import MeasurementSimulator
@@ -281,7 +282,10 @@ def generate_plots(
   object_name_display              : str  = "Object",
   trackers                         : Optional[list['TrackerStation']] = None,
   include_tracker_on_body          : bool = False,
-  od_covariances                   : Optional['np.ndarray'] = None,
+  od_filter_states                 : Optional[PropagationResult] = None,
+  od_filter_covariances            : Optional['np.ndarray'] = None,
+  od_smoother_states               : Optional[PropagationResult] = None,
+  od_smoother_covariances          : Optional['np.ndarray'] = None,
   od_estimation_times              : Optional['np.ndarray'] = None,
   od_measurement_times             : Optional['np.ndarray'] = None,
   include_orbit_determination      : bool = False,
@@ -529,8 +533,9 @@ def generate_plots(
 
   # Generate covariance plots if orbit determination was performed
   covariance_files = []
-  if include_orbit_determination and od_covariances is not None and od_estimation_times is not None:
-    print("    Generate covariance plots")
+  od_comparison_files = []
+  if include_orbit_determination and od_filter_covariances is not None and od_estimation_times is not None:
+    print("    Generate orbit determination plots")
 
     name_lower = object_name.lower().replace(' ', '_').replace('-', '_')
 
@@ -538,21 +543,99 @@ def generate_plots(
       # Use the dedicated covariance time array (includes pre-update and post-update times for sawtooth)
       delta_time_epoch = od_estimation_times
 
-      # Combined covariance plot (RSS + components in 2x2 grid)
-      cov_title = f'State Uncertainty Evolution - {object_name_display} - Orbit Determination'
-      fig_cov = plot_covariance_combined(
-        covariances       = od_covariances,
+      # Filter covariance plot
+      cov_title_filter = f'Filter Uncertainty - {object_name_display} - EKF'
+      fig_cov_filter = plot_covariance_combined(
+        covariances       = od_filter_covariances,
         delta_time_epoch  = delta_time_epoch,
-        title_text        = cov_title,
+        title_text        = cov_title_filter,
         measurement_times = od_measurement_times,
       )
-      filename = f'timeseries_cov_high_fidelity_{name_lower}.png'
-      fig_cov.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-      plt.close(fig_cov)
-      covariance_files.append(filename)
+      filename_filter = f'timeseries_cov_filter_{name_lower}.png'
+      fig_cov_filter.savefig(figures_folderpath / filename_filter, dpi=300, bbox_inches='tight')
+      plt.close(fig_cov_filter)
+      covariance_files.append(filename_filter)
+
+      # Smoother covariance plot (if available)
+      if od_smoother_covariances is not None:
+        cov_title_smoother = f'Smoother Uncertainty - {object_name_display} - RTS'
+        fig_cov_smoother = plot_covariance_combined(
+          covariances       = od_smoother_covariances,
+          delta_time_epoch  = delta_time_epoch,
+          title_text        = cov_title_smoother,
+          measurement_times = od_measurement_times,
+        )
+        filename_smoother = f'timeseries_cov_smoother_{name_lower}.png'
+        fig_cov_smoother.savefig(figures_folderpath / filename_smoother, dpi=300, bbox_inches='tight')
+        plt.close(fig_cov_smoother)
+        covariance_files.append(filename_smoother)
+
+        # Filter vs Smoother covariance comparison
+        cov_title_comparison = f'Filter vs Smoother Uncertainty - {object_name_display}'
+        fig_cov_comp = plot_covariance_filter_vs_smoother(
+          filter_covariances   = od_filter_covariances,
+          smoother_covariances = od_smoother_covariances,
+          delta_time_epoch     = delta_time_epoch,
+          title_text           = cov_title_comparison,
+          measurement_times    = od_measurement_times,
+        )
+        filename_comp = f'timeseries_cov_filter_vs_smoother_{name_lower}.png'
+        fig_cov_comp.savefig(figures_folderpath / filename_comp, dpi=300, bbox_inches='tight')
+        plt.close(fig_cov_comp)
+        covariance_files.append(filename_comp)
 
     except Exception as e:
       print(f"      [WARNING] Failed to generate covariance plots: {e}")
+
+  # Generate filter vs smoother error comparison plots
+  if (include_orbit_determination and
+      od_filter_states is not None and
+      od_smoother_states is not None and
+      result_jpl_horizons_ephemeris is not None and
+      result_jpl_horizons_ephemeris.success):
+    print("    Generate filter vs smoother error comparison plots")
+
+    name_lower = object_name.lower().replace(' ', '_').replace('-', '_')
+
+    try:
+      # Use at_ephem_times for comparison (same grid as truth)
+      filter_at_ephem = od_filter_states.at_ephem_times if hasattr(od_filter_states, 'at_ephem_times') and od_filter_states.at_ephem_times is not None else od_filter_states
+      smoother_at_ephem = od_smoother_states.at_ephem_times if hasattr(od_smoother_states, 'at_ephem_times') and od_smoother_states.at_ephem_times is not None else od_smoother_states
+
+      # Detailed component error comparison
+      error_comp_title = f'Filter vs Smoother Error - {object_name_display}'
+      fig_error_comp = plot_filter_smoother_error_comparison(
+        truth_result    = result_jpl_horizons_ephemeris,
+        filter_result   = filter_at_ephem,
+        smoother_result = smoother_at_ephem,
+        epoch           = time_o_dt,
+        title_text      = error_comp_title,
+        use_ric         = True,
+      )
+      filename_error_comp = f'error_timeseries_filter_vs_smoother_{name_lower}.png'
+      fig_error_comp.savefig(figures_folderpath / filename_error_comp, dpi=300, bbox_inches='tight')
+      plt.close(fig_error_comp)
+      od_comparison_files.append(filename_error_comp)
+
+      # RSS error comparison
+      rss_comp_title = f'Filter vs Smoother RSS Error - {object_name_display}'
+      fig_rss_comp = plot_filter_smoother_rss_comparison(
+        truth_result    = result_jpl_horizons_ephemeris,
+        filter_result   = filter_at_ephem,
+        smoother_result = smoother_at_ephem,
+        epoch           = time_o_dt,
+        title_text      = rss_comp_title,
+        use_ric         = True,
+      )
+      filename_rss_comp = f'error_rss_filter_vs_smoother_{name_lower}.png'
+      fig_rss_comp.savefig(figures_folderpath / filename_rss_comp, dpi=300, bbox_inches='tight')
+      plt.close(fig_rss_comp)
+      od_comparison_files.append(filename_rss_comp)
+
+    except Exception as e:
+      import traceback
+      print(f"      [WARNING] Failed to generate filter vs smoother comparison plots: {e}")
+      traceback.print_exc()
 
   print()
   print("  Summary")
@@ -649,4 +732,11 @@ def generate_plots(
     print()
     print("    Covariance Plots (Orbit Determination)")
     for filename in covariance_files:
+      print(f"      <figures_folderpath>/{filename}")
+
+  # Print Filter vs Smoother Comparison Plots
+  if od_comparison_files:
+    print()
+    print("    Filter vs Smoother Comparison Plots")
+    for filename in od_comparison_files:
       print(f"      <figures_folderpath>/{filename}")

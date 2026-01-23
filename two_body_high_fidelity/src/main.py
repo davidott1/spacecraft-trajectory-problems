@@ -67,7 +67,7 @@ from src.schemas.propagation           import PropagationConfig, PropagationResu
 from src.schemas.state                 import TLEData
 from src.schemas.spacecraft            import ManeuversConfig
 
-from src.orbit_determination.ekf_processor         import process_measurements_with_ekf
+from src.orbit_determination.ekf_processor         import process_measurements_with_ekf, apply_rts_smoother
 from src.orbit_determination.measurement_simulator import MeasurementSimulator
 from src.model.dynamics                            import AccelerationSTMDot, GeneralStateEquationsOfMotion
 
@@ -352,9 +352,11 @@ def main(
     two_body_gravity_model        = config.gravity,
   )
 
-  # Orbit Determination: Process measurements with EKF
-  od_estimated_states = None
-  od_covariances = None
+  # Orbit Determination: Process measurements with EKF and RTS smoother
+  od_filter_states = None
+  od_filter_covariances = None
+  od_smoother_states = None
+  od_smoother_covariances = None
   od_estimation_times = None
   od_measurement_times = None
   if include_orbit_determination and trackers is not None and len(trackers) > 0:
@@ -397,7 +399,7 @@ def main(
 
       # Process with EKF
       print(f"  Processing {len(measurements.measured.delta_time_epoch)} measurements with EKF")
-      od_estimated_states, od_covariances, od_estimation_times = process_measurements_with_ekf(
+      od_filter_states, od_filter_covariances, od_estimation_times = process_measurements_with_ekf(
         measurements       = measurements,
         tracker            = tracker_od,
         initial_state      = initial_guess,
@@ -409,19 +411,37 @@ def main(
         dynamics           = od_dynamics,  # High-fidelity dynamics
       )
 
-      # Replace high-fidelity propagation result with OD estimates
-      result_high_fidelity_propagation = od_estimated_states
-
-      print(f"  ✓ Orbit determination complete")
+      print(f"  ✓ EKF filtering complete")
       print(f"    Initial position uncertainty: ±{1000.0:.0f} m (1-sigma)")
       print(f"    Initial velocity uncertainty: ±{10.0:.1f} m/s (1-sigma)")
 
-      # Compute final uncertainties
-      final_cov = od_covariances[:, :, -1]
+      # Compute final filter uncertainties
+      final_cov = od_filter_covariances[:, :, -1]
       final_pos_sigma = (final_cov[0, 0] + final_cov[1, 1] + final_cov[2, 2])**0.5 / 3**0.5
       final_vel_sigma = (final_cov[3, 3] + final_cov[4, 4] + final_cov[5, 5])**0.5 / 3**0.5
-      print(f"    Final position uncertainty: ±{final_pos_sigma:.1f} m (1-sigma)")
-      print(f"    Final velocity uncertainty: ±{final_vel_sigma:.4f} m/s (1-sigma)")
+      print(f"    Final filter position uncertainty: ±{final_pos_sigma:.1f} m (1-sigma)")
+      print(f"    Final filter velocity uncertainty: ±{final_vel_sigma:.4f} m/s (1-sigma)")
+
+      # Apply RTS smoother to get smoothed estimates
+      print(f"\n  Applying RTS smoother")
+      od_smoother_states, od_smoother_covariances = apply_rts_smoother(
+        filter_result        = od_filter_states,
+        filtered_covariances = od_filter_covariances,
+        estimation_times     = od_estimation_times,
+        epoch_dt_utc         = config.time_o_dt,
+        dynamics             = od_dynamics,
+      )
+
+      # Compute final smoother uncertainties
+      final_smooth_cov = od_smoother_covariances[:, :, -1]
+      final_smooth_pos_sigma = (final_smooth_cov[0, 0] + final_smooth_cov[1, 1] + final_smooth_cov[2, 2])**0.5 / 3**0.5
+      final_smooth_vel_sigma = (final_smooth_cov[3, 3] + final_smooth_cov[4, 4] + final_smooth_cov[5, 5])**0.5 / 3**0.5
+      print(f"  ✓ RTS smoothing complete")
+      print(f"    Final smoother position uncertainty: ±{final_smooth_pos_sigma:.1f} m (1-sigma)")
+      print(f"    Final smoother velocity uncertainty: ±{final_smooth_vel_sigma:.4f} m/s (1-sigma)")
+
+      # Replace high-fidelity propagation result with smoothed OD estimates
+      result_high_fidelity_propagation = od_smoother_states
 
   # Generate plots
   generate_plots(
@@ -436,7 +456,10 @@ def main(
     object_name_display              = config.object_name_display,
     trackers                         = trackers,
     include_tracker_on_body          = include_tracker_on_body,
-    od_covariances                   = od_covariances,
+    od_filter_states                 = od_filter_states,
+    od_filter_covariances            = od_filter_covariances,
+    od_smoother_states               = od_smoother_states,
+    od_smoother_covariances          = od_smoother_covariances,
     od_estimation_times              = od_estimation_times,
     od_measurement_times             = od_measurement_times,
     include_orbit_determination      = include_orbit_determination,

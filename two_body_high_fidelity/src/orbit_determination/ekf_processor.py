@@ -11,6 +11,7 @@ from scipy.integrate  import solve_ivp
 from typing           import Optional, Tuple, Callable
 
 from src.orbit_determination.extended_kalman_filter import ExtendedKalmanFilter, EKFMeasurement, EKFConfig
+from src.orbit_determination.rts_smoother           import smooth_ekf_estimates
 from src.schemas.measurement                        import SimulatedMeasurements
 from src.schemas.propagation                        import PropagationResult, TimeGrid
 from src.schemas.state                              import TrackerStation, ClassicalOrbitalElements, ModifiedEquinoctialElements
@@ -492,6 +493,68 @@ def process_measurements_with_ekf(
   )
 
   return result, estimated_covariances, estimation_times
+
+
+def apply_rts_smoother(
+  filter_result        : PropagationResult,
+  filtered_covariances : np.ndarray,
+  estimation_times     : np.ndarray,
+  epoch_dt_utc         : datetime,
+  dynamics             : Optional[GeneralStateEquationsOfMotion] = None,
+) -> Tuple[PropagationResult, np.ndarray]:
+  """
+  Apply Rauch-Tung-Striebel (RTS) smoother to forward-filtered EKF estimates.
+
+  The smoother produces optimal state estimates using all measurements (past and
+  future) by running a backward pass through the filtered estimates.
+
+  Input:
+  ------
+    filter_result : PropagationResult
+      Forward-filtered EKF result.
+    filtered_covariances : np.ndarray (6, 6, N)
+      Forward-filtered covariances from EKF.
+    estimation_times : np.ndarray (N,)
+      Time array [s] for estimates.
+    epoch_dt_utc : datetime
+      Reference epoch.
+    dynamics : GeneralStateEquationsOfMotion, optional
+      High-fidelity dynamics model (same as used in EKF).
+      If None, uses two-body dynamics.
+
+  Output:
+  -------
+    smoothed_result : PropagationResult
+      Smoothed state estimates.
+    smoothed_covariances : np.ndarray (6, 6, N)
+      Smoothed covariance matrices.
+  """
+  # Create propagator (same as EKF)
+  propagator = None
+  if dynamics is not None:
+    propagator = create_high_fidelity_propagator(dynamics, epoch_dt_utc)
+  else:
+    # Use two-body propagator
+    from src.model.constants import SOLARSYSTEMCONSTANTS
+    gp = SOLARSYSTEMCONSTANTS.EARTH.GP
+
+    def two_body_propagator(x, t0, tf):
+      # Simple two-body propagation with STM
+      # (Implementation placeholder - would use actual two-body propagator)
+      raise NotImplementedError("Two-body smoother propagator not yet implemented")
+
+    propagator = two_body_propagator
+
+  # Apply smoother
+  smoothed_result, smoothed_covariances = smooth_ekf_estimates(
+    filter_result        = filter_result,
+    filtered_covariances = filtered_covariances,
+    estimation_times     = estimation_times,
+    propagator           = propagator,
+    epoch_dt_utc         = epoch_dt_utc,
+  )
+
+  return smoothed_result, smoothed_covariances
 
 
 def perturb_initial_state(
