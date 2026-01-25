@@ -12,7 +12,7 @@
       azimuth_min_max__deg      : -180.0,   180.0
       elevation_min_max__deg    :   10.0,    90.0
     uncertainty                 :
-      range__m                  : 10.0               # GPS-like / Radar uncertainty
+      range__m                  : 10.0
       range_rate__m_per_s       :  1.0
       azimuth__deg              :  0.1
       azimuth_rate__deg_per_s   :  0.01

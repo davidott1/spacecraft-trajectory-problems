@@ -1795,8 +1795,11 @@ class Gravity:
 
       # Compute Jacobian matrix A for STM propagation
       if self.spherical_harmonics_model is not None:
-        # No analytical Jacobian for spherical harmonics - use point-mass approximation
+        # No analytical Jacobian for spherical harmonics - use point-mass + J2 approximation
+        # Using point-mass only is too optimistic for high-fidelity propagation
+        # Including J2 in the Jacobian provides better covariance propagation
         A_matrix = self.two_body.point_mass_jacobian(pos_vec)
+        A_matrix[3:6, 0:3] += self.two_body.oblate_j2_jacobian(time, pos_vec)
       else:
         # Use analytical Jacobians matching the acceleration model
         A_matrix = self.two_body.point_mass_jacobian(pos_vec)
@@ -1815,8 +1818,42 @@ class Gravity:
 
 class AtmosphericDrag:
     """
-    Atmospheric drag acceleration using exponential atmosphere model
+    Atmospheric drag acceleration using exponential atmosphere model with layers.
+    Ref: Vallado, D. A. (2013). Fundamentals of Astrodynamics and Applications.
     """
+    
+    # Exponential atmosphere model coefficients (Vallado, 2013, Table 8-4)
+    # Metric units: h_base [km], rho_base [kg/m^3], H [km]
+    ATMOSPHERE_LAYERS = [
+        (0.0,    1.225,       7.249),
+        (25.0,   3.899e-2,    6.349),
+        (30.0,   1.774e-2,    6.682),
+        (40.0,   3.972e-3,    7.554),
+        (50.0,   1.057e-3,    8.382),
+        (60.0,   3.206e-4,    7.714),
+        (70.0,   8.770e-5,    6.549),
+        (80.0,   1.905e-5,    5.799),
+        (90.0,   3.396e-6,    5.382),
+        (100.0,  5.297e-7,    5.877),
+        (110.0,  9.661e-8,    7.263),
+        (120.0,  2.438e-8,    9.473),
+        (130.0,  8.484e-9,    12.636),
+        (140.0,  3.845e-9,    16.149),
+        (150.0,  2.070e-9,    22.523),
+        (180.0,  5.464e-10,   29.740),
+        (200.0,  2.789e-10,   37.105),
+        (250.0,  7.248e-11,   45.546),
+        (300.0,  2.418e-11,   53.628),
+        (350.0,  9.518e-12,   53.298),
+        (400.0,  3.725e-12,   58.515),
+        (450.0,  1.585e-12,   60.828),
+        (500.0,  6.967e-13,   63.822),
+        (600.0,  1.454e-13,   71.835),
+        (700.0,  3.614e-14,   88.667),
+        (800.0,  1.170e-14,   124.64),
+        (900.0,  5.245e-15,   181.05),
+        (1000.0, 3.019e-15,   268.00)
+    ]
     
     def __init__(
       self,
@@ -1890,11 +1927,11 @@ class AtmosphericDrag:
       altitude : float,
     ) -> float:
       """
-      Simplified exponential atmospheric density model
+      Calculate density using layered exponential model.
       
       Input:
       ------
-        altitude : float
+        altitude_m : float
           Altitude above Earth's surface [m]
       
       Output:
@@ -1902,11 +1939,29 @@ class AtmosphericDrag:
         density : float
           Atmospheric density [kg/m³]
       """
-      if altitude < 0:
-        altitude = 0
+      altitude_km = altitude / 1000.0
       
-      # Simplified exponential model
-      rho = SOLARSYSTEMCONSTANTS.EARTH.RHO_0 * np.exp(-altitude / SOLARSYSTEMCONSTANTS.EARTH.H_0)
+      # Find the appropriate layer
+      # Default to the highest layer if above (or vacuum)
+      if altitude_km > 1000.0:
+          return 0.0
+          
+      # Find layer: last layer where h_base <= altitude
+      h_base = 0.0
+      rho_base = 1.225
+      H = 7.249
+                 
+      for layer in self.ATMOSPHERE_LAYERS:
+          if altitude_km >= layer[0]:
+              h_base = layer[0]
+              rho_base = layer[1]
+              H = layer[2]
+          else:
+              break
+              
+      # Exponential model for the layer
+      # rho = rho_base * exp(-(h - h_base) / H)
+      rho = rho_base * np.exp(-(altitude_km - h_base) / H)
       
       return rho
 

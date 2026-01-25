@@ -1,24 +1,24 @@
-# ISS Propagation Configuration
-#   International Space Station (ISS) at ~400 km altitude (LEO).
-#   Significant drag due to low altitude and large surface area.
-#   Significant SRP due to large solar arrays.
+# LAGEOS-2 Propagation Configuration
+#   LAGEOS-2 is a passive geodetic satellite at ~5,900 km altitude (MEO).
+#   Minimal drag/SRP due to small cross-section and high altitude.
+#   Uses SLR (Satellite Laser Ranging) tracker stations.
 
 # Initial state configuration
 initial_state_source   : jpl_horizons
-initial_state_norad_id : 25544  # ISS
+initial_state_norad_id : 22195  # LAGEOS-2
 
 # Time span for propagation
 timespan : 2024-01-15T00:00:00 2024-01-15T12:00:00
 
-# Gravity model configuratison
-gravity_harmonics_degree_order : 8 8
+# Gravity model configuration
+gravity_harmonics_degree_order : 2 2
 gravity_harmonics_filename     : EGM2008.gfc
 
 # Gravity third-bodies (use 'third_bodies' to enable)
 third_bodies : Sun Moon Jupiter
 
-# Perturbation forces (ISS is LEO, so drag is dominant)
-include_drag        : true
+# Perturbation forces (LAGEOS has minimal drag due to high altitude)
+include_drag        : false
 include_srp         : true
 include_relativity  : true
 include_solid_tides : true
@@ -30,7 +30,7 @@ compare_tle          : false
 
 # Visualization options
 include_tracker_skyplots : true
-tracker_filename         : trackers_iss.yaml
+tracker_filename         : trackers_lageos_2.yaml
 include_tracker_on_body  : true
 
 # Orbit determination
