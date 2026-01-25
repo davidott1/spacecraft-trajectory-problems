@@ -13,12 +13,12 @@
       azimuth_min_max__deg      : -180.0, 180.0
       elevation_min_max__deg    :   10.0,  90.0
     uncertainty                 :
-      range__m                  : 0.01
-      range_rate__m_per_s       : 0.001
-      azimuth__deg              : 0.001
-      azimuth_rate__deg_per_s   : 0.0001
-      elevation__deg            : 0.001
-      elevation_rate__deg_per_s : 0.0001
+      range__m                  : 1.0e1
+      range_rate__m_per_s       : 1.0e0
+      azimuth__deg              : 1.0e0
+      azimuth_rate__deg_per_s   : 1.0e-1
+      elevation__deg            : 1.0e0
+      elevation_rate__deg_per_s : 1.0e-1
 
 - name                          : "Greenbelt SLR"
   position                      :
@@ -31,12 +31,12 @@
       azimuth_min_max__deg      : -180.0, 180.0
       elevation_min_max__deg    :   10.0,  90.0
     uncertainty                 :
-      range__m                  : 0.01
-      range_rate__m_per_s       : 0.001
-      azimuth__deg              : 0.001
-      azimuth_rate__deg_per_s   : 0.0001
-      elevation__deg            : 0.001
-      elevation_rate__deg_per_s : 0.0001
+      range__m                  : 1.0e1
+      range_rate__m_per_s       : 1.0e0
+      azimuth__deg              : 1.0e0
+      azimuth_rate__deg_per_s   : 1.0e-1
+      elevation__deg            : 1.0e0
+      elevation_rate__deg_per_s : 1.0e-1
 
 - name                          : "Zimmerwald SLR"
   position                      :
@@ -49,9 +49,9 @@
       azimuth_min_max__deg      : -180.0, 180.0
       elevation_min_max__deg    :   10.0,  90.0
     uncertainty                 :
-      range__m                  : 0.01
-      range_rate__m_per_s       : 0.001
-      azimuth__deg              : 0.001
-      azimuth_rate__deg_per_s   : 0.0001
-      elevation__deg            : 0.001
-      elevation_rate__deg_per_s : 0.0001
+      range__m                  : 1.0e1
+      range_rate__m_per_s       : 1.0e0
+      azimuth__deg              : 1.0e0
+      azimuth_rate__deg_per_s   : 1.0e-1
+      elevation__deg            : 1.0e0
+      elevation_rate__deg_per_s : 1.0e-1
