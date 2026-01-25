@@ -188,12 +188,13 @@ def _parse_single_tracker(data: dict) -> 'TrackerStation':
       uncertainty = perf['uncertainty']
 
       # Extract uncertainty values (defaults to 0.0 if not specified)
-      range_unc          = uncertainty.get('range__m', 0.0)
-      range_rate_unc     = uncertainty.get('range_rate__m_per_s', 0.0)
-      azimuth_unc_deg    = uncertainty.get('azimuth__deg', 0.0)
-      azimuth_rate_unc_deg_per_s = uncertainty.get('azimuth_rate__deg_per_s', 0.0)
-      elevation_unc_deg  = uncertainty.get('elevation__deg', 0.0)
-      elevation_rate_unc_deg_per_s = uncertainty.get('elevation_rate__deg_per_s', 0.0)
+      # Convert to float in case YAML parsed scientific notation as string
+      range_unc                    = float(uncertainty.get('range__m', 0.0))
+      range_rate_unc               = float(uncertainty.get('range_rate__m_per_s', 0.0))
+      azimuth_unc_deg              = float(uncertainty.get('azimuth__deg', 0.0))
+      azimuth_rate_unc_deg_per_s   = float(uncertainty.get('azimuth_rate__deg_per_s', 0.0))
+      elevation_unc_deg            = float(uncertainty.get('elevation__deg', 0.0))
+      elevation_rate_unc_deg_per_s = float(uncertainty.get('elevation_rate__deg_per_s', 0.0))
 
       # Convert angular uncertainties from degrees to radians
       tracker_uncertainty = TrackerUncertainty(

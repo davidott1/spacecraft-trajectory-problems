@@ -8,7 +8,7 @@ initial_state_source   : jpl_horizons
 initial_state_norad_id : 25544  # ISS
 
 # Time span for propagation
-timespan : 2024-01-15T00:00:00 2024-01-15T12:00:00
+timespan : 2024-01-15T00:00:00 2024-01-16T00:00:00
 
 # Gravity model configuratison
 gravity_harmonics_degree_order : 8 8
@@ -35,6 +35,8 @@ include_tracker_on_body  : true
 
 # Orbit determination
 include_orbit_determination : true
+process_noise_pos           : 1e-3
+process_noise_vel           : 1e-6
 
 # Download options
 auto_download : true

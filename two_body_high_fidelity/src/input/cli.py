@@ -272,6 +272,11 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
       if current_value == default_vals[arg_name]:
         setattr(args, arg_name, config_value)
 
+    elif arg_name in ['process_noise_pos', 'process_noise_vel']:
+      # Float arguments for process noise - use config if CLI didn't provide a value
+      if current_value is None:
+        setattr(args, arg_name, float(config_value))
+
   return args
 
 
