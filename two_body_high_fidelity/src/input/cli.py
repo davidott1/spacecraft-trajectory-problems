@@ -168,6 +168,10 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
     'include_tracker_on_body': ('include_tracker_on_body', ['--include-tracker-on-body', '--enable-tracker-on-body', '--disable-tracker-on-body']),
     'include_orbit_determination': ('include_orbit_determination', ['--include-orbit-determination', '--enable-orbit-determination', '--disable-orbit-determination']),
     'maneuver_filename': ('maneuver_filename', ['--maneuver-filename']),
+    'process_noise_pos': ('process_noise_pos', ['--process-noise-pos']),
+    'process_noise_vel': ('process_noise_vel', ['--process-noise-vel']),
+    'process_noise_pos__m_per_s': ('process_noise_pos', ['--process-noise-pos']),
+    'process_noise_vel__m_per_s2': ('process_noise_vel', ['--process-noise-vel']),
   }
 
   # Process each config key
@@ -617,6 +621,22 @@ def parse_command_line_arguments(
     default = argparse.SUPPRESS,
     invert  = True,
     help    = argparse.SUPPRESS,
+  )
+
+  parser.add_argument(
+    '--process-noise-pos',
+    dest    = 'process_noise_pos',
+    type    = float,
+    default = None,
+    help    = 'Position process noise spectral density [m/s]. Represents rate of position uncertainty growth. Default: 1e-4. EKF uses Q_pos = (value * dt)^2.',
+  )
+
+  parser.add_argument(
+    '--process-noise-vel',
+    dest    = 'process_noise_vel',
+    type    = float,
+    default = None,
+    help    = 'Velocity process noise spectral density [m/s^2]. Represents continuous acceleration noise. Default: 1e-7. EKF uses Q_vel = (value * sqrt(dt))^2.',
   )
 
   # Parse arguments

@@ -55,6 +55,8 @@ Usage:
 from typing                            import Optional, Union
 from datetime                          import datetime
 
+import numpy as np
+
 from src.plot.plot_generator           import generate_plots
 from src.propagation.propagator        import run_propagations
 from src.input.loader                  import unload_files, load_files, get_horizons_ephemeris, get_celestrak_tle
@@ -161,8 +163,10 @@ def main(
   tracker_filename               : Optional[str]  = None,
   tracker_filepath               : Optional[str]  = None,
   include_tracker_on_body        : bool           = False,
-  include_orbit_determination    : bool           = False,
   maneuver_filename              : Optional[str]  = None,
+  include_orbit_determination    : bool           = False,
+  process_noise_pos              : Optional[float] = None,
+  process_noise_vel              : Optional[float] = None,
 ) -> PropagationResult:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -233,6 +237,9 @@ def main(
     tracker_filepath,
     include_tracker_on_body,
     maneuver_filename,
+    include_orbit_determination,
+    process_noise_pos,
+    process_noise_vel,
   )
 
   # Start logging to file
@@ -398,6 +405,15 @@ def main(
       )
       od_dynamics = GeneralStateEquationsOfMotion(acceleration=od_acceleration)
 
+      # Construct Process Noise (Q) matrix from configuration
+      q_pos_sigma = config.orbit_determination.process_noise_pos
+      q_vel_sigma = config.orbit_determination.process_noise_vel
+      
+      od_process_noise = np.diag([
+        q_pos_sigma**2, q_pos_sigma**2, q_pos_sigma**2,
+        q_vel_sigma**2, q_vel_sigma**2, q_vel_sigma**2
+      ])
+
       # Process with EKF
       print(f"  Processing {len(measurements.measured.delta_time_epoch)} measurements with EKF")
       od_filter_states, od_filter_covariances, od_estimation_times, od_residual_data = process_measurements_with_ekf(
@@ -408,7 +424,7 @@ def main(
         ephemeris_times    = result_jpl_horizons_ephemeris.time_grid.deltas,
         propagation_times  = None,  # Use ephemeris_times
         initial_covariance = None,  # Use defaults
-        process_noise      = None,  # Use defaults
+        process_noise      = od_process_noise,
         dynamics           = od_dynamics,  # High-fidelity dynamics
       )
 
@@ -520,6 +536,8 @@ if __name__ == "__main__":
     args.tracker_filename,
     args.tracker_filepath,
     args.include_tracker_on_body,
-    args.include_orbit_determination,
     args.maneuver_filename,
+    args.include_orbit_determination,
+    args.process_noise_pos,
+    args.process_noise_vel,
   )

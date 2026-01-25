@@ -7,6 +7,7 @@ from datetime import datetime
 from typing   import Optional
 
 from src.schemas.config        import OutputPaths, SimulationConfig, InitialStateConfig, ComparisonConfig
+from src.schemas.orbit_determination import OrbitDeterminationConfig
 from src.schemas.gravity       import GravityModelConfig, SphericalHarmonicsConfig, ThirdBodyConfig, RelativityConfig, SolidEarthTidesConfig, OceanTidesConfig
 from src.schemas.spacecraft    import SpacecraftProperties, DragConfig, SRPConfig, ManeuversConfig
 from src.schemas.propagation   import PropagationConfig
@@ -307,9 +308,12 @@ def build_config(
   rtol                           : float          = 1e-12,
   include_tracker_skyplots       : bool           = False,
   tracker_filename               : Optional[str]  = None,
-  tracker_filepath               : Optional[str]  = None,
-  include_tracker_on_body        : bool           = False,
-  maneuver_filename              : Optional[str]  = None,
+  tracker_filepath               : Optional[str]   = None,
+  include_tracker_on_body        : bool            = False,
+  maneuver_filename              : Optional[str]   = None,
+  include_orbit_determination    : bool            = False,
+  process_noise_pos              : Optional[float] = None,
+  process_noise_vel              : Optional[float] = None,
 ) -> SimulationConfig:
   """
   Parse, validate, and set up input parameters for orbit propagation.
@@ -597,6 +601,13 @@ def build_config(
     compare_jpl_horizons = compare_jpl_horizons,
     compare_tle          = compare_tle,
   )
+
+  # Create OrbitDeterminationConfig
+  od_config = OrbitDeterminationConfig(
+    enabled           = include_orbit_determination,
+    process_noise_pos = process_noise_pos if process_noise_pos is not None else 1e-4,
+    process_noise_vel = process_noise_vel if process_noise_vel is not None else 1e-7,
+  )
   
   # Update output_paths with all path information
   output_paths = paths['output_paths']
@@ -618,6 +629,7 @@ def build_config(
     object_name_display = object_name_display,
     auto_download       = auto_download,
     propagation_config  = propagation_config,
+    orbit_determination = od_config,
   )
 
 
