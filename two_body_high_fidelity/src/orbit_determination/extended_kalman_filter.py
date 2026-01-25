@@ -104,14 +104,16 @@ class EKFConfig:
   Configuration for Extended Kalman Filter.
 
   Attributes:
-    process_noise_pos    : Position process noise std dev [m]
-    process_noise_vel    : Velocity process noise std dev [m/s]
+    process_noise_pos    : Position process noise spectral density [m/s]
+                          Q_pos = (process_noise_pos * dt)^2
+    process_noise_vel    : Velocity process noise spectral density [m/s^2]
+                          Q_vel = (process_noise_vel * sqrt(dt))^2
     epoch_dt_utc         : Reference epoch for time conversion
     propagator           : Function to propagate state: (x, t0, tf) -> (x_f, Phi)
     use_joseph_form      : Use Joseph form for covariance update (more numerically stable)
   """
-  process_noise_pos : float = 1.0        # m
-  process_noise_vel : float = 1e-3       # m/s
+  process_noise_pos : float = 1.0        # m/s (spectral density)
+  process_noise_vel : float = 1e-3       # m/s^2 (spectral density)
   epoch_dt_utc      : Optional[datetime] = None
   propagator        : Optional[Callable] = None
   use_joseph_form   : bool = True

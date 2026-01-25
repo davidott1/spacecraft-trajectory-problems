@@ -35,6 +35,8 @@ include_tracker_on_body  : true
 
 # Orbit determination
 include_orbit_determination : true
+process_noise_pos : 1e-2
+process_noise_vel : 1e-5
 
 # Download options
 auto_download : true

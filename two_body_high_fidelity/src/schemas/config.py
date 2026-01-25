@@ -14,6 +14,7 @@ from src.schemas.gravity     import GravityModelConfig
 from src.schemas.propagation import PropagationConfig
 from src.schemas.spacecraft  import SpacecraftProperties
 from src.schemas.state       import CartesianState
+from src.schemas.orbit_determination import OrbitDeterminationConfig
 
 
 @dataclass
@@ -114,6 +115,7 @@ class SimulationConfig:
     tle_line_1          : TLE line 1 (populated after loading)
     tle_line_2          : TLE line 2 (populated after loading)
     tle_epoch_dt        : TLE epoch datetime (populated after loading)
+    orbit_determination : Orbit determination configuration
   """
   initial_state       : InitialStateConfig
   time_o_dt           : datetime
@@ -129,6 +131,7 @@ class SimulationConfig:
   tle_line_1          : Optional[str]                = None
   tle_line_2          : Optional[str]                = None
   tle_epoch_dt        : Optional[datetime]           = None
+  orbit_determination : OrbitDeterminationConfig     = field(default_factory=OrbitDeterminationConfig)
 
   def __post_init__(self):
     if self.gravity is None:
