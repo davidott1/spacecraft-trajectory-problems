@@ -73,16 +73,20 @@ def create_default_process_noise(scale: float = 1.0) -> np.ndarray:
     Q : np.ndarray (6x6)
       Process noise covariance matrix.
   """
-  # Default process noise for two-body dynamics
-  # Position: 1 mm/s variance per second
-  # Velocity: 1 μm/s^2 variance per second
+  # Default process noise
+  # We use a relatively high process noise to prevent the filter from becoming
+  # "smug" (underestimating covariance) in the presence of unmodeled dynamics
+  # (e.g., gravity truncation, unmodeled third bodies, etc.).
+  
+  # Position: 6e-5 (tuned for sigma ~1)
+  # Velocity: 1e-8
   Q_default = np.diag([
-    1e-6,  # x position process noise [m^2/s]
-    1e-6,  # y position process noise [m^2/s]
-    1e-6,  # z position process noise [m^2/s]
-    1e-12, # vx velocity process noise [(m/s)^2/s]
-    1e-12, # vy velocity process noise [(m/s)^2/s]
-    1e-12, # vz velocity process noise [(m/s)^2/s]
+    6e-5,  # x (m^2/s)
+    6e-5,  # y
+    6e-5,  # z
+    1e-8,  # vx ((m/s)^2/s)
+    1e-8,  # vy
+    1e-8,  # vz
   ])
 
   return Q_default * scale

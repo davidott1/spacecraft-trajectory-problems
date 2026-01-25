@@ -432,6 +432,7 @@ def main(
         )
 
         print_residual_diagnostics(diagnostics)
+
       print(f"    Final filter velocity uncertainty: ±{final_vel_sigma:.4f} m/s (1-sigma)")
 
       # Apply RTS smoother to get smoothed estimates
