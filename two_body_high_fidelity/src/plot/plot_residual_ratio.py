@@ -257,27 +257,11 @@ def plot_innovation_covariance_evolution(
     ax.plot(times_minutes, innovation_stdevs[j, :], 'o-',
             linewidth=2, markersize=4, color='C1', label='Innovation Std (√S)')
 
-    # Formatting
+    # Formatting - always use log scale for standard deviations
+    ax.set_yscale('log')
     ax.set_ylabel(f'{meas_type}\nStd Dev', fontsize=10)
-    ax.grid(True, alpha=0.3)
+    ax.grid(True, which='both', alpha=0.3)
     ax.legend(loc='upper right', fontsize=9)
-
-    # Use log scale if variation is large
-    if innovation_stdevs[j, :].max() / innovation_stdevs[j, :].min() > 10:
-      ax.set_yscale('log')
-      ax.set_ylabel(f'{meas_type}\nStd Dev (log)', fontsize=10)
-
-    # Add statistics text
-    mean_val = np.mean(innovation_stdevs[j, :])
-    std_val = np.std(innovation_stdevs[j, :])
-    min_val = np.min(innovation_stdevs[j, :])
-    max_val = np.max(innovation_stdevs[j, :])
-
-    stats_text = f'mean={mean_val:.2e}\nmin={min_val:.2e}\nmax={max_val:.2e}\nvariation={max_val/min_val:.1f}x'
-    ax.text(0.02, 0.98, stats_text,
-            transform=ax.transAxes, fontsize=8,
-            verticalalignment='top', horizontalalignment='left',
-            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
   # Set x-label on bottom plot
   axes[-1].set_xlabel('Time Since Epoch (minutes)', fontsize=11)

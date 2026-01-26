@@ -348,7 +348,7 @@ def plot_covariance_filter_vs_smoother(
   if measurement_times is not None:
     meas_time_min = measurement_times / 60.0
     for mt in meas_time_min:
-      ax1.axvline(mt, color='green', alpha=0.15, linewidth=0.8, linestyle='-')
+      ax1.axvline(mt, color='magenta', alpha=0.15, linewidth=0.8, linestyle='-')
 
   # Right: Velocity uncertainties
   ax2 = axes[1]
@@ -363,7 +363,7 @@ def plot_covariance_filter_vs_smoother(
   # Add measurement markers
   if measurement_times is not None:
     for mt in meas_time_min:
-      ax2.axvline(mt, color='green', alpha=0.15, linewidth=0.8, linestyle='-')
+      ax2.axvline(mt, color='magenta', alpha=0.15, linewidth=0.8, linestyle='-')
 
   # Overall figure title
   fig.suptitle(title_text, fontsize=14, fontweight='bold')
