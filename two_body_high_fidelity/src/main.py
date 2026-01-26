@@ -68,8 +68,9 @@ from src.utility.logger                import start_logging, stop_logging
 from src.schemas.propagation           import PropagationConfig, PropagationResult
 from src.schemas.state                 import TLEData
 from src.schemas.spacecraft            import ManeuversConfig
+from src.schemas.measurement           import merge_multi_tracker_measurements
 
-from src.orbit_determination.ekf_processor         import process_measurements_with_ekf, apply_rts_smoother
+from src.orbit_determination.ekf_processor         import process_measurements_with_ekf, process_multi_tracker_measurements_with_ekf, apply_rts_smoother
 from src.orbit_determination.measurement_simulator import MeasurementSimulator
 from src.model.dynamics                            import AccelerationSTMDot, GeneralStateEquationsOfMotion
 
@@ -376,29 +377,47 @@ def main(
       print(section_title)
       print("-" * len(section_title))
 
-      # Use first tracker for orbit determination
-      tracker_od = trackers[0]
-      print(f"\n  Using tracker: {tracker_od.name}")
+      # Simulate measurements from ALL trackers
+      print(f"\n  Progress")
+      all_measurements = []
+      for i, tracker in enumerate(trackers):
+        print(f"    Simulating measurements from tracker: {tracker.name}")
+        simulator = MeasurementSimulator(result_jpl_horizons_ephemeris, tracker, config.time_o_dt)
+        noise_config = simulator.get_tracker_noise_config()
+        # Use different seed per tracker for independent noise
+        measurements = simulator.simulate(noise_config=noise_config, seed=42+i, include_rates=True)
 
-      # Simulate measurements from JPL Horizons truth
-      print(f"  Simulating measurements from JPL Horizons ephemeris")
-      simulator = MeasurementSimulator(result_jpl_horizons_ephemeris, tracker_od, config.time_o_dt)
-      noise_config = simulator.get_tracker_noise_config()
-      measurements = simulator.simulate(noise_config=noise_config, seed=42, include_rates=True)
+        # Filter measurements to only include times when tracker has visibility
+        measurements.truth    = measurements.get_visible_truth()
+        measurements.measured = measurements.get_visible_measured()
 
-      # Filter measurements to only include times when tracker has visibility
-      measurements.truth    = measurements.get_visible_truth()
-      measurements.measured = measurements.get_visible_measured()
+        if measurements.n_visible > 0:
+          all_measurements.append(measurements)
+
+      # Merge all tracker measurements into a single time-sorted structure
+      if len(all_measurements) == 0:
+        print("    WARNING: No visible measurements from any tracker!")
+        merged_measurements = None
+        n_measurements = 0
+      else:
+        merged_measurements = merge_multi_tracker_measurements(all_measurements)
+        n_measurements = merged_measurements.n_measurements
+        meas_per_tracker = merged_measurements.get_measurements_per_tracker()
+        print(f"    Merged {n_measurements} measurements from {len(all_measurements)} tracker(s):")
+        for tracker_name, count in meas_per_tracker.items():
+          print(f"      - {tracker_name}: {count}")
 
       # Store measurement times for plotting (only visible times)
-      od_measurement_times = measurements.measured.delta_time_epoch.copy()
+      if merged_measurements is not None:
+        od_measurement_times = merged_measurements.times.copy()
+      else:
+        od_measurement_times = np.array([])
 
       # Use ephemeris initial state as initial guess (this is what we would have from propagation)
-      print(f"  Using ephemeris initial state as initial guess")
+      print(f"    Initializing EKF with ephemeris initial state")
       initial_guess = initial_state.copy()
 
       # Create high-fidelity dynamics model for EKF propagation
-      print(f"  Initializing high-fidelity dynamics for EKF")
       od_acceleration = AccelerationSTMDot(
         gravity_config = config.gravity,
         spacecraft     = config.spacecraft,
@@ -408,60 +427,74 @@ def main(
       # Construct Process Noise (Q) matrix from configuration
       q_pos_sigma = config.orbit_determination.process_noise_pos
       q_vel_sigma = config.orbit_determination.process_noise_vel
-
-      print(f"  Using process noise: pos={q_pos_sigma:.1e}, vel={q_vel_sigma:.1e}")
       
       od_process_noise = np.diag([
         q_pos_sigma**2, q_pos_sigma**2, q_pos_sigma**2,
         q_vel_sigma**2, q_vel_sigma**2, q_vel_sigma**2
       ])
 
+      # Get initial covariance values (defaults from EKF processor)
+      initial_pos_sigma = 100.0  # m
+      initial_vel_sigma = 1.0    # m/s
+
       # Process with EKF
-      print(f"  Processing {len(measurements.measured.delta_time_epoch)} measurements with EKF")
-      od_filter_states, od_filter_covariances, od_estimation_times, od_residual_data = process_measurements_with_ekf(
-        measurements       = measurements,
-        tracker            = tracker_od,
-        initial_state      = initial_guess,
-        epoch_dt_utc       = config.time_o_dt,
-        ephemeris_times    = result_jpl_horizons_ephemeris.time_grid.deltas,
-        propagation_times  = None,  # Use ephemeris_times
-        initial_covariance = None,  # Use defaults
-        process_noise      = od_process_noise,
-        dynamics           = od_dynamics,  # High-fidelity dynamics
-      )
+      if merged_measurements is not None and n_measurements > 0:
+        print(f"    Processing {n_measurements} measurements with multi-tracker EKF")
+        od_filter_states, od_filter_covariances, od_estimation_times, od_residual_data = process_multi_tracker_measurements_with_ekf(
+          merged_measurements = merged_measurements,
+          initial_state       = initial_guess,
+          epoch_dt_utc        = config.time_o_dt,
+          ephemeris_times     = result_jpl_horizons_ephemeris.time_grid.deltas,
+          propagation_times   = None,  # Use ephemeris_times
+          initial_covariance  = None,  # Use defaults
+          process_noise       = od_process_noise,
+          dynamics            = od_dynamics,  # High-fidelity dynamics
+        )
 
-      print(f"  ✓ EKF filtering complete")
-      print(f"    Initial position uncertainty: ±{100.0:.0f} m (1-sigma)")
-      print(f"    Initial velocity uncertainty: ±{1.0:.1f} m/s (1-sigma)")
+        # Compute final filter uncertainties
+        final_cov = od_filter_covariances[:, :, -1]
+        final_pos_sigma = (final_cov[0, 0] + final_cov[1, 1] + final_cov[2, 2])**0.5 / 3**0.5
+        final_vel_sigma = (final_cov[3, 3] + final_cov[4, 4] + final_cov[5, 5])**0.5 / 3**0.5
 
-      # Compute final filter uncertainties
-      final_cov = od_filter_covariances[:, :, -1]
-      final_pos_sigma = (final_cov[0, 0] + final_cov[1, 1] + final_cov[2, 2])**0.5 / 3**0.5
-      final_vel_sigma = (final_cov[3, 3] + final_cov[4, 4] + final_cov[5, 5])**0.5 / 3**0.5
-      print(f"    Final filter position uncertainty: ±{final_pos_sigma:.1f} m (1-sigma)")
+        # Apply RTS smoother to get smoothed estimates
+        print(f"    Applying RTS smoother")
+        od_smoother_states, od_smoother_covariances = apply_rts_smoother(
+          filter_result        = od_filter_states,
+          filtered_covariances = od_filter_covariances,
+          estimation_times     = od_estimation_times,
+          epoch_dt_utc         = config.time_o_dt,
+          dynamics             = od_dynamics,
+        )
 
-      print(f"    Final filter velocity uncertainty: ±{final_vel_sigma:.4f} m/s (1-sigma)")
+        # Compute final smoother uncertainties
+        final_smooth_cov = od_smoother_covariances[:, :, -1]
+        final_smooth_pos_sigma = (final_smooth_cov[0, 0] + final_smooth_cov[1, 1] + final_smooth_cov[2, 2])**0.5 / 3**0.5
+        final_smooth_vel_sigma = (final_smooth_cov[3, 3] + final_smooth_cov[4, 4] + final_smooth_cov[5, 5])**0.5 / 3**0.5
 
-      # Apply RTS smoother to get smoothed estimates
-      print(f"\n  Applying RTS smoother")
-      od_smoother_states, od_smoother_covariances = apply_rts_smoother(
-        filter_result        = od_filter_states,
-        filtered_covariances = od_filter_covariances,
-        estimation_times     = od_estimation_times,
-        epoch_dt_utc         = config.time_o_dt,
-        dynamics             = od_dynamics,
-      )
+        # Print summary
+        print()
+        print(f"  Summary")
+        print(f"    Trackers             : {len(all_measurements)}")
+        for tracker_name, count in meas_per_tracker.items():
+          print(f"      - {tracker_name}: {count} measurements")
+        print(f"    Total Measurements   : {n_measurements}")
+        print(f"    Process Noise (pos)  : {q_pos_sigma:.1e}")
+        print(f"    Process Noise (vel)  : {q_vel_sigma:.1e}")
+        print()
+        print(f"    Initial Uncertainty")
+        print(f"      Position           : {initial_pos_sigma:.0f} m (1-σ)")
+        print(f"      Velocity           : {initial_vel_sigma:.1f} m/s (1-σ)")
+        print()
+        print(f"    Final Filter Uncertainty")
+        print(f"      Position           : {final_pos_sigma:.1f} m (1-σ)")
+        print(f"      Velocity           : {final_vel_sigma:.4f} m/s (1-σ)")
+        print()
+        print(f"    Final Smoother Uncertainty")
+        print(f"      Position           : {final_smooth_pos_sigma:.1f} m (1-σ)")
+        print(f"      Velocity           : {final_smooth_vel_sigma:.4f} m/s (1-σ)")
 
-      # Compute final smoother uncertainties
-      final_smooth_cov = od_smoother_covariances[:, :, -1]
-      final_smooth_pos_sigma = (final_smooth_cov[0, 0] + final_smooth_cov[1, 1] + final_smooth_cov[2, 2])**0.5 / 3**0.5
-      final_smooth_vel_sigma = (final_smooth_cov[3, 3] + final_smooth_cov[4, 4] + final_smooth_cov[5, 5])**0.5 / 3**0.5
-      print(f"  ✓ RTS smoothing complete")
-      print(f"    Final smoother position uncertainty: ±{final_smooth_pos_sigma:.1f} m (1-sigma)")
-      print(f"    Final smoother velocity uncertainty: ±{final_smooth_vel_sigma:.4f} m/s (1-sigma)")
-
-      # Replace high-fidelity propagation result with smoothed OD estimates
-      result_high_fidelity_propagation = od_smoother_states
+        # Replace high-fidelity propagation result with smoothed OD estimates
+        result_high_fidelity_propagation = od_smoother_states
 
   # Generate plots
   generate_plots(

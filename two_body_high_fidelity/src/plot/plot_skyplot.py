@@ -689,7 +689,8 @@ def plot_skyplot(
                       'b-', linewidth=3.5, alpha=0.8, label=label)
       blue_plotted = True
 
-    ax_rng_dot.legend(loc='best', fontsize=9)
+    if gray_plotted or blue_plotted:
+      ax_rng_dot.legend(loc='best', fontsize=9)
   ax_rng_dot.set_xticklabels([])
 
   # Plot Azimuth Rate vs Time
@@ -716,7 +717,8 @@ def plot_skyplot(
                      'b-', linewidth=3.5, alpha=0.8, label=label)
       blue_plotted = True
 
-    ax_az_dot.legend(loc='best', fontsize=9)
+    if gray_plotted or blue_plotted:
+      ax_az_dot.legend(loc='best', fontsize=9)
   ax_az_dot.set_xticklabels([])
 
   # Plot Elevation Rate vs Time
@@ -761,7 +763,8 @@ def plot_skyplot(
       ax_el_dot.tick_params(axis='x', rotation=45)
       ax_el_dot.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
 
-    ax_el_dot.legend(loc='best', fontsize=9)
+    if gray_plotted or blue_plotted:
+      ax_el_dot.legend(loc='best', fontsize=9)
 
   # Adjust layout
   with warnings.catch_warnings():

@@ -1,0 +1,93 @@
+# Tracker stations configured for GPS PRN 31 (MEO satellite at ~20,200 km altitude)
+# Range constraints set to 30,000 km to accommodate slant range at low elevations
+# These represent GPS ground monitoring stations
+
+- name                          : "Colorado Springs"
+  position                      :
+    latitude__deg               :   38.8
+    longitude__deg              : -104.8
+    altitude__m                 : 1838.0
+  performance                   :
+    constraints                 :
+      range_min_max__m          :    0.0,  30.0e6
+      azimuth_min_max__deg      : -180.0, 180.0
+      elevation_min_max__deg    :   10.0,  90.0
+    uncertainty                 :
+      range__m                  : 1.0e1
+      range_rate__m_per_s       : 1.0e0
+      azimuth__deg              : 1.0e0
+      azimuth_rate__deg_per_s   : 1.0e-1
+      elevation__deg            : 1.0e0
+      elevation_rate__deg_per_s : 1.0e-1
+
+- name                          : "Hawaii"
+  position                      :
+    latitude__deg               :   21.5
+    longitude__deg              : -158.0
+    altitude__m                 :   10.0
+  performance                   :
+    constraints                 :
+      range_min_max__m          :    0.0,  30.0e6
+      azimuth_min_max__deg      : -180.0, 180.0
+      elevation_min_max__deg    :   10.0,  90.0
+    uncertainty                 :
+      range__m                  : 1.0e1
+      range_rate__m_per_s       : 1.0e0
+      azimuth__deg              : 1.0e0
+      azimuth_rate__deg_per_s   : 1.0e-1
+      elevation__deg            : 1.0e0
+      elevation_rate__deg_per_s : 1.0e-1
+
+- name                          : "Ascension Island"
+  position                      :
+    latitude__deg               :  -7.9
+    longitude__deg              : -14.4
+    altitude__m                 : 104.0
+  performance                   :
+    constraints                 :
+      range_min_max__m          :    0.0,  30.0e6
+      azimuth_min_max__deg      : -180.0, 180.0
+      elevation_min_max__deg    :   10.0,  90.0
+    uncertainty                 :
+      range__m                  : 1.0e1
+      range_rate__m_per_s       : 1.0e0
+      azimuth__deg              : 1.0e0
+      azimuth_rate__deg_per_s   : 1.0e-1
+      elevation__deg            : 1.0e0
+      elevation_rate__deg_per_s : 1.0e-1
+
+- name                          : "Diego Garcia"
+  position                      :
+    latitude__deg               : -7.3
+    longitude__deg              : 72.4
+    altitude__m                 : 2.0
+  performance                   :
+    constraints                 :
+      range_min_max__m          :    0.0,  30.0e6
+      azimuth_min_max__deg      : -180.0, 180.0
+      elevation_min_max__deg    :   10.0,  90.0
+    uncertainty                 :
+      range__m                  : 1.0e1
+      range_rate__m_per_s       : 1.0e0
+      azimuth__deg              : 1.0e0
+      azimuth_rate__deg_per_s   : 1.0e-1
+      elevation__deg            : 1.0e0
+      elevation_rate__deg_per_s : 1.0e-1
+
+- name                          : "Kwajalein"
+  position                      :
+    latitude__deg               : 9.4
+    longitude__deg              : 167.5
+    altitude__m                 : 5.0
+  performance                   :
+    constraints                 :
+      range_min_max__m          :    0.0,  30.0e6
+      azimuth_min_max__deg      : -180.0, 180.0
+      elevation_min_max__deg    :   10.0,  90.0
+    uncertainty                 :
+      range__m                  : 1.0e1
+      range_rate__m_per_s       : 1.0e0
+      azimuth__deg              : 1.0e0
+      azimuth_rate__deg_per_s   : 1.0e-1
+      elevation__deg            : 1.0e0
+      elevation_rate__deg_per_s : 1.0e-1

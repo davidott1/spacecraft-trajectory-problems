@@ -1,0 +1,42 @@
+# Hubble Space Telescope (HST) Propagation Configuration
+#   HST is in LEO at ~540 km altitude, 28.5° inclination.
+#   Drag is significant due to large cross-section and low altitude.
+#   NAIF ID: -48
+
+# Initial state configuration
+initial_state_source   : jpl_horizons
+initial_state_norad_id : 20580  # HST
+
+# Time span for propagation
+timespan : 2024-01-15T00:00:00 2024-01-16T00:00:00
+
+# Gravity model configuration
+gravity_harmonics_degree_order : 20 20
+gravity_harmonics_filename     : EGM2008.gfc
+
+# Gravity third-bodies
+third_bodies : Sun Moon
+
+# Perturbation forces (HST has significant drag in LEO)
+include_drag        : true
+include_srp         : true
+include_relativity  : false
+include_solid_tides : true
+include_ocean_tides : true
+
+# Comparison options
+compare_jpl_horizons : true
+compare_tle          : false
+
+# Visualization options
+include_tracker_skyplots : true
+tracker_filename         : trackers_hubble.yaml
+include_tracker_on_body  : true
+
+# Orbit determination
+include_orbit_determination : true
+process_noise_pos : 1e-3
+process_noise_vel : 1e-6
+
+# Download options
+auto_download : true
