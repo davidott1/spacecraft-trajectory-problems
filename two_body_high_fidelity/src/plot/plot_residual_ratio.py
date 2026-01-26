@@ -14,6 +14,8 @@ where:
 The residual ratio should be roughly normally distributed with mean 0 and
 standard deviation 1 if the filter is performing well.
 """
+import warnings
+
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
@@ -110,7 +112,7 @@ def plot_measurement_residual_ratio(
 
   # Create figure with GridSpec for timeseries (left) and histograms (right)
   fig = plt.figure(figsize=(15, 2.5*n_types))
-  gs = GridSpec(n_types, 2, figure=fig, width_ratios=[3, 1], hspace=0.3, wspace=0.3)
+  gs = GridSpec(n_types, 2, figure=fig, width_ratios=[3, 1], hspace=0.3, wspace=0.05)
 
   # Create axes for timeseries and histograms
   ts_axes = []
@@ -150,12 +152,12 @@ def plot_measurement_residual_ratio(
     # Plot histogram (horizontal orientation to match timeseries y-axis)
     data = residual_ratios[i, :]
     ax_hist.hist(data, bins=20, orientation='horizontal', density=True,
-                 alpha=0.7, color='C0', edgecolor='black', linewidth=0.5)
+                 alpha=0.5, color='C0', edgecolor='black', linewidth=0.5)
 
     # Overlay theoretical normal distribution N(0,1)
     y_range = np.linspace(-3.5, 3.5, 100)
     normal_pdf = stats.norm.pdf(y_range, loc=0, scale=1)
-    ax_hist.plot(normal_pdf, y_range, 'r-', linewidth=2, label='N(0,1)')
+    ax_hist.plot(normal_pdf, y_range, 'b-', linewidth=2, label='N(0,1)')
 
     # Add statistics text
     mean_val = np.mean(data)
@@ -178,7 +180,9 @@ def plot_measurement_residual_ratio(
   fig.suptitle(title_text, fontsize=14, y=0.995)
 
   # Adjust layout
-  fig.tight_layout(rect=[0, 0, 1, 0.99])
+  with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message=".*tight_layout.*")
+    fig.tight_layout(rect=[0, 0, 1, 0.99])
 
   return fig
 
@@ -270,7 +274,9 @@ def plot_innovation_covariance_evolution(
   fig.suptitle(title_text, fontsize=14, y=0.995)
 
   # Adjust layout
-  fig.tight_layout(rect=[0, 0, 1, 0.99])
+  with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message=".*tight_layout.*")
+    fig.tight_layout(rect=[0, 0, 1, 0.99])
 
   return fig
 

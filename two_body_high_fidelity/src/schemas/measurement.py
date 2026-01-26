@@ -7,7 +7,7 @@ Dataclasses for simulated and observed measurements from ground trackers.
 import numpy as np
 
 from dataclasses import dataclass
-from typing      import Optional
+from typing      import Optional, List
 
 from src.model.constants import CONVERTER
 from src.schemas.state   import TrackerStation
@@ -191,3 +191,91 @@ class SimulatedMeasurements:
       elevation_dot    = self.measured.elevation_dot[self.visible_mask] if self.measured.elevation_dot is not None else None,
       range_dot        = self.measured.range_dot[self.visible_mask]     if self.measured.range_dot     is not None else None,
     )
+
+
+@dataclass
+class MultiTrackerMeasurements:
+  """
+  Merged measurements from multiple trackers, sorted by time.
+
+  Each measurement is associated with its originating tracker for proper
+  measurement model computation in the EKF.
+
+  Attributes:
+    times           : measurement times [s] relative to epoch, sorted
+    trackers        : list of TrackerStation for each measurement (same length as times)
+    measurements    : list of SimulatedMeasurements, one per tracker (for data access)
+    tracker_indices : index into measurements list for each time point
+    meas_indices    : index into each SimulatedMeasurements for each time point
+  """
+  times           : np.ndarray
+  trackers        : List[TrackerStation]
+  measurements    : List[SimulatedMeasurements]
+  tracker_indices : np.ndarray
+  meas_indices    : np.ndarray
+
+  @property
+  def n_measurements(self) -> int:
+    return len(self.times)
+
+  @property
+  def n_trackers(self) -> int:
+    return len(self.measurements)
+
+  def get_tracker_names(self) -> List[str]:
+    """Return list of unique tracker names."""
+    return [m.tracker.name for m in self.measurements]
+
+  def get_measurements_per_tracker(self) -> dict:
+    """Return dict of tracker_name -> measurement count."""
+    counts = {}
+    for m in self.measurements:
+      n_vis = m.n_visible
+      if n_vis > 0:
+        counts[m.tracker.name] = n_vis
+    return counts
+
+
+def merge_multi_tracker_measurements(
+  measurements_list : List[SimulatedMeasurements],
+) -> MultiTrackerMeasurements:
+  """
+  Merge measurements from multiple trackers into a single time-sorted structure.
+
+  Input:
+  ------
+    measurements_list : List[SimulatedMeasurements]
+      List of SimulatedMeasurements, one per tracker.
+      Each should already have visibility filtering applied.
+
+  Output:
+  -------
+    merged : MultiTrackerMeasurements
+      Merged measurements sorted by time with tracker association.
+  """
+  # Collect all (time, tracker_idx, meas_idx) tuples
+  all_entries = []
+  for tracker_idx, meas in enumerate(measurements_list):
+    visible_times = meas.measured.delta_time_epoch
+    for meas_idx, t in enumerate(visible_times):
+      all_entries.append((t, tracker_idx, meas_idx))
+
+  # Sort by time
+  all_entries.sort(key=lambda x: x[0])
+
+  # Unpack into arrays
+  n_total = len(all_entries)
+  times           = np.array([e[0] for e in all_entries])
+  tracker_indices = np.array([e[1] for e in all_entries])
+  meas_indices    = np.array([e[2] for e in all_entries])
+
+  # Build trackers list (one per measurement, for easy lookup)
+  trackers = [measurements_list[tracker_indices[i]].tracker for i in range(n_total)]
+
+  return MultiTrackerMeasurements(
+    times           = times,
+    trackers        = trackers,
+    measurements    = measurements_list,
+    tracker_indices = tracker_indices,
+    meas_indices    = meas_indices,
+  )

@@ -645,7 +645,7 @@ def generate_plots(
       filter_at_ephem = od_filter_states.at_ephem_times if hasattr(od_filter_states, 'at_ephem_times') and od_filter_states.at_ephem_times is not None else od_filter_states
       smoother_at_ephem = od_smoother_states.at_ephem_times if hasattr(od_smoother_states, 'at_ephem_times') and od_smoother_states.at_ephem_times is not None else od_smoother_states
 
-      # Detailed component error comparison
+      # Combined error comparison (RSS + R/I/C components)
       error_comp_title = f'Filter vs Smoother Error - {object_name_display}'
       fig_error_comp = plot_filter_smoother_error_comparison(
         truth_result    = result_jpl_horizons_ephemeris,
@@ -655,25 +655,10 @@ def generate_plots(
         title_text      = error_comp_title,
         use_ric         = True,
       )
-      filename_error_comp = f'error_timeseries_filter_vs_smoother_{name_lower}.png'
+      filename_error_comp = f'error_timeseries_cart_high_fidelity_filter_smoother_rel_jpl_horizons_{name_lower}.png'
       fig_error_comp.savefig(figures_folderpath / filename_error_comp, dpi=300, bbox_inches='tight')
       plt.close(fig_error_comp)
       od_comparison_files.append(filename_error_comp)
-
-      # RSS error comparison
-      rss_comp_title = f'Filter vs Smoother RSS Error - {object_name_display}'
-      fig_rss_comp = plot_filter_smoother_rss_comparison(
-        truth_result    = result_jpl_horizons_ephemeris,
-        filter_result   = filter_at_ephem,
-        smoother_result = smoother_at_ephem,
-        epoch           = time_o_dt,
-        title_text      = rss_comp_title,
-        use_ric         = True,
-      )
-      filename_rss_comp = f'error_rss_filter_vs_smoother_{name_lower}.png'
-      fig_rss_comp.savefig(figures_folderpath / filename_rss_comp, dpi=300, bbox_inches='tight')
-      plt.close(fig_rss_comp)
-      od_comparison_files.append(filename_rss_comp)
 
     except Exception as e:
       import traceback
