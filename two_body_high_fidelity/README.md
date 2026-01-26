@@ -49,7 +49,8 @@ The tool supports validation against JPL Horizons ephemerides and SGP4/TLE propa
 - **Orbital Element Computation**: Classical and Modified Equinoctial Elements
 - **SPICE Integration**: High-accuracy planetary ephemerides via DE440
 - **Orbit Determination**: Ground station tracking with topocentric coordinates and Extended Kalman Filter (EKF)
-- **Extended Kalman Filter**: Sequential state estimation from ground-based tracking measurements
+- **Extended Kalman Filter**: Sequential state estimation with multi-tracker measurement fusion
+- **RTS Smoother**: Rauch-Tung-Striebel fixed-interval smoothing for improved estimates
 - **Skyplot Visualization**: Polar plots showing satellite visibility from ground stations
 - **Geographic Coordinate Conversion**: Geodetic and geocentric coordinate systems with WGS84 ellipsoid
 - **Configuration File Support**: YAML-based configuration files for complex run scenarios
@@ -281,14 +282,14 @@ python -m src.main \
   --gravity-model-filename EGM2008.gfc
 ```
 
-**7. Orbit determination with EKF:**
+**7. Orbit determination with EKF (multi-tracker):**
 ```bash
 python -m src.main \
   --initial-state-norad-id 25544 \
   --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00 \
   --gravity-harmonics J2 \
   --include-orbit-determination \
-  --tracker-filename trackers_set1.yaml
+  --tracker-filename trackers_global.yaml
 ```
 
 **8. Propagation with impulsive maneuvers:**
@@ -326,8 +327,13 @@ compare_tle: false
 
 # Orbit determination
 include_orbit_determination: true
-tracker_filename: trackers_set1.yaml
+tracker_filename: trackers_global.yaml
 include_tracker_skyplots: true
+
+# Orbit determination tuning
+orbit_determination:
+  process_noise_pos: 1.0e-2
+  process_noise_vel: 1.0e-5
 
 # Numerical integration
 atol: 1.0e-12
@@ -483,6 +489,17 @@ These measurements are fundamental for:
 
 Ground station configurations are defined in YAML files located in `input/trackers/`. Multiple tracker sets are available:
 
+**trackers_global.yaml** - Global network (6 stations, ~60° longitude spacing):
+- Fairbanks, Alaska (64.8°N, 147.7°W)
+- Santiago, Chile (33.4°S, 70.6°W)
+- Ascension Island (7.9°S, 14.4°W)
+- Pretoria, South Africa (25.7°S, 28.2°E)
+- Diego Garcia (7.3°S, 72.4°E)
+- Guam (13.4°N, 144.8°E)
+
+**trackers_hubble.yaml** - HST tracking network:
+- White Sands, Goddard, Canberra, Madrid
+
 **trackers_set1.yaml** - Standard network:
 ```yaml
 - name: "Canberra DSN"
@@ -491,21 +508,16 @@ Ground station configurations are defined in YAML files located in `input/tracke
     longitude__deg: 148.98
     altitude__m: 550.0
   performance:
-    azimuth_min_max__deg: -180.0, 180.0
-    elevation_min_max__deg: 10.0, 90.0
-    range_min_max__m: 0.0, 2.5e6
+    constraints:
+      azimuth_min_max__deg: -180.0, 180.0
+      elevation_min_max__deg: 10.0, 90.0
+      range_min_max__m: 0.0, 2.5e6
+    uncertainty:
+      range__m: 10.0
+      range_rate__m_per_s: 1.0
+      azimuth__deg: 0.1
+      elevation__deg: 0.1
 ```
-
-**trackers_set2.yaml** - Global coverage:
-- Equatorial Tracker
-- Northern Tracker (45°N)
-- Southern Tracker (45°S)
-- Equatorial Eastern Tracker
-
-**trackers_set3.yaml** - Real-world stations:
-- Canberra DSN (Australia)
-- Svalbard Arctic (Norway)
-- Santiago Chile
 
 Each tracker specifies:
 - **Position**: Geodetic latitude, longitude, altitude (WGS84)
@@ -541,7 +553,6 @@ The propagator includes a full Extended Kalman Filter implementation for sequent
 
 **State Vector**:
 - Position and velocity (6 states): `[r_x, r_y, r_z, v_x, v_y, v_z]`
-- Optional augmentation: drag coefficient (C_d), SRP coefficient (C_r)
 
 **Measurements**:
 - Range, azimuth, elevation
@@ -549,18 +560,35 @@ The propagator includes a full Extended Kalman Filter implementation for sequent
 - Configurable measurement subsets based on tracker capabilities
 
 **Features**:
+- **Multi-tracker fusion**: Measurements from all configured ground stations are merged and processed chronologically
+- **RTS Smoother**: Rauch-Tung-Striebel fixed-interval smoothing for optimal state estimates
 - Linearized dynamics via state transition matrix (STM)
 - Measurement Jacobian for topocentric observations
-- Process noise and measurement noise covariance
-- Covariance propagation and filtering
-- Multiple ground station support
+- **Configurable process noise**: Position and velocity process noise via YAML or CLI
+- Measurement noise covariance from tracker uncertainty specifications
+- Joseph-form covariance update for numerical stability
+
+**Process Noise Configuration**:
+```yaml
+orbit_determination:
+  process_noise_pos: 1.0e-2   # Position process noise σ [m]
+  process_noise_vel: 1.0e-5   # Velocity process noise σ [m/s]
+```
+
+Typical values:
+| Orbit | Position σ | Velocity σ | Notes |
+|-------|------------|------------|-------|
+| LEO (ISS) | 1.0 | 1e-3 | High drag uncertainty |
+| MEO (GPS) | 1e-2 | 1e-5 | Lower perturbations |
+| Laser ranging (LAGEOS) | 1e-2 | 1e-5 | Very stable orbit |
 
 **Usage**:
 Enable EKF orbit determination with the `--include-orbit-determination` flag. Results include:
-- State estimate time series
+- State estimate time series (filter and smoother)
 - Covariance evolution plots
-- Estimation error analysis
-- Residual statistics
+- Estimation error analysis (RIC frame)
+- Innovation and residual statistics
+- Per-tracker measurement counts
 
 ## Data Sources
 
@@ -691,43 +719,102 @@ These objects are defined in `data/supported_objects.yaml` with their physical p
 
 ## Output
 
-Each run creates a timestamped folder in `output/`:
+Each run creates a timestamped folder in `output/` and prints a detailed summary to the terminal:
 
 ```
-output/20251216_143052/
+output/<timestamp>/
 ├── figures/
-│   ├── 3d_j2000_earth_centered_high_fidelity_iss.png
-│   ├── 3d_j2000_earth_centered_jpl_horizons_iss.png
-│   ├── 3d_j2000_earth_centered_sgp4_iss.png
-│   ├── 3d_iau_earth_high_fidelity_iss.png
-│   ├── 3d_j2000_sun_centered_high_fidelity_iss.png
-│   ├── timeseries_cart_coe_mee_high_fidelity_iss.png
-│   ├── timeseries_cart_coe_mee_jpl_horizons_iss.png
-│   ├── timeseries_cart_coe_mee_sgp4_iss.png
-│   ├── error_timeseries_high_fidelity_rel_jpl_horizons_iss.png
-│   ├── error_timeseries_high_fidelity_rel_sgp4_iss.png
-│   ├── groundtrack_high_fidelity_iss.png
-│   ├── skyplot_canberra_dsn_high_fidelity_iss.png
-│   ├── timeseries_meas_canberra_dsn_high_fidelity_iss.png
-│   └── skyplot_svalbard_arctic_high_fidelity_iss.png
+│   └── (all generated plots)
 └── files/
     └── output.log
+```
+
+### Terminal Output Summary
+
+The program prints a structured summary of all generated plots:
+
+```
+-----------------------
+Generate and Save Plots
+-----------------------
+
+  Progress
+    Generate 3D-trajectory, time-series, and groundtrack plots
+    Generate error plots
+    Generate skyplots
+    Generate error skyplots (Measured vs Truth)
+    Generate pass time-series plots
+    Generate measurement residual ratio plots
+    Generate orbit determination plots
+    Generate filter vs smoother error comparison plots
+
+  Summary
+    Figure Folderpath : <output>/<timestamp>/figures
+
+    3D-Trajectory, Time-Series, and Groundtrack Plots
+      JPL-Horizons-Ephemeris Plots
+        3D Inertial    : 3d_j2000_earth_centered_jpl_horizons_<object>.png
+        Time Series    : timeseries_cart_coe_mee_jpl_horizons_<object>.png
+        3D Body-Fixed  : 3d_iau_earth_jpl_horizons_<object>.png
+        Ground Track   : groundtrack_jpl_horizons_<object>.png
+      High-Fidelity-Model Plots
+        3D Inertial    : 3d_j2000_earth_centered_high_fidelity_<object>.png
+        Time Series    : timeseries_cart_coe_mee_high_fidelity_<object>.png
+        3D Body-Fixed  : 3d_iau_earth_high_fidelity_<object>.png
+        Ground Track   : groundtrack_high_fidelity_<object>.png
+        3D Sun-Centered: 3d_j2000_sun_centered_high_fidelity_<object>.png
+
+    Error Cartesian-COE-MEE Plots
+      High-Fidelity Relative To JPL Horizons
+        Time-Series Error : error_timeseries_cart_coe_mee_high_fidelity_rel_jpl_horizons_<object>.png
+
+    Skyplots (per tracker)
+      skyplot_<tracker>_high_fidelity_<object>.png
+      skyplot_<tracker>_jpl_horizons_<object>.png
+
+    Error Skyplots (per tracker)
+      error_skyplot_<tracker>_jpl_horizons_meas_rel_truth_<object>.png
+
+    Pass Time-Series (per tracker)
+      timeseries_meas_<tracker>_high_fidelity_<object>.png
+      timeseries_meas_<tracker>_jpl_horizons_<object>.png
+
+    Measurement Residual Ratio Plots (Orbit Determination)
+      timeseries_residual_ratio_<object>.png
+      timeseries_innovation_covariance_<object>.png
+
+    Covariance Plots (Orbit Determination)
+      timeseries_cov_filter_<object>.png
+      timeseries_cov_smoother_<object>.png
+      timeseries_cov_filter_vs_smoother_<object>.png
+
+    Filter vs Smoother Comparison Plots
+      error_timeseries_cart_high_fidelity_filter_smoother_rel_jpl_horizons_<object>.png
 ```
 
 ### Plot Types
 
 | Plot | Description |
 |------|-------------|
-| 3D Trajectory (J2000) | Position and velocity in 3D inertial frame with Earth wireframe |
+| **Trajectory Plots** | |
+| 3D Trajectory (J2000) | Position in 3D inertial frame with Earth wireframe |
 | 3D Trajectory (IAU_EARTH) | Body-fixed 3D trajectory with rotating Earth |
 | 3D Trajectory (Sun-centered) | Heliocentric trajectory visualization |
-| Time Series (Cart/COE/MEE) | Cartesian state, Classical Orbital Elements, and Modified Equinoctial Elements vs time |
-| Error Time Series | RIC-frame position/velocity errors and orbital element differences |
 | Ground Track | Geographic ground track with latitude/longitude |
-| Skyplots | Polar plots showing satellite visibility from ground stations with azimuth/elevation tracks |
-| Measurement Time Series | Range, azimuth, and elevation measurements from ground stations vs time |
-| Covariance Plots | EKF state covariance evolution (position and velocity uncertainties) |
-| Residual Plots | EKF measurement residuals and innovation statistics |
+| **State Time Series** | |
+| Time Series (Cart/COE/MEE) | Cartesian state, Classical and Modified Equinoctial Elements vs time |
+| Error Time Series | RIC-frame position/velocity errors vs reference (JPL Horizons or SGP4) |
+| **Tracker Plots** (per station) | |
+| Skyplot | Polar plot showing satellite visibility with azimuth/elevation track |
+| Measurement Time Series | Range, azimuth, elevation, and rates vs time |
+| Error Skyplot | Measurement errors (noisy - truth) overlaid on skyplot |
+| **Orbit Determination Plots** | |
+| Filter vs Smoother Error | RIC position/velocity errors for EKF filter and RTS smoother |
+| Covariance (Filter) | Position and velocity uncertainty (1-σ) from filter |
+| Covariance (Smoother) | Position and velocity uncertainty (1-σ) from smoother |
+| Covariance (Filter vs Smoother) | Comparison of filter and smoother uncertainties |
+| Innovation Covariance | Innovation statistics per measurement type (6 subplots, log scale) |
+| Residual Ratio | Normalized residuals histogram with Gaussian reference |
 
 ## Testing
 
