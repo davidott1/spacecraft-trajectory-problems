@@ -16,7 +16,7 @@ from src.plot.plot_timeseries                  import plot_time_series, plot_tim
 from src.plot.plot_groundtrack                 import plot_ground_track
 from src.plot.plot_skyplot                     import plot_skyplot, plot_pass_timeseries, plot_measurement_errors, plot_error_skyplot
 from src.plot.plot_covariance                  import plot_covariance_combined, plot_covariance_filter_vs_smoother
-from src.plot.plot_od_comparison               import plot_filter_smoother_error_comparison, plot_filter_smoother_rss_comparison
+from src.plot.plot_od_comparison               import plot_filter_smoother_error_comparison, plot_filter_smoother_rss_comparison, plot_filter_smoother_full_error_comparison
 from src.plot.plot_residual_ratio              import plot_measurement_residual_ratio, plot_innovation_covariance_evolution
 from src.schemas.propagation                   import PropagationResult
 from src.schemas.state                         import TrackerStation
@@ -132,6 +132,8 @@ def generate_3d_and_time_series_plots(
   object_name_display              : str = "Object",
   trackers                         : Optional[list['TrackerStation']] = None,
   include_tracker_on_body          : bool = False,
+  include_orbit_determination      : bool = False,
+  od_smoother_states               : Optional[PropagationResult] = None,
 ) -> dict:
   """
   Generate and save 3D trajectory and time series plots.
@@ -217,6 +219,15 @@ def generate_3d_and_time_series_plots(
     fig4.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
     plot_files['high_fidelity']['time_series'] = filename
     plt.close(fig4)
+
+    # Smoother time series (if orbit determination is enabled)
+    if include_orbit_determination and od_smoother_states is not None:
+      fig_smoother = plot_time_series(od_smoother_states, epoch=time_o_dt)
+      fig_smoother.suptitle(f'Time Series - {object_name_display} - High-Fidelity Smoother', fontsize=16)
+      filename_smoother = f'timeseries_cart_coe_mee_high_fidelity_smoother_{name_lower}.png'
+      fig_smoother.savefig(figures_folderpath / filename_smoother, dpi=300, bbox_inches='tight')
+      plot_files['high_fidelity']['time_series_smoother'] = filename_smoother
+      plt.close(fig_smoother)
 
     # Body-fixed 3D plot
     fig_ef = plot_3d_trajectories_body_fixed(result_high_fidelity_propagation, epoch_dt_utc=time_o_dt, trackers=trackers, include_tracker_on_body=include_tracker_on_body)
@@ -346,6 +357,8 @@ def generate_plots(
     object_name_display              = object_name_display,
     trackers                         = trackers,
     include_tracker_on_body          = include_tracker_on_body,
+    include_orbit_determination      = include_orbit_determination,
+    od_smoother_states               = od_smoother_states,
   )
 
   # Generate error plots only if a comparison was requested
@@ -640,14 +653,18 @@ def generate_plots(
 
     name_lower = object_name.lower().replace(' ', '_').replace('-', '_')
 
-    try:
-      # Use at_ephem_times for comparison (same grid as truth)
-      filter_at_ephem = od_filter_states.at_ephem_times if hasattr(od_filter_states, 'at_ephem_times') and od_filter_states.at_ephem_times is not None else od_filter_states
-      smoother_at_ephem = od_smoother_states.at_ephem_times if hasattr(od_smoother_states, 'at_ephem_times') and od_smoother_states.at_ephem_times is not None else od_smoother_states
+    # Check if filter and smoother have at_ephem_times
+    has_filter_at_ephem = od_filter_states.at_ephem_times is not None
+    has_smoother_at_ephem = od_smoother_states.at_ephem_times is not None
 
-      # Combined error comparison (RSS + R/I/C components)
+    if has_filter_at_ephem and has_smoother_at_ephem:
+      # Use at_ephem_times for smooth curves (same approach as first plot)
+      filter_at_ephem = od_filter_states.at_ephem_times
+      smoother_at_ephem = od_smoother_states.at_ephem_times
+
+      # Comprehensive error comparison (cart + COE + MEE, magnitude only for cart)
       error_comp_title = f'Filter vs Smoother Error - {object_name_display}'
-      fig_error_comp = plot_filter_smoother_error_comparison(
+      fig_error_comp = plot_filter_smoother_full_error_comparison(
         truth_result    = result_jpl_horizons_ephemeris,
         filter_result   = filter_at_ephem,
         smoother_result = smoother_at_ephem,
@@ -655,15 +672,10 @@ def generate_plots(
         title_text      = error_comp_title,
         use_ric         = True,
       )
-      filename_error_comp = f'error_timeseries_cart_high_fidelity_filter_smoother_rel_jpl_horizons_{name_lower}.png'
-      fig_error_comp.savefig(figures_folderpath / filename_error_comp, dpi=300, bbox_inches='tight')
+      filename = f'error_timeseries_cart_coe_mee_high_fidelity_filter_smoother_rel_jpl_horizons_{name_lower}.png'
+      fig_error_comp.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+      od_comparison_files.append(filename)
       plt.close(fig_error_comp)
-      od_comparison_files.append(filename_error_comp)
-
-    except Exception as e:
-      import traceback
-      print(f"      [WARNING] Failed to generate filter vs smoother comparison plots: {e}")
-      traceback.print_exc()
 
   print()
   print("  Summary")

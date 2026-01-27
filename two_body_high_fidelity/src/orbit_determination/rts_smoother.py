@@ -36,6 +36,7 @@ def rts_smoother(
   estimation_times     : np.ndarray,
   propagator           : Callable[[np.ndarray, float, float], Tuple[np.ndarray, np.ndarray]],
   epoch_dt_utc         : datetime,
+  process_noise        : Optional[np.ndarray] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
   """
   Apply Rauch-Tung-Striebel (RTS) smoother to forward-filtered EKF estimates.
@@ -64,6 +65,9 @@ def rts_smoother(
       Same propagator used in forward EKF pass.
     epoch_dt_utc : datetime
       Reference epoch for time conversion.
+    process_noise : np.ndarray (6, 6), optional
+      Process noise covariance matrix Q used in forward EKF pass.
+      If None, assumes zero process noise (only valid for perfect dynamics).
 
   Output:
   -------
@@ -113,12 +117,13 @@ def rts_smoother(
     # Predict from k to k+1 to get x_{k+1|k}, P_{k+1|k}, and Phi_k
     x_kp1_pred, Phi_k = propagator(x_k_filt, t_k, t_kp1)
 
-    # Predicted covariance at k+1: P_{k+1|k} = Phi_k @ P_k|k @ Phi_k^T
-    # (Note: This is approximate - doesn't include process noise Q.
-    #  For RTS smoother with process noise, use: P_{k+1|k} = Phi @ P_k @ Phi^T + Q)
-    # Since we're using same dynamics as EKF, we should match EKF's Q treatment
-    # For now, using zero process noise in backward pass (common simplification)
+    # Predicted covariance at k+1: P_{k+1|k} = Phi_k @ P_k|k @ Phi_k^T + Q
+    # Must use same process noise Q as forward EKF for consistency
+    dt = t_kp1 - t_k
     P_kp1_pred = Phi_k @ P_k_filt @ Phi_k.T
+    if process_noise is not None:
+      # Add process noise scaled by time step
+      P_kp1_pred += process_noise * dt
 
     # Smoother gain: C_k = P_k|k @ Phi_k^T @ inv(P_{k+1|k})
     try:
@@ -161,6 +166,7 @@ def smooth_ekf_estimates(
   estimation_times     : np.ndarray,
   propagator           : Callable[[np.ndarray, float, float], Tuple[np.ndarray, np.ndarray]],
   epoch_dt_utc         : datetime,
+  process_noise        : Optional[np.ndarray] = None,
 ) -> Tuple[PropagationResult, np.ndarray]:
   """
   Apply RTS smoother to EKF results and create smoothed PropagationResult.
@@ -183,6 +189,8 @@ def smooth_ekf_estimates(
       Propagator function used in EKF: (x, t0, tf) -> (x_f, Phi).
     epoch_dt_utc : datetime
       Reference epoch.
+    process_noise : np.ndarray (6, 6), optional
+      Process noise covariance matrix Q used in forward EKF pass.
 
   Output:
   -------
@@ -201,6 +209,7 @@ def smooth_ekf_estimates(
     estimation_times     = estimation_times,
     propagator           = propagator,
     epoch_dt_utc         = epoch_dt_utc,
+    process_noise        = process_noise,
   )
 
   # Compute orbital elements for smoothed states

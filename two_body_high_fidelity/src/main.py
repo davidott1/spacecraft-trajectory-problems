@@ -464,6 +464,7 @@ def main(
           estimation_times     = od_estimation_times,
           epoch_dt_utc         = config.time_o_dt,
           dynamics             = od_dynamics,
+          process_noise        = od_process_noise,
         )
 
         # Compute final smoother uncertainties
