@@ -843,6 +843,7 @@ def apply_rts_smoother(
   estimation_times     : np.ndarray,
   epoch_dt_utc         : datetime,
   dynamics             : Optional[GeneralStateEquationsOfMotion] = None,
+  process_noise        : Optional[np.ndarray] = None,
 ) -> Tuple[PropagationResult, np.ndarray]:
   """
   Apply Rauch-Tung-Striebel (RTS) smoother to forward-filtered EKF estimates.
@@ -863,6 +864,9 @@ def apply_rts_smoother(
     dynamics : GeneralStateEquationsOfMotion, optional
       High-fidelity dynamics model (same as used in EKF).
       If None, uses two-body dynamics.
+    process_noise : np.ndarray (6, 6), optional
+      Process noise covariance matrix Q (same as used in EKF).
+      If None, assumes zero process noise.
 
   Output:
   -------
@@ -894,6 +898,7 @@ def apply_rts_smoother(
     estimation_times     = estimation_times,
     propagator           = propagator,
     epoch_dt_utc         = epoch_dt_utc,
+    process_noise        = process_noise,
   )
 
   return smoothed_result, smoothed_covariances
