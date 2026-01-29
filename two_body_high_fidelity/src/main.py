@@ -494,8 +494,8 @@ def main(
         print(f"      Position           : {final_smooth_pos_sigma:.1f} m (1-σ)")
         print(f"      Velocity           : {final_smooth_vel_sigma:.4f} m/s (1-σ)")
 
-        # Replace high-fidelity propagation result with smoothed OD estimates
-        result_high_fidelity_propagation = od_smoother_states
+        # Replace high-fidelity propagation result with filter OD estimates
+        result_high_fidelity_propagation = od_filter_states
 
   # Generate plots
   generate_plots(
