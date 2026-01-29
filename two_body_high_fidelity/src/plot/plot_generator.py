@@ -658,24 +658,24 @@ def generate_plots(
     has_smoother_at_ephem = od_smoother_states.at_ephem_times is not None
 
     if has_filter_at_ephem and has_smoother_at_ephem:
-      # Use at_ephem_times for smooth curves (same approach as first plot)
+      # Use at_ephem_times for smooth curves (EXACT same approach as first plot)
       filter_at_ephem = od_filter_states.at_ephem_times
       smoother_at_ephem = od_smoother_states.at_ephem_times
 
-      # Comprehensive error comparison (cart + COE + MEE, magnitude only for cart)
-      error_comp_title = f'Filter vs Smoother Error - {object_name_display}'
-      fig_error_comp = plot_filter_smoother_full_error_comparison(
-        truth_result    = result_jpl_horizons_ephemeris,
-        filter_result   = filter_at_ephem,
-        smoother_result = smoother_at_ephem,
+      # Generate filter/smoother error plot with both solutions overlaid
+      fig_err_ts = plot_time_series_error(
+        result_ref      = result_jpl_horizons_ephemeris,
+        result_comp     = filter_at_ephem,
         epoch           = time_o_dt,
-        title_text      = error_comp_title,
         use_ric         = True,
+        result_smoother = smoother_at_ephem,
       )
+      title = f'Error Time Series: High-Fidelity vs JPL Horizons - {object_name_display}'
+      fig_err_ts.suptitle(title, fontsize=14)
       filename = f'error_timeseries_cart_coe_mee_high_fidelity_filter_smoother_rel_jpl_horizons_{name_lower}.png'
-      fig_error_comp.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+      fig_err_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
       od_comparison_files.append(filename)
-      plt.close(fig_error_comp)
+      plt.close(fig_err_ts)
 
   print()
   print("  Summary")
