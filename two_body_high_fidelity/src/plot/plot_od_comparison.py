@@ -8,8 +8,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from matplotlib.figure import Figure
+from matplotlib.gridspec import GridSpec
 from datetime import datetime
 from typing import Optional
+from scipy import stats
 
 from src.schemas.propagation import PropagationResult
 from src.model.frame_converter import FrameConverter
@@ -462,5 +464,231 @@ def plot_filter_smoother_full_error_comparison(
   # Overall title
   fig.suptitle(title_text, fontsize=14, fontweight='bold')
   fig.tight_layout(rect=[0, 0, 1, 0.96])
+
+  return fig
+
+
+def plot_mcreynolds_consistency(
+  filter_result        : PropagationResult,
+  smoother_result      : PropagationResult,
+  filter_covariances   : np.ndarray,
+  smoother_covariances : np.ndarray,
+  epoch                : datetime,
+  truth_result         : Optional[PropagationResult] = None,
+  title_text           : str = "McReynolds Filter/Smoother Consistency Test",
+) -> Figure:
+  """
+  Plot McReynolds consistency metric in RIC frame.
+
+  The McReynolds test computes:
+    χ = (x̂_filter - x̂_smoother) / sqrt(P_filter - P_smoother)
+
+  for each state component in the RIC (Radial-In-track-Cross-track) frame.
+  Under the assumption that both filter and smoother are consistent, these
+  normalized residuals should behave like zero-mean Gaussian random variables
+  with unit variance.
+
+  Input:
+  ------
+    filter_result : PropagationResult
+      Forward-filtered EKF estimates.
+    smoother_result : PropagationResult
+      Backward-smoothed RTS estimates.
+    filter_covariances : np.ndarray (6, 6, N)
+      Forward-filtered covariance matrices.
+    smoother_covariances : np.ndarray (6, 6, N)
+      Backward-smoothed covariance matrices.
+    epoch : datetime
+      Reference epoch for time axis.
+    truth_result : PropagationResult, optional
+      Truth trajectory for RIC frame computation. If None, uses filter trajectory.
+    title_text : str
+      Title for the figure.
+
+  Output:
+  -------
+    fig : Figure
+      Matplotlib figure with 2x1 grid showing position and velocity consistency.
+  """
+  # Extract time and states
+  time_filter = filter_result.time_grid.deltas
+  time_smoother = smoother_result.time_grid.deltas
+
+  # Verify time grids match
+  if not np.allclose(time_filter, time_smoother):
+    raise ValueError("Time grids don't match between filter and smoother!")
+
+  time = time_filter / 60.0  # Convert to minutes
+
+  state_filter = filter_result.state
+  state_smoother = smoother_result.state
+
+  # Check dimensions first
+  n_cov_filter = filter_covariances.shape[2]
+  n_cov_smoother = smoother_covariances.shape[2]
+  n_state_filter = state_filter.shape[1]
+  n_state_smoother = state_smoother.shape[1]
+
+  # Use minimum to avoid index errors
+  n_points = min(len(time_filter), n_cov_filter, n_cov_smoother, n_state_filter, n_state_smoother)
+
+  # Use truth for RIC frame if provided, otherwise use filter
+  # Make sure truth has same number of points
+  if truth_result is not None:
+    ref_states = truth_result.state
+    # If truth has different size, use filter instead
+    if ref_states.shape[1] < n_points:
+      ref_states = state_filter
+  else:
+    ref_states = state_filter
+
+  # Compute consistency metric in RIC frame
+  chi_pos = np.zeros((3, n_points))
+  chi_vel = np.zeros((3, n_points))
+
+  for i in range(n_points):
+    # Reference position and velocity for RIC frame
+    ref_pos = ref_states[0:3, i]
+    ref_vel = ref_states[3:6, i]
+
+    # Rotation matrix from inertial to RIC
+    R_inertial_to_ric = FrameConverter.xyz_to_ric(ref_pos, ref_vel)
+
+    # State differences in inertial frame
+    pos_diff_inertial = state_filter[0:3, i] - state_smoother[0:3, i]
+    vel_diff_inertial = state_filter[3:6, i] - state_smoother[3:6, i]
+
+    # Transform state differences to RIC
+    pos_diff_ric = R_inertial_to_ric @ pos_diff_inertial
+    vel_diff_ric = R_inertial_to_ric @ vel_diff_inertial
+
+    # Covariance differences in inertial frame
+    P_diff = filter_covariances[:, :, i] - smoother_covariances[:, :, i]
+
+    # Transform covariance difference to RIC frame
+    # Build 6x6 rotation matrix: R_6x6 = [[R, 0], [0, R]]
+    R_6x6 = np.zeros((6, 6))
+    R_6x6[0:3, 0:3] = R_inertial_to_ric
+    R_6x6[3:6, 3:6] = R_inertial_to_ric
+
+    # P_ric = R_6x6 @ P_inertial @ R_6x6^T
+    P_diff_ric = R_6x6 @ P_diff @ R_6x6.T
+
+    # Extract diagonal elements (variances)
+    pos_var_diff = np.diag(P_diff_ric[0:3, 0:3])
+    vel_var_diff = np.diag(P_diff_ric[3:6, 3:6])
+
+    # Ensure positive variance difference (use absolute value to avoid NaN)
+    pos_var_diff_safe = np.abs(pos_var_diff)
+    vel_var_diff_safe = np.abs(vel_var_diff)
+
+    # Avoid division by zero
+    epsilon = 1e-20
+
+    # Compute consistency metric
+    chi_pos[:, i] = pos_diff_ric / np.sqrt(pos_var_diff_safe + epsilon)
+    chi_vel[:, i] = vel_diff_ric / np.sqrt(vel_var_diff_safe + epsilon)
+
+  # Create figure with GridSpec for timeseries (left) and histograms (right)
+  fig = plt.figure(figsize=(16, 10))
+  gs = GridSpec(2, 2, figure=fig, width_ratios=[3, 1], hspace=0.15, wspace=0.05)
+
+  # Create axes
+  ax_pos = fig.add_subplot(gs[0, 0])
+  ax_pos_hist = fig.add_subplot(gs[0, 1], sharey=ax_pos)
+  ax_vel = fig.add_subplot(gs[1, 0])
+  ax_vel_hist = fig.add_subplot(gs[1, 1], sharey=ax_vel)
+
+  # Colors for R, I, C components
+  colors = ['r', 'g', 'b']
+  labels = ['R (Radial)', 'I (In-track)', 'C (Cross-track)']
+
+  # ===== TOP PLOT: Position consistency timeseries =====
+  for i in range(3):
+    ax_pos.plot(time, chi_pos[i, :], color=colors[i], linewidth=1.5, alpha=0.8, label=labels[i])
+
+  # Reference lines
+  ax_pos.axhline(y=0, color='k', linestyle='-', linewidth=1.2, alpha=0.7)
+  ax_pos.axhline(y=1, color='gray', linestyle='--', linewidth=1.0, alpha=0.6)
+  ax_pos.axhline(y=-1, color='gray', linestyle='--', linewidth=1.0, alpha=0.6)
+  ax_pos.axhline(y=2, color='gray', linestyle=':', linewidth=1.0, alpha=0.5)
+  ax_pos.axhline(y=-2, color='gray', linestyle=':', linewidth=1.0, alpha=0.5)
+  ax_pos.axhline(y=3, color='gray', linestyle='-.', linewidth=1.0, alpha=0.4)
+  ax_pos.axhline(y=-3, color='gray', linestyle='-.', linewidth=1.0, alpha=0.4)
+
+  ax_pos.set_ylabel('Position Consistency χ [-]', fontsize=12)
+  ax_pos.grid(True, linestyle=':', alpha=0.5)
+  ax_pos.legend(loc='best', fontsize=10)
+  ax_pos.set_ylim(-5, 5)
+  ax_pos.tick_params(labelbottom=False)
+
+  # ===== TOP HISTOGRAM: Position consistency distribution =====
+  # Combine all position components for histogram
+  chi_pos_all = chi_pos.flatten()
+  ax_pos_hist.hist(chi_pos_all, bins=30, orientation='horizontal', density=True,
+                   alpha=0.5, color='steelblue', edgecolor='black', linewidth=0.5)
+
+  # Overlay theoretical normal distribution N(0,1)
+  y_range = np.linspace(-5, 5, 100)
+  normal_pdf = stats.norm.pdf(y_range, loc=0, scale=1)
+  ax_pos_hist.plot(normal_pdf, y_range, 'b-', linewidth=2, label='N(0,1)')
+
+  # Add statistics text
+  mean_val = np.mean(chi_pos_all)
+  std_val = np.std(chi_pos_all)
+  ax_pos_hist.text(0.95, 0.95, f'μ={mean_val:.2f}\nσ={std_val:.2f}',
+                   transform=ax_pos_hist.transAxes, fontsize=9,
+                   verticalalignment='top', horizontalalignment='right',
+                   bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+  ax_pos_hist.set_xlabel('Density', fontsize=10)
+  ax_pos_hist.grid(True, alpha=0.3, axis='x')
+  ax_pos_hist.legend(loc='lower right', fontsize=9)
+  ax_pos_hist.tick_params(labelleft=False)
+
+  # ===== BOTTOM PLOT: Velocity consistency timeseries =====
+  for i in range(3):
+    ax_vel.plot(time, chi_vel[i, :], color=colors[i], linewidth=1.5, alpha=0.8, label=labels[i])
+
+  # Reference lines
+  ax_vel.axhline(y=0, color='k', linestyle='-', linewidth=1.2, alpha=0.7)
+  ax_vel.axhline(y=1, color='gray', linestyle='--', linewidth=1.0, alpha=0.6)
+  ax_vel.axhline(y=-1, color='gray', linestyle='--', linewidth=1.0, alpha=0.6)
+  ax_vel.axhline(y=2, color='gray', linestyle=':', linewidth=1.0, alpha=0.5)
+  ax_vel.axhline(y=-2, color='gray', linestyle=':', linewidth=1.0, alpha=0.5)
+  ax_vel.axhline(y=3, color='gray', linestyle='-.', linewidth=1.0, alpha=0.4)
+  ax_vel.axhline(y=-3, color='gray', linestyle='-.', linewidth=1.0, alpha=0.4)
+
+  ax_vel.set_xlabel('Time [min]', fontsize=12)
+  ax_vel.set_ylabel('Velocity Consistency χ [-]', fontsize=12)
+  ax_vel.grid(True, linestyle=':', alpha=0.5)
+  ax_vel.legend(loc='best', fontsize=10)
+  ax_vel.set_ylim(-5, 5)
+
+  # ===== BOTTOM HISTOGRAM: Velocity consistency distribution =====
+  # Combine all velocity components for histogram
+  chi_vel_all = chi_vel.flatten()
+  ax_vel_hist.hist(chi_vel_all, bins=30, orientation='horizontal', density=True,
+                   alpha=0.5, color='steelblue', edgecolor='black', linewidth=0.5)
+
+  # Overlay theoretical normal distribution N(0,1)
+  ax_vel_hist.plot(normal_pdf, y_range, 'b-', linewidth=2, label='N(0,1)')
+
+  # Add statistics text
+  mean_val = np.mean(chi_vel_all)
+  std_val = np.std(chi_vel_all)
+  ax_vel_hist.text(0.95, 0.95, f'μ={mean_val:.2f}\nσ={std_val:.2f}',
+                   transform=ax_vel_hist.transAxes, fontsize=9,
+                   verticalalignment='top', horizontalalignment='right',
+                   bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+  ax_vel_hist.set_xlabel('Density', fontsize=10)
+  ax_vel_hist.grid(True, alpha=0.3, axis='x')
+  ax_vel_hist.legend(loc='lower right', fontsize=9)
+  ax_vel_hist.tick_params(labelleft=False)
+
+  # Overall title
+  fig.suptitle(title_text, fontsize=14, fontweight='bold')
+  fig.tight_layout(rect=[0, 0, 1, 0.97])
 
   return fig

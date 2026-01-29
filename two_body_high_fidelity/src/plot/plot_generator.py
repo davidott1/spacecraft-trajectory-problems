@@ -16,7 +16,7 @@ from src.plot.plot_timeseries                  import plot_time_series, plot_tim
 from src.plot.plot_groundtrack                 import plot_ground_track
 from src.plot.plot_skyplot                     import plot_skyplot, plot_pass_timeseries, plot_measurement_errors, plot_error_skyplot
 from src.plot.plot_covariance                  import plot_covariance_combined, plot_covariance_filter_vs_smoother
-from src.plot.plot_od_comparison               import plot_filter_smoother_error_comparison, plot_filter_smoother_rss_comparison, plot_filter_smoother_full_error_comparison
+from src.plot.plot_od_comparison               import plot_filter_smoother_error_comparison, plot_filter_smoother_rss_comparison, plot_filter_smoother_full_error_comparison, plot_mcreynolds_consistency
 from src.plot.plot_residual_ratio              import plot_measurement_residual_ratio, plot_innovation_covariance_evolution
 from src.schemas.propagation                   import PropagationResult
 from src.schemas.state                         import TrackerStation
@@ -677,6 +677,37 @@ def generate_plots(
       od_comparison_files.append(filename)
       plt.close(fig_err_ts)
 
+  # Generate McReynolds consistency plot
+  consistency_files = []
+  if (include_orbit_determination and
+      od_filter_states is not None and
+      od_smoother_states is not None and
+      od_filter_covariances is not None and
+      od_smoother_covariances is not None):
+    print("    Generate McReynolds consistency plot")
+
+    name_lower = object_name.lower().replace(' ', '_').replace('-', '_')
+
+    try:
+      # Generate McReynolds consistency plot
+      consistency_title = f'McReynolds Consistency Test - {object_name_display}'
+      fig_consistency = plot_mcreynolds_consistency(
+        filter_result        = od_filter_states,
+        smoother_result      = od_smoother_states,
+        filter_covariances   = od_filter_covariances,
+        smoother_covariances = od_smoother_covariances,
+        epoch                = time_o_dt,
+        truth_result         = result_jpl_horizons_ephemeris if (result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success) else None,
+        title_text           = consistency_title,
+      )
+      filename_consistency = f'mcreynolds_consistency_{name_lower}.png'
+      fig_consistency.savefig(figures_folderpath / filename_consistency, dpi=300, bbox_inches='tight')
+      plt.close(fig_consistency)
+      consistency_files.append(filename_consistency)
+
+    except Exception as e:
+      print(f"      [WARNING] Failed to generate McReynolds consistency plot: {e}")
+
   print()
   print("  Summary")
   print(f"    Figure Folderpath : {figures_folderpath}")
@@ -786,4 +817,11 @@ def generate_plots(
     print()
     print("    Filter vs Smoother Comparison Plots")
     for filename in od_comparison_files:
+      print(f"      <figures_folderpath>/{filename}")
+
+  # Print McReynolds Consistency Plots
+  if consistency_files:
+    print()
+    print("    McReynolds Consistency Plots")
+    for filename in consistency_files:
       print(f"      <figures_folderpath>/{filename}")
