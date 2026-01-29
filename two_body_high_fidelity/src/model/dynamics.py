@@ -1265,6 +1265,88 @@ class ThirdBodyGravity:
 
       return acc_vec
 
+    def jacobian(
+      self,
+      time        : float,
+      pos_sat_vec : np.ndarray,
+    ) -> np.ndarray:
+      """
+      Compute Jacobian of third-body acceleration with respect to satellite position.
+
+      Returns the 3x3 matrix ∂a_3rd/∂r for all third bodies combined.
+
+      Input:
+      ------
+        time : float
+          Current Ephemeris Time (ET) [s]
+        pos_sat_vec : np.ndarray
+          Satellite position vector [m]
+
+      Output:
+      -------
+        jacobian : np.ndarray (3, 3)
+          Partial derivative of third-body acceleration w.r.t. position [1/s²]
+
+      Notes:
+      ------
+        For each third body, the Jacobian is:
+          ∂a/∂r = μ * [ I/d³ - 3*ρ⊗ρ/d⁵ ]
+
+        where:
+          μ = gravitational parameter of third body
+          ρ = r_sat - r_3rd (vector from third body to satellite)
+          d = ||ρ|| (distance from satellite to third body)
+          I = identity matrix
+          ⊗ = outer product
+
+        This formula comes from differentiating the third-body point-mass acceleration:
+          a = μ * [ρ/d³ - r_3rd/||r_3rd||³]
+
+        The second term (indirect part) doesn't depend on satellite position, so its
+        derivative is zero. Only the direct term contributes to the Jacobian.
+      """
+      et_seconds = time
+      jac_total = np.zeros((3, 3))
+
+      for body in self.bodies:
+        body_upper = body.upper()
+
+        # Skip Earth if it's in the list
+        if body_upper == 'EARTH':
+          continue
+
+        # Get gravitational parameter
+        if hasattr(SOLARSYSTEMCONSTANTS, body_upper):
+          GP = getattr(SOLARSYSTEMCONSTANTS, body_upper).GP
+        else:
+          continue
+
+        # Position of Earth to third body [m]
+        pos_centbody_to_pertbody_vec = self._get_position_body_spice(body, et_seconds)
+
+        # Position of satellite to third body [m]
+        pos_sat_to_pertbody_vec = pos_centbody_to_pertbody_vec - pos_sat_vec
+        pos_sat_to_pertbody_mag = np.linalg.norm(pos_sat_to_pertbody_vec)
+
+        # Safety check
+        if pos_sat_to_pertbody_mag < 1e6:  # Less than 1000 km (unphysical)
+          continue
+
+        # Compute Jacobian for this body
+        # ∂a/∂r = μ * [ I/d³ - 3*ρ⊗ρ/d⁵ ]
+        d = pos_sat_to_pertbody_mag
+        d3 = d**3
+        d5 = d**5
+
+        I = np.eye(3)
+        rho_outer_rho = np.outer(pos_sat_to_pertbody_vec, pos_sat_to_pertbody_vec)
+
+        jac_body = GP * (I / d3 - 3.0 * rho_outer_rho / d5)
+
+        jac_total += jac_body
+
+      return jac_total
+
 
 class GeneralRelativity:
   """
@@ -1805,6 +1887,10 @@ class Gravity:
         A_matrix = self.two_body.point_mass_jacobian(pos_vec)
         A_matrix[3:6, 0:3] += self.two_body.oblate_j2_jacobian(time, pos_vec)
 
+      # Add third-body Jacobian contribution if enabled
+      if self.third_body is not None:
+        A_matrix[3:6, 0:3] += self.third_body.jacobian(time, pos_vec)
+
       # STM time derivative: dΦ/dt = A * Φ
       stm_dot = A_matrix @ stm
 
@@ -2005,29 +2091,40 @@ class SolarRadiationPressure:
       self,
       time                 : float,
       earth_to_sat_pos_vec : np.ndarray,
-    ) -> np.ndarray:
+      include_stm          : bool       = False,
+      stm                  : np.ndarray = None,
+    ):
       """
-      Compute SRP acceleration.
-      
+      Compute SRP acceleration, optionally with STM time derivative.
+
       Input:
       ------
         time : float
           Current Ephemeris Time (ET) [s]
         earth_to_sat_pos_vec : np.ndarray
           Spacecraft position vector relative to Earth [m], i.e. Earth to spacecraft vector.
-      
+        include_stm : bool
+          If True, also compute STM time derivative (default: False)
+        stm : np.ndarray (6, 6), optional
+          State transition matrix (required if include_stm=True)
+
       Output:
       -------
         earth_to_sat_acc_vec : np.ndarray
           SRP acceleration [m/s²]
+        OR
+        (earth_to_sat_acc_vec, stm_dot) : tuple
+          If include_stm=True, returns tuple of acceleration and STM time derivative
       """
       # Check for valid parameters
       if self.area <= 0 or self.mass <= 0:
+        if include_stm:
+          return np.zeros(3), np.zeros((6, 6))
         return np.zeros(3)
-      
+
       # Get Sun position relative to Earth using SPICE
       earth_to_sun_pos_vec = self._get_sun_position(time)
-      
+
       # Vector from spacecraft to Sun
       sat_to_sun_pos_vec = earth_to_sun_pos_vec - earth_to_sat_pos_vec
       sat_to_sun_pos_mag = np.linalg.norm(sat_to_sun_pos_vec)
@@ -2035,12 +2132,14 @@ class SolarRadiationPressure:
 
       # Direction of solar radiation pressure force is from Sun to spacecraft
       acc_dir = -sat_to_sun_pos_dir
-      
+
       # Compute shadow factor (0.0 = full shadow, 1.0 = full sunlight)
       shadow_factor = self._compute_shadow_factor(earth_to_sat_pos_vec, earth_to_sun_pos_vec)
-      
+
       # If in full shadow, no SRP acceleration
       if shadow_factor == 0.0:
+        if include_stm:
+          return np.zeros(3), np.zeros((6, 6))
         return np.zeros(3)
       
       # Solar radiation pressure at spacecraft distance
@@ -2052,9 +2151,106 @@ class SolarRadiationPressure:
       
       # SRP acceleration direction (away from Sun)
       acc_vec = acc_mag * acc_dir
-      
-      return acc_vec
-    
+
+      # Return just acceleration if STM not requested
+      if not include_stm:
+        return acc_vec
+
+      # Compute STM time derivative if requested
+      if stm is None:
+        raise ValueError("stm parameter required when include_stm=True")
+
+      # Get SRP Jacobian
+      srp_jac = self.jacobian(time, earth_to_sat_pos_vec)
+
+      # Build A matrix for SRP
+      A_matrix = np.zeros((6, 6))
+      A_matrix[3:6, 0:3] = srp_jac
+
+      # STM time derivative: dΦ/dt = A * Φ
+      stm_dot = A_matrix @ stm
+
+      return acc_vec, stm_dot
+
+    def jacobian(
+      self,
+      time                 : float,
+      earth_to_sat_pos_vec : np.ndarray,
+    ) -> np.ndarray:
+      """
+      Compute Jacobian of SRP acceleration with respect to position.
+
+      Returns the 3x3 matrix ∂a_SRP/∂r.
+
+      Input:
+      ------
+        time : float
+          Current Ephemeris Time (ET) [s]
+        earth_to_sat_pos_vec : np.ndarray
+          Spacecraft position vector relative to Earth [m]
+
+      Output:
+      -------
+        jacobian : np.ndarray (3, 3)
+          Partial derivative of SRP acceleration w.r.t. position [1/s²]
+
+      Notes:
+      ------
+        This Jacobian assumes the shadow factor ν is constant (i.e., ignores
+        the discontinuity at shadow boundaries). This is a standard approximation
+        for EKF propagation as shadow transitions are brief and the linearization
+        error is small compared to other uncertainties.
+
+        The analytical formula is:
+          ∂a/∂r = -K * ν * [ I/r - 3*(ŝ⊗ŝ)/r ]
+
+        where:
+          K = P * C_r * A / m  (SRP coefficient)
+          ν = shadow factor
+          ŝ = unit vector from spacecraft to Sun
+          r = distance from spacecraft to Sun
+          I = identity matrix
+          ⊗ = outer product
+      """
+      # Check for valid parameters
+      if self.area <= 0 or self.mass <= 0:
+        return np.zeros((3, 3))
+
+      # Get Sun position relative to Earth
+      earth_to_sun_pos_vec = self._get_sun_position(time)
+
+      # Vector from spacecraft to Sun
+      sat_to_sun_pos_vec = earth_to_sun_pos_vec - earth_to_sat_pos_vec
+      sat_to_sun_pos_mag = np.linalg.norm(sat_to_sun_pos_vec)
+      sat_to_sun_pos_dir = sat_to_sun_pos_vec / sat_to_sun_pos_mag
+
+      # Compute shadow factor
+      shadow_factor = self._compute_shadow_factor(earth_to_sat_pos_vec, earth_to_sun_pos_vec)
+
+      # If in full shadow, Jacobian is zero
+      if shadow_factor == 0.0:
+        return np.zeros((3, 3))
+
+      # Solar radiation pressure at spacecraft distance
+      pressure_srp = SOLARSYSTEMCONSTANTS.EARTH.PRESSURE_SRP * (CONVERTER.M_PER_AU * CONVERTER.ONE_AU / sat_to_sun_pos_mag)**2
+
+      # SRP coefficient: K = P * C_r * A / m * ν
+      K = (pressure_srp * self.cr * self.area / self.mass) * shadow_factor
+
+      # Partial derivative of SRP acceleration w.r.t. position
+      # ∂a/∂r = -K * [ I/r - 3*(ŝ⊗ŝ)/r ]
+      #
+      # Physical interpretation:
+      #   - First term (I/r): as spacecraft moves away from Sun, SRP decreases
+      #   - Second term (ŝ⊗ŝ): directional dependency (stronger along Sun line)
+
+      I = np.eye(3)
+      s_outer_s = np.outer(sat_to_sun_pos_dir, sat_to_sun_pos_dir)
+
+      jacobian = -K * (I / sat_to_sun_pos_mag - 3.0 * s_outer_s / sat_to_sun_pos_mag)
+
+      return jacobian
+
     def _get_sun_position(
       self,
       time_et : float,
@@ -2286,7 +2482,12 @@ class AccelerationSTMDot:
 
       # Solar radiation pressure (optional)
       if self.srp is not None:
-        acc_vec += self.srp.compute(time, pos_vec)
+        if include_stm:
+          acc_srp, stm_dot_srp = self.srp.compute(time, pos_vec, include_stm=True, stm=stm)
+          acc_vec += acc_srp
+          stm_dot += stm_dot_srp
+        else:
+          acc_vec += self.srp.compute(time, pos_vec)
 
       # Return based on whether STM was requested
       if include_stm:
