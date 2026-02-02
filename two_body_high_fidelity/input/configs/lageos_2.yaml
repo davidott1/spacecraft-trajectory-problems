@@ -11,13 +11,13 @@ initial_state_norad_id : 22195  # LAGEOS-2
 timespan : 2024-01-15T00:00:00Z 2024-01-15T06:00:00Z
 
 # Gravity model configuration
-gravity_harmonics_degree_order : 2 2
-# gravity_harmonics_coefficients : J2
+# gravity_harmonics_degree_order : 0 0
+gravity_harmonics_coefficients : J2
 gravity_harmonics_filename     : EGM2008.gfc
 
 # Jacobian selection (exactly one should be true; defaults to approx if neither)
-use_approx_jacobian   : true
-use_analytic_jacobian : false
+use_approx_jacobian   : false
+use_analytic_jacobian : true
 jacobian_approx_eps   : 1e-6  # Must be >= 1e-6 for numerical stability
 
 # Gravity third-bodies (use 'third_bodies' to enable)
@@ -25,7 +25,7 @@ third_bodies : None
 
 # Perturbation forces
 include_drag        : false
-include_srp         : true
+include_srp         : false
 include_relativity  : false
 include_solid_tides : false
 include_ocean_tides : false
@@ -42,8 +42,8 @@ include_tracker_on_body  : true
 # Orbit determination
 include_orbit_determination : true
 make_meas_from              : model
-process_noise_pos           : 1e-4
-process_noise_vel           : 1e-7
+process_noise_pos           : 1e-6
+process_noise_vel           : 1e-9
 
 # Download options
 auto_download : true
