@@ -11,8 +11,8 @@ initial_state_norad_id : 22195  # LAGEOS-2
 timespan : 2024-01-15T00:00:00Z 2024-01-15T06:00:00Z
 
 # Gravity model configuration
-# gravity_harmonics_degree_order : 0 0
-gravity_harmonics_coefficients : J2
+gravity_harmonics_degree_order : 8 8
+# gravity_harmonics_coefficients : J2
 gravity_harmonics_filename     : EGM2008.gfc
 
 # Jacobian selection (exactly one should be true; defaults to approx if neither)
