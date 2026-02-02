@@ -256,7 +256,7 @@ def main(
   )
   
   # Print input configuration and paths
-  print_configuration(config)
+  print_configuration(config, make_meas_from)
 
   # Load files: SPICE, spherical harmonics coefficients, trackers, maneuvers
   # Note: Tracker azimuth normalization happens inside load_files()

@@ -31,8 +31,20 @@ def print_input_configuration(
   include_srp                : bool,
   include_relativity         : bool,
   auto_download              : bool,
-  maneuver_filename          : Optional[str] = None,
-  maneuvers                  : Optional[list] = None,
+  maneuver_filename          : Optional[str]   = None,
+  maneuvers                  : Optional[list]  = None,
+  include_solid_tides        : bool            = False,
+  include_ocean_tides        : bool            = False,
+  include_tracker_skyplots   : bool            = False,
+  tracker_filename           : Optional[str]   = None,
+  include_tracker_on_body    : bool            = False,
+  include_orbit_determination: bool            = False,
+  process_noise_pos          : Optional[float] = None,
+  process_noise_vel          : Optional[float] = None,
+  use_approx_jacobian        : Optional[bool]  = None,
+  use_analytic_jacobian      : Optional[bool]  = None,
+  jacobian_approx_eps        : Optional[float] = None,
+  make_meas_from             : str             = 'jpl_ephem',
 ) -> None:
   """
   Print the input configuration in a formatted table.
@@ -77,22 +89,34 @@ def print_input_configuration(
   # Define defaults for comparison
   print("    Define default configuration values")
   defaults = {
-    'initial_state_source'       : 'jpl_horizons',
-    'initial_state_norad_id'     : None,
-    'initial_state_filename'     : None,
-    'timespan'                   : None,
-    'gravity_harmonics'          : [],
-    'gravity_harmonics_degree'   : None,
-    'gravity_harmonics_order'    : None,
-    'gravity_harmonics_filename' : 'EGM2008.gfc',
-    'third_bodies'               : [],
-    'include_drag'               : False,
-    'include_srp'                : False,
-    'include_relativity'         : False,
-    'compare_jpl_horizons'       : False,
-    'compare_tle'                : False,
-    'auto_download'              : False,
-    'maneuver_filename'          : None,
+    'initial_state_source'        : 'jpl_horizons',
+    'initial_state_norad_id'      : None,
+    'initial_state_filename'      : None,
+    'timespan'                    : None,
+    'gravity_harmonics'           : [],
+    'gravity_harmonics_degree'    : None,
+    'gravity_harmonics_order'     : None,
+    'gravity_harmonics_filename'  : 'EGM2008.gfc',
+    'third_bodies'                : [],
+    'include_drag'                : False,
+    'include_srp'                 : False,
+    'include_relativity'          : False,
+    'include_solid_tides'         : False,
+    'include_ocean_tides'         : False,
+    'compare_jpl_horizons'        : False,
+    'compare_tle'                 : False,
+    'auto_download'               : False,
+    'maneuver_filename'           : None,
+    'include_tracker_skyplots'    : False,
+    'tracker_filename'            : None,
+    'include_tracker_on_body'     : False,
+    'include_orbit_determination' : False,
+    'process_noise_pos'           : 1e-4,
+    'process_noise_vel'           : 1e-7,
+    'use_approx_jacobian'         : True,
+    'use_analytic_jacobian'       : False,
+    'jacobian_approx_eps'         : 1e-6,
+    'make_meas_from'              : 'jpl_ephem',
   }
 
   # Format values for display
@@ -102,24 +126,45 @@ def print_input_configuration(
   gh_deg_order_str = f"{two_body_gravity_model.spherical_harmonics.degree} {two_body_gravity_model.spherical_harmonics.order}" if two_body_gravity_model.spherical_harmonics.degree is not None else "None"
   third_str        = ' '.join(third_bodies_list) if third_bodies_list else "None"
 
+  # Format process noise for display
+  proc_noise_pos_str = f"{process_noise_pos:.0e}" if process_noise_pos is not None else f"{defaults['process_noise_pos']:.0e}"
+  proc_noise_vel_str = f"{process_noise_vel:.0e}" if process_noise_vel is not None else f"{defaults['process_noise_vel']:.0e}"
+  jacobian_eps_str   = f"{jacobian_approx_eps:.0e}" if jacobian_approx_eps is not None else f"{defaults['jacobian_approx_eps']:.0e}"
+
+  # Resolve Jacobian flags for display
+  use_approx_display = use_approx_jacobian if use_approx_jacobian is not None else defaults['use_approx_jacobian']
+  use_analytic_display = use_analytic_jacobian if use_analytic_jacobian is not None else defaults['use_analytic_jacobian']
+
   # Build configuration entries: (name, value, default, user_set)
   print("    Build configuration table entries")
   entries = [
-    ('initial_state_source',   initial_state_source,            defaults['initial_state_source'],       initial_state_source       != defaults['initial_state_source']),
-    ('initial_state_norad_id', initial_state_norad_id,          defaults['initial_state_norad_id'],     initial_state_norad_id     is not None),
-    ('initial_state_filename', initial_state_filename,          defaults['initial_state_filename'],     initial_state_filename     is not None),
-    ('timespan',               timespan_str,                    defaults['timespan'],                   desired_timespan           is not None),
-    ('gravity_harmonics',      harmonics_str,                   defaults['gravity_harmonics'],          gravity_harmonics_list     is not None and len(gravity_harmonics_list) > 0),
-    ('gravity_degree_order',   gh_deg_order_str,                "None",                                 two_body_gravity_model.spherical_harmonics.degree is not None),
-    ('gravity_file',           two_body_gravity_model.filename, defaults['gravity_harmonics_filename'], two_body_gravity_model.filename != defaults['gravity_harmonics_filename']),
-    ('third_bodies',           third_str,                       defaults['third_bodies'],               third_bodies_list          is not None and len(third_bodies_list) > 0),
-    ('include_drag',           include_drag,                    defaults['include_drag'],               include_drag               != defaults['include_drag']),
-    ('include_srp',            include_srp,                     defaults['include_srp'],                include_srp                != defaults['include_srp']),
-    ('include_relativity',     include_relativity,              defaults['include_relativity'],         include_relativity         != defaults['include_relativity']),
-    ('maneuver_filename',      maneuver_filename,               defaults['maneuver_filename'],          maneuver_filename          is not None),
-    ('compare_jpl_horizons',   compare_jpl_horizons,            defaults['compare_jpl_horizons'],       compare_jpl_horizons       != defaults['compare_jpl_horizons']),
-    ('compare_tle',            compare_tle,                     defaults['compare_tle'],                compare_tle                != defaults['compare_tle']),
-    ('auto_download',          auto_download,                   defaults['auto_download'],              auto_download              != defaults['auto_download']),
+    ('initial_state_source',      initial_state_source,            defaults['initial_state_source'],        initial_state_source       != defaults['initial_state_source']),
+    ('initial_state_norad_id',    initial_state_norad_id,          defaults['initial_state_norad_id'],      initial_state_norad_id     is not None),
+    ('initial_state_filename',    initial_state_filename,          defaults['initial_state_filename'],      initial_state_filename     is not None),
+    ('timespan',                  timespan_str,                    defaults['timespan'],                    desired_timespan           is not None),
+    ('gravity_harmonics',         harmonics_str,                   defaults['gravity_harmonics'],           gravity_harmonics_list     is not None and len(gravity_harmonics_list) > 0),
+    ('gravity_degree_order',      gh_deg_order_str,                "None",                                  two_body_gravity_model.spherical_harmonics.degree is not None),
+    ('gravity_file',              two_body_gravity_model.filename, defaults['gravity_harmonics_filename'],  two_body_gravity_model.filename != defaults['gravity_harmonics_filename']),
+    ('third_bodies',              third_str,                       defaults['third_bodies'],                third_bodies_list          is not None and len(third_bodies_list) > 0),
+    ('include_drag',              include_drag,                    defaults['include_drag'],                include_drag               != defaults['include_drag']),
+    ('include_srp',               include_srp,                     defaults['include_srp'],                 include_srp                != defaults['include_srp']),
+    ('include_relativity',        include_relativity,              defaults['include_relativity'],          include_relativity         != defaults['include_relativity']),
+    ('include_solid_tides',       include_solid_tides,             defaults['include_solid_tides'],         include_solid_tides        != defaults['include_solid_tides']),
+    ('include_ocean_tides',       include_ocean_tides,             defaults['include_ocean_tides'],         include_ocean_tides        != defaults['include_ocean_tides']),
+    ('maneuver_filename',         maneuver_filename,               defaults['maneuver_filename'],           maneuver_filename          is not None),
+    ('compare_jpl_horizons',      compare_jpl_horizons,            defaults['compare_jpl_horizons'],        compare_jpl_horizons       != defaults['compare_jpl_horizons']),
+    ('compare_tle',               compare_tle,                     defaults['compare_tle'],                 compare_tle                != defaults['compare_tle']),
+    ('auto_download',             auto_download,                   defaults['auto_download'],               auto_download              != defaults['auto_download']),
+    ('include_tracker_skyplots',  include_tracker_skyplots,        defaults['include_tracker_skyplots'],    include_tracker_skyplots   != defaults['include_tracker_skyplots']),
+    ('tracker_filename',          tracker_filename,                defaults['tracker_filename'],            tracker_filename           is not None),
+    ('include_tracker_on_body',   include_tracker_on_body,         defaults['include_tracker_on_body'],     include_tracker_on_body    != defaults['include_tracker_on_body']),
+    ('include_orbit_determination', include_orbit_determination,   defaults['include_orbit_determination'], include_orbit_determination != defaults['include_orbit_determination']),
+    ('process_noise_pos',         proc_noise_pos_str,              f"{defaults['process_noise_pos']:.0e}",  process_noise_pos is not None and process_noise_pos != defaults['process_noise_pos']),
+    ('process_noise_vel',         proc_noise_vel_str,              f"{defaults['process_noise_vel']:.0e}",  process_noise_vel is not None and process_noise_vel != defaults['process_noise_vel']),
+    ('use_approx_jacobian',       use_approx_display,              defaults['use_approx_jacobian'],         use_approx_jacobian is not None and use_approx_jacobian != defaults['use_approx_jacobian']),
+    ('use_analytic_jacobian',     use_analytic_display,            defaults['use_analytic_jacobian'],       use_analytic_jacobian is not None and use_analytic_jacobian != defaults['use_analytic_jacobian']),
+    ('jacobian_approx_eps',       jacobian_eps_str,                f"{defaults['jacobian_approx_eps']:.0e}",jacobian_approx_eps is not None and jacobian_approx_eps != defaults['jacobian_approx_eps']),
+    ('make_meas_from',            make_meas_from,                  defaults['make_meas_from'],              make_meas_from             != defaults['make_meas_from']),
   ]
 
   # Convert entries to strings for width calculation
@@ -160,7 +205,7 @@ def print_input_configuration(
     print()
     print(f"  Maneuvers ({len(maneuvers)})")
     for idx, mnvr in enumerate(maneuvers, 1):
-      print(f"    Maneuver {i}")
+      print(f"    Maneuver {idx}")
       print(f"      Time     : {mnvr.time_dt.isoformat()}")
       print(f"      ΔV       : {mnvr.mag():.3f} m/s")
       print(f"      Frame    : {mnvr.frame}")
@@ -214,7 +259,8 @@ def print_paths(
 
 
 def print_configuration(
-  config : SimulationConfig,
+  config         : SimulationConfig,
+  make_meas_from : str = 'jpl_ephem',
 ) -> None:
   """
   Print the complete configuration (input arguments and paths).
@@ -223,27 +269,41 @@ def print_configuration(
   ------
     config : SimulationConfig
       Configuration object containing all input and path attributes.
+    make_meas_from : str
+      Source for measurement simulation ('jpl_ephem' or 'model').
 
   Output:
   -------
     None
   """
   print_input_configuration(
-    initial_state_source   = config.initial_state.source,
-    initial_state_norad_id = config.initial_state.norad_id,
-    initial_state_filename = config.initial_state.filename,
-    desired_timespan       = [config.time_o_dt, config.time_f_dt],
-    include_drag           = config.include_drag,
-    compare_tle            = config.comparison.compare_tle,
-    compare_jpl_horizons   = config.comparison.compare_jpl_horizons,
-    third_bodies_list      = config.gravity.third_body.bodies,
-    gravity_harmonics_list = config.gravity.spherical_harmonics.coefficients,
-    two_body_gravity_model = config.gravity,
-    include_srp            = config.include_srp,
-    include_relativity     = config.gravity.relativity.enabled,
-    auto_download          = config.auto_download,
-    maneuver_filename      = config.spacecraft.maneuvers.filename,
-    maneuvers              = config.spacecraft.maneuvers,
+    initial_state_source        = config.initial_state.source,
+    initial_state_norad_id      = config.initial_state.norad_id,
+    initial_state_filename      = config.initial_state.filename,
+    desired_timespan            = [config.time_o_dt, config.time_f_dt],
+    include_drag                = config.include_drag,
+    compare_tle                 = config.comparison.compare_tle,
+    compare_jpl_horizons        = config.comparison.compare_jpl_horizons,
+    third_bodies_list           = config.gravity.third_body.bodies,
+    gravity_harmonics_list      = config.gravity.spherical_harmonics.coefficients,
+    two_body_gravity_model      = config.gravity,
+    include_srp                 = config.include_srp,
+    include_relativity          = config.gravity.relativity.enabled,
+    auto_download               = config.auto_download,
+    maneuver_filename           = config.spacecraft.maneuvers.filename,
+    maneuvers                   = config.spacecraft.maneuvers,
+    include_solid_tides         = config.gravity.solid_tides.enabled,
+    include_ocean_tides         = config.gravity.ocean_tides.enabled,
+    include_tracker_skyplots    = config.output_paths.tracker_filepath is not None if config.output_paths else False,
+    tracker_filename            = config.output_paths.tracker_filepath.name if config.output_paths and config.output_paths.tracker_filepath else None,
+    include_tracker_on_body     = False,  # TODO: Add to config if needed
+    include_orbit_determination = config.orbit_determination.enabled,
+    process_noise_pos           = config.orbit_determination.process_noise_pos,
+    process_noise_vel           = config.orbit_determination.process_noise_vel,
+    use_approx_jacobian         = config.gravity.use_approx_jacobian,
+    use_analytic_jacobian       = config.gravity.use_analytic_jacobian,
+    jacobian_approx_eps         = config.gravity.jacobian_approx_eps,
+    make_meas_from              = make_meas_from,
   )
 
   print_paths(config)
