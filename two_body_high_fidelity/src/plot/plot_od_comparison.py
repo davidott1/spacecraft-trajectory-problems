@@ -545,6 +545,8 @@ def plot_mcreynolds_consistency(
   # Compute consistency metric in RIC frame
   chi_pos = np.zeros((3, n_points))
   chi_vel = np.zeros((3, n_points))
+  pos_var_diff_hist = np.zeros((3, n_points))
+  vel_var_diff_hist = np.zeros((3, n_points))
 
   for i in range(n_points):
     # Reference position and velocity for RIC frame
@@ -578,6 +580,9 @@ def plot_mcreynolds_consistency(
     pos_var_diff = np.diag(P_diff_ric[0:3, 0:3])
     vel_var_diff = np.diag(P_diff_ric[3:6, 3:6])
 
+    pos_var_diff_hist[:, i] = pos_var_diff
+    vel_var_diff_hist[:, i] = vel_var_diff
+
     # Ensure positive variance difference (use absolute value to avoid NaN)
     pos_var_diff_safe = np.abs(pos_var_diff)
     vel_var_diff_safe = np.abs(vel_var_diff)
@@ -607,6 +612,12 @@ def plot_mcreynolds_consistency(
   for i in range(3):
     ax_pos.plot(time, chi_pos[i, :], color=colors[i], linewidth=1.5, alpha=0.8, label=labels[i])
 
+  # Mark non-positive variance differences (Pf - Ps <= 0)
+  for i in range(3):
+    bad_idx = np.where(pos_var_diff_hist[i, :] <= 0.0)[0]
+    if bad_idx.size > 0:
+      ax_pos.scatter(time[bad_idx], chi_pos[i, bad_idx], s=18, marker='x', color='k', alpha=0.7, zorder=5)
+
   # Reference lines
   ax_pos.axhline(y=0, color='k', linestyle='-', linewidth=1.2, alpha=0.7)
   ax_pos.axhline(y=1, color='gray', linestyle='--', linewidth=1.0, alpha=0.6)
@@ -617,15 +628,41 @@ def plot_mcreynolds_consistency(
   ax_pos.axhline(y=-3, color='gray', linestyle='-.', linewidth=1.0, alpha=0.4)
 
   ax_pos.set_ylabel('Position Consistency χ [-]', fontsize=12)
+  ax_pos.set_yscale('symlog', linthresh=3)
   ax_pos.grid(True, linestyle=':', alpha=0.5)
   ax_pos.legend(loc='best', fontsize=10)
-  ax_pos.set_ylim(-5, 5)
+  # Set ylim to show full data range with some padding
+  pos_max = np.max(np.abs(chi_pos)) * 1.1
+  ax_pos.set_ylim(-pos_max, pos_max)
+  # Custom yticks: linear region (-3 to 3) and log powers of 10
+  linear_ticks = [-3, -2, -1, 0, 1, 2, 3]
+  log_ticks = []
+  log_labels = []
+  for exp in range(1, 10):
+    val = 10**exp
+    if val < pos_max:
+      log_ticks.extend([-val, val])
+      log_labels.extend([f'$-10^{exp}$', f'$10^{exp}$'])
+  all_ticks = sorted(linear_ticks + log_ticks)
+  all_labels = [str(t) if t in linear_ticks else (f'$-10^{{{int(np.log10(abs(t)))}}}$' if t < 0 else f'$10^{{{int(np.log10(t))}}}$') for t in all_ticks]
+  ax_pos.set_yticks(all_ticks)
+  ax_pos.set_yticklabels(all_labels)
   ax_pos.tick_params(labelbottom=False)
 
   # ===== TOP HISTOGRAM: Position consistency distribution =====
   # Combine all position components for histogram
   chi_pos_all = chi_pos.flatten()
-  ax_pos_hist.hist(chi_pos_all, bins=30, orientation='horizontal', density=True,
+  def _symlog_bins(max_abs: float, linthresh: float = 3.0, n_linear: int = 21, n_log: int = 5) -> np.ndarray:
+    max_abs = max(max_abs, linthresh)
+    linear_edges = np.linspace(-linthresh, linthresh, n_linear)
+    if max_abs <= linthresh:
+      return linear_edges
+    log_edges = np.logspace(np.log10(linthresh), np.log10(max_abs), n_log)
+    neg_edges = -log_edges[::-1]
+    return np.concatenate([neg_edges, linear_edges[1:-1], log_edges])
+
+  pos_bins = _symlog_bins(np.max(np.abs(chi_pos_all)))
+  ax_pos_hist.hist(chi_pos_all, bins=pos_bins, orientation='horizontal', density=True,
                    alpha=0.5, color='steelblue', edgecolor='black', linewidth=0.5)
 
   # Overlay theoretical normal distribution N(0,1)
@@ -650,6 +687,12 @@ def plot_mcreynolds_consistency(
   for i in range(3):
     ax_vel.plot(time, chi_vel[i, :], color=colors[i], linewidth=1.5, alpha=0.8, label=labels[i])
 
+  # Mark non-positive variance differences (Pf - Ps <= 0)
+  for i in range(3):
+    bad_idx = np.where(vel_var_diff_hist[i, :] <= 0.0)[0]
+    if bad_idx.size > 0:
+      ax_vel.scatter(time[bad_idx], chi_vel[i, bad_idx], s=18, marker='x', color='k', alpha=0.7, zorder=5)
+
   # Reference lines
   ax_vel.axhline(y=0, color='k', linestyle='-', linewidth=1.2, alpha=0.7)
   ax_vel.axhline(y=1, color='gray', linestyle='--', linewidth=1.0, alpha=0.6)
@@ -661,14 +704,29 @@ def plot_mcreynolds_consistency(
 
   ax_vel.set_xlabel('Time [min]', fontsize=12)
   ax_vel.set_ylabel('Velocity Consistency χ [-]', fontsize=12)
+  ax_vel.set_yscale('symlog', linthresh=3)
   ax_vel.grid(True, linestyle=':', alpha=0.5)
   ax_vel.legend(loc='best', fontsize=10)
-  ax_vel.set_ylim(-5, 5)
+  # Set ylim to show full data range with some padding
+  vel_max = np.max(np.abs(chi_vel)) * 1.1
+  ax_vel.set_ylim(-vel_max, vel_max)
+  # Custom yticks: linear region (-3 to 3) and log powers of 10
+  linear_ticks = [-3, -2, -1, 0, 1, 2, 3]
+  log_ticks = []
+  for exp in range(1, 10):
+    val = 10**exp
+    if val < vel_max:
+      log_ticks.extend([-val, val])
+  all_ticks = sorted(linear_ticks + log_ticks)
+  all_labels = [str(t) if t in linear_ticks else (f'$-10^{{{int(np.log10(abs(t)))}}}$' if t < 0 else f'$10^{{{int(np.log10(t))}}}$') for t in all_ticks]
+  ax_vel.set_yticks(all_ticks)
+  ax_vel.set_yticklabels(all_labels)
 
   # ===== BOTTOM HISTOGRAM: Velocity consistency distribution =====
   # Combine all velocity components for histogram
   chi_vel_all = chi_vel.flatten()
-  ax_vel_hist.hist(chi_vel_all, bins=30, orientation='horizontal', density=True,
+  vel_bins = _symlog_bins(np.max(np.abs(chi_vel_all)))
+  ax_vel_hist.hist(chi_vel_all, bins=vel_bins, orientation='horizontal', density=True,
                    alpha=0.5, color='steelblue', edgecolor='black', linewidth=0.5)
 
   # Overlay theoretical normal distribution N(0,1)

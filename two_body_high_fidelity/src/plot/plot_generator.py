@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from pathlib  import Path
 from typing   import Optional
+from scipy    import interpolate
 
 from src.plot.plot_3d                          import plot_3d_trajectories, plot_3d_trajectories_body_fixed, plot_3d_trajectory_sun_centered
 from src.plot.plot_timeseries                  import plot_time_series, plot_time_series_error
@@ -18,9 +19,111 @@ from src.plot.plot_skyplot                     import plot_skyplot, plot_pass_ti
 from src.plot.plot_covariance                  import plot_covariance_combined, plot_covariance_filter_vs_smoother
 from src.plot.plot_od_comparison               import plot_filter_smoother_error_comparison, plot_filter_smoother_rss_comparison, plot_filter_smoother_full_error_comparison, plot_mcreynolds_consistency
 from src.plot.plot_residual_ratio              import plot_measurement_residual_ratio, plot_innovation_covariance_evolution
-from src.schemas.propagation                   import PropagationResult
-from src.schemas.state                         import TrackerStation
+from src.schemas.propagation                   import PropagationResult, TimeGrid
+from src.schemas.state                         import TrackerStation, ClassicalOrbitalElements, ModifiedEquinoctialElements
 from src.orbit_determination.measurement_simulator import MeasurementSimulator
+from src.model.orbit_converter                 import OrbitConverter
+from src.model.constants                       import SOLARSYSTEMCONSTANTS
+
+
+def _interpolate_result_to_times(source_result: PropagationResult, target_times: np.ndarray) -> PropagationResult:
+  """
+  Interpolate a PropagationResult to a new time grid.
+
+  Input:
+  ------
+    source_result : PropagationResult
+      The source result with states and time_grid to interpolate from.
+    target_times : np.ndarray
+      The target times (in seconds from epoch) to interpolate to.
+
+  Output:
+  -------
+    interpolated_result : PropagationResult
+      A new PropagationResult with states interpolated to target_times.
+  """
+  source_times = source_result.time_grid.deltas
+  source_states = source_result.state
+
+  # Create interpolators for each state component (6 states)
+  interpolated_states = np.zeros((6, len(target_times)))
+  for i in range(6):
+    interp_func = interpolate.interp1d(
+      source_times, source_states[i, :],
+      kind='cubic', fill_value='extrapolate'
+    )
+    interpolated_states[i, :] = interp_func(target_times)
+
+  # Compute orbital elements for interpolated states
+  n_times = len(target_times)
+  coe_sma  = np.zeros(n_times)
+  coe_ecc  = np.zeros(n_times)
+  coe_inc  = np.zeros(n_times)
+  coe_raan = np.zeros(n_times)
+  coe_aop  = np.zeros(n_times)
+  coe_ta   = np.zeros(n_times)
+  coe_ea   = np.zeros(n_times)
+  coe_ma   = np.zeros(n_times)
+  mee_p    = np.zeros(n_times)
+  mee_f    = np.zeros(n_times)
+  mee_g    = np.zeros(n_times)
+  mee_h    = np.zeros(n_times)
+  mee_k    = np.zeros(n_times)
+  mee_L    = np.zeros(n_times)
+
+  for i in range(n_times):
+    coe = OrbitConverter.pv_to_coe(
+      interpolated_states[0:3, i] * 1000.0,  # km -> m
+      interpolated_states[3:6, i] * 1000.0,  # km/s -> m/s
+      gp = SOLARSYSTEMCONSTANTS.EARTH.GP,
+    )
+    coe_sma[i]  = coe.sma  if coe.sma  is not None else 0.0
+    coe_ecc[i]  = coe.ecc  if coe.ecc  is not None else 0.0
+    coe_inc[i]  = coe.inc  if coe.inc  is not None else 0.0
+    coe_raan[i] = coe.raan if coe.raan is not None else 0.0
+    coe_aop[i]  = coe.aop  if coe.aop  is not None else 0.0
+    coe_ta[i]   = coe.ta   if coe.ta   is not None else 0.0
+    coe_ea[i]   = coe.ea   if coe.ea   is not None else 0.0
+    coe_ma[i]   = coe.ma   if coe.ma   is not None else 0.0
+
+    mee = OrbitConverter.pv_to_mee(
+      interpolated_states[0:3, i] * 1000.0,
+      interpolated_states[3:6, i] * 1000.0,
+      gp = SOLARSYSTEMCONSTANTS.EARTH.GP,
+    )
+    mee_p[i] = mee.p
+    mee_f[i] = mee.f
+    mee_g[i] = mee.g
+    mee_h[i] = mee.h
+    mee_k[i] = mee.k
+    mee_L[i] = mee.L
+
+  coe_time_series = ClassicalOrbitalElements(
+    sma=coe_sma, ecc=coe_ecc, inc=coe_inc, raan=coe_raan,
+    aop=coe_aop, ma=coe_ma, ta=coe_ta, ea=coe_ea,
+  )
+  mee_time_series = ModifiedEquinoctialElements(
+    p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L,
+  )
+
+  # Create new time grid using source's initial time and computing final from target deltas
+  from datetime import timedelta
+  initial_time = source_result.time_grid.initial
+  final_time = initial_time + timedelta(seconds=float(target_times[-1]))
+  new_time_grid = TimeGrid(
+    initial=initial_time,
+    final=final_time,
+    deltas=target_times,
+  )
+
+  return PropagationResult(
+    success=True,
+    state=interpolated_states,
+    time_grid=new_time_grid,
+    coe=coe_time_series,
+    mee=mee_time_series,
+    at_ephem_times=None,
+  )
 
 
 def generate_error_plots(
@@ -69,19 +172,31 @@ def generate_error_plots(
     # Note: plot_time_series_error expects dicts or objects. 
     # at_ephem_times is a dict in PropagationResult.
     hf_at_ephem = result_high_fidelity_propagation.at_ephem_times
+
+    # Check if time grids match, if not, interpolate to JPL Horizons grid
+    jpl_times = result_jpl_horizons_ephemeris.time_grid.deltas
+    hf_times = hf_at_ephem.time_grid.deltas
+
+    if len(hf_times) != len(jpl_times) or not np.allclose(hf_times, jpl_times):
+      # Time grids don't match - interpolate HF to JPL grid
+      print(f"      Interpolating HF model to JPL Horizons time grid ({len(hf_times)} -> {len(jpl_times)} points)")
+      hf_at_ephem = _interpolate_result_to_times(hf_at_ephem, jpl_times)
     
-    fig_err_ts = plot_time_series_error(
-      result_ref  = result_jpl_horizons_ephemeris,
-      result_comp = hf_at_ephem,
-      epoch       = time_o_dt,
-      use_ric     = True,
-    )
-    title = f'Error Time Series: High-Fidelity vs JPL Horizons - {object_name_display}'
-    fig_err_ts.suptitle(title, fontsize=14)
-    filename = f'error_timeseries_cart_coe_mee_high_fidelity_rel_jpl_horizons_{name_lower}.png'
-    fig_err_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-    error_files['hf_vs_horizons'].append(filename)
-    plt.close(fig_err_ts)
+    try:
+      fig_err_ts = plot_time_series_error(
+        result_ref  = result_jpl_horizons_ephemeris,
+        result_comp = hf_at_ephem,
+        epoch       = time_o_dt,
+        use_ric     = True,
+      )
+      title = f'Error Time Series: High-Fidelity vs JPL Horizons - {object_name_display}'
+      fig_err_ts.suptitle(title, fontsize=14)
+      filename = f'error_timeseries_cart_coe_mee_high_fidelity_rel_jpl_horizons_{name_lower}.png'
+      fig_err_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+      error_files['hf_vs_horizons'].append(filename)
+      plt.close(fig_err_ts)
+    except Exception as e:
+      print(f"      [WARNING] HF vs Horizons error plot failed: {e}")
 
   # High-Fidelity Relative To SGP4 (compare at equal grid times)
   if compare_tle and has_high_fidelity and has_sgp4:
@@ -662,20 +777,33 @@ def generate_plots(
       filter_at_ephem = od_filter_states.at_ephem_times
       smoother_at_ephem = od_smoother_states.at_ephem_times
 
-      # Generate filter/smoother error plot with both solutions overlaid
-      fig_err_ts = plot_time_series_error(
-        result_ref      = result_jpl_horizons_ephemeris,
-        result_comp     = filter_at_ephem,
-        epoch           = time_o_dt,
-        use_ric         = True,
-        result_smoother = smoother_at_ephem,
-      )
-      title = f'Error Time Series: High-Fidelity vs JPL Horizons - {object_name_display}'
-      fig_err_ts.suptitle(title, fontsize=14)
-      filename = f'error_timeseries_cart_coe_mee_high_fidelity_filter_smoother_rel_jpl_horizons_{name_lower}.png'
-      fig_err_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
-      od_comparison_files.append(filename)
-      plt.close(fig_err_ts)
+      # Check if time grids match, if not, interpolate to JPL Horizons grid
+      jpl_times = result_jpl_horizons_ephemeris.time_grid.deltas
+      filter_times = filter_at_ephem.time_grid.deltas
+
+      if len(filter_times) != len(jpl_times) or not np.allclose(filter_times, jpl_times):
+        # Time grids don't match - interpolate filter/smoother to JPL grid
+        print(f"      Interpolating filter/smoother results to JPL Horizons time grid ({len(filter_times)} -> {len(jpl_times)} points)")
+        filter_at_ephem = _interpolate_result_to_times(filter_at_ephem, jpl_times)
+        smoother_at_ephem = _interpolate_result_to_times(smoother_at_ephem, jpl_times)
+
+      try:
+        # Generate filter/smoother error plot with both solutions overlaid
+        fig_err_ts = plot_time_series_error(
+          result_ref      = result_jpl_horizons_ephemeris,
+          result_comp     = filter_at_ephem,
+          epoch           = time_o_dt,
+          use_ric         = True,
+          result_smoother = smoother_at_ephem,
+        )
+        title = f'Error Time Series: Filter/Smoother vs JPL Horizons - {object_name_display}'
+        fig_err_ts.suptitle(title, fontsize=14)
+        filename = f'error_timeseries_cart_coe_mee_high_fidelity_filter_smoother_rel_jpl_horizons_{name_lower}.png'
+        fig_err_ts.savefig(figures_folderpath / filename, dpi=300, bbox_inches='tight')
+        od_comparison_files.append(filename)
+        plt.close(fig_err_ts)
+      except Exception as e:
+        print(f"      [WARNING] Filter/smoother error plot failed: {e}")
 
   # Generate McReynolds consistency plot
   consistency_files = []

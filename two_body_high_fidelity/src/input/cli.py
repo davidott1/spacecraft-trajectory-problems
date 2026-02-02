@@ -172,6 +172,10 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
     'process_noise_vel': ('process_noise_vel', ['--process-noise-vel']),
     'process_noise_pos__m_per_s': ('process_noise_pos', ['--process-noise-pos']),
     'process_noise_vel__m_per_s2': ('process_noise_vel', ['--process-noise-vel']),
+    'use_approx_jacobian': ('use_approx_jacobian', ['--use-approx-jacobian', '--approx-jacobian']),
+    'use_analytic_jacobian': ('use_analytic_jacobian', ['--use-analytic-jacobian', '--analytic-jacobian']),
+    'jacobian_approx_eps': ('jacobian_approx_eps', ['--jacobian-approx-eps']),
+    'make_meas_from': ('make_meas_from', ['--make-meas-from']),
   }
 
   # Process each config key
@@ -259,17 +263,20 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
           setattr(args, arg_name, config_value)
 
     elif arg_name in ['include_drag', 'include_srp', 'include_relativity', 'include_solid_tides', 'include_ocean_tides', 'compare_tle', 'compare_jpl_horizons',
-                      'auto_download', 'include_tracker_skyplots', 'include_tracker_on_body',
-                      'include_orbit_determination']:
+              'auto_download', 'include_tracker_skyplots', 'include_tracker_on_body',
+              'include_orbit_determination', 'use_approx_jacobian', 'use_analytic_jacobian']:
       # Boolean flags - only override if CLI kept the default False
       # With FlexibleBooleanAction, check if the value is still False (default)
       if current_value is False:
         setattr(args, arg_name, config_value)
 
-    elif arg_name in ['atol', 'rtol']:
+    elif arg_name in ['atol', 'rtol', 'jacobian_approx_eps']:
       # Float arguments - use config if CLI kept defaults
       default_vals = {'atol': 1e-15, 'rtol': 1e-12}
-      if current_value == default_vals[arg_name]:
+      if arg_name == 'jacobian_approx_eps':
+        if current_value is None:
+          setattr(args, arg_name, float(config_value))
+      elif current_value == default_vals[arg_name]:
         setattr(args, arg_name, config_value)
 
     elif arg_name in ['process_noise_pos', 'process_noise_vel']:
@@ -642,6 +649,57 @@ def parse_command_line_arguments(
     type    = float,
     default = None,
     help    = 'Velocity process noise spectral density [m/s^2]. Represents continuous acceleration noise. Default: 1e-7. EKF uses Q_vel = (value * sqrt(dt))^2.',
+  )
+
+  parser.add_argument(
+    '--use-approx-jacobian',
+    '--approx-jacobian',
+    dest    = 'use_approx_jacobian',
+    action  = FlexibleBooleanAction,
+    default = False,
+    help    = 'Use numerical Jacobian for gravity (default if neither flag is set). Accepts True/False or use --disable-approx-jacobian to disable.',
+  )
+  parser.add_argument(
+    '--disable-approx-jacobian',
+    dest    = 'use_approx_jacobian',
+    action  = FlexibleBooleanAction,
+    default = argparse.SUPPRESS,
+    invert  = True,
+    help    = argparse.SUPPRESS,
+  )
+
+  parser.add_argument(
+    '--use-analytic-jacobian',
+    '--analytic-jacobian',
+    dest    = 'use_analytic_jacobian',
+    action  = FlexibleBooleanAction,
+    default = False,
+    help    = 'Use analytic Jacobian (currently J2-only). Accepts True/False or use --disable-analytic-jacobian to disable.',
+  )
+  parser.add_argument(
+    '--disable-analytic-jacobian',
+    dest    = 'use_analytic_jacobian',
+    action  = FlexibleBooleanAction,
+    default = argparse.SUPPRESS,
+    invert  = True,
+    help    = argparse.SUPPRESS,
+  )
+
+  parser.add_argument(
+    '--jacobian-approx-eps',
+    dest    = 'jacobian_approx_eps',
+    type    = float,
+    default = None,
+    help    = 'Relative step size for numerical Jacobian (default: 1e-6).',
+  )
+
+  parser.add_argument(
+    '--make-meas-from',
+    dest    = 'make_meas_from',
+    type    = str,
+    choices = ['jpl_ephem', 'model'],
+    default = 'jpl_ephem',
+    help    = 'Source for measurement simulation: jpl_ephem (default) or model (closed-loop).',
   )
 
   # Parse arguments

@@ -168,6 +168,10 @@ def main(
   include_orbit_determination    : bool            = False,
   process_noise_pos              : Optional[float] = None,
   process_noise_vel              : Optional[float] = None,
+  use_approx_jacobian            : Optional[bool]  = None,
+  use_analytic_jacobian          : Optional[bool]  = None,
+  jacobian_approx_eps            : Optional[float] = None,
+  make_meas_from                 : str             = 'jpl_ephem',
 ) -> PropagationResult:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -241,6 +245,9 @@ def main(
     include_orbit_determination,
     process_noise_pos,
     process_noise_vel,
+    use_approx_jacobian,
+    use_analytic_jacobian,
+    jacobian_approx_eps,
   )
 
   # Start logging to file
@@ -370,8 +377,18 @@ def main(
   od_residual_data = None
   if include_orbit_determination and trackers is not None and len(trackers) > 0:
     
-    # Use JPL Horizons as truth for measurement simulation
-    if result_jpl_horizons_ephemeris is not None and result_jpl_horizons_ephemeris.success:
+    # Choose truth source for measurement simulation
+    if make_meas_from == 'model' and result_high_fidelity_propagation is not None:
+      truth_for_measurements = result_high_fidelity_propagation
+      truth_source_name = "high-fidelity model (closed-loop)"
+    elif result_jpl_horizons_ephemeris is not None and result_jpl_horizons_ephemeris.success:
+      truth_for_measurements = result_jpl_horizons_ephemeris
+      truth_source_name = "JPL Horizons ephemeris"
+    else:
+      truth_for_measurements = None
+      truth_source_name = None
+    
+    if truth_for_measurements is not None:
       section_title = "Orbit Determination with Extended Kalman Filter"
       print("\n" + "-" * len(section_title))
       print(section_title)
@@ -379,10 +396,11 @@ def main(
 
       # Simulate measurements from ALL trackers
       print(f"\n  Progress")
+      print(f"    Measurement truth source: {truth_source_name}")
       all_measurements = []
       for i, tracker in enumerate(trackers):
-        print(f"    Simulating measurements from tracker: {tracker.name}")
-        simulator = MeasurementSimulator(result_jpl_horizons_ephemeris, tracker, config.time_o_dt)
+        print(f"    Simulating measurements from tracker : {tracker.name}")
+        simulator = MeasurementSimulator(truth_for_measurements, tracker, config.time_o_dt)
         noise_config = simulator.get_tracker_noise_config()
         # Use different seed per tracker for independent noise
         measurements = simulator.simulate(noise_config=noise_config, seed=42+i, include_rates=True)
@@ -403,9 +421,11 @@ def main(
         merged_measurements = merge_multi_tracker_measurements(all_measurements)
         n_measurements = merged_measurements.n_measurements
         meas_per_tracker = merged_measurements.get_measurements_per_tracker()
-        print(f"    Merged {n_measurements} measurements from {len(all_measurements)} tracker(s):")
-        for tracker_name, count in meas_per_tracker.items():
-          print(f"      - {tracker_name}: {count}")
+        print(f"    Merged {n_measurements} measurements from {len(all_measurements)} tracker(s)")
+        if meas_per_tracker:
+          max_name_len = max(len(name) for name in meas_per_tracker.keys())
+          for tracker_name, count in meas_per_tracker.items():
+            print(f"      {tracker_name:<{max_name_len}} : {count}")
 
       # Store measurement times for plotting (only visible times)
       if merged_measurements is not None:
@@ -437,6 +457,13 @@ def main(
       initial_pos_sigma = 100.0  # m
       initial_vel_sigma = 1.0    # m/s
 
+      # Determine which time grid to use for EKF processing
+      # Use the truth source's time grid so measurements align properly
+      if make_meas_from == 'model' and result_high_fidelity_propagation is not None:
+        ekf_ephemeris_times = result_high_fidelity_propagation.time_grid.deltas
+      else:
+        ekf_ephemeris_times = result_jpl_horizons_ephemeris.time_grid.deltas
+
       # Process with EKF
       if merged_measurements is not None and n_measurements > 0:
         print(f"    Processing {n_measurements} measurements with multi-tracker EKF")
@@ -444,7 +471,7 @@ def main(
           merged_measurements = merged_measurements,
           initial_state       = initial_guess,
           epoch_dt_utc        = config.time_o_dt,
-          ephemeris_times     = result_jpl_horizons_ephemeris.time_grid.deltas,
+          ephemeris_times     = ekf_ephemeris_times,
           propagation_times   = None,  # Use ephemeris_times
           initial_covariance  = None,  # Use defaults
           process_noise       = od_process_noise,
@@ -475,24 +502,26 @@ def main(
         # Print summary
         print()
         print(f"  Summary")
-        print(f"    Trackers             : {len(all_measurements)}")
-        for tracker_name, count in meas_per_tracker.items():
-          print(f"      - {tracker_name}: {count} measurements")
+        print(f"    Trackers            : {len(all_measurements)}")
+        if meas_per_tracker:
+          max_name_len = max(len(name) for name in meas_per_tracker.keys())
+          for tracker_name, count in meas_per_tracker.items():
+            print(f"      {tracker_name:<{max_name_len}} : {count} measurements")
         print(f"    Total Measurements   : {n_measurements}")
         print(f"    Process Noise (pos)  : {q_pos_sigma:.1e}")
         print(f"    Process Noise (vel)  : {q_vel_sigma:.1e}")
         print()
         print(f"    Initial Uncertainty")
-        print(f"      Position           : {initial_pos_sigma:.0f} m (1-σ)")
-        print(f"      Velocity           : {initial_vel_sigma:.1f} m/s (1-σ)")
+        print(f"      Position           : {initial_pos_sigma:.0f} m (1σ)")
+        print(f"      Velocity           : {initial_vel_sigma:.1f} m/s (1σ)")
         print()
         print(f"    Final Filter Uncertainty")
-        print(f"      Position           : {final_pos_sigma:.1f} m (1-σ)")
-        print(f"      Velocity           : {final_vel_sigma:.4f} m/s (1-σ)")
+        print(f"      Position           : {final_pos_sigma:.1f} m (1σ)")
+        print(f"      Velocity           : {final_vel_sigma:.4f} m/s (1σ)")
         print()
         print(f"    Final Smoother Uncertainty")
-        print(f"      Position           : {final_smooth_pos_sigma:.1f} m (1-σ)")
-        print(f"      Velocity           : {final_smooth_vel_sigma:.4f} m/s (1-σ)")
+        print(f"      Position           : {final_smooth_pos_sigma:.1f} m (1σ)")
+        print(f"      Velocity           : {final_smooth_vel_sigma:.4f} m/s (1σ)")
 
         # Replace high-fidelity propagation result with filter OD estimates
         result_high_fidelity_propagation = od_filter_states
@@ -565,4 +594,8 @@ if __name__ == "__main__":
     args.include_orbit_determination,
     args.process_noise_pos,
     args.process_noise_vel,
+    args.use_approx_jacobian,
+    args.use_analytic_jacobian,
+    args.jacobian_approx_eps,
+    args.make_meas_from,
   )

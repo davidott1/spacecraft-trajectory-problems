@@ -100,25 +100,31 @@ class GravityModelConfig:
   Complete gravity model configuration.
 
   Attributes:
-    gp                  : Central body gravitational parameter [m³/s²]
-    central_body        : Central body name (default 'EARTH')
-    spherical_harmonics : Spherical harmonics configuration
-    third_body          : Third-body configuration
-    relativity          : General relativity configuration
-    solid_tides         : Solid Earth tides configuration
-    ocean_tides         : Ocean tides configuration
-    folderpath          : Path to gravity model files
-    filename            : Gravity model filename (e.g., 'EGM2008.gfc')
+    gp                    : Central body gravitational parameter [m³/s²]
+    central_body          : Central body name (default 'EARTH')
+    spherical_harmonics   : Spherical harmonics configuration
+    third_body            : Third-body configuration
+    relativity            : General relativity configuration
+    solid_tides           : Solid Earth tides configuration
+    ocean_tides           : Ocean tides configuration
+    folderpath            : Path to gravity model files
+    filename              : Gravity model filename (e.g., 'EGM2008.gfc')
+    use_approx_jacobian   : Use numerical Jacobian for gravity (default handled in config)
+    use_analytic_jacobian : Use analytic Jacobian (currently J2-only)
+    jacobian_approx_eps   : Relative step size for numerical Jacobian
   """
-  gp                  : float
-  central_body        : str                       = "EARTH"
-  spherical_harmonics : SphericalHarmonicsConfig  = field(default_factory=SphericalHarmonicsConfig)
-  third_body          : ThirdBodyConfig           = field(default_factory=ThirdBodyConfig)
-  relativity          : RelativityConfig          = field(default_factory=RelativityConfig)
-  solid_tides         : SolidEarthTidesConfig     = field(default_factory=SolidEarthTidesConfig)
-  ocean_tides         : OceanTidesConfig          = field(default_factory=OceanTidesConfig)
-  folderpath          : Optional[Path]            = None
-  filename            : Optional[str]             = None
+  gp                    : float
+  central_body          : str                      = "EARTH"
+  spherical_harmonics   : SphericalHarmonicsConfig = field(default_factory=SphericalHarmonicsConfig)
+  third_body            : ThirdBodyConfig          = field(default_factory=ThirdBodyConfig)
+  relativity            : RelativityConfig         = field(default_factory=RelativityConfig)
+  solid_tides           : SolidEarthTidesConfig    = field(default_factory=SolidEarthTidesConfig)
+  ocean_tides           : OceanTidesConfig         = field(default_factory=OceanTidesConfig)
+  folderpath            : Optional[Path]           = None
+  filename              : Optional[str]            = None
+  use_approx_jacobian   : Optional[bool]           = None
+  use_analytic_jacobian : Optional[bool]           = None
+  jacobian_approx_eps   : Optional[float]          = None
   
   @property
   def filepath(self) -> Optional[Path]:

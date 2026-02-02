@@ -291,29 +291,32 @@ def build_config(
   initial_state_norad_id         : Optional[str],
   initial_state_filename         : Optional[str],
   timespan_dt                    : list[datetime],
-  include_drag                   : bool           = False,
-  compare_tle                    : bool           = False,
-  compare_jpl_horizons           : bool           = False,
-  third_bodies                   : Optional[list] = None,
-  gravity_harmonics              : Optional[list] = None,
-  include_srp                    : bool           = False,
-  include_relativity             : bool           = False,
-  include_solid_tides            : bool           = False,
-  include_ocean_tides            : bool           = False,
-  auto_download                  : bool           = False,
-  initial_state_source           : str            = 'jpl_horizons',
-  gravity_harmonics_degree_order : Optional[list] = None,
-  gravity_model_filename         : Optional[str]  = None,
-  atol                           : float          = 1e-15,
-  rtol                           : float          = 1e-12,
-  include_tracker_skyplots       : bool           = False,
-  tracker_filename               : Optional[str]  = None,
+  include_drag                   : bool            = False,
+  compare_tle                    : bool            = False,
+  compare_jpl_horizons           : bool            = False,
+  third_bodies                   : Optional[list]  = None,
+  gravity_harmonics              : Optional[list]  = None,
+  include_srp                    : bool            = False,
+  include_relativity             : bool            = False,
+  include_solid_tides            : bool            = False,
+  include_ocean_tides            : bool            = False,
+  auto_download                  : bool            = False,
+  initial_state_source           : str             = 'jpl_horizons',
+  gravity_harmonics_degree_order : Optional[list]  = None,
+  gravity_model_filename         : Optional[str]   = None,
+  atol                           : float           = 1e-15,
+  rtol                           : float           = 1e-12,
+  include_tracker_skyplots       : bool            = False,
+  tracker_filename               : Optional[str]   = None,
   tracker_filepath               : Optional[str]   = None,
   include_tracker_on_body        : bool            = False,
   maneuver_filename              : Optional[str]   = None,
   include_orbit_determination    : bool            = False,
   process_noise_pos              : Optional[float] = None,
   process_noise_vel              : Optional[float] = None,
+  use_approx_jacobian            : Optional[bool]  = None,
+  use_analytic_jacobian          : Optional[bool]  = None,
+  jacobian_approx_eps            : Optional[float] = None,
 ) -> SimulationConfig:
   """
   Parse, validate, and set up input parameters for orbit propagation.
@@ -563,6 +566,14 @@ def build_config(
     rtol      = rtol,
   )
 
+  # Resolve Jacobian selection flags
+  use_approx = use_approx_jacobian is True
+  use_analytic = use_analytic_jacobian is True
+  if use_approx and use_analytic:
+    raise ValueError("Only one of use_approx_jacobian or use_analytic_jacobian can be True")
+  if not use_approx and not use_analytic:
+    use_approx = True
+
   # Create GravityModelConfig
   gravity_model = GravityModelConfig(
     gp                  = SOLARSYSTEMCONSTANTS.EARTH.GP,
@@ -586,6 +597,9 @@ def build_config(
     ocean_tides = OceanTidesConfig(
       enabled = include_ocean_tides,
     ),
+    use_approx_jacobian   = use_approx,
+    use_analytic_jacobian = use_analytic,
+    jacobian_approx_eps   = jacobian_approx_eps,
   )
 
   # Create InitialStateConfig

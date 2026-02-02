@@ -377,6 +377,61 @@ class SphericalHarmonicsGravity:
     
     return j2000_acc
 
+  def jacobian_approx(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+    eps           : float = 1.0e-6,
+  ) -> np.ndarray:
+    """
+    Numerical Jacobian of spherical harmonics acceleration.
+
+    Computes ∂a/∂r using central differences.
+
+    Input:
+    ------
+      time_et : float
+        Current Ephemeris Time (ET) [s]
+      j2000_pos_vec : np.ndarray
+        Position vector [m] in inertial frame (J2000)
+      eps : float
+        Relative step size for finite differences (default 1e-6).
+
+    Output:
+    -------
+      daccvec__dposvec : np.ndarray (3x3)
+        Jacobian matrix ∂a/∂r in J2000 frame
+    """
+    pos_vec = np.array(j2000_pos_vec, dtype=float)
+    daccvec__dposvec = np.zeros((3, 3))
+
+    # Compute rotation once to avoid repeated SPICE calls
+    try:
+      rot_mat = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      rot_mat = np.eye(3)
+    rot_T = rot_mat.T
+
+    for i in range(3):
+      step = eps * max(1.0, abs(pos_vec[i]))
+      if step == 0.0:
+        step = eps
+
+      pos_plus = pos_vec.copy()
+      pos_minus = pos_vec.copy()
+      pos_plus[i] += step
+      pos_minus[i] -= step
+
+      bf_plus = rot_mat @ pos_plus
+      bf_minus = rot_mat @ pos_minus
+
+      acc_plus = rot_T @ self._compute_acceleration_pines(bf_plus)
+      acc_minus = rot_T @ self._compute_acceleration_pines(bf_minus)
+
+      daccvec__dposvec[:, i] = (acc_plus - acc_minus) / (2.0 * step)
+
+    return daccvec__dposvec
+
   def _compute_acceleration_pines(
     self,
     pos_vec : np.ndarray,
