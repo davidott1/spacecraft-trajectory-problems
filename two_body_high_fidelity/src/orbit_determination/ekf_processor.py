@@ -794,12 +794,6 @@ def process_multi_tracker_measurements_with_ekf(
 
   ephem_indices = np.array(ephem_indices)
 
-  # Debug: verify lengths match
-  print(f"    [DEBUG] n_propagation (ephemeris_times): {n_propagation}")
-  print(f"    [DEBUG] n_estimation (with duplicates): {len(estimation_times)}")
-  print(f"    [DEBUG] len(ephem_indices): {len(ephem_indices)}")
-  print(f"    [DEBUG] Should match: n_propagation == len(ephem_indices)")
-
   ephem_time_grid = TimeGrid(
     initial = epoch_dt_utc,
     final   = epoch_dt_utc + timedelta(seconds=float(ephemeris_times[-1])),

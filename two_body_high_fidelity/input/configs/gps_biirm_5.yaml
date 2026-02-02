@@ -14,6 +14,11 @@ timespan : 2024-01-15T00:00:00 2024-01-16T00:00:00
 gravity_harmonics_degree_order : 4 4
 gravity_harmonics_filename     : EGM2008.gfc
 
+# Jacobian selection (exactly one should be true; defaults to approx if neither)
+use_approx_jacobian   : true
+use_analytic_jacobian : false
+jacobian_approx_eps   : 1e-6
+
 # Gravity third-bodies
 third_bodies : Sun Moon Jupiter
 

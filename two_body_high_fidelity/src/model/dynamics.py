@@ -1149,6 +1149,8 @@ class ThirdBodyGravity:
         None
       """
       self.bodies = bodies if bodies else ['sun', 'moon']
+      # Simple cache for SPICE body positions to reduce repeated calls
+      self._spice_pos_cache = {}
     
     def _get_position_body_spice(
       self,
@@ -1173,6 +1175,11 @@ class ThirdBodyGravity:
         pos_vec : np.ndarray
           Position vector [m].
       """
+      # Cache by rounded time to avoid repeated SPICE calls
+      cache_key = (body_name.upper(), frame, round(time_et, 3))
+      if cache_key in self._spice_pos_cache:
+        return self._spice_pos_cache[cache_key]
+
       # SPICE state relative to Earth
       state, _ = spice.spkez(
           targ   = self._get_naif_id(body_name),
@@ -1182,7 +1189,9 @@ class ThirdBodyGravity:
           obs    = 399  # relative to Earth
       )
       # SPICE returns km, convert to m
-      return np.array(state[0:3]) * CONVERTER.M_PER_KM
+      pos_vec = np.array(state[0:3]) * CONVERTER.M_PER_KM
+      self._spice_pos_cache[cache_key] = pos_vec
+      return pos_vec
     
     def _get_naif_id(
       self,
@@ -1738,6 +1747,18 @@ class Gravity:
       """
       # Spherical harmonics gravity model (if provided, replaces two-body terms)
       self.spherical_harmonics_model = gravity_config.spherical_harmonics.model
+
+      # Jacobian selection
+      use_approx = gravity_config.use_approx_jacobian is True
+      use_analytic = gravity_config.use_analytic_jacobian is True
+      if use_approx and use_analytic:
+        raise ValueError("Only one of use_approx_jacobian or use_analytic_jacobian can be True")
+      if not use_approx and not use_analytic:
+        use_approx = True
+
+      self.use_approx_jacobian   = use_approx
+      self.use_analytic_jacobian = use_analytic
+      self.jacobian_approx_eps   = gravity_config.jacobian_approx_eps
       
       # Two-body gravity (used if no spherical harmonics model provided)
       # Get harmonic coefficients from the config's coefficient list
@@ -1877,11 +1898,17 @@ class Gravity:
 
       # Compute Jacobian matrix A for STM propagation
       if self.spherical_harmonics_model is not None:
-        # No analytical Jacobian for spherical harmonics - use point-mass + J2 approximation
-        # Using point-mass only is too optimistic for high-fidelity propagation
-        # Including J2 in the Jacobian provides better covariance propagation
-        A_matrix = self.two_body.point_mass_jacobian(pos_vec)
-        A_matrix[3:6, 0:3] += self.two_body.oblate_j2_jacobian(time, pos_vec)
+        if self.use_analytic_jacobian:
+          # Analytical Jacobian (currently J2-only)
+          A_matrix = self.two_body.point_mass_jacobian(pos_vec)
+          A_matrix[3:6, 0:3] += self.two_body.oblate_j2_jacobian(time, pos_vec)
+        else:
+          # Numerical Jacobian from spherical harmonics model
+          eps = self.jacobian_approx_eps if self.jacobian_approx_eps is not None else 1.0e-6
+          daccvec__dposvec = self.spherical_harmonics_model.jacobian_approx(time, pos_vec, eps=eps)
+          A_matrix = np.zeros((6, 6))
+          A_matrix[0:3, 3:6] = np.eye(3)
+          A_matrix[3:6, 0:3] = daccvec__dposvec
       else:
         # Use analytical Jacobians matching the acceleration model
         A_matrix = self.two_body.point_mass_jacobian(pos_vec)
