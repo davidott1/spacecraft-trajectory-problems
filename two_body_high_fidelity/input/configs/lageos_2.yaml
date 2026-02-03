@@ -42,7 +42,7 @@ include_tracker_on_body  : true
 # Orbit determination
 include_orbit_determination : true
 make_meas_from              : jpl_horizons # model | jpl_horizons
-process_noise_pos           : 1e-3
+process_noise_pos           : 1e-4
 process_noise_vel           : 1e-6
 
 # Download options

@@ -1753,8 +1753,20 @@ class Gravity:
       use_analytic = gravity_config.use_analytic_jacobian is True
       if use_approx and use_analytic:
         raise ValueError("Only one of use_approx_jacobian or use_analytic_jacobian can be True")
+      
+      # Default behavior logic
       if not use_approx and not use_analytic:
-        use_approx = True
+        # If we have a high-fidelity spherical harmonics model, we prefer the exact analytic Jacobian (Vines)
+        # unless specifically told otherwise. 
+        # For legacy/simple cases, maybe default to approx? 
+        # But generally analytic is preferred if available.
+        if self.spherical_harmonics_model is not None:
+             use_analytic = True
+             use_approx   = False
+        else:
+             # For simple 2-body, we also have analytic J2
+             use_analytic = True
+             use_approx   = False
 
       self.use_approx_jacobian   = use_approx
       self.use_analytic_jacobian = use_analytic
@@ -1899,9 +1911,11 @@ class Gravity:
       # Compute Jacobian matrix A for STM propagation
       if self.spherical_harmonics_model is not None:
         if self.use_analytic_jacobian:
-          # Analytical Jacobian (currently J2-only)
-          A_matrix = self.two_body.point_mass_jacobian(pos_vec)
-          A_matrix[3:6, 0:3] += self.two_body.oblate_j2_jacobian(time, pos_vec)
+          # Analytical Jacobian using Spherical Harmonics (Pines implementation)
+          daccvec__dposvec = self.spherical_harmonics_model.jacobian(time, pos_vec)
+          A_matrix = np.zeros((6, 6))
+          A_matrix[0:3, 3:6] = np.eye(3)
+          A_matrix[3:6, 0:3] = daccvec__dposvec
         else:
           # Numerical Jacobian from spherical harmonics model
           eps = self.jacobian_approx_eps if self.jacobian_approx_eps is not None else 1.0e-6
@@ -2035,6 +2049,103 @@ class AtmosphericDrag:
       
       return acc_drag_mag * acc_drag_dir
     
+    def jacobian(
+      self,
+      pos_vec : np.ndarray,
+      vel_vec : np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
+      """
+      Compute Jacobians of drag acceleration with respect to position and velocity.
+
+      Input:
+      ------
+        pos_vec : np.ndarray
+          Position vector [m]
+        vel_vec : np.ndarray
+          Velocity vector [m/s]
+
+      Output:
+      -------
+        dacc__dpos : np.ndarray (3, 3)
+          Partial derivative of acceleration w.r.t. position
+        dacc__dvel : np.ndarray (3, 3)
+          Partial derivative of acceleration w.r.t. velocity
+      """
+      # Position magnitude and altitude
+      r       = np.linalg.norm(pos_vec)
+      alt     = r - SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
+      
+      # Constants
+      omega_earth = np.array([0, 0, SOLARSYSTEMCONSTANTS.EARTH.OMEGA])
+      
+      # Atmospheric density
+      rho = self._atmospheric_density(float(alt))
+      
+      # Look up scale height H for current altitude
+      # This is an approximation: assuming H from the static table lookup
+      # corresponding to the current altitude layer.
+      H = 0.0
+      for h_b, rho_b, H_b in self.ATMOSPHERE_LAYERS:
+        # Convert h_b from km to m
+        if alt >= h_b * 1000.0:
+          H = H_b * 1000.0 # Convert km to m
+        else:
+          break
+      if H == 0.0: H = 10000.0 # Fallback 
+
+      # Gradient of density w.r.t. position
+      # d(rho)/d(r) = -rho/H * (r_vec / r)
+      drho__dpos = -(rho / H) * (pos_vec / r)
+
+      # Relative velocity
+      vel_rel_vec = vel_vec - np.cross(omega_earth, pos_vec)
+      v_rel       = np.linalg.norm(vel_rel_vec)
+      
+      if v_rel == 0:
+        return np.zeros((3, 3)), np.zeros((3, 3))
+
+      # Drag factor B = 0.5 * Cd * A / m
+      B = 0.5 * self.cd * self.area / self.mass
+
+      # d(v_rel_vec) / d(pos_vec) = - skew(omega)
+      # skew(omega) = [[0, -wz, wy], [wz, 0, -wx], [-wy, wx, 0]]
+      # Since omega = [0, 0, wz]:
+      skew_omega = np.array([
+        [0.0, -omega_earth[2], 0.0],
+        [omega_earth[2], 0.0, 0.0],
+        [0.0, 0.0, 0.0]
+      ])
+      dv_rel_vec__dpos = -skew_omega
+
+      # d(v_rel) / d(pos_vec) = (v_rel_vec^T / v_rel) @ d(v_rel_vec)/d(pos_vec)
+      dv_rel__dpos = (vel_rel_vec @ dv_rel_vec__dpos) / v_rel
+
+      # Velocity Jacobian: d(acc) / d(vel)
+      # a = -B * rho * v_rel * v_rel_vec
+      # da/dv = -B * rho * ( v_rel * I + v_rel_vec * (v_rel_vec^T / v_rel) )
+      term_vv = np.outer(vel_rel_vec, vel_rel_vec) / v_rel
+      dacc__dvel = -B * rho * (v_rel * np.eye(3) + term_vv)
+
+      # Position Jacobian: d(acc) / d(pos)
+      # a = -B * rho * v_rel * v_rel_vec
+      # da/dp = -B * [ (d(rho)/dp * v_rel * v_rel_vec) + (rho * d(v_rel)/dp * v_rel_vec) + (rho * v_rel * d(v_rel_vec)/dp) ]
+      
+      # Term 1: Variation of density
+      # result is 3x3 matrix. outer product of (v_rel * v_rel_vec) and drho__dpos
+      term1 = np.outer(v_rel * vel_rel_vec, drho__dpos)
+
+      # Term 2: Variation of relative speed magnitude
+      # result is 3x3. outer product of v_rel_vec and dv_rel__dpos
+      term2 = rho * np.outer(vel_rel_vec, dv_rel__dpos)
+
+      # Term 3: Variation of relative velocity vector direction
+      # result is 3x3. rho * v_rel * dv_rel_vec__dpos
+      term3 = rho * v_rel * dv_rel_vec__dpos
+
+      dacc__dpos = -B * (term1 + term2 + term3)
+
+      return dacc__dpos, dacc__dvel
+
     def _atmospheric_density(
       self,
       altitude : float,
@@ -2506,6 +2617,11 @@ class AccelerationSTMDot:
       # Atmospheric drag (optional)
       if self.drag is not None:
         acc_vec += self.drag.compute(pos_vec, vel_vec)
+        if include_stm:
+           drag_jac_pos, drag_jac_vel = self.drag.jacobian(pos_vec, vel_vec)
+           # Add drag contributions to STM time derivative
+           # d (stm_vel) / dt += d(acc)/d(pos) * stm_pos + d(acc)/d(vel) * stm_vel
+           stm_dot[3:6, :] += drag_jac_pos @ stm[0:3, :] + drag_jac_vel @ stm[3:6, :]
 
       # Solar radiation pressure (optional)
       if self.srp is not None:
