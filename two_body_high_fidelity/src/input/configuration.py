@@ -44,7 +44,7 @@ def print_input_configuration(
   use_approx_jacobian        : Optional[bool]  = None,
   use_analytic_jacobian      : Optional[bool]  = None,
   jacobian_approx_eps        : Optional[float] = None,
-  make_meas_from             : str             = 'jpl_ephem',
+  make_meas_from             : str             = 'jpl_horizons',
 ) -> None:
   """
   Print the input configuration in a formatted table.
@@ -116,7 +116,7 @@ def print_input_configuration(
     'use_approx_jacobian'         : True,
     'use_analytic_jacobian'       : False,
     'jacobian_approx_eps'         : 1e-6,
-    'make_meas_from'              : 'jpl_ephem',
+    'make_meas_from'              : 'jpl_horizons',
   }
 
   # Format values for display
@@ -260,7 +260,7 @@ def print_paths(
 
 def print_configuration(
   config         : SimulationConfig,
-  make_meas_from : str = 'jpl_ephem',
+  make_meas_from : str = 'jpl_horizons',
 ) -> None:
   """
   Print the complete configuration (input arguments and paths).
@@ -270,7 +270,7 @@ def print_configuration(
     config : SimulationConfig
       Configuration object containing all input and path attributes.
     make_meas_from : str
-      Source for measurement simulation ('jpl_ephem' or 'model').
+      Source for measurement simulation ('jpl_horizons' or 'model').
 
   Output:
   -------

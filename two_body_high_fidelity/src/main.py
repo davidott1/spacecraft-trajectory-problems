@@ -171,7 +171,7 @@ def main(
   use_approx_jacobian            : Optional[bool]  = None,
   use_analytic_jacobian          : Optional[bool]  = None,
   jacobian_approx_eps            : Optional[float] = None,
-  make_meas_from                 : str             = 'jpl_ephem',
+  make_meas_from                 : str             = 'jpl_horizons',
 ) -> PropagationResult:
   """
   Main function to run the high-fidelity orbit propagation.
