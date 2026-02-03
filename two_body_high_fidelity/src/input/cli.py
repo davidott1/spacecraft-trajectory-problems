@@ -697,9 +697,9 @@ def parse_command_line_arguments(
     '--make-meas-from',
     dest    = 'make_meas_from',
     type    = str,
-    choices = ['jpl_ephem', 'model'],
-    default = 'jpl_ephem',
-    help    = 'Source for measurement simulation: jpl_ephem (default) or model (closed-loop).',
+    choices = ['jpl_horizons', 'model'],
+    default = 'jpl_horizons',
+    help    = 'Source for measurement simulation: jpl_horizons (default) or model (closed-loop).',
   )
 
   # Parse arguments

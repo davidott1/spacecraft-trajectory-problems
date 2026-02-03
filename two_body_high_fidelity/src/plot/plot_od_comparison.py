@@ -673,6 +673,7 @@ def plot_mcreynolds_consistency(
   # Add statistics text
   mean_val = np.mean(chi_pos_all)
   std_val = np.std(chi_pos_all)
+  print(f"    [DEBUG] McReynolds Position Consistency: mean={mean_val:.2f}, std={std_val:.2f}")
   ax_pos_hist.text(0.95, 0.95, f'μ={mean_val:.2f}\nσ={std_val:.2f}',
                    transform=ax_pos_hist.transAxes, fontsize=9,
                    verticalalignment='top', horizontalalignment='right',
