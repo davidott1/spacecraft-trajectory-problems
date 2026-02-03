@@ -332,8 +332,8 @@ class SphericalHarmonicsGravity:
     Precompute normalization factors for Legendre recursion.
     These convert between normalized and unnormalized associated Legendre functions.
     """
-    n_max = self.degree + 2  # Need extra for derivatives
-    m_max = self.order  + 2
+    n_max = self.degree + 4  # Increased for curvature (Jacobian) computation
+    m_max = self.order  + 4
     
     # Anm factors for vertical recursion: P(n,m) from P(n-1,m) and P(n-2,m)
     self.anm = np.zeros((n_max, m_max))
@@ -556,6 +556,348 @@ class SphericalHarmonicsGravity:
     
     return acc_vec
 
+  def jacobian(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Compute gravitational Jacobian (Gravity Gradient Matrix) using spherical harmonics.
+    
+    Input:
+    ------
+      time_et : float
+        Ephemeris time [s]
+      j2000_pos_vec : np.ndarray
+        Position vector in J2000 frame [m]
+        
+    Output:
+    -------
+      j2000_jac : np.ndarray (3, 3)
+        3x3 Jacobian matrix (da/dr) in J2000 frame [1/s^2]
+    """
+    # Transform to body-fixed frame
+    try:
+      rot_mat = FrameConverter.j2000_to_iau_earth(time_et)
+    except Exception:
+      rot_mat = np.eye(3)
+    
+    bf_pos = rot_mat @ j2000_pos_vec
+    
+    # Use Pines algorithm for Jacobian (Vines)
+    bf_jac = self._compute_jacobian_pines(bf_pos)
+    
+    # Transform back to J2000: J_inertial = R^T * J_body * R
+    j2000_jac = rot_mat.T @ bf_jac @ rot_mat
+    
+    return j2000_jac
+
+  def _compute_jacobian_pines(
+    self,
+    pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Compute Gravity Gradient Matrix (Jacobian) using Pines' algorithm.
+    The partial derivatives of the acceleration vector.
+    """
+    x, y, z = pos_vec
+    r = np.linalg.norm(pos_vec)
+    r_sq = r * r
+    
+    # Normalized coordinates
+    s = x / r
+    t = y / r
+    u = z / r
+    
+    Re = self.radius
+    gp = self.gp
+    
+    n_max = self.degree
+    m_max = self.order
+    
+    # Needs recursion up to n_max + 2 for second derivatives
+    V = np.zeros((n_max + 4, m_max + 4))
+    W = np.zeros((n_max + 4, m_max + 4))
+    
+    # Seed values
+    rho = Re / r
+    V[0, 0] = rho
+    W[0, 0] = 0.0
+    
+    # -------------------------------------------------------------------------
+    # Recursion (same as acceleration, but extended depth)
+    # -------------------------------------------------------------------------
+    
+    # Zonal (m=0)
+    V[1, 0] = u * np.sqrt(3.0) * rho * V[0, 0]
+    for n in range(2, n_max + 3):
+      V[n, 0] = (self.anm[n, 0] * u * V[n-1, 0]) * rho - (self.bnm[n, 0] * V[n-2, 0]) * rho * rho
+
+    # Sectorial/Tesseral
+    for m in range(1, m_max + 3):
+      # Sectorial n=m
+      if m <= n_max + 2:
+        V[m, m] = self.dnm[m] * (s * V[m-1, m-1] - t * W[m-1, m-1]) * rho
+        W[m, m] = self.dnm[m] * (s * W[m-1, m-1] + t * V[m-1, m-1]) * rho
+      
+      # First tesseral n=m+1
+      if m + 1 <= n_max + 2:
+        fac = np.sqrt(2*m + 3)
+        V[m+1, m] = fac * u * V[m, m] * rho
+        W[m+1, m] = fac * u * W[m, m] * rho
+      
+      # Remaining tesseral
+      for n in range(m + 2, n_max + 3):
+        V[n, m] = (self.anm[n, m] * u * V[n-1, m]) * rho - (self.bnm[n, m] * V[n-2, m]) * rho * rho
+
+    # -------------------------------------------------------------------------
+    # Gradient Computation
+    # -------------------------------------------------------------------------
+    # Initialize partials
+    j_xx = j_yy = j_zz = j_xy = j_xz = j_yz = 0.0
+    
+    for n in range(2, n_max + 1):
+      # Normalization correction for first derivative (acceleration)
+      nf1 = np.sqrt((2.0 * n + 1.0) / (2.0 * n + 3.0))
+      # Normalization correction for second derivative (gradient)
+      nf2 = np.sqrt((2.0 * n + 3.0) / (2.0 * n + 5.0))
+      
+      # Combined normalization
+      norm_fix = nf1 * nf2
+
+      for m in range(0, min(n + 1, m_max + 1)):
+        Cnm = self.coefficients.C[n, m]
+        Snm = self.coefficients.S[n, m]
+        
+        # Apply masks
+        if self._C_mask is not None and not self._C_mask[n, m]: Cnm = 0.0
+        if self._S_mask is not None and not self._S_mask[n, m]: Snm = 0.0
+        if Cnm == 0.0 and Snm == 0.0: continue
+
+        # Helper terms for m-2, m, m+2
+        # C_alpha: V/W terms for m-2
+        # C_beta:  V/W terms for m
+        # C_gamma: V/W terms for m+2
+
+        # Factors for recursions n->n+1->n+2
+        # We process based on the 9 components of Hessian, exploiting symmetry
+        # da_x / dx
+        #   involves m-2, m, m+2
+        # da_z / dz
+        #   involves m, m
+        
+        # Recalculate factors for n, m
+        # fac1_1: sqrt((n-m+1)(n-m+2)) corresponding to m-1 step
+        # fac2_1: sqrt((n+m+1)(n+m+2)) corresponding to m+1 step
+        # fac3_1: sqrt((n-m+1)(n+m+1)) corresponding to z step
+
+        # --- Base Factors (Level 1: n -> n+1) ---
+        f_m_minus_1 = 0.0
+        if m > 0:
+           # valid for m-1
+           f_m_minus_1 = np.sqrt((n - m + 1) * (n - m + 2))
+           if m == 1: f_m_minus_1 = np.sqrt(n * (n + 1)) # special m=1 case
+        
+        f_m_plus_1  = np.sqrt((n + m + 1) * (n + m + 2))
+        f_z         = np.sqrt((n - m + 1) * (n + m + 1))
+        
+        # --- Level 2 Factors (Level 2: n+1 -> n+2) ---
+        # We need these evaluated at the new orders (m-1, m, m+1)
+        
+        # For term m-2 (path: m -> m-1 -> m-2)
+        f_m_minus_2 = 0.0 # from m-1 down to m-2
+        if m > 1:
+           # parent is m-1, child is m-2
+           # factor formula using n_new = n+1, m_new = m-1
+           # sqrt((n' - m' + 1)(n' - m' + 2)) -> sqrt((n+1 - (m-1) + 1)(...))
+           # sqrt((n - m + 3)(n - m + 4))
+           if m == 2:
+             f_m_minus_2 = np.sqrt((n + 1) * (n + 2))
+           else:
+             f_m_minus_2 = np.sqrt((n - m + 3) * (n - m + 4))
+
+        # For term m (path: m -> m-1 -> m)
+        # parent m-1, child m
+        # factor sqrt((n' + m' + 1)(n' + m' + 2)) where n'=n+1, m'=m-1
+        # sqrt((n+1 + m-1 + 1)(...)) -> sqrt((n+m+1)(n+m+2))
+        # Note: this equals f_m_plus_1!
+        
+        # For term m (path: m -> m+1 -> m)
+        # parent m+1, child m
+        # factor sqrt((n' - m' + 1)(n' - m' + 2)) where n'=n+1, m'=m+1
+        # sqrt((n+1 - (m+1) + 1)(...)) -> sqrt((n-m+1)(n-m+2))
+        # Note: this equals f_m_minus_1!
+
+        # For term m+2 (path: m -> m+1 -> m+2)
+        # parent m+1, child m+2
+        f_m_plus_2  = np.sqrt((n + m + 3) * (n + m + 4))
+
+        # --- Term Combinations ---
+        # 1. Term (m-2)
+        # Coeff: 0.25 * f_m_minus_1 * f_m_minus_2
+        val_m_minus_2_C = 0.0
+        val_m_minus_2_S = 0.0
+        if m >= 2:
+            val_m_minus_2_C = V[n+2, m-2]
+            val_m_minus_2_S = W[n+2, m-2]
+        term_m_minus_2_C = (Cnm * val_m_minus_2_C + Snm * val_m_minus_2_S)
+        term_m_minus_2_S = (Cnm * val_m_minus_2_S - Snm * val_m_minus_2_C)
+        
+        c_m_minus_2 = 0.25 * f_m_minus_1 * f_m_minus_2
+
+        # 2. Term (m+2)
+        # Coeff: 0.25 * f_m_plus_1 * f_m_plus_2
+        val_m_plus_2_C = V[n+2, m+2]
+        val_m_plus_2_S = W[n+2, m+2]
+        term_m_plus_2_C = (Cnm * val_m_plus_2_C + Snm * val_m_plus_2_S)
+        term_m_plus_2_S = (Cnm * val_m_plus_2_S - Snm * val_m_plus_2_C)
+        
+        c_m_plus_2 = 0.25 * f_m_plus_1 * f_m_plus_2
+        
+        # 3. Term (m) - from x/y mixed
+        # Coeff: 0.25 * (f_m_minus_1 * f_m_plus_1 + f_m_plus_1 * f_m_minus_1) ... wait check structure
+        # Actually for partial_xx: 0.5 * d/dx ( +fac1 * V... - fac2 * V... )
+        # d/dx V(n,m) ~ +V(n,m-1) - V(n,m+1)
+        # So we get cross terms.
+        
+        val_m_C = V[n+2, m]
+        val_m_S = W[n+2, m]
+        term_m_C = (Cnm * val_m_C + Snm * val_m_S)
+        term_m_S = (Cnm * val_m_S - Snm * val_m_C)
+
+        # Coefficient for central term (m) in xx/yy
+        # derived from -fac2 * ( +fac1 * V(m) ) + fac1 * ( -fac2 * V(m) )
+        # = -2 * fac1 * fac2 * V(m) * 0.25 = -0.5 * fac1 * fac2
+        c_m_center = -0.5 * f_m_minus_1 * f_m_plus_1
+        
+        # --- Hessian Components ---
+
+        # d(ax)/dx
+        # = Term(m-2) + Term(m+2) + Term(m center)
+        # (+ c_m_minus_2 * V_m-2  + c_m_plus_2 * V_m+2  + c_m_center * V_m)
+        j_xx += (c_m_minus_2 * term_m_minus_2_C + c_m_plus_2 * term_m_plus_2_C + c_m_center * term_m_C) * norm_fix
+
+        # d(ay)/dy
+        # = - Term(m-2) - Term(m+2) + Term(m center) 
+        # (signs flip for m-2 and m+2 due to W/V swapping in d/dy)
+        # d/dy V(m) ~ W(m-1) + W(m+1)
+        # d/dy W(m) ~ -V(m-1) - V(m+1)
+        # Combining leads to negations for the m+/-2 terms relative to xx
+        j_yy += (-c_m_minus_2 * term_m_minus_2_C - c_m_plus_2 * term_m_plus_2_C + c_m_center * term_m_C) * norm_fix
+
+        # d(ax)/dy = d(ay)/dx (xy)
+        # Involves S terms for m +/- 2
+        # c_m_minus_2 * TermS(m-2) - c_m_plus_2 * TermS(m+2)
+        # The center term cancels out for xy
+        j_xy += (c_m_minus_2 * term_m_minus_2_S - c_m_plus_2 * term_m_plus_2_S) * norm_fix
+
+        # d(az)/dz
+        # d/dz V(n,m) = -fac3 * V(n+1,m)
+        # Second deriv: (-fac3_1) * (-fac3_2) * V(n+2,m)
+        # fac3_2 for n+1->n+2, order m->m
+        # sqrt((n+1-m+1)(n+1+m+1)) = sqrt((n-m+2)(n+m+2))
+        f_z_2 = np.sqrt((n - m + 2) * (n + m + 2))
+        # d(az)/dz
+        # d/dz V(n,m) = -fac3 * V(n+1,m)
+        # Second deriv: (-fac3_1) * (-fac3_2) * V(n+2,m)
+        # fac3_2 for n+1->n+2, order m->m
+        # sqrt((n+1-m+1)(n+1+m+1)) = sqrt((n-m+2)(n+m+2))
+        f_z_2 = np.sqrt((n - m + 2) * (n + m + 2))
+        c_zz = f_z * f_z_2
+        
+        term_zz = (c_zz * term_m_C) * norm_fix
+        j_zz += term_zz
+
+        # Special handling for Zonal Harmonics (m=0)
+        # For m=0, V depends only on z and r, so V is cylindrically symmetric about z.
+        # This implies d2V/dx2 = d2V/dy2.
+        # From Laplace: d2V/dx2 + d2V/dy2 + d2V/dz2 = 0
+        # 2 * d2V/dx2 = -d2V/dz2  =>  d2V/dx2 = -0.5 * d2V/dz2
+        # This is more robust than the general recursion which fails for m=0 due to c_center=0.
+        if m == 0:
+            j_xx += -0.5 * term_zz
+            j_yy += -0.5 * term_zz
+            # j_xy contribution is zero for zonals
+        else:
+            # Standard Pines recursion for m > 0
+
+            # d(ax)/dx
+            # = Term(m-2) + Term(m+2) + Term(m center)
+            j_xx += (c_m_minus_2 * term_m_minus_2_C + c_m_plus_2 * term_m_plus_2_C + c_m_center * term_m_C) * norm_fix
+
+            # d(ay)/dy
+            # = - Term(m-2) - Term(m+2) + Term(m center) 
+            # (signs flip for m-2 and m+2 due to W/V swapping in d/dy)
+            j_yy += (-c_m_minus_2 * term_m_minus_2_C - c_m_plus_2 * term_m_plus_2_C + c_m_center * term_m_C) * norm_fix
+
+            # d(ax)/dy = d(ay)/dx (xy)
+            # Involves S terms for m +/- 2
+            # c_m_minus_2 * TermS(m-2) - c_m_plus_2 * TermS(m+2)
+            # The center term cancels out for xy
+            j_xy += (c_m_minus_2 * term_m_minus_2_S - c_m_plus_2 * term_m_plus_2_S) * norm_fix
+
+        if m > 0:
+            # Standard recursion for xz, yz also works for m=0 if bounds are careful
+            # But let's reuse logic below
+            pass
+
+        # d(ax)/dz (xz)
+        # d/dz ( dx )
+        # dx terms: +0.5 * f1 * V(m-1) - 0.5 * f2 * V(m+1)
+        # apply d/dz: * -f_z_next
+        # ... derived coeff c_xz_1, c_xz_2
+        
+        c_xz_1 = 0.5 * f_z * np.sqrt((n - m + 2) * (n - m + 3))
+        c_xz_2 = -0.5 * f_z * np.sqrt((n + m + 2) * (n + m + 3))
+        
+        val_m_minus_1_C = 0.0
+        val_m_minus_1_S = 0.0
+        if m >= 1:
+           val_m_minus_1_C = V[n+2, m-1]
+           val_m_minus_1_S = W[n+2, m-1]
+        
+        val_m_plus_1_C = V[n+2, m+1]
+        val_m_plus_1_S = W[n+2, m+1]
+
+        t_m_minus_1_C = (Cnm * val_m_minus_1_C + Snm * val_m_minus_1_S)
+        t_m_minus_1_S = (Cnm * val_m_minus_1_S - Snm * val_m_minus_1_C)
+        t_m_plus_1_C  = (Cnm * val_m_plus_1_C + Snm * val_m_plus_1_S)
+        t_m_plus_1_S  = (Cnm * val_m_plus_1_S - Snm * val_m_plus_1_C)
+
+        j_xz += (c_xz_1 * t_m_minus_1_C + c_xz_2 * t_m_plus_1_C) * norm_fix
+        j_yz += (c_xz_1 * t_m_minus_1_S + c_xz_2 * t_m_plus_1_S) * norm_fix # d(ay)/dz like d(ax)/dz with W/V swap (S term)
+
+    # Scale
+    scale = gp / (Re**3)
+    
+    # Point mass contribution (n=0)
+    # G_pm = -mu/r^3 * I + 3*mu/r^5 * r*r^T
+    # The loop handled n >= 2.
+    # We must add point mass G explicitly.
+    
+    J = np.zeros((3, 3))
+    J[0, 0] = j_xx * scale
+    J[0, 1] = j_xy * scale
+    J[0, 2] = j_xz * scale
+    J[1, 1] = j_yy * scale
+    J[1, 2] = j_yz * scale
+    J[2, 2] = j_zz * scale
+    
+    # Symmetrize
+    J[1, 0] = J[0, 1]
+    J[2, 0] = J[0, 2]
+    J[2, 1] = J[1, 2]
+    
+    # Point mass terms
+    pm_term = -gp / r_sq / r
+    pm_term3 = 3.0 * gp / (r_sq * r_sq * r)
+    
+    I_mat = np.eye(3)
+    rr_T = np.outer(pos_vec, pos_vec)
+    
+    J_pm = pm_term * I_mat + pm_term3 * rr_T
+    
+    return J + J_pm
 
 def load_gravity_field(
   filepath : Path,
