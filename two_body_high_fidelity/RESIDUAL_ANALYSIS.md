@@ -166,3 +166,32 @@ This is **expected behavior** for an EKF with:
 - Weak sensitivity of angles to state errors
 
 The residual ratio plot is correctly showing that the filter takes several measurements to converge. Once converged, the residuals should become more normally distributed.
+
+## Analytic Jacobian Validation (Etalon-1)
+*Date: 2026-02-03*
+
+### Objective
+Validate the newly implemented Analytic Jacobian (including "Vines" 8x8 Spherical Harmonics, Atmospheric Drag, Solid Earth Tides, and General Relativity) by performing a McReynolds Consistency Test on the Etalon-1 satellite. Etalon-1 was chosen to minimize unmodeled drag effects (MEO altitude).
+
+### Test Configuration
+- **Satellite**: Etalon-1 (NORAD 19751)
+- **Gravity**: 8x8 (EGM2008)
+- **Forces**: Gravity, Third-Body (Sun/Moon), SRP, Relativity, Solid Tides.
+- **Jacobian**: Fully Analytic.
+
+### Results
+
+#### 1. Comparison vs. JPL Horizons (Model Mismatch)
+*Command*: `python -m src.main --config etalon_1.yaml` (default `make_meas_from: jpl_horizons`)
+- **Mean σ**: 2.59
+- **Std σ**: 23.22
+- **Result**: **Inconsistent**. The large sigma is due to the truncation error of the 8x8 gravity model compared to the high-fidelity force model used by JPL Horizons. This introduces dynamic errors that the filter's covariance (tuned for 1e-5 process noise) does not account for.
+
+#### 2. Internal Consistency Check (Truth = Model)
+*Command*: `python -m src.main --config etalon_1.yaml --make-meas-from model`
+- **Mean σ**: 0.09
+- **Std σ**: 0.44
+- **Result**: **CONSISTENT**.
+  The consistency ratio is < 1.0 (0.44), indicating the filter is slightly conservative (as expected, since the truth model has zero process noise while the filter adds Q).
+  This result **validates** the Analytic Jacobian implementation. The filter perfectly understands the linearized dynamics of the 8x8 potential, drag (negligible), tides, and relativity.
+

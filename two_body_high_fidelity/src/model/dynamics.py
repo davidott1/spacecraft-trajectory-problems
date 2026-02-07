@@ -1440,6 +1440,83 @@ class GeneralRelativity:
 
     return acc_vec
 
+  def jacobian(
+    self,
+    pos_vec : np.ndarray,
+    vel_vec : np.ndarray,
+  ) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Compute Jacobian of relativistic acceleration w.r.t position and velocity.
+
+    Input:
+    ------
+      pos_vec : np.ndarray
+        Position vector [m]
+      vel_vec : np.ndarray
+        Velocity vector [m/s]
+    
+    Output:
+    -------
+      dacc__dpos : np.ndarray (3, 3)
+      dacc__dvel : np.ndarray (3, 3)
+    """
+    r_mag = np.linalg.norm(pos_vec)
+    r2    = r_mag**2
+    r_mag3 = r2 * r_mag
+    
+    v_sq    = np.dot(vel_vec, vel_vec)
+    r_dot_v = np.dot(pos_vec, vel_vec)
+    
+    # Common Factor K = mu / (c^2 * r^3)
+    K = self.gp / (self.c2 * r_mag3)
+    
+    # Acceleration terms breakdown:
+    # a = K * [ (4mu/r - v^2)*r + 4(r.v)*v ]
+    # Let T1 = (4mu/r - v^2)
+    # Let T2 = 4(r.v)
+    # a = K * [ T1*r + T2*v ]
+    
+    T1 = (4.0 * self.gp / r_mag - v_sq)
+    T2 = 4.0 * r_dot_v
+    
+    # --- Velocity Jacobian ---
+    # da/dv = K * [ d(T1*r)/dv + d(T2*v)/dv ]
+    # d(T1)/dv = d(-v^2)/dv = -2*v^T
+    # d(T2)/dv = d(4r.v)/dv = 4*r^T
+    #
+    # d(T1*r)/dv = r * (-2*v^T)
+    # d(T2*v)/dv = T2 * I + v * (4*r^T)
+    
+    dacc__dvel = K * ( np.outer(pos_vec, -2.0*vel_vec) + T2 * np.eye(3) + np.outer(vel_vec, 4.0*pos_vec) )
+    
+    # --- Position Jacobian ---
+    # da/dr = dK/dr * [brackets] + K * d[brackets]/dr
+    # dK/dr = -3 * K / r^2 * r^T = -3*mu/(c^2 * r^5) * r^T
+    
+    brackets = T1 * pos_vec + T2 * vel_vec
+    
+    # Term A: Variation of K factor
+    # A = (-3 * K / r^2) * (brackets * r^T) -> Outer product
+    term_A = (-3.0 * K / r2) * np.outer(brackets, pos_vec)
+    
+    # Term B: Variation inside brackets
+    # d(T1*r)/dr = T1*I + r * d(T1)/dr
+    # d(T1)/dr = d(4mu/r)/dr = -4mu/r^3 * r^T
+    # -> T1*I - 4mu/r^3 * (r * r^T)
+    #
+    # d(T2*v)/dr = v * d(T2)/dr
+    # d(T2)/dr = d(4r.v)/dr = 4*v^T
+    # -> 4 * (v * v^T)
+    
+    d_brackets_dr = T1 * np.eye(3) - (4.0 * self.gp / r_mag3) * np.outer(pos_vec, pos_vec) + 4.0 * np.outer(vel_vec, vel_vec)
+    
+    term_B = K * d_brackets_dr
+    
+    dacc__dpos = term_A + term_B
+    
+    return dacc__dpos, dacc__dvel
+    return acc_vec
+
 
 class SolidEarthTides:
   """
@@ -1549,6 +1626,136 @@ class SolidEarthTides:
       acc_vec += acc_tide
 
     return acc_vec
+
+  def jacobian(
+    self,
+    time_et       : float,
+    j2000_pos_vec : np.ndarray,
+  ) -> np.ndarray:
+    """
+    Analytical Jacobian of Solid Earth Tide acceleration.
+
+    Computes partial derivatives of the tide acceleration vector with respect
+    to the satellite position vector.
+
+    Based on the simplified degree-2 Model:
+      a = A/r^4 * [ (5 cos²ψ - 1) * r̂ - 2 cosψ * d̂ ]
+    Where:
+      A = 1.5 * k2 * μ_body * Re^5 / d_body^3
+      ψ = angle between r (sat) and d (body)
+      r̂ = r / |r|
+      d̂ = d / |d|
+
+    Input:
+    ------
+      time_et : float
+      j2000_pos_vec : np.ndarray (3,)
+
+    Output:
+    -------
+      jacobian : np.ndarray (3,3)
+    """
+    r_mag = np.linalg.norm(j2000_pos_vec)
+    if r_mag == 0:
+      return np.zeros((3,3))
+    
+    r_sq = r_mag**2
+    r_hat = j2000_pos_vec / r_mag
+    
+    jacobian = np.zeros((3,3))
+    I = np.eye(3)
+    
+    # Iterate over Moon and Sun
+    for body_name, body_gp in [('MOON', SOLARSYSTEMCONSTANTS.MOON.GP),
+                               ( 'SUN', SOLARSYSTEMCONSTANTS.SUN.GP )]:
+      try:
+        state, _ = spice.spkez(
+          targ   = NAIFIDS.NAME_TO_ID[body_name],
+          et     = time_et,
+          ref    = 'J2000',
+          abcorr = 'NONE',
+          obs    = 399
+        )
+        body_pos_vec = np.array(state[0:3]) * CONVERTER.M_PER_KM
+      except:
+        continue
+
+      d_mag = np.linalg.norm(body_pos_vec)
+      if d_mag == 0: continue
+        
+      d_hat = body_pos_vec / d_mag
+      
+      # Constant factor A (independent of r)
+      A = (1.5 * self.k2 * body_gp) * (self.earth_radius**5 / d_mag**3)
+      
+      # Geometry terms
+      cos_psi = np.dot(r_hat, d_hat)
+      
+      # Term 1: Scalar part of radial component
+      # T1 = (5 cos^2 psi - 1)
+      T1 = 5.0 * cos_psi**2 - 1.0
+      
+      # Term 2: Scalar part of body component
+      # T2 = -2 cos psi
+      T2 = -2.0 * cos_psi
+      
+      # Full acceleration vector formula used in compute():
+      # a = (A / r^4) * ( T1 * r_hat + T2 * d_hat )
+      # Let K = A / r^4
+      # a = K * ( T1 * r_hat + T2 * d_hat )
+      
+      K = A / (r_sq * r_sq)
+      
+      # Gradient Calculation
+      # da/dr = (dK/dr) * vec + K * (dT1/dr * r_hat + T1 * dr_hat/dr + dT2/dr * d_hat + T2 * dd_hat/dr)
+      
+      vect = T1 * r_hat + T2 * d_hat
+      
+      # 1. dK/dr
+      # d(r^-4)/dr = -4 r^-5 * r_hat^T (gradient)
+      dK_dr = -4.0 * K / r_mag * r_hat # vector shape (3,)
+      
+      # Term A: Variation of magnitude factor
+      # (dK/dr) * vect^T (outer product)
+      jac_A = np.outer(vect, dK_dr) # Note: order matters. da_i / dx_j. dK/dx_j is column j.
+      # Wait, dK/dr is a gradient vector (1,3).
+      # da/dr = vec * (grad K)^T
+      jac_A = np.outer(vect, -4.0 * r_hat / r_mag) * K 
+      
+      # 2. dr_hat/dr
+      # d(r/|r|)/dr = (I - r_hat r_hat^T) / |r|
+      dr_hat_dr = (I - np.outer(r_hat, r_hat)) / r_mag
+      
+      # 3. d(cos psi)/dr
+      # psi is angle between r and fixed d.
+      # cos psi = r_hat . d_hat = d_hat^T * r_hat
+      # d(cos psi)/dr = d_hat^T * dr_hat/dr
+      dcos_dr = d_hat @ dr_hat_dr # vector (3,)
+      
+      # 4. dT1/dr
+      # T1 = 5 cos^2 psi - 1
+      # dT1/d(cos) = 10 cos psi
+      dT1_dr = 10.0 * cos_psi * dcos_dr
+      
+      # 5. dT2/dr
+      # T2 = -2 cos psi
+      dT2_dr = -2.0 * dcos_dr
+      
+      # Term B: Variation of vector components
+      # K * [ dT1/dr * r_hat^T -> outer(r_hat, dT1/dr)
+      #     + T1 * dr_hat/dr
+      #     + dT2/dr * d_hat^T -> outer(d_hat, dT2/dr) ]
+      # Note: dd_hat/dr is zero (d is constant w.r.t r)
+      
+      jac_B = K * (
+          np.outer(r_hat, dT1_dr) +
+          T1 * dr_hat_dr +
+          np.outer(d_hat, dT2_dr)
+      )
+      
+      jacobian += (jac_A + jac_B)
+      
+    return jacobian
 
 
 class OceanTides:
@@ -1931,6 +2138,16 @@ class Gravity:
       # Add third-body Jacobian contribution if enabled
       if self.third_body is not None:
         A_matrix[3:6, 0:3] += self.third_body.jacobian(time, pos_vec)
+        
+      # Add Solid Tides Jacobian if enabled
+      if self.enable_solid_tides and self.solid_tides is not None:
+         A_matrix[3:6, 0:3] += self.solid_tides.jacobian(time, pos_vec)
+
+      # Add Relativity Jacobian if enabled
+      if self.enable_relativity and self.relativity is not None:
+        rel_jac_pos, rel_jac_vel = self.relativity.jacobian(pos_vec, vel_vec)
+        A_matrix[3:6, 0:3] += rel_jac_pos
+        A_matrix[3:6, 3:6] += rel_jac_vel
 
       # STM time derivative: dΦ/dt = A * Φ
       stm_dot = A_matrix @ stm
