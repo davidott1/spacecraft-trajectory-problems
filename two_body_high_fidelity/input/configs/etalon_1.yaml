@@ -1,0 +1,52 @@
+# Etalon-1 Propagation Configuration
+#   NORAD ID 19751
+#   Geodetic satellite at ~19,120 km altitude (MEO).
+#   Spherical, dense (high mass-to-area), negligible drag.
+#   Ideal for testing gravity and SRP models in a "clean" environment.
+
+# Initial state configuration
+initial_state_source   : jpl_horizons
+initial_state_norad_id : 19751
+
+# Time span for propagation (12 hours)
+# Etalon period is ~11.3 hours, so 12h captures a full orbit
+timespan : 2024-01-15T00:00:00Z 2024-01-15T12:00:00Z
+
+# Gravity model configuration
+gravity_harmonics_degree_order : 8 8
+gravity_harmonics_filename     : EGM2008.gfc
+
+# Jacobian selection
+# Using the newly implemented Analytic Jacobian (Vines + Tides + Relativity)
+use_approx_jacobian   : false
+use_analytic_jacobian : true
+jacobian_approx_eps   : 1e-6
+
+# Gravity third-bodies
+third_bodies : sun moon
+
+# Perturbation forces
+include_drag        : false  # ~19,000 km altitude, drag is zero
+include_srp         : true   # Primary non-gravitational force (simple sphere model works well)
+include_relativity  : true   # Enabled
+include_solid_tides : true   # Enabled
+include_ocean_tides : false  # Negligible at this altitude compared to Solid Tides
+
+# Comparison options
+compare_jpl_horizons : true
+compare_tle          : false
+
+# Visualization options
+include_tracker_skyplots : true
+tracker_filename         : trackers_lageos_2.yaml # ILRS stations track Etalon too
+include_tracker_on_body  : true
+
+# Orbit determination
+include_orbit_determination : true
+make_meas_from              : jpl_horizons
+# Process noise can be tighter than LAGEOS because Drag is gone
+process_noise_pos           : 1e-5
+process_noise_vel           : 1e-8
+
+# Download options
+auto_download : true

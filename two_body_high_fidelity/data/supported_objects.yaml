@@ -34,6 +34,17 @@
     area__m2 : 20.0                                                                     # srp cross-sectional area [m²]
 
 # MEO satellites (Medium Earth Orbit, ~20,200 km altitude)
+'19751'      :                                                                          # norad id as top-level key
+  name       : "ETALON-1"                                                               # object name
+  norad_id   : 19751                                                                    # norad id
+  naif_id    : null
+  mass__kg   : 1415.0                                                                   # mass [kg]
+  drag       :                                                                          # drag parameters
+    coeff    : 2.2                                                                      # drag coefficient, typically c_d [-]
+    area__m2 : 1.282                                                                    # drag cross-sectional area [m²]
+  srp        :                                                                          # solar radiation pressure parameters
+    coeff    : 1.13                                                                     # solar radiation pressure coefficient, typically c_r [-]
+    area__m2 : 1.282                                                                    # srp cross-sectional area [m²]
 '26407'      :                                                                          # norad id as top-level key
   name       : "GPS BIIRM-5 (PRN 31) - NAVSTAR-48"                                      # object name
   norad_id   : 26407                                                                    # norad id
