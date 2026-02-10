@@ -858,8 +858,8 @@ def run_high_fidelity_propagation(
     num_grid_points   = int(num_periods * points_per_period)
 
     # Ensure reasonable limits
-    if num_grid_points < 1000:
-      num_grid_points = 1000
+    if num_grid_points < 100:
+      num_grid_points = 100
     # Cap at reasonable max to prevent memory issues for long propagations
     if num_grid_points > 1000000:
       num_grid_points = 1000000

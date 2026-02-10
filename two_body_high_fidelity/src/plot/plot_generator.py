@@ -416,6 +416,8 @@ def generate_plots(
   od_estimation_times              : Optional['np.ndarray'] = None,
   od_measurement_times             : Optional['np.ndarray'] = None,
   od_residual_data                 : Optional[dict] = None,
+  od_propagator                    : Optional[object] = None,
+  od_process_noise                 : Optional['np.ndarray'] = None,
   include_orbit_determination      : bool = False,
 ) -> None:
   """

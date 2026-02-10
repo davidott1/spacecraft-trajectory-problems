@@ -530,14 +530,56 @@ def plot_mcreynolds_consistency(
   n_state_smoother = state_smoother.shape[1]
 
   # Use minimum to avoid index errors
-  n_points = min(len(time_filter), n_cov_filter, n_cov_smoother, n_state_filter, n_state_smoother)
+  n_all = min(len(time_filter), n_cov_filter, n_cov_smoother, n_state_filter, n_state_smoother)
+
+  # Filter out pre-update (predicted) entries at measurement times.
+  # The EKF stores [pre-update, post-update] at the same time for measurement times.
+  # Pre-update has P_predicted (inflated), which makes P_f - P_s artificially large.
+  # Keep only post-update entries (second of each duplicate pair) and non-measurement entries.
+  keep_mask = np.ones(n_all, dtype=bool)
+  for i in range(n_all - 1):
+    if np.abs(time_filter[i + 1] - time_filter[i]) < 1e-6:
+      # This is a pre-update entry (next entry is post-update at same time)
+      keep_mask[i] = False
+
+  keep_indices = np.where(keep_mask)[0]
+  n_points = len(keep_indices)
+  n_filtered = n_all - n_points
+  print(f"    [DEBUG] McReynolds: n_all={n_all}, n_filtered={n_filtered}, n_points={n_points}")
+
+  # Diagnostic: compute McReynolds in INERTIAL frame (no RIC) for debugging
+  chi_inertial_diag = np.zeros((6, n_points))
+  for i in range(n_points):
+    idx = keep_indices[i]
+    dx = state_filter[:, idx] - state_smoother[:, idx]
+    dP = np.diag(filter_covariances[:, :, idx] - smoother_covariances[:, :, idx])
+    dP_safe = np.abs(dP) + 1e-20
+    chi_inertial_diag[:, i] = dx / np.sqrt(dP_safe)
+  for j in range(6):
+    labels_6 = ['x','y','z','vx','vy','vz']
+    m = np.mean(chi_inertial_diag[j,:])
+    s = np.std(chi_inertial_diag[j,:])
+    print(f"    [DEBUG] Inertial {labels_6[j]}: mean={m:.4f}, std={s:.4f}")
+  # Also print sample P_f, P_s, diff at midpoint
+  mid = keep_indices[n_points // 2]
+  Pf_diag = np.diag(filter_covariances[:, :, mid])
+  Ps_diag = np.diag(smoother_covariances[:, :, mid])
+  print(f"    [DEBUG] Mid-point Pf diag: {Pf_diag}")
+  print(f"    [DEBUG] Mid-point Ps diag: {Ps_diag}")
+  print(f"    [DEBUG] Mid-point Pf-Ps  : {Pf_diag - Ps_diag}")
+  dx_mid = state_filter[:, mid] - state_smoother[:, mid]
+  print(f"    [DEBUG] Mid-point dx     : {dx_mid}")
+  print(f"    [DEBUG] Mid-point dx^2   : {dx_mid**2}")
+
+  # Remap time to use only kept indices
+  time = time[keep_indices]
 
   # Use truth for RIC frame if provided, otherwise use filter
   # Make sure truth has same number of points
   if truth_result is not None:
     ref_states = truth_result.state
     # If truth has different size, use filter instead
-    if ref_states.shape[1] < n_points:
+    if ref_states.shape[1] < n_all:
       ref_states = state_filter
   else:
     ref_states = state_filter
@@ -549,23 +591,26 @@ def plot_mcreynolds_consistency(
   vel_var_diff_hist = np.zeros((3, n_points))
 
   for i in range(n_points):
+    # Map to original index (skipping pre-update entries)
+    idx = keep_indices[i]
+
     # Reference position and velocity for RIC frame
-    ref_pos = ref_states[0:3, i]
-    ref_vel = ref_states[3:6, i]
+    ref_pos = ref_states[0:3, idx]
+    ref_vel = ref_states[3:6, idx]
 
     # Rotation matrix from inertial to RIC
     R_inertial_to_ric = FrameConverter.xyz_to_ric(ref_pos, ref_vel)
 
     # State differences in inertial frame
-    pos_diff_inertial = state_filter[0:3, i] - state_smoother[0:3, i]
-    vel_diff_inertial = state_filter[3:6, i] - state_smoother[3:6, i]
+    pos_diff_inertial = state_filter[0:3, idx] - state_smoother[0:3, idx]
+    vel_diff_inertial = state_filter[3:6, idx] - state_smoother[3:6, idx]
 
     # Transform state differences to RIC
     pos_diff_ric = R_inertial_to_ric @ pos_diff_inertial
     vel_diff_ric = R_inertial_to_ric @ vel_diff_inertial
 
     # Covariance differences in inertial frame
-    P_diff = filter_covariances[:, :, i] - smoother_covariances[:, :, i]
+    P_diff = filter_covariances[:, :, idx] - smoother_covariances[:, :, idx]
 
     # Transform covariance difference to RIC frame
     # Build 6x6 rotation matrix: R_6x6 = [[R, 0], [0, R]]
