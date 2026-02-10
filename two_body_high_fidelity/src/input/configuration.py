@@ -45,6 +45,7 @@ def print_input_configuration(
   use_analytic_jacobian      : Optional[bool]  = None,
   jacobian_approx_eps        : Optional[float] = None,
   make_meas_from             : str             = 'jpl_horizons',
+  make_meas_from_explicitly_set : bool          = False,
 ) -> None:
   """
   Print the input configuration in a formatted table.
@@ -164,7 +165,7 @@ def print_input_configuration(
     ('use_approx_jacobian',       use_approx_display,              defaults['use_approx_jacobian'],         use_approx_jacobian is not None and use_approx_jacobian != defaults['use_approx_jacobian']),
     ('use_analytic_jacobian',     use_analytic_display,            defaults['use_analytic_jacobian'],       use_analytic_jacobian is not None and use_analytic_jacobian != defaults['use_analytic_jacobian']),
     ('jacobian_approx_eps',       jacobian_eps_str,                f"{defaults['jacobian_approx_eps']:.0e}",jacobian_approx_eps is not None and jacobian_approx_eps != defaults['jacobian_approx_eps']),
-    ('make_meas_from',            make_meas_from,                  defaults['make_meas_from'],              make_meas_from             != defaults['make_meas_from']),
+    ('make_meas_from',            make_meas_from,                  defaults['make_meas_from'],              make_meas_from_explicitly_set),
   ]
 
   # Convert entries to strings for width calculation
@@ -259,8 +260,10 @@ def print_paths(
 
 
 def print_configuration(
-  config         : SimulationConfig,
-  make_meas_from : str = 'jpl_horizons',
+  config                         : SimulationConfig,
+  make_meas_from                 : str  = 'jpl_horizons',
+  include_tracker_on_body        : bool = False,
+  make_meas_from_explicitly_set  : bool = False,
 ) -> None:
   """
   Print the complete configuration (input arguments and paths).
@@ -296,7 +299,7 @@ def print_configuration(
     include_ocean_tides         = config.gravity.ocean_tides.enabled,
     include_tracker_skyplots    = config.output_paths.tracker_filepath is not None if config.output_paths else False,
     tracker_filename            = config.output_paths.tracker_filepath.name if config.output_paths and config.output_paths.tracker_filepath else None,
-    include_tracker_on_body     = False,  # TODO: Add to config if needed
+    include_tracker_on_body     = include_tracker_on_body,
     include_orbit_determination = config.orbit_determination.enabled,
     process_noise_pos           = config.orbit_determination.process_noise_pos,
     process_noise_vel           = config.orbit_determination.process_noise_vel,
@@ -304,6 +307,7 @@ def print_configuration(
     use_analytic_jacobian       = config.gravity.use_analytic_jacobian,
     jacobian_approx_eps         = config.gravity.jacobian_approx_eps,
     make_meas_from              = make_meas_from,
+    make_meas_from_explicitly_set = make_meas_from_explicitly_set,
   )
 
   print_paths(config)

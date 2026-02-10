@@ -241,7 +241,8 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
           setattr(args, arg_name, [start, end])
 
     elif arg_name in ['initial_state_source', 'initial_state_norad_id', 'initial_state_filename',
-                      'gravity_model_filename', 'tracker_filename', 'tracker_filepath', 'maneuver_filename']:
+                      'gravity_model_filename', 'tracker_filename', 'tracker_filepath', 'maneuver_filename',
+                      'make_meas_from']:
       # String arguments - only override if CLI didn't provide a value
       if current_value is None or (arg_name == 'initial_state_source' and current_value == 'horizons'):
         # Convert to string (YAML may parse NORAD ID as int)
@@ -698,7 +699,7 @@ def parse_command_line_arguments(
     dest    = 'make_meas_from',
     type    = str,
     choices = ['jpl_horizons', 'model'],
-    default = 'jpl_horizons',
+    default = None,
     help    = 'Source for measurement simulation: jpl_horizons (default) or model (closed-loop).',
   )
 

@@ -10,7 +10,7 @@ initial_state_norad_id : 19751
 
 # Time span for propagation (12 hours)
 # Etalon period is ~11.3 hours, so 12h captures a full orbit
-timespan : 2024-01-15T00:00:00Z 2024-01-15T12:00:00Z
+timespan : 2024-01-15T00:00:00Z 2024-01-16T00:00:00Z
 
 # Gravity model configuration
 gravity_harmonics_degree_order : 8 8
@@ -43,10 +43,11 @@ include_tracker_on_body  : true
 
 # Orbit determination
 include_orbit_determination : true
-make_meas_from              : jpl_horizons
-# Process noise can be tighter than LAGEOS because Drag is gone
-process_noise_pos           : 1e-5
-process_noise_vel           : 1e-8
+make_meas_from              : model # model jpl_horizons
+
+# Process noise tuned for jpl_horizons measurements (open-loop)
+process_noise_pos           : 1e-4
+process_noise_vel           : 1e-7
 
 # Download options
 auto_download : true

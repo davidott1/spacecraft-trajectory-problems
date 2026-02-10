@@ -119,11 +119,25 @@ def rts_smoother(
 
     # Predicted covariance at k+1: P_{k+1|k} = Phi_k @ P_k|k @ Phi_k^T + Q
     # Must use same process noise Q as forward EKF for consistency
+    # The EKF computes Q as: Q_pos = (sigma_pos * dt)^2, Q_vel = (sigma_vel * sqrt(dt))^2
+    # where sigma_pos = sqrt(process_noise[0,0]), sigma_vel = sqrt(process_noise[3,3])
+    # So we must reconstruct the same dt-dependent Q here.
     dt = t_kp1 - t_k
     P_kp1_pred = Phi_k @ P_k_filt @ Phi_k.T
     if process_noise is not None:
-      # Add process noise scaled by time step
-      P_kp1_pred += process_noise * dt
+      # Reconstruct Q exactly as the EKF does (dt-dependent)
+      sigma_pos = np.sqrt(process_noise[0, 0])
+      sigma_vel = np.sqrt(process_noise[3, 3])
+      Q_k = np.zeros_like(process_noise)
+      q_pos = (sigma_pos * abs(dt))**2
+      q_vel = (sigma_vel * np.sqrt(abs(dt)))**2
+      Q_k[0, 0] = q_pos
+      Q_k[1, 1] = q_pos
+      Q_k[2, 2] = q_pos
+      Q_k[3, 3] = q_vel
+      Q_k[4, 4] = q_vel
+      Q_k[5, 5] = q_vel
+      P_kp1_pred += Q_k
 
     # Smoother gain: C_k = P_k|k @ Phi_k^T @ inv(P_{k+1|k})
     try:
@@ -136,11 +150,7 @@ def rts_smoother(
     x_k_smooth = x_k_filt + C_k @ (x_kp1_smooth - x_kp1_pred)
 
     # Smoothed covariance: P_k|N = P_k|k + C_k @ (P_{k+1|N} - P_{k+1|k}) @ C_k^T
-    # Use Joseph form for numerical stability to maintain positive-definiteness
-    # Joseph form: P_k|N = (I - C_k @ Phi_k) @ P_k|k @ (I - C_k @ Phi_k)^T + C_k @ P_{k+1|N} @ C_k^T
-    I = np.eye(n_states)
-    A = I - C_k @ Phi_k
-    P_k_smooth = A @ P_k_filt @ A.T + C_k @ P_kp1_smooth @ C_k.T
+    P_k_smooth = P_k_filt + C_k @ (P_kp1_smooth - P_kp1_pred) @ C_k.T
 
     # Ensure covariance is symmetric (numerical stability)
     P_k_smooth = 0.5 * (P_k_smooth + P_k_smooth.T)

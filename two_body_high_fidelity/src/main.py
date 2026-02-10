@@ -70,7 +70,7 @@ from src.schemas.state                 import TLEData
 from src.schemas.spacecraft            import ManeuversConfig
 from src.schemas.measurement           import merge_multi_tracker_measurements
 
-from src.orbit_determination.ekf_processor         import process_measurements_with_ekf, process_multi_tracker_measurements_with_ekf, apply_rts_smoother
+from src.orbit_determination.ekf_processor         import process_measurements_with_ekf, process_multi_tracker_measurements_with_ekf, apply_rts_smoother, create_high_fidelity_propagator
 from src.orbit_determination.measurement_simulator import MeasurementSimulator
 from src.model.dynamics                            import AccelerationSTMDot, GeneralStateEquationsOfMotion
 
@@ -171,7 +171,7 @@ def main(
   use_approx_jacobian            : Optional[bool]  = None,
   use_analytic_jacobian          : Optional[bool]  = None,
   jacobian_approx_eps            : Optional[float] = None,
-  make_meas_from                 : str             = 'jpl_horizons',
+  make_meas_from                 : Optional[str]   = 'jpl_horizons',
 ) -> PropagationResult:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -217,6 +217,11 @@ def main(
       Object containing the results of the high-fidelity propagation.
   """
   
+  # Default make_meas_from if not provided
+  make_meas_from_explicitly_set = make_meas_from is not None
+  if make_meas_from is None:
+    make_meas_from = 'jpl_horizons'
+
   # Process inputs and setup
   config = build_config(
     initial_state_norad_id,
@@ -256,7 +261,7 @@ def main(
   )
   
   # Print input configuration and paths
-  print_configuration(config, make_meas_from)
+  print_configuration(config, make_meas_from, include_tracker_on_body, make_meas_from_explicitly_set)
 
   # Load files: SPICE, spherical harmonics coefficients, trackers, maneuvers
   # Note: Tracker azimuth normalization happens inside load_files()
@@ -375,6 +380,8 @@ def main(
   od_estimation_times = None
   od_measurement_times = None
   od_residual_data = None
+  od_propagator = None
+  od_process_noise = None
   if include_orbit_determination and trackers is not None and len(trackers) > 0:
     
     # Choose truth source for measurement simulation
@@ -494,6 +501,9 @@ def main(
           process_noise        = od_process_noise,
         )
 
+        # Create propagator for overlap test plots
+        od_propagator = create_high_fidelity_propagator(od_dynamics, config.time_o_dt)
+
         # Compute final smoother uncertainties
         final_smooth_cov = od_smoother_covariances[:, :, -1]
         final_smooth_pos_sigma = (final_smooth_cov[0, 0] + final_smooth_cov[1, 1] + final_smooth_cov[2, 2])**0.5 / 3**0.5
@@ -546,6 +556,8 @@ def main(
     od_estimation_times              = od_estimation_times,
     od_measurement_times             = od_measurement_times,
     od_residual_data                 = od_residual_data,
+    od_propagator                    = od_propagator,
+    od_process_noise                 = od_process_noise,
     include_orbit_determination      = include_orbit_determination,
   )
   
