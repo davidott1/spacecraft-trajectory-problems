@@ -17,7 +17,7 @@ from src.plot.plot_timeseries                  import plot_time_series, plot_tim
 from src.plot.plot_groundtrack                 import plot_ground_track
 from src.plot.plot_skyplot                     import plot_skyplot, plot_pass_timeseries, plot_measurement_errors, plot_error_skyplot
 from src.plot.plot_covariance                  import plot_covariance_combined, plot_covariance_filter_vs_smoother
-from src.plot.plot_od_comparison               import plot_filter_smoother_error_comparison, plot_filter_smoother_rss_comparison, plot_filter_smoother_full_error_comparison, plot_mcreynolds_consistency
+from src.plot.plot_od_comparison               import plot_filter_smoother_error_comparison, plot_filter_smoother_rss_comparison, plot_filter_smoother_full_error_comparison, plot_mcreynolds_consistency, plot_state_covariance_overlap
 from src.plot.plot_residual_ratio              import plot_measurement_residual_ratio, plot_innovation_covariance_evolution
 from src.schemas.propagation                   import PropagationResult, TimeGrid
 from src.schemas.state                         import TrackerStation, ClassicalOrbitalElements, ModifiedEquinoctialElements
@@ -838,6 +838,46 @@ def generate_plots(
     except Exception as e:
       print(f"      [WARNING] Failed to generate McReynolds consistency plot: {e}")
 
+  # Generate state-covariance overlap test plot
+  overlap_files = []
+  if (include_orbit_determination and
+      od_filter_states is not None and
+      od_smoother_states is not None and
+      od_filter_covariances is not None and
+      od_smoother_covariances is not None and
+      od_estimation_times is not None and
+      od_propagator is not None and
+      od_process_noise is not None):
+    print("    Generate state-covariance overlap test plot")
+
+    name_lower = object_name.lower().replace(' ', '_').replace('-', '_')
+
+    try:
+      overlap_title = f'State-Covariance Overlap Test - {object_name_display}'
+      fig_overlap = plot_state_covariance_overlap(
+        filter_result        = od_filter_states,
+        smoother_result      = od_smoother_states,
+        filter_covariances   = od_filter_covariances,
+        smoother_covariances = od_smoother_covariances,
+        estimation_times     = od_estimation_times,
+        propagator           = od_propagator,
+        process_noise        = od_process_noise,
+        epoch                = time_o_dt,
+        start_hours          = np.arange(0, 25, 1.0),
+        propagation_hours    = 12.0,
+        n_eval_points        = 50,
+        title_text           = overlap_title,
+      )
+      filename_overlap = f'state_covariance_overlap_{name_lower}.png'
+      fig_overlap.savefig(figures_folderpath / filename_overlap, dpi=300, bbox_inches='tight')
+      plt.close(fig_overlap)
+      overlap_files.append(filename_overlap)
+
+    except Exception as e:
+      import traceback
+      print(f"      [WARNING] Failed to generate overlap test plot: {e}")
+      traceback.print_exc()
+
   print()
   print("  Summary")
   print(f"    Figure Folderpath : {figures_folderpath}")
@@ -954,4 +994,11 @@ def generate_plots(
     print()
     print("    McReynolds Consistency Plots")
     for filename in consistency_files:
+      print(f"      <figures_folderpath>/{filename}")
+
+  # Print State-Covariance Overlap Plots
+  if overlap_files:
+    print()
+    print("    State-Covariance Overlap Plots")
+    for filename in overlap_files:
       print(f"      <figures_folderpath>/{filename}")
