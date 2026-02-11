@@ -796,3 +796,239 @@ def plot_mcreynolds_consistency(
   fig.tight_layout(rect=[0, 0, 1, 0.97])
 
   return fig
+
+
+def plot_state_covariance_overlap(
+  filter_result        : PropagationResult,
+  smoother_result      : PropagationResult,
+  filter_covariances   : np.ndarray,
+  smoother_covariances : np.ndarray,
+  estimation_times     : np.ndarray,
+  propagator           : object,
+  process_noise        : np.ndarray,
+  epoch                : datetime,
+  start_hours          : Optional[np.ndarray] = None,
+  propagation_hours    : float = 12.0,
+  n_eval_points        : int = 50,
+  title_text           : str = "State-Covariance Overlap Test (3D Position)",
+) -> Figure:
+  """
+  State-Covariance Overlap Test (3D Position).
+
+  Validates covariance realism by propagating BOTH filter and smoother
+  states/covariances forward from specified start epochs, then computing
+  the 3D position Mahalanobis distance:
+
+    d² = Δr ᵀ (P_f_pos + P_s_pos)⁻¹ Δr
+
+  where Δr = r_filter - r_smoother (3×1) and P_pos is the 3×3 position
+  sub-block of the propagated covariance.
+
+  Under correct covariance calibration, d² ~ χ²(3).
+
+  Input:
+  ------
+    filter_result : PropagationResult
+      Forward-filtered EKF estimates.
+    smoother_result : PropagationResult
+      Backward-smoothed RTS estimates.
+    filter_covariances : np.ndarray (6, 6, N)
+      Forward-filtered covariance matrices.
+    smoother_covariances : np.ndarray (6, 6, N)
+      Backward-smoothed covariance matrices.
+    estimation_times : np.ndarray (N,)
+      Estimation times [s] relative to epoch.
+    propagator : Callable
+      Function (x, t0, tf) -> (x_f, Phi) for high-fidelity propagation.
+    process_noise : np.ndarray (6, 6)
+      Process noise covariance Q (same as used in EKF/smoother).
+    epoch : datetime
+      Reference epoch.
+    start_hours : np.ndarray, optional
+      Start epoch times in hours from epoch. Default: [0, 1, 2, ..., 24].
+    propagation_hours : float
+      How many hours to propagate forward from each start epoch.
+    n_eval_points : int
+      Number of evaluation points per propagation arc.
+    title_text : str
+      Title for the figure.
+
+  Output:
+  -------
+    fig : Figure
+      Matplotlib figure with d² time series and histogram.
+  """
+  state_filter = filter_result.state
+  state_smoother = smoother_result.state
+  time_deltas = estimation_times
+
+  # Filter out pre-update duplicate entries (keep only post-update)
+  n_total = min(len(time_deltas), state_filter.shape[1], state_smoother.shape[1],
+                filter_covariances.shape[2], smoother_covariances.shape[2])
+  keep_mask = np.ones(n_total, dtype=bool)
+  for i in range(n_total - 1):
+    if np.abs(time_deltas[i + 1] - time_deltas[i]) < 1e-6:
+      keep_mask[i] = False
+  keep_idx = np.where(keep_mask)[0]
+
+  times = time_deltas[keep_idx]
+  x_f_all = state_filter[:, keep_idx]
+  x_s_all = state_smoother[:, keep_idx]
+  P_f_all = filter_covariances[:, :, keep_idx]
+  P_s_all = smoother_covariances[:, :, keep_idx]
+
+  # Default start hours: every hour from 0 to 24
+  if start_hours is None:
+    start_hours = np.arange(0, 25, 1.0)
+
+  # Convert start hours to seconds and find nearest estimation index
+  start_times_s = start_hours * 3600.0
+  start_indices = []
+  start_hours_actual = []
+  for t_start in start_times_s:
+    idx = np.argmin(np.abs(times - t_start))
+    if idx not in start_indices:  # Avoid duplicates
+      start_indices.append(idx)
+      start_hours_actual.append(times[idx] / 3600.0)
+
+  n_start_epochs = len(start_indices)
+
+  # Process noise spectral densities
+  sigma_pos = np.sqrt(process_noise[0, 0])
+  sigma_vel = np.sqrt(process_noise[3, 3])
+
+  # Position-only: d² ~ χ²(3)
+  chi2_dof = 3
+
+  # Collect all d² values
+  all_d2 = []
+  arc_data = []  # (prop_time_hours, d2_array, start_hr)
+
+  print(f"    Propagating from {n_start_epochs} start epochs ({propagation_hours:.0f} hr each) for overlap test...")
+  for si, start_idx in enumerate(start_indices):
+    t0 = times[start_idx]
+    x_f0 = x_f_all[:, start_idx].copy()
+    x_s0 = x_s_all[:, start_idx].copy()
+    P_f0 = P_f_all[:, :, start_idx].copy()
+    P_s0 = P_s_all[:, :, start_idx].copy()
+
+    # Propagation end time
+    t_end = t0 + propagation_hours * 3600.0
+
+    # Create evaluation time grid
+    eval_times = np.linspace(t0, t_end, n_eval_points + 1)[1:]  # Skip t0
+
+    prop_time_hours = (eval_times - t0) / 3600.0
+    d2_arc = np.zeros(len(eval_times))
+
+    # Propagate step-by-step
+    x_f_cur = x_f0.copy()
+    x_s_cur = x_s0.copy()
+    P_f_cur = P_f0.copy()
+    P_s_cur = P_s0.copy()
+    t_cur = t0
+
+    for j, tf in enumerate(eval_times):
+      dt = tf - t_cur
+
+      # Propagate both filter and smoother states + STM
+      x_f_prop, Phi_f = propagator(x_f_cur, t_cur, tf)
+      x_s_prop, Phi_s = propagator(x_s_cur, t_cur, tf)
+
+      # Map covariances forward: P(t) = Φ P Φᵀ + Q(dt)
+      Q_k = np.zeros((6, 6))
+      q_pos = (sigma_pos * abs(dt))**2
+      q_vel = (sigma_vel * np.sqrt(abs(dt)))**2
+      Q_k[0, 0] = Q_k[1, 1] = Q_k[2, 2] = q_pos
+      Q_k[3, 3] = Q_k[4, 4] = Q_k[5, 5] = q_vel
+
+      P_f_prop = Phi_f @ P_f_cur @ Phi_f.T + Q_k
+      P_s_prop = Phi_s @ P_s_cur @ Phi_s.T + Q_k
+
+      # 3D position only: extract position sub-blocks
+      dr = x_f_prop[0:3] - x_s_prop[0:3]
+      P_sum_pos = P_f_prop[0:3, 0:3] + P_s_prop[0:3, 0:3]
+
+      try:
+        P_sum_pos_inv = np.linalg.inv(P_sum_pos)
+        d2 = dr @ P_sum_pos_inv @ dr
+      except np.linalg.LinAlgError:
+        d2 = np.nan
+
+      d2_arc[j] = d2
+      all_d2.append(d2)
+
+      # Update for next step
+      x_f_cur = x_f_prop
+      x_s_cur = x_s_prop
+      P_f_cur = P_f_prop
+      P_s_cur = P_s_prop
+      t_cur = tf
+
+    arc_data.append((prop_time_hours, d2_arc, start_hours_actual[si]))
+
+  all_d2 = np.array(all_d2)
+  all_d2 = all_d2[np.isfinite(all_d2)]
+
+  # χ²(3) distribution statistics
+  chi2_mean = chi2_dof
+  chi2_95 = stats.chi2.ppf(0.95, chi2_dof)
+  chi2_99 = stats.chi2.ppf(0.99, chi2_dof)
+
+  # Create figure: time series (left) + histogram (right)
+  fig = plt.figure(figsize=(16, 8))
+  gs = GridSpec(1, 2, figure=fig, width_ratios=[3, 1], wspace=0.05)
+
+  ax_ts = fig.add_subplot(gs[0, 0])
+  ax_hist = fig.add_subplot(gs[0, 1], sharey=ax_ts)
+
+  # === Time series plot ===
+  cmap = plt.cm.viridis(np.linspace(0, 1, n_start_epochs))
+  for si, (prop_hours, d2_arc, start_hr) in enumerate(arc_data):
+    ax_ts.plot(prop_hours, d2_arc, color=cmap[si], linewidth=1.2, alpha=0.8,
+               label=f't₀={start_hr:.0f}h' if si % 4 == 0 else None)
+
+  # Reference lines
+  ax_ts.axhline(chi2_mean, color='k', linestyle='-', linewidth=1.5, alpha=0.7,
+                label=f'E[χ²({chi2_dof})] = {chi2_mean}')
+  ax_ts.axhline(chi2_95, color='orange', linestyle='--', linewidth=1.2, alpha=0.7,
+                label=f'95th %ile = {chi2_95:.1f}')
+  ax_ts.axhline(chi2_99, color='red', linestyle=':', linewidth=1.2, alpha=0.7,
+                label=f'99th %ile = {chi2_99:.1f}')
+
+  ax_ts.set_xlabel('Propagation Time [hours]', fontsize=12)
+  ax_ts.set_ylabel('d² (3D Position Mahalanobis²)', fontsize=12)
+  ax_ts.set_ylim(bottom=0)
+  ax_ts.grid(True, linestyle=':', alpha=0.5)
+  ax_ts.legend(fontsize=8, loc='upper left', ncol=2)
+
+  # === Histogram ===
+  max_d2 = max(np.max(all_d2), chi2_99 * 1.5) if len(all_d2) > 0 else chi2_99 * 1.5
+  bins = np.linspace(0, max_d2, 40)
+  ax_hist.hist(all_d2, bins=bins, orientation='horizontal', density=True,
+               alpha=0.5, color='steelblue', edgecolor='black', linewidth=0.5)
+
+  # Overlay theoretical χ²(3) PDF
+  y_range = np.linspace(0, max_d2, 200)
+  chi2_pdf = stats.chi2.pdf(y_range, chi2_dof)
+  ax_hist.plot(chi2_pdf, y_range, 'b-', linewidth=2, label=f'χ²({chi2_dof})')
+
+  # Statistics text
+  mean_d2 = np.mean(all_d2)
+  std_d2 = np.std(all_d2)
+  ax_hist.text(0.95, 0.95,
+               f'N = {len(all_d2)}\nμ = {mean_d2:.2f}\nσ = {std_d2:.2f}\n'
+               f'E[χ²] = {chi2_mean}\nσ[χ²] = {np.sqrt(2*chi2_dof):.2f}',
+               transform=ax_hist.transAxes, fontsize=9,
+               verticalalignment='top', horizontalalignment='right',
+               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+  ax_hist.set_xlabel('Density', fontsize=10)
+  ax_hist.grid(True, alpha=0.3, axis='x')
+  ax_hist.legend(loc='lower right', fontsize=9)
+  ax_hist.tick_params(labelleft=False)
+
+  fig.suptitle(title_text, fontsize=14, fontweight='bold')
+  fig.tight_layout(rect=[0, 0, 1, 0.96])
+
+  return fig
