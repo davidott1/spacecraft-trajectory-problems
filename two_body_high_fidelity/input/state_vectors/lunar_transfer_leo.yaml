@@ -1,0 +1,27 @@
+# Lunar Transfer: LEO Departure Orbit
+#
+# Circular LEO orbit for Earth-to-Moon transfer.
+# Altitude: 200 km, equatorial orbit.
+#
+# For optimal lunar transfer geometry, the orbit plane should be near
+# the Moon's position. Adjust inclination and RAAN as needed for your
+# departure epoch. The Moon's orbital plane is inclined ~5° to the ecliptic
+# (which is ~23.4° to the equator), so the Moon's declination varies
+# between roughly ±28.6°.
+#
+# For a direct transfer, use a departure epoch when the Moon is near
+# the LEO orbit plane.
+
+name              : lunar_transfer_leo
+frame             : J2000
+epoch             : 2025-10-01T00:00:00Z
+coordinate_system : cartesian
+pos_vec__m        : 6578137.0, 0.0, 0.0
+vec_vec__m_per_s  : 0.0, 7784.72, 0.0
+mass__kg          : 2000.0
+drag              :
+  coeff           : 0.0
+  area__m2        : 0.0
+srp               :
+  coeff           : 0.0
+  area__m2        : 0.0

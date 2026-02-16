@@ -38,6 +38,11 @@ from src.schemas.measurement import (
   TopocentricState,
   SimulatedMeasurements,
 )
+from src.schemas.optimization import (
+  LunarTransferConfig,
+  LunarTransferResult,
+  TransferLeg,
+)
 
 __all__ = [
   # State representations
@@ -66,4 +71,8 @@ __all__ = [
   'MeasurementNoise',
   'TopocentricState',
   'SimulatedMeasurements',
+  # Optimization
+  'LunarTransferConfig',
+  'LunarTransferResult',
+  'TransferLeg',
 ]

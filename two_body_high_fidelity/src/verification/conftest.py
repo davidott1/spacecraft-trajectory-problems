@@ -48,11 +48,14 @@ def load_spice_kernels(spice_kernels_path):
   
   # Load planetary ephemeris
   spk_path_small = spice_kernels_path / "de440s.bsp"
+  spk_path_full  = spice_kernels_path / "de440.bsp"
   if spk_path_small.exists():
     spice.furnsh(str(spk_path_small))
+  elif spk_path_full.exists():
+    spice.furnsh(str(spk_path_full))
   else:
     raise FileNotFoundError(
-      f"SPICE ephemeris kernel not found. Expected 'de440s.bsp' in {spice_kernels_path}"
+      f"SPICE ephemeris kernel not found. Expected 'de440s.bsp' or 'de440.bsp' in {spice_kernels_path}"
     )
   
   # Load planetary constants
