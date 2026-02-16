@@ -24,7 +24,8 @@ import numpy as np
 from typing import Tuple, Optional, Callable
 from datetime import datetime, timedelta
 
-from src.schemas.propagation import PropagationResult, Time
+from src.schemas.time import TimeStructure
+from src.schemas.propagation import PropagationResult
 from src.schemas.state import ClassicalOrbitalElements, ModifiedEquinoctialElements
 from src.model.orbit_converter import OrbitConverter
 from src.model.constants import SOLARSYSTEMCONSTANTS
@@ -289,12 +290,12 @@ def smooth_ekf_estimates(
   )
 
   # Create time grid (same as filter result)
-  time_grid = filter_result.time_grid
+  time = filter_result.time
 
   # Create smoothed PropagationResult
   smoothed_result = PropagationResult(
     state     = smoothed_states,
-    time_grid = time_grid,
+    time      = time,
     coe       = coe_time_series,
     mee       = mee_time_series,
     success   = True,
@@ -304,13 +305,13 @@ def smooth_ekf_estimates(
   # Create at_ephem_times from filter result structure if it exists
   if hasattr(filter_result, 'at_ephem_times') and filter_result.at_ephem_times is not None:
     # Get ephemeris time grid from filter
-    ephem_time_grid = filter_result.at_ephem_times.time_grid
+    ephem_time_grid = filter_result.at_ephem_times.time
     n_ephem = len(ephem_time_grid.grid.relative_initial)
 
     # Find indices in smoothed states that correspond to ephemeris times
     # We need to match the time grids
     ephem_times_target = ephem_time_grid.grid.relative_initial
-    estimation_times_all = time_grid.grid.relative_initial
+    estimation_times_all = time.grid.relative_initial
 
     # Find matching indices (within tolerance for floating point)
     ephem_indices = []
@@ -324,7 +325,7 @@ def smooth_ekf_estimates(
     # Extract smoothed states and orbital elements at ephemeris times
     smoothed_result.at_ephem_times = PropagationResult(
       state     = smoothed_states[:, ephem_indices],
-      time_grid = ephem_time_grid,
+      time      = ephem_time_grid,
       coe       = ClassicalOrbitalElements(
         sma  = coe_sma[ephem_indices],
         ecc  = coe_ecc[ephem_indices],

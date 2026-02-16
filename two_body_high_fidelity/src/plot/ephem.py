@@ -131,7 +131,7 @@ def main():
         sys.exit(1)
 
     print("\n[SUCCESS] Ephemeris loaded successfully")
-    print(f"  Grid Points : {len(result.time_grid.grid.relative_initial)}")
+    print(f"  Grid Points : {len(result.time.grid.relative_initial)}")
 
     # Generate time series plot
     print("\nGenerating time series plot...")

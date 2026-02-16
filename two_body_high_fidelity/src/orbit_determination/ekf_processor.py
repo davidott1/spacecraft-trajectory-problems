@@ -13,7 +13,8 @@ from typing           import Optional, Tuple, Callable
 from src.orbit_determination.extended_kalman_filter import ExtendedKalmanFilter, EKFMeasurement, EKFConfig
 from src.orbit_determination.rts_smoother           import smooth_ekf_estimates
 from src.schemas.measurement                        import SimulatedMeasurements, MultiTrackerMeasurements
-from src.schemas.propagation                        import PropagationResult, Time
+from src.schemas.time                               import TimeStructure
+from src.schemas.propagation                        import PropagationResult
 from src.schemas.state                              import TrackerStation, ClassicalOrbitalElements, ModifiedEquinoctialElements
 from src.model.orbit_converter                      import OrbitConverter
 from src.model.constants                            import SOLARSYSTEMCONSTANTS
@@ -440,7 +441,7 @@ def process_measurements_with_ekf(
   mee_time_series = ModifiedEquinoctialElements(p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L)
 
   # Create time grid for estimation times
-  estimation_time_grid = Time(
+  estimation_time_grid = TimeStructure(
     initial                = epoch_dt_utc,
     grid_relative_initial  = estimation_times,
   )
@@ -448,7 +449,7 @@ def process_measurements_with_ekf(
   # Create PropagationResult at estimation_times
   result = PropagationResult(
     state     = estimated_states,
-    time_grid = estimation_time_grid,
+    time = estimation_time_grid,
     coe       = coe_time_series,
     mee       = mee_time_series,
     success   = True,
@@ -470,13 +471,13 @@ def process_measurements_with_ekf(
 
   ephem_indices = np.array(ephem_indices)
   # Create time grid for ephemeris times
-  ephem_time_grid = Time(
+  ephem_time_grid = TimeStructure(
     initial                = epoch_dt_utc,
     grid_relative_initial  = ephemeris_times,
   )
   result.at_ephem_times = PropagationResult(
     state     = estimated_states[:, ephem_indices],
-    time_grid = ephem_time_grid,
+    time = ephem_time_grid,
     coe       = ClassicalOrbitalElements(
       sma  = coe_sma [ephem_indices],
       ecc  = coe_ecc [ephem_indices],
@@ -762,7 +763,7 @@ def process_multi_tracker_measurements_with_ekf(
   mee_time_series = ModifiedEquinoctialElements(p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L)
 
   # Create time grid for estimation times
-  estimation_time_grid = Time(
+  estimation_time_grid = TimeStructure(
     initial                = epoch_dt_utc,
     grid_relative_initial  = estimation_times,
   )
@@ -770,7 +771,7 @@ def process_multi_tracker_measurements_with_ekf(
   # Create PropagationResult at estimation_times
   result = PropagationResult(
     state     = estimated_states,
-    time_grid = estimation_time_grid,
+    time = estimation_time_grid,
     coe       = coe_time_series,
     mee       = mee_time_series,
     success   = True,
@@ -791,13 +792,13 @@ def process_multi_tracker_measurements_with_ekf(
 
   ephem_indices = np.array(ephem_indices)
 
-  ephem_time_grid = Time(
+  ephem_time_grid = TimeStructure(
     initial                = epoch_dt_utc,
     grid_relative_initial  = ephemeris_times,
   )
   result.at_ephem_times = PropagationResult(
     state     = estimated_states[:, ephem_indices],
-    time_grid = ephem_time_grid,
+    time = ephem_time_grid,
     coe       = ClassicalOrbitalElements(
       sma  = coe_sma [ephem_indices],
       ecc  = coe_ecc [ephem_indices],

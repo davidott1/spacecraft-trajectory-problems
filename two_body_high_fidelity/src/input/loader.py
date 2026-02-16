@@ -12,7 +12,8 @@ from src.model.orbit_converter import OrbitConverter
 from src.model.constants       import PRINTFORMATTER, SOLARSYSTEMCONSTANTS
 from src.input.cli             import parse_time
 from src.utility.tle_helper    import get_tle_satellite_and_tle_epoch
-from src.schemas.propagation   import PropagationResult, Time
+from src.schemas.time          import TimeStructure
+from src.schemas.propagation   import PropagationResult
 from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoctialElements, TLEData, TrackerStation
 from src.model.constants       import CONVERTER
 
@@ -1123,8 +1124,8 @@ def get_horizons_ephemeris(
     result_horizons = process_horizons_result(result_horizons)
 
   if result_horizons and result_horizons.get('success'):
-    # Construct Time
-    time_grid = Time(
+    # Construct TimeStructure
+    time = TimeStructure(
         initial                = result_horizons['time_o'],
         grid_relative_initial  = result_horizons['delta_time']
     )
@@ -1154,7 +1155,7 @@ def get_horizons_ephemeris(
     return PropagationResult(
         success   = True,
         message   = "JPL Horizons ephemeris loaded successfully",
-        time_grid = time_grid,
+        time = time,
         state     = result_horizons['state'],
         coe       = coe_obj,
         mee       = mee_obj,

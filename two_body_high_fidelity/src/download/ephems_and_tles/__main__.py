@@ -17,7 +17,7 @@ import os
 from astroquery.jplhorizons import Horizons
 from pathlib                import Path
 from datetime               import datetime
-from astropy.time           import Time, TimeDelta
+from astropy.time           import Time as AstropyTime, TimeDelta as AstropyTimeDelta
 from astropy.table          import Table
 from astropy                import units as u
 from typing                 import List, Dict, Tuple, Optional, Union
@@ -112,7 +112,7 @@ def download_tle_for_satellite(
             tle_year = 2000 + tle_year if tle_year < 57 else 1900 + tle_year
             tle_day_of_year = float(tle_epoch_str[2:])
             
-            tle_epoch_time = Time(f"{tle_year}-01-01", format='iso') + TimeDelta((tle_day_of_year - 1) * u.day) # type: ignore
+            tle_epoch_time = AstropyTime(f"{tle_year}-01-01", format='iso') + AstropyTimeDelta((tle_day_of_year - 1) * u.day) # type: ignore
             epoch_jd = tle_epoch_time.jd
             
             print(f"Downloaded TLE for NORAD {norad_id}")

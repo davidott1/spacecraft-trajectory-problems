@@ -229,7 +229,7 @@ def plot_ground_track(
   # Extract J2000 state vectors
   j2000_state   = result.state
   j2000_pos_vec = j2000_state[0:3, :]
-  time_s        = result.time_grid.grid.relative_initial
+  time_s        = result.time.grid.relative_initial
   n_points      = j2000_state.shape[1]
   
   # Convert epoch to ET

@@ -41,7 +41,7 @@ def plot_time_series(
   fig = plt.figure(figsize=(24, 10))
   
   # Extract data
-  time   = result.time_grid.grid.relative_initial
+  time   = result.time.grid.relative_initial
   states = result.state
   pos_x, pos_y, pos_z = states[0, :], states[1, :], states[2, :]
   vel_x, vel_y, vel_z = states[3, :], states[4, :], states[5, :]
@@ -233,9 +233,9 @@ def plot_time_series_error(
     fig : matplotlib.figure.Figure
       Figure object containing the time series error plots.
   """
-  # Use time_grid.grid.relative_initial for both datasets
-  time_ref  = result_ref.time_grid.grid.relative_initial
-  time_comp = result_comp.time_grid.grid.relative_initial
+  # Use time.grid.relative_initial for both datasets
+  time_ref  = result_ref.time.grid.relative_initial
+  time_comp = result_comp.time.grid.relative_initial
   
   state_ref  = result_ref.state
   state_comp = result_comp.state
@@ -247,7 +247,7 @@ def plot_time_series_error(
   # Smoother data (if provided)
   has_smoother = result_smoother is not None
   if has_smoother:
-    time_smoother = result_smoother.time_grid.grid.relative_initial
+    time_smoother = result_smoother.time.grid.relative_initial
     state_smoother = result_smoother.state
     coe_smoother = result_smoother.coe
     mee_smoother = result_smoother.mee

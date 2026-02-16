@@ -269,7 +269,7 @@ class TestLunarTransfer:
       assert result.combined_trajectory is not None
       assert result.combined_trajectory.state.shape[0] == 6
       assert result.combined_trajectory.state.shape[1] > 100
-      assert result.combined_trajectory.time_grid is not None
+      assert result.combined_trajectory.time is not None
     else:
       # No solution found for this geometry - that's OK, just note it
       pytest.skip(f"No transfer found for test geometry: {result.message}")

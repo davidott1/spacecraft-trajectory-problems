@@ -90,7 +90,7 @@ class MeasurementSimulator:
     j2000_state   = self.result.state
     j2000_pos_vec = j2000_state[0:3, :]
     j2000_vel_vec = j2000_state[3:6, :]
-    time_s        = self.result.time_grid.grid.relative_initial
+    time_s        = self.result.time.grid.relative_initial
     n_points      = j2000_state.shape[1]
 
     # Transform positions and velocities from J2000 to body-fixed frame
