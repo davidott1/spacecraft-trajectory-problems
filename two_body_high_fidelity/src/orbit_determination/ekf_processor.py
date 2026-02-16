@@ -13,7 +13,7 @@ from typing           import Optional, Tuple, Callable
 from src.orbit_determination.extended_kalman_filter import ExtendedKalmanFilter, EKFMeasurement, EKFConfig
 from src.orbit_determination.rts_smoother           import smooth_ekf_estimates
 from src.schemas.measurement                        import SimulatedMeasurements, MultiTrackerMeasurements
-from src.schemas.propagation                        import PropagationResult, TimeGrid
+from src.schemas.propagation                        import PropagationResult, Time
 from src.schemas.state                              import TrackerStation, ClassicalOrbitalElements, ModifiedEquinoctialElements
 from src.model.orbit_converter                      import OrbitConverter
 from src.model.constants                            import SOLARSYSTEMCONSTANTS
@@ -440,10 +440,9 @@ def process_measurements_with_ekf(
   mee_time_series = ModifiedEquinoctialElements(p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L)
 
   # Create time grid for estimation times
-  estimation_time_grid = TimeGrid(
-    initial = epoch_dt_utc,
-    final   = epoch_dt_utc + timedelta(seconds=float(estimation_times[-1])),
-    deltas  = estimation_times,
+  estimation_time_grid = Time(
+    initial                = epoch_dt_utc,
+    grid_relative_initial  = estimation_times,
   )
 
   # Create PropagationResult at estimation_times
@@ -471,10 +470,9 @@ def process_measurements_with_ekf(
 
   ephem_indices = np.array(ephem_indices)
   # Create time grid for ephemeris times
-  ephem_time_grid = TimeGrid(
-    initial = epoch_dt_utc,
-    final   = epoch_dt_utc + timedelta(seconds=float(ephemeris_times[-1])),
-    deltas  = ephemeris_times,
+  ephem_time_grid = Time(
+    initial                = epoch_dt_utc,
+    grid_relative_initial  = ephemeris_times,
   )
   result.at_ephem_times = PropagationResult(
     state     = estimated_states[:, ephem_indices],
@@ -764,10 +762,9 @@ def process_multi_tracker_measurements_with_ekf(
   mee_time_series = ModifiedEquinoctialElements(p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L)
 
   # Create time grid for estimation times
-  estimation_time_grid = TimeGrid(
-    initial = epoch_dt_utc,
-    final   = epoch_dt_utc + timedelta(seconds=float(estimation_times[-1])),
-    deltas  = estimation_times,
+  estimation_time_grid = Time(
+    initial                = epoch_dt_utc,
+    grid_relative_initial  = estimation_times,
   )
 
   # Create PropagationResult at estimation_times
@@ -794,10 +791,9 @@ def process_multi_tracker_measurements_with_ekf(
 
   ephem_indices = np.array(ephem_indices)
 
-  ephem_time_grid = TimeGrid(
-    initial = epoch_dt_utc,
-    final   = epoch_dt_utc + timedelta(seconds=float(ephemeris_times[-1])),
-    deltas  = ephemeris_times,
+  ephem_time_grid = Time(
+    initial                = epoch_dt_utc,
+    grid_relative_initial  = ephemeris_times,
   )
   result.at_ephem_times = PropagationResult(
     state     = estimated_states[:, ephem_indices],

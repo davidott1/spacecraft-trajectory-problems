@@ -172,7 +172,7 @@ def plot_3d_trajectories(
   vel_x, vel_y, vel_z = posvel_vec[3, :], posvel_vec[4, :], posvel_vec[5, :]
   
   # Build info string with frame and time if epoch is provided
-  plot_delta_time = result.time_grid.deltas
+  plot_delta_time = result.time_grid.grid.relative_initial
   info_text = f"Frame: {frame}"
   if epoch is not None and plot_delta_time is not None:
     start_utc = epoch.strftime('%Y-%m-%d %H:%M:%S UTC')
@@ -366,7 +366,7 @@ def plot_3d_trajectories_body_fixed(
   j2000_state   = result.state
   j2000_pos_vec = j2000_state[0:3, :]
   j2000_vel_vec = j2000_state[3:6, :]
-  time_s        = result.time_grid.deltas
+  time_s        = result.time_grid.grid.relative_initial
   n_points      = j2000_state.shape[1]
   
   # Convert epoch to ET
@@ -532,7 +532,7 @@ def plot_3d_trajectory_sun_centered(
   
   # Extract state vectors
   posvel_vec = result.state
-  time_s     = result.time_grid.deltas
+  time_s     = result.time_grid.grid.relative_initial
   
   # Build info string
   info_text = "Frame: J2000 - Sun-Centered"
@@ -875,8 +875,8 @@ def plot_3d_error(
   # Interpolate comparison result to reference time points
   from scipy.interpolate import interp1d
 
-  time_ref   = result_ref.time_grid.deltas
-  time_comp  = result_comp.time_grid.deltas
+  time_ref   = result_ref.time_grid.grid.relative_initial
+  time_comp  = result_comp.time_grid.grid.relative_initial
   state_comp = result_comp.state
   
   # Interpolate each state component

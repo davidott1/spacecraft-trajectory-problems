@@ -56,7 +56,7 @@ from typing          import Optional
 from src.model.constants       import SOLARSYSTEMCONSTANTS, NAIFIDS, CONVERTER
 from src.model.time_converter  import utc_to_et, et_to_utc
 from src.model.orbit_converter import OrbitConverter
-from src.schemas.propagation   import PropagationResult, TimeGrid
+from src.schemas.propagation   import PropagationResult, Time
 from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoctialElements
 from src.schemas.optimization  import LunarTransferConfig, LunarTransferResult, TransferLeg
 
@@ -454,11 +454,13 @@ class LunarTransferOptimizer:
     earth_states = eval_result['soi_result']['trajectory_states']
 
     earth_leg = TransferLeg(
-      name                = 'earth_departure',
-      central_body        = 'EARTH',
-      state_body_centered = earth_states,
-      state_earth_j2000   = earth_states,  # Already Earth-centered
-      times_et            = earth_times,
+      name            = 'earth_departure',
+      central_body    = 'EARTH',
+      j2000_state_vec = earth_states,
+      time_grid       = Time(
+        initial                = et_to_utc(earth_times[0]),
+        grid_relative_initial  = earth_times - earth_times[0],
+      ),
     )
 
     # --------------------------------------------------
@@ -467,18 +469,14 @@ class LunarTransferOptimizer:
     moon_times  = eval_result['peri_result']['trajectory_times']
     moon_states = eval_result['peri_result']['trajectory_states']
 
-    # Transform Moon-centered states to Earth-centered J2000
-    n_moon = moon_states.shape[1]
-    moon_states_earth = np.zeros_like(moon_states)
-    for i in range(n_moon):
-      moon_states_earth[:, i] = moon_to_earth_state(moon_states[:, i], moon_times[i])
-
     lunar_leg = TransferLeg(
-      name                = 'lunar_arrival',
-      central_body        = 'MOON',
-      state_body_centered = moon_states,
-      state_earth_j2000   = moon_states_earth,
-      times_et            = moon_times,
+      name            = 'lunar_arrival',
+      central_body    = 'MOON',
+      j2000_state_vec = moon_states,
+      time_grid       = Time(
+        initial                = et_to_utc(moon_times[0]),
+        grid_relative_initial  = moon_times - moon_times[0],
+      ),
     )
 
     # --------------------------------------------------
@@ -514,18 +512,14 @@ class LunarTransferOptimizer:
     llo_times  = llo_prop['times']
     llo_states = llo_prop['states']
 
-    # Transform LLO states to Earth-centered J2000
-    n_llo = llo_states.shape[1]
-    llo_states_earth = np.zeros_like(llo_states)
-    for i in range(n_llo):
-      llo_states_earth[:, i] = moon_to_earth_state(llo_states[:, i], llo_times[i])
-
     llo_leg = TransferLeg(
-      name                = 'llo_coast',
-      central_body        = 'MOON',
-      state_body_centered = llo_states,
-      state_earth_j2000   = llo_states_earth,
-      times_et            = llo_times,
+      name            = 'llo_coast',
+      central_body    = 'MOON',
+      j2000_state_vec = llo_states,
+      time_grid       = Time(
+        initial                = et_to_utc(llo_times[0]),
+        grid_relative_initial  = llo_times - llo_times[0],
+      ),
     )
 
     # --------------------------------------------------
@@ -600,32 +594,37 @@ class LunarTransferOptimizer:
       combined : PropagationResult
         Full trajectory in Earth-centered J2000.
     """
+    # Transform Moon-centered legs to Earth-centered J2000
+    def _to_earth(leg: TransferLeg) -> np.ndarray:
+      """Return states in Earth-centered J2000 for any leg."""
+      if leg.central_body == 'EARTH':
+        return leg.j2000_state_vec
+      states_earth = np.zeros_like(leg.j2000_state_vec)
+      for i in range(leg.j2000_state_vec.shape[1]):
+        states_earth[:, i] = moon_to_earth_state(leg.j2000_state_vec[:, i], leg.time_grid.grid.et[i])
+      return states_earth
+
     # Concatenate states (skip duplicate boundary points)
     all_states = np.hstack([
-      earth_leg.state_earth_j2000,
-      lunar_leg.state_earth_j2000[:, 1:],  # Skip duplicate SOI point
-      llo_leg.state_earth_j2000[:, 1:],    # Skip duplicate insertion point
+      _to_earth(earth_leg),
+      _to_earth(lunar_leg)[:, 1:],  # Skip duplicate SOI point
+      _to_earth(llo_leg)[:, 1:],    # Skip duplicate insertion point
     ])
 
     all_times_et = np.concatenate([
-      earth_leg.times_et,
-      lunar_leg.times_et[1:],
-      llo_leg.times_et[1:],
+      earth_leg.time_grid.grid.et,
+      lunar_leg.time_grid.grid.et[1:],
+      llo_leg.time_grid.grid.et[1:],
     ])
 
     # Compute deltas from departure
-    t0_et  = earth_leg.times_et[0]
+    t0_et  = earth_leg.time_grid.grid.et[0]
     deltas = all_times_et - t0_et
 
-    # Final datetime
-    final_et = all_times_et[-1]
-    final_dt = et_to_utc(final_et)
-
-    # Create TimeGrid
-    time_grid = TimeGrid(
-      initial = departure_dt,
-      final   = final_dt,
-      deltas  = deltas,
+    # Create Time
+    time_grid = Time(
+      initial                = departure_dt,
+      grid_relative_initial  = deltas,
     )
 
     # Compute COE relative to Earth at each point
@@ -754,8 +753,8 @@ class LunarTransferOptimizer:
       print(f"    Trajectory")
       print(f"      Total Points         : {n_pts}")
       if result.earth_departure_leg is not None:
-        print(f"      Earth Departure Leg  : {result.earth_departure_leg.state_earth_j2000.shape[1]} points")
+        print(f"      Earth Departure Leg  : {result.earth_departure_leg.j2000_state_vec.shape[1]} points")
       if result.lunar_arrival_leg is not None:
-        print(f"      Lunar Arrival Leg    : {result.lunar_arrival_leg.state_earth_j2000.shape[1]} points")
+        print(f"      Lunar Arrival Leg    : {result.lunar_arrival_leg.j2000_state_vec.shape[1]} points")
       if result.llo_coast_leg is not None:
-        print(f"      LLO Coast Leg        : {result.llo_coast_leg.state_earth_j2000.shape[1]} points")
+        print(f"      LLO Coast Leg        : {result.llo_coast_leg.j2000_state_vec.shape[1]} points")
