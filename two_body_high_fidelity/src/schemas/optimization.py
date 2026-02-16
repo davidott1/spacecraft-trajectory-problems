@@ -11,7 +11,8 @@ from dataclasses import dataclass, field
 from datetime    import datetime
 from typing      import Optional, List
 
-from src.schemas.propagation import PropagationResult, Time
+from src.schemas.time        import TimeStructure
+from src.schemas.propagation import PropagationResult
 
 
 @dataclass
@@ -54,12 +55,12 @@ class TransferLeg:
     name            : Leg identifier ('earth_departure', 'lunar_arrival', 'llo_coast')
     central_body    : Central gravitational body for this leg ('EARTH' or 'MOON')
     j2000_state_vec : State array centered on central_body, J2000 frame, shape (6, N) [m, m/s]
-    time_grid       : Time for this leg
+    time            : TimeStructure for this leg
   """
   name            : str
   central_body    : str
   j2000_state_vec : np.ndarray
-  time_grid       : Time
+  time            : TimeStructure
 
 
 @dataclass

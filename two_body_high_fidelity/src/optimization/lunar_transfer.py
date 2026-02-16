@@ -56,7 +56,8 @@ from typing          import Optional
 from src.model.constants       import SOLARSYSTEMCONSTANTS, NAIFIDS, CONVERTER
 from src.model.time_converter  import utc_to_et, et_to_utc
 from src.model.orbit_converter import OrbitConverter
-from src.schemas.propagation   import PropagationResult, Time
+from src.schemas.time          import TimeStructure
+from src.schemas.propagation   import PropagationResult
 from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoctialElements
 from src.schemas.optimization  import LunarTransferConfig, LunarTransferResult, TransferLeg
 
@@ -457,7 +458,7 @@ class LunarTransferOptimizer:
       name            = 'earth_departure',
       central_body    = 'EARTH',
       j2000_state_vec = earth_states,
-      time_grid       = Time(
+      time            = TimeStructure(
         initial                = et_to_utc(earth_times[0]),
         grid_relative_initial  = earth_times - earth_times[0],
       ),
@@ -473,7 +474,7 @@ class LunarTransferOptimizer:
       name            = 'lunar_arrival',
       central_body    = 'MOON',
       j2000_state_vec = moon_states,
-      time_grid       = Time(
+      time            = TimeStructure(
         initial                = et_to_utc(moon_times[0]),
         grid_relative_initial  = moon_times - moon_times[0],
       ),
@@ -516,7 +517,7 @@ class LunarTransferOptimizer:
       name            = 'llo_coast',
       central_body    = 'MOON',
       j2000_state_vec = llo_states,
-      time_grid       = Time(
+      time            = TimeStructure(
         initial                = et_to_utc(llo_times[0]),
         grid_relative_initial  = llo_times - llo_times[0],
       ),
@@ -601,7 +602,7 @@ class LunarTransferOptimizer:
         return leg.j2000_state_vec
       states_earth = np.zeros_like(leg.j2000_state_vec)
       for i in range(leg.j2000_state_vec.shape[1]):
-        states_earth[:, i] = moon_to_earth_state(leg.j2000_state_vec[:, i], leg.time_grid.grid.et[i])
+        states_earth[:, i] = moon_to_earth_state(leg.j2000_state_vec[:, i], leg.time.grid.et[i])
       return states_earth
 
     # Concatenate states (skip duplicate boundary points)
@@ -612,17 +613,17 @@ class LunarTransferOptimizer:
     ])
 
     all_times_et = np.concatenate([
-      earth_leg.time_grid.grid.et,
-      lunar_leg.time_grid.grid.et[1:],
-      llo_leg.time_grid.grid.et[1:],
+      earth_leg.time.grid.et,
+      lunar_leg.time.grid.et[1:],
+      llo_leg.time.grid.et[1:],
     ])
 
     # Compute deltas from departure
-    t0_et  = earth_leg.time_grid.grid.et[0]
+    t0_et  = earth_leg.time.grid.et[0]
     deltas = all_times_et - t0_et
 
     # Create Time
-    time_grid = Time(
+    time = TimeStructure(
       initial                = departure_dt,
       grid_relative_initial  = deltas,
     )
@@ -684,7 +685,7 @@ class LunarTransferOptimizer:
     return PropagationResult(
       success   = True,
       message   = "Patched conic lunar transfer trajectory",
-      time_grid = time_grid,
+      time      = time,
       state     = all_states,
       coe       = coe_time_series,
       mee       = mee_time_series,

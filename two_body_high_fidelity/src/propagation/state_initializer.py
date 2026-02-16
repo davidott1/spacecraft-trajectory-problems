@@ -125,12 +125,12 @@ def get_initial_state(
     print()
 
     # Get the Horizons time grid
-    if not result_jpl_horizons_ephemeris.time_grid:
+    if not result_jpl_horizons_ephemeris.time:
       raise ValueError("Horizons ephemeris missing time grid data")
 
     # Use the first state from the filtered Horizons data
     horizons_initial_state = result_jpl_horizons_ephemeris.state[:, 0]
-    epoch_dt = result_jpl_horizons_ephemeris.time_grid.initial.utc
+    epoch_dt = result_jpl_horizons_ephemeris.time.initial.utc
 
     try:
       epoch_et = utc_to_et(epoch_dt)

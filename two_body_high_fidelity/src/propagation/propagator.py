@@ -20,7 +20,8 @@ from src.model.frame_converter import VectorConverter
 from src.utility.tle_helper    import modify_tle_bstar, get_tle_satellite_and_tle_epoch
 from src.schemas.gravity       import GravityModelConfig
 from src.schemas.spacecraft    import SpacecraftProperties
-from src.schemas.propagation   import PropagationConfig, PropagationResult, Time
+from src.schemas.time          import TimeStructure
+from src.schemas.propagation   import PropagationConfig, PropagationResult
 from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoctialElements
 
 
@@ -68,7 +69,7 @@ def propagate_tle(
   Output:
   -------
     result : PropagationResult
-      Result object with 'success', 'state', 'time_grid', 'message', 'coe', 'mee'.
+      Result object with 'success', 'state', 'time', 'message', 'coe', 'mee'.
   """
   # Input validation
   if (time_o is not None or time_f is not None) and time_eval is not None:
@@ -207,22 +208,22 @@ def propagate_tle(
       p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L
     )
 
-    # Create Time if datetime parameters provided
-    time_grid = None
+    # Create TimeStructure if datetime parameters provided
+    time = None
     if initial_dt is not None and final_dt is not None:
       # time array is in seconds from TLE epoch, convert to deltas from initial_dt
       time_offset_o_s = (initial_dt - epoch_datetime).total_seconds()
       deltas = time - time_offset_o_s
-      time_grid = Time(
+      time = TimeStructure(
         initial                = initial_dt,
         grid_relative_initial  = deltas,
       )
 
-    # Return result object with time_grid
+    # Return result object with time
     return PropagationResult(
       success   = True,
       message   = 'SGP4 propagation successful',
-      time_grid = time_grid,
+      time      = time,
       state     = posvel_vec_array,
       coe       = coe_time_series,
       mee       = mee_time_series,
@@ -348,7 +349,7 @@ def propagate_state_numerical_integration(
       Object containing:
       - success   : bool - Integration success flag
       - message   : str - Status message
-      - time_grid : TimeGrid - Time grid with initial, final, and deltas
+      - time      : TimeStructure - Time structure with initial, final, and deltas
       - state     : np.ndarray - State history [6 x N]
       - coe       : ClassicalOrbitalElements - Classical orbital elements time series (if requested)
       - mee       : ModifiedEquinoctialElements - Modified equinoctial elements time series (if requested)
@@ -448,11 +449,11 @@ def propagate_state_numerical_integration(
       L = mee_L,
     )
 
-  # Create Time
+  # Create TimeStructure
   # solution.t contains the time array (in ET seconds)
   # Convert to deltas from time_o
   deltas = solution.t - time_o
-  time_grid = Time(
+  time = TimeStructure(
     initial                = initial_dt,
     grid_relative_initial  = deltas,
   )
@@ -460,7 +461,7 @@ def propagate_state_numerical_integration(
   return PropagationResult(
     success   = solution.success,
     message   = solution.message,
-    time_grid = time_grid,
+    time      = time,
     state     = solution.y,
     coe       = coe_time_series,
     mee       = mee_time_series,
@@ -595,14 +596,14 @@ def propagate_with_maneuvers(
     if i == 0:
       # First segment: keep all points
       all_states.append(result.state)
-      all_times.append(result.time_grid.grid.relative_initial)
+      all_times.append(result.time.grid.relative_initial)
       if get_coe_time_series:
         all_coe.append(result.coe)
         all_mee.append(result.mee)
     else:
       # Later segments: skip first point (duplicate from previous segment's end)
       all_states.append(result.state[:, 1:])
-      all_times.append(result.time_grid.grid.relative_initial[1:] + (seg_start_dt - initial_dt).total_seconds())
+      all_times.append(result.time.grid.relative_initial[1:] + (seg_start_dt - initial_dt).total_seconds())
       if get_coe_time_series:
         all_coe.append(_skip_first_coe(result.coe))
         all_mee.append(_skip_first_mee(result.mee))
@@ -641,8 +642,8 @@ def propagate_with_maneuvers(
     combined_coe = _concatenate_coe(all_coe)
     combined_mee = _concatenate_mee(all_mee)
 
-  # Create time grid
-  time_grid = Time(
+  # Create time structure
+  time = TimeStructure(
     initial                = initial_dt,
     grid_relative_initial  = combined_deltas,
   )
@@ -650,7 +651,7 @@ def propagate_with_maneuvers(
   return PropagationResult(
     success   = True,
     message   = f"Propagation successful with {len(valid_maneuvers)} maneuver(s)",
-    time_grid = time_grid,
+    time      = time,
     state     = combined_state,
     coe       = combined_coe,
     mee       = combined_mee,
@@ -920,7 +921,7 @@ def run_high_fidelity_propagation(
       # Use the absolute ephemeris times from the Horizons result (TDB/ET)
       # This ensures we compare the simulation state at Time T with the Horizons state at Time T,
       # accounting for any offset between the simulation start time and the first Horizons data point.
-      ephem_times_et = result_jpl_horizons_ephemeris.time_grid.grid.et
+      ephem_times_et = result_jpl_horizons_ephemeris.time.grid.et
 
       # Interpolate state to ephemeris times (use time_et_array from above)
       state_at_ephem = np.zeros((6, len(ephem_times_et)))
@@ -989,15 +990,15 @@ def run_high_fidelity_propagation(
 
       # Store ephemeris-time results as PropagationResult
       # Create time grid for interpolated ephemeris times
-      if result_jpl_horizons_ephemeris.time_grid is not None:
-        ephem_time_grid = Time(
-          initial                = result_jpl_horizons_ephemeris.time_grid.initial.utc,
-          grid_relative_initial  = result_jpl_horizons_ephemeris.time_grid.grid.relative_initial,
+      if result_jpl_horizons_ephemeris.time is not None:
+        ephem_time_grid = TimeStructure(
+          initial                = result_jpl_horizons_ephemeris.time.initial.utc,
+          grid_relative_initial  = result_jpl_horizons_ephemeris.time.grid.relative_initial,
         )
         result_high_fidelity.at_ephem_times = PropagationResult(
           success   = True,
           message   = "Interpolated to ephemeris times",
-          time_grid = ephem_time_grid,
+          time      = ephem_time_grid,
           state     = state_at_ephem,
           coe       = coe_at_ephem,
           mee       = mee_at_ephem,
@@ -1116,7 +1117,7 @@ def run_high_fidelity_propagation(
     print()
 
     # Print final state and orbital elements
-    time_et_f_final = result_high_fidelity.time_grid.grid.et[-1]
+    time_et_f_final = result_high_fidelity.time.grid.et[-1]
     time_utc_f_str = f"{et_to_utc(time_et_f_final)} UTC / {time_et_f_final:.6f} ET"
 
     pos_vec_f = result_high_fidelity.state[0:3, -1]
@@ -1241,8 +1242,8 @@ def run_sgp4_propagation(
     return None
 
   # If comparing to Horizons, also propagate at ephemeris times
-  if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success and result_jpl_horizons_ephemeris.time_grid is not None:
-    ephem_times_s = result_jpl_horizons_ephemeris.time_grid.grid.relative_initial  # seconds from time_o
+  if compare_jpl_horizons and result_jpl_horizons_ephemeris and result_jpl_horizons_ephemeris.success and result_jpl_horizons_ephemeris.time is not None:
+    ephem_times_s = result_jpl_horizons_ephemeris.time.grid.relative_initial  # seconds from time_o
     ephem_times_from_tle = ephem_times_s + time_offset_o_s  # seconds from TLE epoch
 
     print(f"    Propagating at {len(ephem_times_from_tle)} ephemeris time points ... ", end='', flush=True)
@@ -1252,12 +1253,12 @@ def run_sgp4_propagation(
       tle_line_2 = tle_line_2,
       to_j2000   = True,
       time_eval  = ephem_times_from_tle,
-      initial_dt = result_jpl_horizons_ephemeris.time_grid.initial.utc,
-      final_dt   = result_jpl_horizons_ephemeris.time_grid.final.utc,
+      initial_dt = result_jpl_horizons_ephemeris.time.initial.utc,
+      final_dt   = result_jpl_horizons_ephemeris.time.final.utc,
     )
 
     if result_sgp4_at_ephem.success:
-      # Store ephemeris-time results directly (time_grid already created by propagate_tle)
+      # Store ephemeris-time results directly (time already created by propagate_tle)
       result_sgp4.at_ephem_times = result_sgp4_at_ephem
       print("Complete")
     else:
@@ -1323,8 +1324,8 @@ def run_propagations(
   if compare_tle:
     # Use high-fidelity time grid if available for direct comparison
     time_eval_s = None
-    if result_high_fidelity.success and result_high_fidelity.time_grid is not None:
-      time_eval_s = result_high_fidelity.time_grid.grid.relative_initial
+    if result_high_fidelity.success and result_high_fidelity.time is not None:
+      time_eval_s = result_high_fidelity.time.grid.relative_initial
     
     result_sgp4 = run_sgp4_propagation(
       result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
