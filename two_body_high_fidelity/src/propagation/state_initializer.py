@@ -130,7 +130,7 @@ def get_initial_state(
 
     # Use the first state from the filtered Horizons data
     horizons_initial_state = result_jpl_horizons_ephemeris.state[:, 0]
-    epoch_dt = result_jpl_horizons_ephemeris.time_grid.initial
+    epoch_dt = result_jpl_horizons_ephemeris.time_grid.initial.utc
 
     try:
       epoch_et = utc_to_et(epoch_dt)

@@ -12,7 +12,7 @@ from src.model.orbit_converter import OrbitConverter
 from src.model.constants       import PRINTFORMATTER, SOLARSYSTEMCONSTANTS
 from src.input.cli             import parse_time
 from src.utility.tle_helper    import get_tle_satellite_and_tle_epoch
-from src.schemas.propagation   import PropagationResult, TimeGrid
+from src.schemas.propagation   import PropagationResult, Time
 from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoctialElements, TLEData, TrackerStation
 from src.model.constants       import CONVERTER
 
@@ -1123,11 +1123,10 @@ def get_horizons_ephemeris(
     result_horizons = process_horizons_result(result_horizons)
 
   if result_horizons and result_horizons.get('success'):
-    # Construct TimeGrid
-    time_grid = TimeGrid(
-        initial = result_horizons['time_o'],
-        final   = result_horizons['time_f'],
-        deltas  = result_horizons['delta_time']
+    # Construct Time
+    time_grid = Time(
+        initial                = result_horizons['time_o'],
+        grid_relative_initial  = result_horizons['delta_time']
     )
 
     # Construct COE object

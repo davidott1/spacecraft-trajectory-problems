@@ -24,7 +24,7 @@ import numpy as np
 from typing import Tuple, Optional, Callable
 from datetime import datetime, timedelta
 
-from src.schemas.propagation import PropagationResult, TimeGrid
+from src.schemas.propagation import PropagationResult, Time
 from src.schemas.state import ClassicalOrbitalElements, ModifiedEquinoctialElements
 from src.model.orbit_converter import OrbitConverter
 from src.model.constants import SOLARSYSTEMCONSTANTS
@@ -305,12 +305,12 @@ def smooth_ekf_estimates(
   if hasattr(filter_result, 'at_ephem_times') and filter_result.at_ephem_times is not None:
     # Get ephemeris time grid from filter
     ephem_time_grid = filter_result.at_ephem_times.time_grid
-    n_ephem = len(ephem_time_grid.deltas)
+    n_ephem = len(ephem_time_grid.grid.relative_initial)
 
     # Find indices in smoothed states that correspond to ephemeris times
     # We need to match the time grids
-    ephem_times_target = ephem_time_grid.deltas
-    estimation_times_all = time_grid.deltas
+    ephem_times_target = ephem_time_grid.grid.relative_initial
+    estimation_times_all = time_grid.grid.relative_initial
 
     # Find matching indices (within tolerance for floating point)
     ephem_indices = []

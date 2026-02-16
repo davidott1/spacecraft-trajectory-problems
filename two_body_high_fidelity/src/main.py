@@ -467,9 +467,9 @@ def main(
       # Determine which time grid to use for EKF processing
       # Use the truth source's time grid so measurements align properly
       if make_meas_from == 'model' and result_high_fidelity_propagation is not None:
-        ekf_ephemeris_times = result_high_fidelity_propagation.time_grid.deltas
+        ekf_ephemeris_times = result_high_fidelity_propagation.time_grid.grid.relative_initial
       else:
-        ekf_ephemeris_times = result_jpl_horizons_ephemeris.time_grid.deltas
+        ekf_ephemeris_times = result_jpl_horizons_ephemeris.time_grid.grid.relative_initial
 
       # Process with EKF
       if merged_measurements is not None and n_measurements > 0:

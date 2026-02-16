@@ -19,7 +19,7 @@ from src.plot.plot_skyplot                     import plot_skyplot, plot_pass_ti
 from src.plot.plot_covariance                  import plot_covariance_combined, plot_covariance_filter_vs_smoother
 from src.plot.plot_od_comparison               import plot_filter_smoother_error_comparison, plot_filter_smoother_rss_comparison, plot_filter_smoother_full_error_comparison, plot_mcreynolds_consistency, plot_state_covariance_overlap
 from src.plot.plot_residual_ratio              import plot_measurement_residual_ratio, plot_innovation_covariance_evolution
-from src.schemas.propagation                   import PropagationResult, TimeGrid
+from src.schemas.propagation                   import PropagationResult, Time
 from src.schemas.state                         import TrackerStation, ClassicalOrbitalElements, ModifiedEquinoctialElements
 from src.orbit_determination.measurement_simulator import MeasurementSimulator
 from src.model.orbit_converter                 import OrbitConverter
@@ -42,7 +42,7 @@ def _interpolate_result_to_times(source_result: PropagationResult, target_times:
     interpolated_result : PropagationResult
       A new PropagationResult with states interpolated to target_times.
   """
-  source_times = source_result.time_grid.deltas
+  source_times = source_result.time_grid.grid.relative_initial
   source_states = source_result.state
 
   # Create interpolators for each state component (6 states)
@@ -106,14 +106,11 @@ def _interpolate_result_to_times(source_result: PropagationResult, target_times:
     p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L,
   )
 
-  # Create new time grid using source's initial time and computing final from target deltas
-  from datetime import timedelta
-  initial_time = source_result.time_grid.initial
-  final_time = initial_time + timedelta(seconds=float(target_times[-1]))
-  new_time_grid = TimeGrid(
+  # Create new time grid using source's initial time
+  initial_time = source_result.time_grid.initial.utc
+  new_time_grid = Time(
     initial=initial_time,
-    final=final_time,
-    deltas=target_times,
+    grid_relative_initial=target_times,
   )
 
   return PropagationResult(
@@ -174,8 +171,8 @@ def generate_error_plots(
     hf_at_ephem = result_high_fidelity_propagation.at_ephem_times
 
     # Check if time grids match, if not, interpolate to JPL Horizons grid
-    jpl_times = result_jpl_horizons_ephemeris.time_grid.deltas
-    hf_times = hf_at_ephem.time_grid.deltas
+    jpl_times = result_jpl_horizons_ephemeris.time_grid.grid.relative_initial
+    hf_times = hf_at_ephem.time_grid.grid.relative_initial
 
     if len(hf_times) != len(jpl_times) or not np.allclose(hf_times, jpl_times):
       # Time grids don't match - interpolate HF to JPL grid
@@ -780,8 +777,8 @@ def generate_plots(
       smoother_at_ephem = od_smoother_states.at_ephem_times
 
       # Check if time grids match, if not, interpolate to JPL Horizons grid
-      jpl_times = result_jpl_horizons_ephemeris.time_grid.deltas
-      filter_times = filter_at_ephem.time_grid.deltas
+      jpl_times = result_jpl_horizons_ephemeris.time_grid.grid.relative_initial
+      filter_times = filter_at_ephem.time_grid.grid.relative_initial
 
       if len(filter_times) != len(jpl_times) or not np.allclose(filter_times, jpl_times):
         # Time grids don't match - interpolate filter/smoother to JPL grid

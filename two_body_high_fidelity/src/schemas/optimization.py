@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime    import datetime
 from typing      import Optional, List
 
-from src.schemas.propagation import PropagationResult, TimeGrid
+from src.schemas.propagation import PropagationResult, Time
 
 
 @dataclass
@@ -31,16 +31,16 @@ class LunarTransferConfig:
     atol                      : Absolute tolerance for numerical integration
     rtol                      : Relative tolerance for numerical integration
   """
-  leo_altitude_m            : float    = 200_000.0
-  llo_altitude_m            : float    = 100_000.0
-  departure_epoch           : Optional[datetime] = None
-  max_transfer_time_s       : float    = 7.0 * 86400.0
-  dv1_search_bounds_m_s     : tuple    = (2800.0, 3400.0)
-  departure_search_window_s : float    = 30.0 * 86400.0
-  n_departure_candidates    : int      = 720
-  llo_coast_orbits          : int      = 3
-  atol                      : float    = 1e-12
-  rtol                      : float    = 1e-12
+  leo_altitude_m            : float               = 200_000.0
+  llo_altitude_m            : float               = 100_000.0
+  departure_epoch           : Optional[datetime]  = None
+  max_transfer_time_s       : float               = 7.0 * 86400.0
+  dv1_search_bounds_m_s     : tuple[float, float] = (2800.0, 3400.0)
+  departure_search_window_s : float               = 30.0 * 86400.0
+  n_departure_candidates    : int                 = 720
+  llo_coast_orbits          : int                 = 3
+  atol                      : float               = 1e-12
+  rtol                      : float               = 1e-12
 
 
 @dataclass
@@ -48,20 +48,18 @@ class TransferLeg:
   """
   Single leg of a patched conic transfer trajectory.
 
+  State is always expressed relative to central_body in the J2000 frame.
+
   Attributes:
-    name               : Leg identifier ('leo_coast', 'earth_departure', 'lunar_arrival', 'llo_coast')
-    central_body       : Central gravitational body for this leg ('EARTH' or 'MOON')
-    state_body_centered: State array in body-centered J2000, shape (6, N)
-    state_earth_j2000  : State array in Earth-centered J2000, shape (6, N)
-    times_et           : Ephemeris times [s past J2000], shape (N,)
-    time_grid          : TimeGrid for this leg (optional)
+    name            : Leg identifier ('earth_departure', 'lunar_arrival', 'llo_coast')
+    central_body    : Central gravitational body for this leg ('EARTH' or 'MOON')
+    j2000_state_vec : State array centered on central_body, J2000 frame, shape (6, N) [m, m/s]
+    time_grid       : Time for this leg
   """
-  name                : str
-  central_body        : str
-  state_body_centered : np.ndarray
-  state_earth_j2000   : np.ndarray
-  times_et            : np.ndarray
-  time_grid           : Optional[TimeGrid] = None
+  name            : str
+  central_body    : str
+  j2000_state_vec : np.ndarray
+  time_grid       : Time
 
 
 @dataclass

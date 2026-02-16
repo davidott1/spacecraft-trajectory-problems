@@ -17,6 +17,8 @@ from src.schemas.state import (
 from src.schemas.propagation import (
   PropagationResult,
   PropagationConfig,
+  Time,
+  TimePoint,
   TimeGrid,
 )
 from src.schemas.gravity import (
@@ -55,6 +57,8 @@ __all__ = [
   # Propagation
   'PropagationResult',
   'PropagationConfig',
+  'Time',
+  'TimePoint',
   'TimeGrid',
   # Gravity
   'GravityModelConfig',

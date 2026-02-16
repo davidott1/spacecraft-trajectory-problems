@@ -54,9 +54,9 @@ def plot_filter_smoother_error_comparison(
       Matplotlib figure containing error comparison plots.
   """
   # Extract time and states
-  time_truth = truth_result.time_grid.deltas
-  time_filter = filter_result.time_grid.deltas
-  time_smoother = smoother_result.time_grid.deltas
+  time_truth = truth_result.time_grid.grid.relative_initial
+  time_filter = filter_result.time_grid.grid.relative_initial
+  time_smoother = smoother_result.time_grid.grid.relative_initial
 
   # Verify time grids match
   if not (np.allclose(time_truth, time_filter) and np.allclose(time_truth, time_smoother)):
@@ -219,9 +219,9 @@ def plot_filter_smoother_full_error_comparison(
       Matplotlib figure containing comprehensive error comparison plots.
   """
   # Extract time and states
-  time_truth = truth_result.time_grid.deltas
-  time_filter = filter_result.time_grid.deltas
-  time_smoother = smoother_result.time_grid.deltas
+  time_truth = truth_result.time_grid.grid.relative_initial
+  time_filter = filter_result.time_grid.grid.relative_initial
+  time_smoother = smoother_result.time_grid.grid.relative_initial
 
   # Verify time grids match
   if not (np.allclose(time_truth, time_filter) and np.allclose(time_truth, time_smoother)):
@@ -511,8 +511,8 @@ def plot_mcreynolds_consistency(
       Matplotlib figure with 2x1 grid showing position and velocity consistency.
   """
   # Extract time and states
-  time_filter = filter_result.time_grid.deltas
-  time_smoother = smoother_result.time_grid.deltas
+  time_filter = filter_result.time_grid.grid.relative_initial
+  time_smoother = smoother_result.time_grid.grid.relative_initial
 
   # Verify time grids match
   if not np.allclose(time_filter, time_smoother):

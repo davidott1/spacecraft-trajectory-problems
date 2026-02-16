@@ -104,7 +104,7 @@ def plot_skyplot(
   if hasattr(topo_truth, 'delta_time_epoch'):
     delta_time_epoch = topo_truth.delta_time_epoch  # From TopocentricState (SimulatedMeasurements)
   else:
-    delta_time_epoch = result.time_grid.deltas  # From PropagationResult (compute_topocentric_coordinates_with_rates)
+    delta_time_epoch = result.time_grid.grid.relative_initial  # From PropagationResult (compute_topocentric_coordinates_with_rates)
 
   range_m_truth = topo_truth.range
 
@@ -811,7 +811,7 @@ def plot_pass_timeseries(
   # Convert to degrees for display
   az_deg  = topo.azimuth   * CONVERTER.DEG_PER_RAD
   el_deg  = topo.elevation * CONVERTER.DEG_PER_RAD
-  delta_time_epoch  = result.time_grid.deltas
+  delta_time_epoch  = result.time_grid.grid.relative_initial
   
   # Get rates (convert angular rates to deg/s)
   az_dot_deg  = topo.azimuth_dot   * CONVERTER.DEG_PER_RAD if topo.azimuth_dot is not None else None
