@@ -27,11 +27,12 @@ import numpy as np
 from datetime import datetime
 
 from src.model.constants      import SOLARSYSTEMCONSTANTS, CONVERTER
+from src.model.orbital_mechanics import compute_circular_velocity
+from src.propagation.analytical_propagator import propagate_circular_orbit
 from src.optimization.patched_conic import (
   compute_soi_radius,
-  compute_circular_velocity,
+
   compute_hohmann_estimates,
-  propagate_circular_orbit,
   propagate_two_body,
 )
 

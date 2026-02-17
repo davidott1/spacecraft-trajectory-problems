@@ -9,9 +9,7 @@ two-body propagation with event detection.
 Key Functions:
 --------------
   compute_soi_radius          - Sphere of influence radius from mass ratio
-  compute_circular_velocity   - Circular orbit velocity at radius
   compute_hohmann_estimates   - Hohmann transfer ΔV and timing estimates
-  propagate_circular_orbit    - Analytical circular orbit propagation
   get_body_state              - SPICE body state query
   earth_to_moon_state         - Earth-centered to Moon-centered frame transform
   moon_to_earth_state         - Moon-centered to Earth-centered frame transform
@@ -65,30 +63,6 @@ def compute_soi_radius(
   return sma * (gp_secondary / gp_primary) ** 0.4
 
 
-def compute_circular_velocity(
-  r  : float,
-  gp : float,
-) -> float:
-  """
-  Compute circular orbit velocity at radius r.
-
-  v_circ = sqrt(gp / r)
-
-  Input:
-  ------
-    r : float
-      Orbital radius [m].
-    gp : float
-      Gravitational parameter of central body [m³/s²].
-
-  Output:
-  -------
-    v_circ : float
-      Circular orbital velocity [m/s].
-  """
-  return np.sqrt(gp / r)
-
-
 def compute_hohmann_estimates(
   r1 : float,
   r2 : float,
@@ -139,51 +113,6 @@ def compute_hohmann_estimates(
     'v_departure'   : v_departure,
     'v_arrival'     : v_arrival,
   }
-
-
-def propagate_circular_orbit(
-  state0 : np.ndarray,
-  dt     : float,
-) -> np.ndarray:
-  """
-  Analytically propagate a circular orbit by time dt.
-
-  Exact for circular orbits. Rotates the position and velocity vectors
-  by the angle swept in time dt within the orbit plane.
-
-  Input:
-  ------
-    state0 : np.ndarray (6,)
-      Initial state [pos, vel] in meters and m/s.
-    dt : float
-      Time to propagate [s]. Can be positive or negative.
-
-  Output:
-  -------
-    state_new : np.ndarray (6,)
-      Propagated state [pos, vel] in meters and m/s.
-  """
-  r0    = state0[0:3]
-  v0    = state0[3:6]
-  r_mag = np.linalg.norm(r0)
-  v_mag = np.linalg.norm(v0)
-
-  # Unit vectors in orbit plane
-  r_hat = r0 / r_mag
-  v_hat = v0 / v_mag
-
-  # Angular rate for circular orbit
-  omega = v_mag / r_mag
-  theta = omega * dt
-
-  cos_t = np.cos(theta)
-  sin_t = np.sin(theta)
-
-  # Rotate in the orbit plane
-  r_new = r_mag * (cos_t * r_hat + sin_t * v_hat)
-  v_new = v_mag * (-sin_t * r_hat + cos_t * v_hat)
-
-  return np.concatenate([r_new, v_new])
 
 
 # --------------------------------------------------------------------------

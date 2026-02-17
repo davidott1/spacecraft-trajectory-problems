@@ -58,7 +58,7 @@ from datetime                          import datetime
 import numpy as np
 
 from src.plot.plot_generator           import generate_plots
-from src.propagation.propagator        import run_propagations
+from src.propagation.numerical_propagator import run_propagations
 from src.input.loader                  import unload_files, load_files, get_horizons_ephemeris, get_celestrak_tle
 from src.utility.printer               import final_print
 from src.input.cli                     import parse_command_line_arguments
