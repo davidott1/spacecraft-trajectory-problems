@@ -56,16 +56,17 @@ from typing          import Optional
 from src.model.constants       import SOLARSYSTEMCONSTANTS, NAIFIDS, CONVERTER
 from src.model.time_converter  import utc_to_et, et_to_utc
 from src.model.orbit_converter import OrbitConverter
-from src.schemas.time          import TimeStructure
-from src.schemas.propagation   import PropagationResult
+from src.model.orbital_mechanics import compute_circular_velocity
+from src.schemas.time              import TimeStructure
+from src.schemas.propagation       import PropagationResult
 from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoctialElements
 from src.schemas.optimization  import LunarTransferConfig, LunarTransferResult, TransferLeg
 
+from src.propagation.analytical_propagator import propagate_circular_orbit
 from src.optimization.patched_conic import (
   compute_soi_radius,
-  compute_circular_velocity,
+
   compute_hohmann_estimates,
-  propagate_circular_orbit,
   get_body_state,
   earth_to_moon_state,
   moon_to_earth_state,
