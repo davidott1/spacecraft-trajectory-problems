@@ -100,7 +100,7 @@ two_body_high_fidelity/
     ├── model/                       # Core physics models
     │   ├── constants.py             # Physical constants and unit conversions
     │   ├── dynamics.py              # Acceleration models (gravity, drag, SRP, relativity, tides)
-    │   ├── frame_converter.py       # Reference frame transformations
+    │   ├── frame_and_vector_converter.py # Reference frame transformations
     │   ├── orbit_converter.py       # Orbital element conversions
     │   ├── time_converter.py        # Time system conversions
     │   └── gravity_field.py         # Spherical harmonic gravity field models
@@ -143,7 +143,7 @@ two_body_high_fidelity/
         ├── conftest.py              # Pytest configuration and fixtures
         ├── fixtures/                # Static test data
         ├── test_dynamics.py         # Dynamics model tests
-        ├── test_frame_converter.py
+        ├── test_frame_and_vector_converter.py
         ├── test_orbit_converter.py
         ├── test_propagator.py
         └── test_regression.py       # End-to-end regression tests
@@ -837,7 +837,7 @@ python -m pytest src/verification/ --cov=src --cov-report=html
 | Module | Description |
 |--------|-------------|
 | `test_dynamics.py` | Gravity, drag, SRP acceleration models |
-| `test_frame_converter.py` | J2000↔TEME, XYZ↔RIC transformations |
+| `test_frame_and_vector_converter.py` | J2000↔TEME, XYZ↔RIC transformations |
 | `test_orbit_converter.py` | Cartesian↔Keplerian conversions |
 | `test_propagator.py` | Integration and SGP4 propagation |
 | `test_regression.py` | End-to-end regression tests |

@@ -13,7 +13,7 @@ from matplotlib.figure import Figure
 
 from src.plot.utility          import add_utc_time_axis
 from src.model.constants       import CONVERTER
-from src.model.frame_converter import FrameConverter
+from src.model.frame_and_vector_converter import FrameConverter
 from src.schemas.propagation   import PropagationResult
 
 

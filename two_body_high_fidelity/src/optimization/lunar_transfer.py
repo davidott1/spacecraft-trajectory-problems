@@ -53,23 +53,20 @@ from datetime        import datetime, timedelta
 from scipy.optimize  import minimize
 from typing          import Optional
 
-from src.model.constants       import SOLARSYSTEMCONSTANTS, NAIFIDS, CONVERTER
-from src.model.time_converter  import utc_to_et, et_to_utc
-from src.model.orbit_converter import OrbitConverter
+from src.model.constants         import SOLARSYSTEMCONSTANTS, NAIFIDS, CONVERTER
+from src.model.time_converter    import utc_to_et, et_to_utc
+from src.model.orbit_converter   import OrbitConverter
 from src.model.orbital_mechanics import compute_circular_velocity
-from src.schemas.time              import TimeStructure
-from src.schemas.propagation       import PropagationResult
-from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoctialElements
-from src.schemas.optimization  import LunarTransferConfig, LunarTransferResult, TransferLeg
+from src.schemas.time            import TimeStructure
+from src.schemas.propagation     import PropagationResult
+from src.schemas.state           import ClassicalOrbitalElements, ModifiedEquinoctialElements
+from src.schemas.optimization    import LunarTransferConfig, LunarTransferResult, TransferLeg
 
 from src.propagation.analytical_propagator import propagate_circular_orbit
-from src.optimization.patched_conic import (
+from src.model.orbital_mechanics           import compute_hohmann_velocities
+from src.model.frame_and_vector_converter  import BodyVectorConverter
+from src.optimization.patched_conic        import (
   compute_soi_radius,
-
-  compute_hohmann_estimates,
-  get_body_state,
-  earth_to_moon_state,
-  moon_to_earth_state,
   propagate_to_soi,
   propagate_to_periapsis,
   propagate_two_body,
@@ -129,10 +126,10 @@ class LunarTransferOptimizer:
     self.v_circ_llo = compute_circular_velocity(self.r_llo, self.MOON_GP)
 
     # Moon's sphere of influence
-    self.soi_moon = compute_soi_radius(self.MOON_SMA, self.MOON_GP, self.EARTH_GP)
+    self.soi_moon = compute_soi_radius(self.MOON_SMA, self.EARTH_GP, self.MOON_GP)
 
     # Hohmann transfer estimates (Earth-only, to Moon orbit distance)
-    self.hohmann = compute_hohmann_estimates(self.r_leo, self.MOON_SMA, self.EARTH_GP)
+    self.hohmann = compute_hohmann_velocities(self.r_leo, self.MOON_SMA, self.EARTH_GP)
 
   def solve(self) -> LunarTransferResult:
     """
@@ -150,7 +147,7 @@ class LunarTransferOptimizer:
 
     # Verify SPICE is loaded
     try:
-      get_body_state(NAIFIDS.MOON, t0_et, NAIFIDS.EARTH)
+      BodyVectorConverter.get_body_state(NAIFIDS.MOON, t0_et, NAIFIDS.EARTH)
     except Exception as e:
       return LunarTransferResult(
         success = False,
@@ -180,11 +177,11 @@ class LunarTransferOptimizer:
     # Print Hohmann estimates
     print()
     print("  Hohmann Transfer Estimates")
-    print(f"    ΔV₁ (departure)      : {self.hohmann['dv1']:.2f} m/s")
-    print(f"    ΔV₂ (arrival)        : {self.hohmann['dv2']:.2f} m/s")
+    print(f"    ΔV₁ (departure)      : {self.hohmann['delta_vel_mag_o']:.2f} m/s")
+    print(f"    ΔV₂ (arrival)        : {self.hohmann['delta_vel_mag_f']:.2f} m/s")
     print(f"    Total ΔV             : {self.hohmann['delta_vel_total']:.2f} m/s")
-    print(f"    Transfer Time        : {self.hohmann['transfer_time']/86400:.2f} days")
-    print(f"    Transfer SMA         : {self.hohmann['a_transfer']/1000:.1f} km")
+    print(f"    Transfer Time        : {self.hohmann['delta_time_of']/86400:.2f} days")
+    print(f"    Transfer SMA         : {self.hohmann['sma_of']/1000:.1f} km")
 
     # Phase 1: Grid search
     print()
@@ -193,7 +190,7 @@ class LunarTransferOptimizer:
 
     search_window  = self.config.departure_search_window_s
     n_candidates   = self.config.n_departure_candidates
-    dv1_initial    = self.hohmann['dv1']
+    dv1_initial    = self.hohmann['delta_vel_mag_o']
 
     best_result    = None
     best_dv_total  = np.inf
@@ -348,9 +345,9 @@ class LunarTransferOptimizer:
 
     # Propagate transfer orbit to Moon SOI
     soi_result = propagate_to_soi(
-      state0           = state_post_burn,
-      t0_et            = t_depart_et,
-      gp_central       = self.EARTH_GP,
+      state_o          = state_post_burn,
+      time_et_o        = t_depart_et,
+      gp               = self.EARTH_GP,
       target_naif_id   = NAIFIDS.MOON,
       observer_naif_id = NAIFIDS.EARTH,
       soi_radius       = self.soi_moon,
@@ -365,7 +362,7 @@ class LunarTransferOptimizer:
     # Transform to Moon-centered frame at SOI crossing
     t_soi          = soi_result['soi_time_et']
     state_soi_earth = soi_result['soi_state']
-    state_soi_moon = earth_to_moon_state(state_soi_earth, t_soi)
+    state_soi_moon = BodyVectorConverter.j2000_xyz__rel_earth_to_rel_moon(state_soi_earth, t_soi)
 
     v_infinity = np.linalg.norm(state_soi_moon[3:6])
 
@@ -603,7 +600,7 @@ class LunarTransferOptimizer:
         return leg.j2000_state_vec
       states_earth = np.zeros_like(leg.j2000_state_vec)
       for i in range(leg.j2000_state_vec.shape[1]):
-        states_earth[:, i] = moon_to_earth_state(leg.j2000_state_vec[:, i], leg.time.grid.et[i])
+        states_earth[:, i] = BodyVectorConverter.j2000_xyz__rel_moon_to_rel_earth(leg.j2000_state_vec[:, i], leg.time.grid.et[i])
       return states_earth
 
     # Concatenate states (skip duplicate boundary points)

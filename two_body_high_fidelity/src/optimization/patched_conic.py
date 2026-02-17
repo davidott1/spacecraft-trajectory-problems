@@ -9,10 +9,6 @@ two-body propagation with event detection.
 Key Functions:
 --------------
   compute_soi_radius          - Sphere of influence radius from mass ratio
-  compute_hohmann_estimates   - Hohmann transfer ΔV and timing estimates
-  get_body_state              - SPICE body state query
-  earth_to_moon_state         - Earth-centered to Moon-centered frame transform
-  moon_to_earth_state         - Moon-centered to Earth-centered frame transform
   propagate_to_soi            - Two-body propagation with SOI crossing event
   propagate_to_periapsis      - Two-body propagation with periapsis event
   propagate_two_body          - Simple two-body numerical propagation
@@ -30,16 +26,16 @@ import spiceypy as spice
 from scipy.integrate import solve_ivp
 
 from src.model.constants import SOLARSYSTEMCONSTANTS, NAIFIDS, CONVERTER
+from src.model.dynamics import AccelerationSTMDot, GeneralStateEquationsOfMotion
+from src.model.frame_and_vector_converter import BodyVectorConverter
+from src.schemas.gravity import GravityModelConfig
+from src.schemas.spacecraft import SpacecraftProperties
 
-
-# --------------------------------------------------------------------------
-# Analytical Functions
-# --------------------------------------------------------------------------
 
 def compute_soi_radius(
   sma          : float,
-  gp_secondary : float,
   gp_primary   : float,
+  gp_secondary : float,
 ) -> float:
   """
   Compute sphere of influence radius using Laplace's formula.
@@ -50,10 +46,10 @@ def compute_soi_radius(
   ------
     sma : float
       Semi-major axis of the secondary body's orbit around the primary [m].
-    gp_secondary : float
-      Gravitational parameter of the secondary body [m³/s²].
     gp_primary : float
       Gravitational parameter of the primary body [m³/s²].
+    gp_secondary : float
+      Gravitational parameter of the secondary body [m³/s²].
 
   Output:
   -------
@@ -63,167 +59,31 @@ def compute_soi_radius(
   return sma * (gp_secondary / gp_primary) ** 0.4
 
 
-def compute_hohmann_estimates(
-  r1 : float,
-  r2 : float,
-  gp : float,
-) -> dict:
-  """
-  Compute Hohmann transfer estimates between two circular orbits.
-
-  Input:
-  ------
-    r1 : float
-      Radius of departure (inner) circular orbit [m].
-    r2 : float
-      Radius of arrival (outer) circular orbit [m].
-    gp : float
-      Gravitational parameter of central body [m³/s²].
-
-  Output:
-  -------
-    estimates : dict
-      Dictionary with keys:
-        'dv1'               : ΔV at departure [m/s]
-        'dv2'               : ΔV at arrival [m/s]
-        'delta_vel_total'   : Total ΔV [m/s]
-        'transfer_time' : Half-period of transfer ellipse [s]
-        'a_transfer'    : Semi-major axis of transfer ellipse [m]
-        'v_departure'   : Velocity at departure on transfer orbit [m/s]
-        'v_arrival'     : Velocity at arrival on transfer orbit [m/s]
-  """
-  a_transfer = (r1 + r2) / 2.0
-
-  v_circ_1    = np.sqrt(gp / r1)
-  v_circ_2    = np.sqrt(gp / r2)
-  v_departure = np.sqrt(gp * (2.0 / r1 - 1.0 / a_transfer))
-  v_arrival   = np.sqrt(gp * (2.0 / r2 - 1.0 / a_transfer))
-
-  dv1 = v_departure - v_circ_1
-  dv2 = v_circ_2 - v_arrival
-
-  transfer_time = np.pi * np.sqrt(a_transfer**3 / gp)
-
-  return {
-    'dv1'               : dv1,
-    'dv2'               : dv2,
-    'delta_vel_total'   : abs(dv1) + abs(dv2),
-    'transfer_time' : transfer_time,
-    'a_transfer'    : a_transfer,
-    'v_departure'   : v_departure,
-    'v_arrival'     : v_arrival,
-  }
-
-
-# --------------------------------------------------------------------------
-# SPICE Wrappers
-# --------------------------------------------------------------------------
-
-def get_body_state(
-  naif_id     : int,
-  time_et     : float,
-  observer_id : int = 399,
-) -> np.ndarray:
-  """
-  Get body state from SPICE in J2000 frame.
-
-  Input:
-  ------
-    naif_id : int
-      NAIF ID of the target body.
-    time_et : float
-      Ephemeris time [s past J2000].
-    observer_id : int
-      NAIF ID of the observer body (default: Earth = 399).
-
-  Output:
-  -------
-    state : np.ndarray (6,)
-      State vector [pos, vel] in meters and m/s, J2000 frame.
-  """
-  state_km, _ = spice.spkez(naif_id, time_et, 'J2000', 'NONE', observer_id)
-  return np.array(state_km) * CONVERTER.M_PER_KM
-
-
-def earth_to_moon_state(
-  state_earth_j2000 : np.ndarray,
-  time_et           : float,
-) -> np.ndarray:
-  """
-  Transform state from Earth-centered J2000 to Moon-centered J2000.
-
-  Input:
-  ------
-    state_earth_j2000 : np.ndarray (6,)
-      State in Earth-centered J2000 [m, m/s].
-    time_et : float
-      Ephemeris time [s past J2000].
-
-  Output:
-  -------
-    state_moon : np.ndarray (6,)
-      State in Moon-centered J2000 [m, m/s].
-  """
-  moon_state = get_body_state(NAIFIDS.MOON, time_et, NAIFIDS.EARTH)
-  return state_earth_j2000 - moon_state
-
-
-def moon_to_earth_state(
-  state_moon : np.ndarray,
-  time_et    : float,
-) -> np.ndarray:
-  """
-  Transform state from Moon-centered J2000 to Earth-centered J2000.
-
-  Input:
-  ------
-    state_moon : np.ndarray (6,)
-      State in Moon-centered J2000 [m, m/s].
-    time_et : float
-      Ephemeris time [s past J2000].
-
-  Output:
-  -------
-    state_earth_j2000 : np.ndarray (6,)
-      State in Earth-centered J2000 [m, m/s].
-  """
-  moon_state = get_body_state(NAIFIDS.MOON, time_et, NAIFIDS.EARTH)
-  return state_moon + moon_state
-
-
 # --------------------------------------------------------------------------
 # Two-Body Dynamics
 # --------------------------------------------------------------------------
 
-def _two_body_eom(
-  t  : float,
-  y  : np.ndarray,
+def _build_two_body_eom(
   gp : float,
-) -> np.ndarray:
+) -> GeneralStateEquationsOfMotion:
   """
-  Two-body equations of motion (right-hand side).
-
-  d/dt [r, v] = [v, -gp * r / |r|³]
+  Build a two-body point-mass equations-of-motion object.
 
   Input:
   ------
-    t : float
-      Time (unused for autonomous system, but required by solve_ivp).
-    y : np.ndarray (6,)
-      State vector [pos, vel].
     gp : float
       Gravitational parameter [m³/s²].
 
   Output:
   -------
-    dydt : np.ndarray (6,)
-      State derivative [vel, acc].
+    eom : GeneralStateEquationsOfMotion
+      Equations-of-motion instance whose state_time_derivative(t, y)
+      computes d/dt [r, v] = [v, -gp * r / |r|³].
   """
-  r     = y[0:3]
-  v     = y[3:6]
-  r_mag = np.linalg.norm(r)
-  a     = -gp * r / r_mag**3
-  return np.concatenate([v, a])
+  gravity_config = GravityModelConfig(gp=gp)
+  spacecraft     = SpacecraftProperties()
+  acceleration   = AccelerationSTMDot(gravity_config=gravity_config, spacecraft=spacecraft)
+  return GeneralStateEquationsOfMotion(acceleration)
 
 
 # --------------------------------------------------------------------------
@@ -231,15 +91,15 @@ def _two_body_eom(
 # --------------------------------------------------------------------------
 
 def propagate_to_soi(
-  state0       : np.ndarray,
-  t0_et        : float,
-  gp_central   : float,
-  target_naif_id : int,
+  state_o          : np.ndarray,
+  time_et_o        : float,
+  gp               : float,
+  target_naif_id   : int,
   observer_naif_id : int,
-  soi_radius   : float,
-  max_time_s   : float,
-  rtol         : float = 1e-12,
-  atol         : float = 1e-12,
+  soi_radius       : float,
+  max_time_s       : float,
+  rtol             : float = 1e-12,
+  atol             : float = 1e-12,
 ) -> dict:
   """
   Propagate under central body two-body gravity until SOI crossing.
@@ -249,11 +109,11 @@ def propagate_to_soi(
 
   Input:
   ------
-    state0 : np.ndarray (6,)
+    state_o : np.ndarray (6,)
       Initial state [pos, vel] in observer-centered J2000 [m, m/s].
-    t0_et : float
+    time_et_o : float
       Initial ephemeris time [s past J2000].
-    gp_central : float
+    gp : float
       Gravitational parameter of central body [m³/s²].
     target_naif_id : int
       NAIF ID of the target body (e.g., Moon = 301).
@@ -272,33 +132,34 @@ def propagate_to_soi(
   -------
     result : dict
       Keys:
-        'success'            : bool - Whether SOI crossing was detected
-        'message'            : str  - Status message (on failure)
-        'soi_time_et'        : float - ET at SOI crossing
-        'soi_state'          : np.ndarray (6,) - State at SOI crossing
-        'trajectory_times'   : np.ndarray (N,) - ET times of trajectory
-        'trajectory_states'  : np.ndarray (6, N) - States along trajectory
+        'success'           : bool - Whether SOI crossing was detected
+        'message'           : str  - Status message (on failure)
+        'soi_time_et'       : float - ET at SOI crossing
+        'soi_state'         : np.ndarray (6,) - State at SOI crossing
+        'trajectory_times'  : np.ndarray (N,) - ET times of trajectory
+        'trajectory_states' : np.ndarray (6, N) - States along trajectory
   """
   # SOI crossing event function
   def soi_event(t, y):
-    target_state = get_body_state(target_naif_id, t, observer_naif_id)
+    target_state = BodyVectorConverter.get_body_state(target_naif_id, t, observer_naif_id)
     dist = np.linalg.norm(y[0:3] - target_state[0:3])
     return dist - soi_radius
 
   soi_event.terminal  = True
-  soi_event.direction = -1  # Trigger when entering SOI (distance decreasing)
+  soi_event.direction = -1  # trigger when entering SOI (distance decreasing)
 
   # Time span and evaluation points
-  t_span   = (t0_et, t0_et + max_time_s)
+  t_span   = (time_et_o, time_et_o + max_time_s)
   n_points = max(1000, int(max_time_s / 60))
   n_points = min(n_points, 50000)
-  t_eval   = np.linspace(t0_et, t0_et + max_time_s, n_points)
+  t_eval   = np.linspace(time_et_o, time_et_o + max_time_s, n_points)
 
   # Integrate
+  eom = _build_two_body_eom(gp)
   sol = solve_ivp(
-    fun          = lambda t, y: _two_body_eom(t, y, gp_central),
+    fun          = eom.state_time_derivative,
     t_span       = t_span,
-    y0           = state0,
+    y0           = state_o,
     method       = 'DOP853',
     rtol         = rtol,
     atol         = atol,
@@ -389,8 +250,9 @@ def propagate_to_periapsis(
   t_eval   = np.linspace(t0_et, t0_et + max_time_s, n_points)
 
   # Integrate
+  eom = _build_two_body_eom(gp)
   sol = solve_ivp(
-    fun          = lambda t, y: _two_body_eom(t, y, gp),
+    fun          = eom.state_time_derivative,
     t_span       = t_span,
     y0           = state0,
     method       = 'DOP853',
@@ -472,8 +334,9 @@ def propagate_two_body(
   """
   t_eval = np.linspace(t0_et, tf_et, n_points)
 
+  eom = _build_two_body_eom(gp)
   sol = solve_ivp(
-    fun    = lambda t, y: _two_body_eom(t, y, gp),
+    fun    = eom.state_time_derivative,
     t_span = (t0_et, tf_et),
     y0     = state0,
     method = 'DOP853',

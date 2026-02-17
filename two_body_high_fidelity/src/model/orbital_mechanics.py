@@ -36,3 +36,56 @@ def compute_circular_velocity(
       Circular orbital velocity [m/s].
   """
   return np.sqrt(gp / pos_mag)
+
+
+def compute_hohmann_velocities(
+  pos_mag_o : float,
+  pos_mag_f : float,
+  gp        : float,
+) -> dict:
+  """
+  Compute Hohmann transfer estimates between two circular orbits.
+
+  Input:
+  ------
+    pos_mag_o : float
+      Radius of departure (inner) circular orbit [m].
+    pos_mag_f : float
+      Radius of arrival (outer) circular orbit [m].
+    gp : float
+      Gravitational parameter of central body [m³/s²].
+
+  Output:
+  -------
+    estimates : dicts
+      Dictionary with keys:
+        'delta_vel_mag_o'   : ΔV at departure [m/s]
+        'delta_vel_mag_f'   : ΔV at arrival [m/s]
+        'delta_vel_total'   : total ΔV [m/s]
+        'delta_time_of'     : half-period of transfer ellipse [s]
+        'sma_of'            : semi-major axis of transfer ellipse [m]
+        'vel_mag_o_pls'     : velocity at departure on transfer orbit [m/s]
+        'vel_mag_f_mns'     : velocity at arrival on transfer orbit [m/s]
+  """
+  sma_of = (pos_mag_o + pos_mag_f) / 2.0
+
+  vel_mag_o_mns  = np.sqrt(gp / pos_mag_o)
+  vel_mag_f_pls  = np.sqrt(gp / pos_mag_f)
+  vel_mag_o_pls  = np.sqrt(gp * (2.0 / pos_mag_o - 1.0 / sma_of))
+  vel_mag_f_mns  = np.sqrt(gp * (2.0 / pos_mag_f - 1.0 / sma_of))
+
+  delta_vel_mag_o = vel_mag_o_pls - vel_mag_o_mns
+  delta_vel_mag_f = vel_mag_f_pls - vel_mag_f_mns
+  delta_vel_total = abs(delta_vel_mag_o) + abs(delta_vel_mag_f)
+
+  delta_time_of = np.pi * np.sqrt(sma_of**3 / gp)
+
+  return {
+    'delta_vel_mag_o' : delta_vel_mag_o,
+    'delta_vel_mag_f' : delta_vel_mag_f,
+    'delta_vel_total' : delta_vel_total,
+    'delta_time_of'   : delta_time_of,
+    'sma_of'          : sma_of,
+    'vel_mag_o_pls'   : vel_mag_o_pls,
+    'vel_mag_f_mns'   : vel_mag_f_mns,
+  }

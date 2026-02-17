@@ -14,7 +14,7 @@ from typing import Optional
 from scipy import stats
 
 from src.schemas.propagation import PropagationResult
-from src.model.frame_converter import FrameConverter
+from src.model.frame_and_vector_converter import FrameConverter
 from src.model.constants import CONVERTER
 
 
