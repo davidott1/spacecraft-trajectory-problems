@@ -110,7 +110,7 @@ import numpy    as np
 import spiceypy as spice
 
 from src.model.constants       import SOLARSYSTEMCONSTANTS, CONVERTER, NAIFIDS, PHYSICALCONSTANTS
-from src.model.frame_converter import FrameConverter
+from src.model.frame_and_vector_converter import FrameConverter
 from src.schemas.spacecraft    import SpacecraftProperties, DragConfig, SRPConfig
 from src.schemas.gravity       import GravityModelConfig
 

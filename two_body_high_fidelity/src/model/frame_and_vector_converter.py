@@ -6,6 +6,8 @@ from astropy             import units as u
 from astropy.time        import Time as AstropyTime
 from astropy.coordinates import TEME, GCRS, CartesianRepresentation, CartesianDifferential
 
+from src.model.constants import NAIFIDS, CONVERTER
+
 class FrameConverter:
   @staticmethod
   def j2000_to_iau_earth(
@@ -638,4 +640,80 @@ class VectorConverter:
       return xyz_obj_pos_vec
     else:
       return xyz_obj_vel_vec # type: ignore
+
+
+class BodyVectorConverter:
+  @staticmethod
+  def get_body_state(
+    naif_id     : int,
+    time_et     : float,
+    observer_id : int = 399,
+  ) -> np.ndarray:
+    """
+    Get body state from SPICE in J2000 frame.
+
+    Input:
+    ------
+      naif_id : int
+        NAIF ID of the target body.
+      time_et : float
+        ephemeris time [s past J2000].
+      observer_id : int
+        NAIF ID of the observer body (default: Earth = 399).
+
+    Output:
+    -------
+      state : np.ndarray (6,)
+        state vector [pos, vel] in meters and m/s, J2000 frame.
+    """
+    state_km, _ = spice.spkez(naif_id, time_et, 'J2000', 'NONE', observer_id)
+    return np.array(state_km) * CONVERTER.M_PER_KM
+
+  @staticmethod
+  def j2000_xyz__rel_earth_to_rel_moon(
+    j2000_state_earth_to_obj : np.ndarray,
+    time_et                  : float,
+  ) -> np.ndarray:
+    """
+    Transform state from Earth-centered J2000 to Moon-centered J2000.
+
+    Input:
+    ------
+      j2000_state_earth_to_obj : np.ndarray (6,)
+        state in Earth-centered J2000 [m, m/s].
+      time_et : float
+        ephemeris time [s past J2000].
+
+    Output:
+    -------
+      j2000_state_moon_to_obj : np.ndarray (6,)
+        state in Moon-centered J2000 [m, m/s].
+    """
+    j2000_state_earth_to_moon = BodyVectorConverter.get_body_state(NAIFIDS.MOON, time_et, NAIFIDS.EARTH)
+    j2000_state_moon_to_obj   = j2000_state_earth_to_obj - j2000_state_earth_to_moon
+    return j2000_state_moon_to_obj
+
+  @staticmethod
+  def j2000_xyz__rel_moon_to_rel_earth(
+    j2000_state_moon_to_obj : np.ndarray,
+    time_et                 : float,
+  ) -> np.ndarray:
+    """
+    Transform state from Moon-centered J2000 to Earth-centered J2000.
+
+    Input:
+    ------
+      j2000_state_moon_to_obj : np.ndarray (6,)
+        state in Moon-centered J2000 [m, m/s].
+      time_et : float
+        ephemeris time [s past J2000].
+
+    Output:
+    -------
+      j2000_state_earth_to_obj : np.ndarray (6,)
+        state in Earth-centered J2000 [m, m/s].
+    """
+    j2000_state_earth_to_moon = BodyVectorConverter.get_body_state(NAIFIDS.MOON, time_et, NAIFIDS.EARTH)
+    j2000_state_earth_to_obj  = j2000_state_earth_to_moon + j2000_state_moon_to_obj
+    return j2000_state_earth_to_obj
 

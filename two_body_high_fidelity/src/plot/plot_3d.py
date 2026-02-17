@@ -15,7 +15,7 @@ from matplotlib.lines  import Line2D
 
 from src.plot.utility          import get_equal_limits
 from src.model.constants       import CONVERTER, SOLARSYSTEMCONSTANTS
-from src.model.frame_converter import FrameConverter
+from src.model.frame_and_vector_converter import FrameConverter
 from src.model.time_converter  import utc_to_et
 from src.model.orbit_converter import GeographicCoordinateConverter, OrbitConverter
 from src.schemas.propagation   import PropagationResult

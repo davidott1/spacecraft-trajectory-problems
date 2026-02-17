@@ -8,7 +8,7 @@ Modules:
 --------
 - test_dynamics        : Unit tests for acceleration models
 - test_orbit_converter : Tests for orbital element conversions
-- test_frame_converter : Tests for reference frame transformations
+- test_frame_and_vector_converter : Tests for reference frame transformations
 - test_propagator      : Integration tests for the propagator
 
 Usage:

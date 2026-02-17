@@ -11,7 +11,7 @@ import numpy as np
 
 from typing import Optional
 
-from src.model.frame_converter import FrameConverter, VectorConverter
+from src.model.frame_and_vector_converter import FrameConverter, VectorConverter
 from src.model.orbit_converter import TopocentricConverter
 from src.model.time_converter  import utc_to_et
 from src.schemas.propagation   import PropagationResult

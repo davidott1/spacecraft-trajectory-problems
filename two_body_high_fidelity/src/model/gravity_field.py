@@ -19,7 +19,7 @@ from pathlib import Path
 from typing  import Optional, Set
 
 from src.model.constants       import SOLARSYSTEMCONSTANTS
-from src.model.frame_converter import FrameConverter
+from src.model.frame_and_vector_converter import FrameConverter
 
 
 class GravityFieldCoefficients:

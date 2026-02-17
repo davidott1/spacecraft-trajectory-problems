@@ -20,12 +20,12 @@ TestVectorConverter
 
 Usage:
 ------
-  python -m pytest src/verification/test_frame_converter.py -v
+  python -m pytest src/verification/test_frame_and_vector_converter.py -v
 """
 import pytest
 import numpy as np
 
-from src.model.frame_converter import FrameConverter, VectorConverter
+from src.model.frame_and_vector_converter import FrameConverter, VectorConverter
 
 
 class TestRICFrameConversion:

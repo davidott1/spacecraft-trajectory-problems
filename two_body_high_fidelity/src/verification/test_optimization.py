@@ -27,12 +27,11 @@ import numpy as np
 from datetime import datetime
 
 from src.model.constants      import SOLARSYSTEMCONSTANTS, CONVERTER
-from src.model.orbital_mechanics import compute_circular_velocity
+from src.model.orbital_mechanics import compute_circular_velocity, compute_hohmann_velocities
 from src.propagation.analytical_propagator import propagate_circular_orbit
 from src.optimization.patched_conic import (
   compute_soi_radius,
 
-  compute_hohmann_estimates,
   propagate_two_body,
 )
 
@@ -50,8 +49,8 @@ class TestPatchedConicFunctions:
     """
     r_soi = compute_soi_radius(
       sma          = SOLARSYSTEMCONSTANTS.MOON.SMA,
-      gp_secondary = SOLARSYSTEMCONSTANTS.MOON.GP,
       gp_primary   = SOLARSYSTEMCONSTANTS.EARTH.GP,
+      gp_secondary = SOLARSYSTEMCONSTANTS.MOON.GP,
     )
     r_soi_km = r_soi / 1000.0
 
@@ -81,14 +80,14 @@ class TestPatchedConicFunctions:
     r2 = SOLARSYSTEMCONSTANTS.MOON.SMA                          # Moon orbit
     gp = SOLARSYSTEMCONSTANTS.EARTH.GP
 
-    estimates = compute_hohmann_estimates(r1, r2, gp)
+    estimates = compute_hohmann_velocities(r1, r2, gp)
 
     # ΔV₁ should be approximately 3.1 km/s
-    dv1_km_s = estimates['dv1'] / 1000.0
+    dv1_km_s = estimates['delta_vel_mag_o'] / 1000.0
     assert 2.8 < dv1_km_s < 3.5, f"ΔV₁ = {dv1_km_s:.3f} km/s, expected ~3.1 km/s"
 
     # Transfer time should be approximately 5 days
-    tt_days = estimates['transfer_time'] / 86400.0
+    tt_days = estimates['delta_time_of'] / 86400.0
     assert 4.0 < tt_days < 6.0, f"Transfer time = {tt_days:.2f} days, expected ~5 days"
 
 
@@ -184,7 +183,8 @@ class TestLunarTransfer:
     """
     Verify that a Hohmann-like transfer from LEO can reach the Moon's SOI.
     """
-    from src.optimization.patched_conic import propagate_to_soi, get_body_state
+    from src.optimization.patched_conic import propagate_to_soi
+    from src.model.frame_and_vector_converter import BodyVectorConverter
     from src.model.constants import NAIFIDS
     from src.model.time_converter import utc_to_et
 
@@ -207,8 +207,8 @@ class TestLunarTransfer:
     # SOI radius
     soi_moon = compute_soi_radius(
       SOLARSYSTEMCONSTANTS.MOON.SMA,
-      SOLARSYSTEMCONSTANTS.MOON.GP,
       gp_earth,
+      SOLARSYSTEMCONSTANTS.MOON.GP,
     )
 
     # Use a reference epoch
@@ -216,9 +216,9 @@ class TestLunarTransfer:
 
     # Try to reach Moon SOI (may or may not succeed depending on Moon position)
     result = propagate_to_soi(
-      state0           = state_post,
-      t0_et            = t0_et,
-      gp_central       = gp_earth,
+      state_o          = state_post,
+      time_et_o        = t0_et,
+      gp               = gp_earth,
       target_naif_id   = NAIFIDS.MOON,
       observer_naif_id = NAIFIDS.EARTH,
       soi_radius       = soi_moon,
