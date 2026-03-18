@@ -216,13 +216,13 @@ class TestLunarTransfer:
 
     # Try to reach Moon SOI (may or may not succeed depending on Moon position)
     result = propagate_to_soi(
-      state_o          = state_post,
-      time_et_o        = t0_et,
-      gp               = gp_earth,
-      target_naif_id   = NAIFIDS.MOON,
-      observer_naif_id = NAIFIDS.EARTH,
-      soi_radius       = soi_moon,
-      max_time_s       = 7.0 * 86400.0,
+      state_o           = state_post,
+      time_et_o         = t0_et,
+      gp                = gp_earth,
+      naif_id_secondary = NAIFIDS.MOON,
+      naif_id_primary   = NAIFIDS.EARTH,
+      soi_radius        = soi_moon,
+      max_time_s        = 7.0 * 86400.0,
     )
 
     # The trajectory should at least propagate successfully
