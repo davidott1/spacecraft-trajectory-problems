@@ -664,7 +664,7 @@ class BodyVectorConverter:
     Output:
     -------
       state : np.ndarray (6,)
-        state vector [pos, vel] in m and m/s, J2000 frame.
+        state vector [pos, vel] in meters and m/s, J2000 frame.
     """
     state_km, _ = spice.spkez(target_naif_id, time_et, 'J2000', 'NONE', observer_naif_id)
     return np.array(state_km) * CONVERTER.M_PER_KM

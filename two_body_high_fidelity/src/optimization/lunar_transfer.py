@@ -345,11 +345,11 @@ class LunarTransferOptimizer:
 
     # Propagate transfer orbit to Moon SOI
     soi_result = propagate_to_soi(
-      state_o          = state_post_burn,
-      time_et_o        = t_depart_et,
-      gp               = self.EARTH_GP,
-      target_naif_id   = NAIFIDS.MOON,
-      observer_naif_id = NAIFIDS.EARTH,
+      state_o           = state_post_burn,
+      time_et_o         = t_depart_et,
+      gp                = self.EARTH_GP,
+      naif_id_secondary = NAIFIDS.MOON,
+      naif_id_primary   = NAIFIDS.EARTH,
       soi_radius       = self.soi_moon,
       max_time_s       = self.config.max_transfer_time_s,
       rtol             = self.config.rtol,

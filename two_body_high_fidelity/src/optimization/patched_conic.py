@@ -94,8 +94,8 @@ def propagate_to_soi(
   state_o          : np.ndarray,
   time_et_o        : float,
   gp               : float,
-  target_naif_id   : int,
-  observer_naif_id : int,
+  naif_id_secondary : int,
+  naif_id_primary   : int,
   soi_radius       : float,
   max_time_s       : float,
   rtol             : float = 1e-12,
@@ -115,10 +115,10 @@ def propagate_to_soi(
       Initial ephemeris time [s past J2000].
     gp : float
       Gravitational parameter of central body [m³/s²].
-    target_naif_id : int
-      NAIF ID of the target body (e.g., Moon = 301).
-    observer_naif_id : int
-      NAIF ID of the observer/central body (e.g., Earth = 399).
+    naif_id_secondary : int
+      NAIF ID of the secondary body (e.g., Moon = 301).
+    naif_id_primary : int
+      NAIF ID of the primary body (e.g., Earth = 399).
     soi_radius : float
       Sphere of influence radius of the target body [m].
     max_time_s : float
@@ -140,31 +140,33 @@ def propagate_to_soi(
         'trajectory_states' : np.ndarray (6, N) - States along trajectory
   """
   # SOI crossing event function
-  def soi_event(t, y):
-    target_state = BodyVectorConverter.get_body_state(target_naif_id, t, observer_naif_id)
-    dist = np.linalg.norm(y[0:3] - target_state[0:3])
-    return dist - soi_radius
+  def soi_event(time_et, object_state):
+    secondary_state = BodyVectorConverter.get_body_state(naif_id_secondary, time_et, naif_id_primary)
+    secondary_to_object_pos_mag = np.linalg.norm(object_state[0:3] - secondary_state[0:3])
+    return secondary_to_object_pos_mag - soi_radius
 
   soi_event.terminal  = True
   soi_event.direction = -1  # trigger when entering SOI (distance decreasing)
 
   # Time span and evaluation points
-  t_span   = (time_et_o, time_et_o + max_time_s)
+  time_span   = (time_et_o, time_et_o + max_time_s)
   n_points = max(1000, int(max_time_s / 60))
   n_points = min(n_points, 50000)
-  t_eval   = np.linspace(time_et_o, time_et_o + max_time_s, n_points)
+  time_eval   = np.linspace(time_et_o, time_et_o + max_time_s, n_points)
+
+  # Build EOM
+  eom = _build_two_body_eom(gp)
 
   # Integrate
-  eom = _build_two_body_eom(gp)
   sol = solve_ivp(
     fun          = eom.state_time_derivative,
-    t_span       = t_span,
+    t_span       = time_span,
     y0           = state_o,
     method       = 'DOP853',
     rtol         = rtol,
     atol         = atol,
     events       = soi_event,
-    t_eval       = t_eval,
+    t_eval       = time_eval,
     dense_output = True,
   )
 
