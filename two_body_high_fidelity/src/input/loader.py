@@ -352,6 +352,182 @@ def load_maneuvers(
   return maneuvers
 
 
+def load_maneuver_plan(
+  maneuver_plan_filepath : Path,
+) -> 'DecisionState':
+  """
+  Load a maneuver plan YAML file into a DecisionState.
+
+  A maneuver plan contains an initial state (position, velocity, epoch)
+  and a sequence of impulsive maneuvers, each with optional variable flags
+  for trajectory optimization.
+
+  Input:
+  ------
+    maneuver_plan_filepath : Path
+      Path to the maneuver plan YAML file.
+
+  Output:
+  -------
+    decision_state : DecisionState
+      Decision state with initial state, maneuvers, and variable flags.
+
+  Raises:
+  -------
+    FileNotFoundError
+      If the maneuver plan file is not found.
+    ValueError
+      If required fields are missing or invalid.
+
+  YAML Format:
+  ------------
+    initial_state:
+      epoch_iso_utc: "2025-10-01T00:00:00"
+      pos_vec__m:        [x, y, z]
+      vel_vec__m_per_s:  [vx, vy, vz]
+      frame: "J2000"
+      variable_epoch:    false
+      variable_position: [false, false, false]
+      variable_velocity: [false, false, false]
+
+    maneuvers:
+      - time_iso_utc: "2025-10-01T06:00:00"
+        delta_vel__m_per_s: [0.0, 50.0, 0.0]
+        frame: "RIC"
+        variable_time: true
+        variable_delta_v: [false, true, false]
+  """
+  from src.schemas.spacecraft    import ImpulsiveManeuver, ManeuversConfig
+  from src.schemas.optimization  import DecisionState
+
+  if not maneuver_plan_filepath.exists():
+    raise FileNotFoundError(f"Maneuver plan file not found: {maneuver_plan_filepath}")
+
+  with open(maneuver_plan_filepath, 'r') as f:
+    data = yaml.safe_load(f)
+
+  if 'initial_state' not in data:
+    raise ValueError("Maneuver plan file must contain 'initial_state' key")
+
+  init = data['initial_state']
+
+  # Parse initial state
+  if 'epoch_iso_utc' not in init:
+    raise ValueError("initial_state must contain 'epoch_iso_utc'")
+  if 'pos_vec__m' not in init:
+    raise ValueError("initial_state must contain 'pos_vec__m'")
+  if 'vel_vec__m_per_s' not in init:
+    raise ValueError("initial_state must contain 'vel_vec__m_per_s'")
+
+  epoch    = parse_time(init['epoch_iso_utc'])
+  position = np.array(init['pos_vec__m'], dtype=float)
+  velocity = np.array(init['vel_vec__m_per_s'], dtype=float)
+
+  if len(position) != 3:
+    raise ValueError(f"pos_vec__m must have 3 components, got {len(position)}")
+  if len(velocity) != 3:
+    raise ValueError(f"vel_vec__m_per_s must have 3 components, got {len(velocity)}")
+
+  # Parse initial state variable flags (default: all fixed)
+  variable_epoch    = bool(init.get('variable_epoch', False))
+  variable_position = np.array(init.get('variable_position', [False, False, False]), dtype=bool)
+  variable_velocity = np.array(init.get('variable_velocity', [False, False, False]), dtype=bool)
+
+  # Parse maneuvers (optional)
+  maneuvers_config          = ManeuversConfig()
+  variable_maneuver_time    = []
+  variable_maneuver_delta_v = []
+
+  if 'maneuvers' in data and data['maneuvers'] is not None:
+    for i, m_data in enumerate(data['maneuvers']):
+      if 'time_iso_utc' not in m_data:
+        raise ValueError(f"Maneuver {i} missing 'time_iso_utc'")
+      if 'delta_vel__m_per_s' not in m_data:
+        raise ValueError(f"Maneuver {i} missing 'delta_vel__m_per_s'")
+
+      time_dt       = parse_time(m_data['time_iso_utc'])
+      delta_vel_vec = np.array(m_data['delta_vel__m_per_s'], dtype=float)
+      frame         = m_data.get('frame', 'J2000')
+
+      if len(delta_vel_vec) != 3:
+        raise ValueError(f"Maneuver {i}: delta_vel__m_per_s must have 3 components, got {len(delta_vel_vec)}")
+
+      maneuvers_config.append(ImpulsiveManeuver(
+        time_dt       = time_dt,
+        delta_vel_vec = delta_vel_vec,
+        frame         = frame,
+      ))
+
+      # Variable flags for this maneuver (default: fixed)
+      variable_maneuver_time.append(bool(m_data.get('variable_time', False)))
+      variable_maneuver_delta_v.append(
+        np.array(m_data.get('variable_delta_v', [False, False, False]), dtype=bool)
+      )
+
+  return DecisionState(
+    position                = position,
+    velocity                = velocity,
+    epoch                   = epoch,
+    maneuvers               = maneuvers_config,
+    variable_position       = variable_position,
+    variable_velocity       = variable_velocity,
+    variable_epoch          = variable_epoch,
+    variable_maneuver_time  = variable_maneuver_time,
+    variable_maneuver_delta_v = variable_maneuver_delta_v,
+  )
+
+
+def save_maneuver_plan(
+  decision_state  : 'DecisionState',
+  output_filepath : Path,
+) -> None:
+  """
+  Write a solved maneuver plan to YAML.
+
+  Uses the same format as the input maneuver plan so it can be loaded
+  with --initial-maneuver-plan or --resume-from.
+
+  Input:
+  ------
+    decision_state : DecisionState
+      Decision state to write.
+    output_filepath : Path
+      Path to write the YAML file.
+  """
+  from src.schemas.optimization import DecisionState
+
+  data = {
+    'initial_state': {
+      'epoch_iso_utc':     decision_state.epoch.strftime('%Y-%m-%dT%H:%M:%S.%f') if decision_state.epoch else None,
+      'pos_vec__m':        decision_state.position.tolist(),
+      'vel_vec__m_per_s':  decision_state.velocity.tolist(),
+      'frame':             'J2000',
+      'variable_epoch':    decision_state.variable_epoch,
+      'variable_position': decision_state.variable_position.tolist(),
+      'variable_velocity': decision_state.variable_velocity.tolist(),
+    }
+  }
+
+  if decision_state.maneuvers and len(decision_state.maneuvers) > 0:
+    maneuvers_list = []
+    for i, m in enumerate(decision_state.maneuvers):
+      m_dict = {
+        'time_iso_utc':       m.time_dt.strftime('%Y-%m-%dT%H:%M:%S.%f'),
+        'delta_vel__m_per_s': m.delta_vel_vec.tolist(),
+        'frame':              m.frame,
+      }
+      if i < len(decision_state.variable_maneuver_time):
+        m_dict['variable_time'] = decision_state.variable_maneuver_time[i]
+      if i < len(decision_state.variable_maneuver_delta_v):
+        m_dict['variable_delta_v'] = decision_state.variable_maneuver_delta_v[i].tolist()
+      maneuvers_list.append(m_dict)
+    data['maneuvers'] = maneuvers_list
+
+  output_filepath.parent.mkdir(parents=True, exist_ok=True)
+  with open(output_filepath, 'w') as f:
+    yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+
+
 def load_gravity_field_model(
   gravity_model_folderpath : Path,
   gravity_model_filename   : str,
@@ -514,7 +690,7 @@ def load_files(
     tracker_filepath : Path, optional
       Path to tracker station YAML file.
     maneuver_filename : str, optional
-      Filename of maneuver YAML file (in input/maneuvers/ folder).
+      Filename of maneuver YAML file (in input/initial_states_and_maneuvers/ folder).
 
   Output:
   -------
@@ -617,7 +793,7 @@ def load_files(
   if maneuver_filename is not None:
     from pathlib import Path as PathLib
     project_root = PathLib(__file__).parent.parent.parent
-    maneuver_filepath = project_root / 'input' / 'maneuvers' / maneuver_filename
+    maneuver_filepath = project_root / 'input' / 'initial_states_and_maneuvers' / maneuver_filename
 
     if maneuver_filepath.exists():
       maneuvers = load_maneuvers(maneuver_filepath)

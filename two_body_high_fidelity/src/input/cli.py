@@ -176,6 +176,9 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
     'use_analytic_jacobian': ('use_analytic_jacobian', ['--use-analytic-jacobian', '--analytic-jacobian']),
     'jacobian_approx_eps': ('jacobian_approx_eps', ['--jacobian-approx-eps']),
     'make_meas_from': ('make_meas_from', ['--make-meas-from']),
+    'initial_maneuver_plan': ('initial_maneuver_plan', ['--initial-maneuver-plan']),
+    'optimize': ('optimize', ['--optimize']),
+    'resume_from': ('resume_from', ['--resume-from']),
   }
 
   # Process each config key
@@ -242,13 +245,13 @@ def merge_config_with_args(config: dict, args: argparse.Namespace) -> argparse.N
 
     elif arg_name in ['initial_state_source', 'initial_state_norad_id', 'initial_state_filename',
                       'gravity_model_filename', 'tracker_filename', 'tracker_filepath', 'maneuver_filename',
-                      'make_meas_from']:
+                      'make_meas_from', 'initial_maneuver_plan', 'resume_from']:
       # String arguments - only override if CLI didn't provide a value
       if current_value is None or (arg_name == 'initial_state_source' and current_value == 'horizons'):
         # Convert to string (YAML may parse NORAD ID as int)
         setattr(args, arg_name, str(config_value) if config_value is not None else None)
 
-    elif arg_name in ['third_bodies', 'gravity_harmonics_coefficients', 'gravity_harmonics_degree_order']:
+    elif arg_name in ['third_bodies', 'gravity_harmonics_coefficients', 'gravity_harmonics_degree_order', 'optimize']:
       # List arguments - only override if CLI didn't provide values
       if current_value is None or (isinstance(current_value, list) and len(current_value) == 0):
         # Handle string "val1, val2" or "val1 val2" format
@@ -346,7 +349,7 @@ def parse_command_line_arguments(
     '--initial-state-filename',
     type     = str,
     required = False,
-    help     = 'Filename of the custom state vector .yaml file in input/state_vectors. Required if initial state source is custom-state-vector.'
+    help     = 'Filename of the custom state vector .yaml file in input/initial_states. Required if initial state source is custom-state-vector.'
   )
   
   # Time arguments
@@ -599,7 +602,33 @@ def parse_command_line_arguments(
     dest     = 'maneuver_filename',
     type     = str,
     required = False,
-    help     = 'Maneuver YAML filename (assumes input/maneuvers/ folder). E.g., example_hohmann_transfer.yaml',
+    help     = 'Maneuver YAML filename (assumes input/initial_states_and_maneuvers/ folder). E.g., example_hohmann_transfer.yaml',
+  )
+
+  # Optimization arguments
+  parser.add_argument(
+    '--initial-maneuver-plan',
+    dest     = 'initial_maneuver_plan',
+    type     = str,
+    required = False,
+    default  = None,
+    help     = 'Maneuver plan YAML filename (assumes input/initial_states_and_maneuvers/ folder). Defines initial state, maneuvers, and variable flags for optimization.',
+  )
+  parser.add_argument(
+    '--optimize',
+    dest    = 'optimize',
+    nargs   = '+',
+    type    = str,
+    choices = ['initial-epoch', 'initial-position', 'initial-velocity', 'maneuvers'],
+    default = None,
+    help    = 'Enable optimization. Specify which quantities to optimize: initial-epoch, initial-position, initial-velocity, maneuvers.',
+  )
+  parser.add_argument(
+    '--resume-from',
+    dest    = 'resume_from',
+    type    = str,
+    default = None,
+    help    = 'Resume from a previous run. Provide an output folder path or "previous" to use the most recent run.',
   )
 
   parser.add_argument(
