@@ -57,18 +57,18 @@ from datetime                          import datetime
 
 import numpy as np
 
-from src.plot.plot_generator           import generate_plots
+from src.plot.plot_generator              import generate_plots
 from src.propagation.numerical_propagator import run_propagations
-from src.input.loader                  import unload_files, load_files, get_horizons_ephemeris, get_celestrak_tle
-from src.utility.printer               import final_print
-from src.input.cli                     import parse_command_line_arguments
-from src.input.configuration           import build_config, print_configuration, extract_tle_to_config
-from src.propagation.state_initializer import get_initial_state
-from src.utility.logger                import start_logging, stop_logging
-from src.schemas.propagation           import PropagationConfig, PropagationResult
-from src.schemas.state                 import TLEData
-from src.schemas.spacecraft            import ManeuversConfig
-from src.schemas.measurement           import merge_multi_tracker_measurements
+from src.input.loader                     import unload_files, load_files, get_horizons_ephemeris, get_celestrak_tle, load_maneuver_plan, save_maneuver_plan
+from src.utility.printer                  import final_print
+from src.input.cli                        import parse_command_line_arguments
+from src.input.configuration              import build_config, print_configuration, extract_tle_to_config
+from src.state_initializer                import get_initial_state, get_initial_state_from_maneuver_plan
+from src.utility.logger                   import start_logging, stop_logging
+from src.schemas.propagation              import PropagationConfig, PropagationResult
+from src.schemas.state                    import TLEData
+from src.schemas.spacecraft               import ManeuversConfig
+from src.schemas.measurement              import merge_multi_tracker_measurements
 
 from src.orbit_determination.ekf_processor         import process_measurements_with_ekf, process_multi_tracker_measurements_with_ekf, apply_rts_smoother, create_high_fidelity_propagator
 from src.orbit_determination.measurement_simulator import MeasurementSimulator
@@ -172,6 +172,9 @@ def main(
   use_analytic_jacobian          : Optional[bool]  = None,
   jacobian_approx_eps            : Optional[float] = None,
   make_meas_from                 : Optional[str]   = 'jpl_horizons',
+  initial_maneuver_plan          : Optional[str]   = None,
+  optimize                       : Optional[list]  = None,
+  resume_from                    : Optional[str]   = None,
 ) -> PropagationResult:
   """
   Main function to run the high-fidelity orbit propagation.
@@ -253,6 +256,9 @@ def main(
     use_approx_jacobian,
     use_analytic_jacobian,
     jacobian_approx_eps,
+    initial_maneuver_plan,
+    optimize,
+    resume_from,
   )
 
   # Start logging to file
@@ -342,16 +348,89 @@ def main(
       stop_logging(logger)
       return error
 
-  # Determine initial state: JPL Horizons, TLE, or Custom State Vector
-  initial_state, initial_epoch_dt = get_initial_state(
-    tle_line_1                    = config.tle_line_1,
-    tle_line_2                    = config.tle_line_2,
-    time_o_dt                     = config.time_o_dt,
-    result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
-    initial_state_source          = config.initial_state.source,
-    custom_state_vector           = config.initial_state.state,
-    initial_state_filename        = config.initial_state.filename,
-  )
+  # Determine initial state: Maneuver Plan, JPL Horizons, TLE, or Custom State Vector
+  decision_state = None
+
+  # Load maneuver plan if provided (overrides other initial state sources)
+  if config.initial_maneuver_plan is not None:
+    from pathlib import Path
+    project_root = Path(__file__).parent.parent
+    maneuver_plan_path = project_root / 'input' / 'initial_states_and_maneuvers' / config.initial_maneuver_plan
+    if not maneuver_plan_path.exists():
+      maneuver_plan_path = Path(config.initial_maneuver_plan)
+
+    decision_state = load_maneuver_plan(maneuver_plan_path)
+    config.decision_state = decision_state
+
+    initial_state, initial_epoch_dt = get_initial_state_from_maneuver_plan(decision_state)
+
+    # Apply maneuvers from the plan to the spacecraft config
+    if decision_state.maneuvers and len(decision_state.maneuvers) > 0:
+      config.spacecraft.maneuvers = decision_state.maneuvers
+
+  elif config.resume_from is not None:
+    from pathlib import Path
+    # Resolve resume path
+    if config.resume_from == 'previous':
+      project_root = Path(__file__).parent.parent
+      output_dir = project_root / 'output'
+      if output_dir.exists():
+        subdirs = sorted([d for d in output_dir.iterdir() if d.is_dir()])
+        if subdirs:
+          resume_path = subdirs[-1] / 'maneuver_plan_solved.yaml'
+        else:
+          raise FileNotFoundError("No previous runs found in output/")
+      else:
+        raise FileNotFoundError("Output directory not found")
+    else:
+      resume_path = Path(config.resume_from)
+      if resume_path.is_dir():
+        resume_path = resume_path / 'maneuver_plan_solved.yaml'
+
+    decision_state = load_maneuver_plan(resume_path)
+    config.decision_state = decision_state
+
+    initial_state, initial_epoch_dt = get_initial_state_from_maneuver_plan(decision_state)
+
+    if decision_state.maneuvers and len(decision_state.maneuvers) > 0:
+      config.spacecraft.maneuvers = decision_state.maneuvers
+
+  else:
+    initial_state, initial_epoch_dt = get_initial_state(
+      tle_line_1                    = config.tle_line_1,
+      tle_line_2                    = config.tle_line_2,
+      time_o_dt                     = config.time_o_dt,
+      result_jpl_horizons_ephemeris = result_jpl_horizons_ephemeris,
+      initial_state_source          = config.initial_state.source,
+      custom_state_vector           = config.initial_state.state,
+      initial_state_filename        = config.initial_state.filename,
+    )
+
+  # Optimization block
+  if config.optimize is not None:
+    if decision_state is None:
+      print("\n  [WARNING] --optimize specified but no maneuver plan loaded. Skipping optimization.")
+    elif not decision_state.has_any_variable():
+      print("\n  [WARNING] --optimize specified but no quantities marked as variable in the maneuver plan. Skipping optimization.")
+    else:
+      # TODO: Run optimizer here
+      # The optimizer will update decision_state in-place with optimized values,
+      # then re-extract initial_state and update maneuvers.
+      section_title = "Trajectory Optimization"
+      print("\n" + "-" * len(section_title))
+      print(section_title)
+      print("-" * len(section_title))
+      print()
+      print(f"  Optimizing: {', '.join(config.optimize)}")
+      print(f"  Variables:  {decision_state.n_variables}")
+      print(f"  [PLACEHOLDER] Optimizer not yet implemented")
+      print()
+
+    # Save solved maneuver plan to output
+    if decision_state is not None:
+      solved_plan_path = config.output_paths.base_folderpath / 'maneuver_plan_solved.yaml'
+      save_maneuver_plan(decision_state, solved_plan_path)
+      print(f"  Maneuver plan saved to: {solved_plan_path}")
 
   # Create PropagationConfig for the propagator using actual initial epoch
   propagation_config = PropagationConfig(
@@ -371,6 +450,18 @@ def main(
     tle_line_2                    = config.tle_line_2,
     two_body_gravity_model        = config.gravity,
   )
+
+  # Write deluxe ephemeris if a maneuver plan was loaded
+  if decision_state is not None and result_high_fidelity_propagation is not None and result_high_fidelity_propagation.success:
+    from src.utility.deluxe_ephemeris import write_deluxe_ephemeris
+    deluxe_path = config.output_paths.base_folderpath / 'deluxe_ephemeris.csv'
+    write_deluxe_ephemeris(
+      output_filepath = deluxe_path,
+      result          = result_high_fidelity_propagation,
+      decision_state  = decision_state,
+      gp              = config.gravity.gp,
+    )
+    print(f"\n  Deluxe ephemeris saved to: {deluxe_path}")
 
   # Orbit Determination: Process measurements with EKF and RTS smoother
   od_filter_states = None
@@ -610,4 +701,7 @@ if __name__ == "__main__":
     args.use_analytic_jacobian,
     args.jacobian_approx_eps,
     args.make_meas_from,
+    args.initial_maneuver_plan,
+    args.optimize,
+    args.resume_from,
   )

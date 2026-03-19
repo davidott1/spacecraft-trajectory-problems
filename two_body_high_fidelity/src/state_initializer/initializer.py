@@ -248,3 +248,91 @@ def get_initial_state(
     print(f"      PA   :  {coe.pa:19.12e} -")
 
   return tle_initial_state, time_o_dt
+
+
+def get_initial_state_from_maneuver_plan(
+  decision_state : 'DecisionState',
+) -> tuple[np.ndarray, datetime]:
+  """
+  Get initial state vector and epoch from a DecisionState (maneuver plan).
+
+  Input:
+  ------
+    decision_state : DecisionState
+      Decision state loaded from a maneuver plan YAML file.
+
+  Output:
+  -------
+    initial_state : np.ndarray
+      Initial state vector [pos_x, pos_y, pos_z, vel_x, vel_y, vel_z] in m and m/s.
+    initial_epoch : datetime
+      Epoch of the initial state.
+  """
+  from src.schemas.optimization import DecisionState
+
+  title = "Initial State"
+  print("\n" + "-" * len(title))
+  print(title)
+  print("-" * len(title))
+  print()
+
+  print("  Progress")
+  print("    Extract initial state from maneuver plan")
+  print("    Convert to classical orbital elements for display")
+  print()
+
+  state_vec = np.concatenate((decision_state.position, decision_state.velocity))
+  epoch_dt  = decision_state.epoch
+
+  # Get ET for display
+  try:
+    epoch_et = utc_to_et(epoch_dt)
+    et_str   = f" / {epoch_et:.6f} ET"
+  except Exception:
+    et_str = ""
+
+  # Convert to COE for display
+  coe = OrbitConverter.pv_to_coe(
+    pos_vec = decision_state.position,
+    vel_vec = decision_state.velocity,
+    gp      = SOLARSYSTEMCONSTANTS.EARTH.GP,
+  )
+
+  n_maneuvers = len(decision_state.maneuvers) if decision_state.maneuvers else 0
+  n_vars      = decision_state.n_variables
+
+  print("  Summary")
+  print(f"    Source     : Maneuver Plan")
+  print(f"    Epoch      : {epoch_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC{et_str}")
+  print(f"    Frame      : J2000")
+  print(f"    Maneuvers  : {n_maneuvers}")
+  print(f"    Variables  : {n_vars}")
+  print(f"    Cartesian State")
+  print(f"      Position :  {state_vec[0]:>19.12e}  {state_vec[1]:>19.12e}  {state_vec[2]:>19.12e} m")
+  print(f"      Velocity :  {state_vec[3]:>19.12e}  {state_vec[4]:>19.12e}  {state_vec[5]:>19.12e} m/s")
+  print(f"    Classical Orbital Elements")
+  print(f"      SMA  :  {coe.sma:19.12e} m")
+  print(f"      ECC  :  {coe.ecc:19.12e} -")
+  print(f"      INC  :  {coe.inc  * CONVERTER.DEG_PER_RAD:19.12e} deg")
+  print(f"      RAAN :  {coe.raan * CONVERTER.DEG_PER_RAD:19.12e} deg")
+  print(f"      AOP  :  {coe.aop  * CONVERTER.DEG_PER_RAD:19.12e} deg")
+  if coe.ta is not None:
+    print(f"      TA   :  {coe.ta   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+  if coe.ea is not None:
+    print(f"      EA   :  {coe.ea   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+  if coe.ma is not None:
+    print(f"      MA   :  {coe.ma   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+  if coe.ha is not None:
+    print(f"      HA   :  {coe.ha   * CONVERTER.DEG_PER_RAD:19.12e} deg")
+  if coe.pa is not None:
+    print(f"      PA   :  {coe.pa:19.12e} -")
+
+  if n_maneuvers > 0:
+    print(f"    Maneuver Details")
+    for i, m in enumerate(decision_state.maneuvers):
+      var_t  = decision_state.variable_maneuver_time[i] if i < len(decision_state.variable_maneuver_time) else False
+      var_dv = decision_state.variable_maneuver_delta_v[i] if i < len(decision_state.variable_maneuver_delta_v) else np.array([False, False, False])
+      dv_mag = np.linalg.norm(m.delta_vel_vec)
+      print(f"      Burn {i+1}: {m.time_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC  |ΔV| = {dv_mag:.3f} m/s  frame = {m.frame}  var_t = {var_t}  var_dv = {var_dv.tolist()}")
+
+  return state_vec, epoch_dt

@@ -12,17 +12,17 @@ from scipy.integrate   import solve_ivp
 from scipy.interpolate import interp1d
 from sgp4.api          import jday
 
-from src.model.dynamics        import GeneralStateEquationsOfMotion, AccelerationSTMDot
-from src.model.orbit_converter import OrbitConverter
-from src.model.constants       import PRINTFORMATTER, SOLARSYSTEMCONSTANTS, CONVERTER
-from src.model.time_converter  import utc_to_et, et_to_utc
+from src.model.dynamics                   import GeneralStateEquationsOfMotion, AccelerationSTMDot
+from src.model.orbit_converter            import OrbitConverter
+from src.model.constants                  import PRINTFORMATTER, SOLARSYSTEMCONSTANTS, CONVERTER
+from src.model.time_converter             import utc_to_et, et_to_utc
 from src.model.frame_and_vector_converter import VectorConverter
-from src.utility.tle_helper    import modify_tle_bstar, get_tle_satellite_and_tle_epoch
-from src.schemas.gravity       import GravityModelConfig
-from src.schemas.spacecraft    import SpacecraftProperties
-from src.schemas.time          import TimeStructure
-from src.schemas.propagation   import PropagationConfig, PropagationResult
-from src.schemas.state         import ClassicalOrbitalElements, ModifiedEquinoctialElements
+from src.utility.tle_helper               import modify_tle_bstar, get_tle_satellite_and_tle_epoch
+from src.schemas.gravity                  import GravityModelConfig
+from src.schemas.spacecraft               import SpacecraftProperties
+from src.schemas.time                     import TimeStructure
+from src.schemas.propagation              import PropagationConfig, PropagationResult
+from src.schemas.state                    import ClassicalOrbitalElements, ModifiedEquinoctialElements
 
 
 FORMAT_NUMBER = ">19.12e"

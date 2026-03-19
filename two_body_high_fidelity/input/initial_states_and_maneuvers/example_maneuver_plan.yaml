@@ -1,0 +1,46 @@
+# Example: Maneuver Plan with Initial State and Variable Flags
+#
+# A maneuver plan defines the initial state (position, velocity, epoch)
+# and a sequence of impulsive maneuvers. Each quantity can be marked as
+# variable (optimizable) or fixed.
+#
+# When used with --optimize, only quantities marked variable: true
+# will be adjusted by the optimizer. The same format is written to the
+# output folder as the solved maneuver plan.
+#
+# Units:
+#   - Position: meters [m]
+#   - Velocity: meters per second [m/s]
+#   - Delta-V:  meters per second [m/s]
+#   - Time:     ISO 8601 UTC
+#
+# Frame Options:
+#   - J2000: Inertial frame (X, Y, Z components)
+#   - RIC:   Radial-In-track-Cross-track (orbit-aligned)
+#   - RTN:   Radial-Tangential-Normal (orbit-aligned)
+
+initial_state:
+  epoch_iso_utc: "2025-10-01T00:00:00"
+  pos_vec__m:        [-4453783.586, -5038203.756, -426384.456]
+  vel_vec__m_per_s:  [3831.888, -2887.221, -6018.232]
+  frame: "J2000"
+
+  # Variable flags for initial state (default: false if omitted)
+  variable_epoch:    false
+  variable_position: [false, false, false]
+  variable_velocity: [false, false, false]
+
+maneuvers:
+  # First burn: Raise apogee (prograde at perigee)
+  - time_iso_utc: "2025-10-01T06:00:00"
+    delta_vel__m_per_s: [0.0, 50.0, 0.0]
+    frame: "RIC"
+    variable_time:     true
+    variable_delta_v:  [false, true, false]
+
+  # Second burn: Circularize at new apogee (prograde)
+  - time_iso_utc: "2025-10-01T12:00:00"
+    delta_vel__m_per_s: [0.0, 30.0, 0.0]
+    frame: "RIC"
+    variable_time:     true
+    variable_delta_v:  [false, true, false]

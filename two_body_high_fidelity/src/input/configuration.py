@@ -256,7 +256,7 @@ def print_paths(
   print(f"      JPL Horizons Folderpath  : <data_folderpath>/{config.output_paths.jpl_horizons_folderpath.relative_to(data_folderpath)}")
   print(f"      TLEs Folderpath          : <data_folderpath>/{config.output_paths.tles_folderpath.relative_to(data_folderpath)}")
   print(f"    Input Folderpath           : {input_folderpath}")
-  print(f"      State Vectors Folderpath : <input_folderpath>/{config.output_paths.state_vectors_folderpath.relative_to(input_folderpath)}")
+  print(f"      Initial States Folderpath : <input_folderpath>/{config.output_paths.initial_states_folderpath.relative_to(input_folderpath)}")
 
 
 def print_configuration(
@@ -381,6 +381,9 @@ def build_config(
   use_approx_jacobian            : Optional[bool]  = None,
   use_analytic_jacobian          : Optional[bool]  = None,
   jacobian_approx_eps            : Optional[float] = None,
+  initial_maneuver_plan          : Optional[str]   = None,
+  optimize                       : Optional[list]  = None,
+  resume_from                    : Optional[str]   = None,
 ) -> SimulationConfig:
   """
   Parse, validate, and set up input parameters for orbit propagation.
@@ -693,7 +696,7 @@ def build_config(
   output_paths.lsk_filepath             = paths['lsk_filepath']
   output_paths.jpl_horizons_folderpath  = paths['jpl_horizons_folderpath']
   output_paths.tles_folderpath          = paths['tles_folderpath']
-  output_paths.state_vectors_folderpath = paths['state_vectors_folderpath']
+  output_paths.initial_states_folderpath = paths['initial_states_folderpath']
 
   return SimulationConfig(
     initial_state       = initial_state_config,
@@ -708,6 +711,9 @@ def build_config(
     auto_download       = auto_download,
     propagation_config  = propagation_config,
     orbit_determination = od_config,
+    optimize            = optimize,
+    initial_maneuver_plan = initial_maneuver_plan,
+    resume_from         = resume_from,
   )
 
 
@@ -768,16 +774,16 @@ def setup_paths(
   # TLEs folderpath
   tles_folderpath = data_folderpath / 'tles'
 
-  # State Vectors folderpath (in input/ folder)
+  # Initial states folderpath (in input/ folder)
   input_folderpath = project_root / 'input'
-  state_vectors_folderpath = input_folderpath / 'state_vectors'
+  initial_states_folderpath = input_folderpath / 'initial_states'
   
   custom_state_vector_filepath = None
   if initial_state_source == 'custom_state_vector':
     if not initial_state_filename:
       raise ValueError("Argument --initial-state-filename is required when using a custom state vector.")
     
-    custom_state_vector_filepath = state_vectors_folderpath / initial_state_filename
+    custom_state_vector_filepath = initial_states_folderpath / initial_state_filename
     if not custom_state_vector_filepath.exists():
       raise FileNotFoundError(f"Custom state vector file not found: {custom_state_vector_filepath}")
 
@@ -833,7 +839,7 @@ def setup_paths(
     'gravity_model_filename'       : gravity_model_filename,
     'jpl_horizons_folderpath'      : jpl_horizons_folderpath,
     'tles_folderpath'              : tles_folderpath,
-    'state_vectors_folderpath'     : state_vectors_folderpath,
+    'initial_states_folderpath'     : initial_states_folderpath,
     'custom_state_vector_filepath' : custom_state_vector_filepath,
     'lsk_filepath'                 : lsk_filepath,
     'tracker_filepath'             : tracker_filepath,

@@ -13,6 +13,70 @@ from typing      import Optional, List
 
 from src.schemas.time        import TimeStructure
 from src.schemas.propagation import PropagationResult
+from src.schemas.spacecraft  import ManeuversConfig
+
+
+@dataclass
+class DecisionState:
+  """
+  Decision state for trajectory optimization.
+
+  Holds the initial state (position, velocity, epoch) and maneuver plan,
+  along with per-component flags indicating which quantities are variable
+  (optimizable) vs. fixed.
+
+  All defaults are fixed (False). The optimizer only adjusts components
+  whose corresponding variable flag is True.
+
+  Attributes:
+    position              : Initial position vector [m], shape (3,)
+    velocity              : Initial velocity vector [m/s], shape (3,)
+    epoch                 : Initial epoch (UTC)
+    maneuvers             : Maneuver plan (list-like container of ImpulsiveManeuver)
+
+    variable_position          : Per-component variable flags for position [pos_x, pos_y, pos_z]
+    variable_velocity          : Per-component variable flags for velocity [vel_x, vel_y, vel_z]
+    variable_epoch             : Whether epoch is variable
+    variable_maneuver_time     : Per-maneuver variable flags for burn time
+    variable_maneuver_delta_v  : Per-maneuver per-component variable flags for ΔV [dvx, dvy, dvz]
+  """
+  # State
+  position  : np.ndarray              = field(default_factory=lambda: np.zeros(3))
+  velocity  : np.ndarray              = field(default_factory=lambda: np.zeros(3))
+  epoch     : Optional[datetime]      = None
+  maneuvers : Optional[ManeuversConfig] = None
+
+  # Variable vs. fixed
+  variable_position          : np.ndarray  = field(default_factory=lambda: np.array([False, False, False]))
+  variable_velocity          : np.ndarray  = field(default_factory=lambda: np.array([False, False, False]))
+  variable_epoch             : bool        = False
+  variable_maneuver_time     : List[bool]          = field(default_factory=list)
+  variable_maneuver_delta_v  : List[np.ndarray]    = field(default_factory=list)
+
+  def has_any_variable(self) -> bool:
+    """Return True if any component is marked as variable."""
+    if np.any(self.variable_position):
+      return True
+    if np.any(self.variable_velocity):
+      return True
+    if self.variable_epoch:
+      return True
+    if any(self.variable_maneuver_time):
+      return True
+    if any(np.any(dv) for dv in self.variable_maneuver_delta_v):
+      return True
+    return False
+
+  @property
+  def n_variables(self) -> int:
+    """Count the total number of variable (optimizable) components."""
+    count = int(np.sum(self.variable_position))
+    count += int(np.sum(self.variable_velocity))
+    if self.variable_epoch:
+      count += 1
+    count += sum(1 for t in self.variable_maneuver_time if t)
+    count += sum(int(np.sum(dv)) for dv in self.variable_maneuver_delta_v)
+    return count
 
 
 @dataclass

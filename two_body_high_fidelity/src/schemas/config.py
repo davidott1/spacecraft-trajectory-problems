@@ -15,6 +15,7 @@ from src.schemas.propagation import PropagationConfig
 from src.schemas.spacecraft  import SpacecraftProperties
 from src.schemas.state       import CartesianState
 from src.schemas.orbit_determination import OrbitDeterminationConfig
+from src.schemas.optimization import DecisionState
 
 
 @dataclass
@@ -32,20 +33,20 @@ class OutputPaths:
     lsk_filepath             : Filepath to leap seconds kernel
     jpl_horizons_folderpath  : Folderpath for JPL Horizons ephemeris
     tles_folderpath          : Folderpath for TLE files
-    state_vectors_folderpath : Folderpath for state vector files
-    tracker_filepath         : Filepath to tracker YAML file
+    initial_states_folderpath : Folderpath for initial state files
+    tracker_filepath          : Filepath to tracker YAML file
   """
-  base_folderpath          : Path
-  figures_folderpath       : Optional[Path] = None
-  logs_folderpath          : Optional[Path] = None
-  data_folderpath          : Optional[Path] = None
-  log_filepath             : Optional[Path] = None
-  spice_kernels_folderpath : Optional[Path] = None
-  lsk_filepath             : Optional[Path] = None
-  jpl_horizons_folderpath  : Optional[Path] = None
-  tles_folderpath          : Optional[Path] = None
-  state_vectors_folderpath : Optional[Path] = None
-  tracker_filepath         : Optional[Path] = None
+  base_folderpath           : Path
+  figures_folderpath        : Optional[Path] = None
+  logs_folderpath           : Optional[Path] = None
+  data_folderpath           : Optional[Path] = None
+  log_filepath              : Optional[Path] = None
+  spice_kernels_folderpath  : Optional[Path] = None
+  lsk_filepath              : Optional[Path] = None
+  jpl_horizons_folderpath   : Optional[Path] = None
+  tles_folderpath           : Optional[Path] = None
+  initial_states_folderpath : Optional[Path] = None
+  tracker_filepath          : Optional[Path] = None
   
   def __post_init__(self):
     if self.figures_folderpath is None:
@@ -116,6 +117,10 @@ class SimulationConfig:
     tle_line_2          : TLE line 2 (populated after loading)
     tle_epoch_dt        : TLE epoch datetime (populated after loading)
     orbit_determination : Orbit determination configuration
+    optimize            : List of quantities to optimize (None = no optimization)
+    initial_maneuver_plan : Maneuver plan filename
+    resume_from         : Path to previous run to resume from
+    decision_state      : DecisionState for optimization (populated after loading)
   """
   initial_state       : InitialStateConfig
   time_o_dt           : datetime
@@ -132,6 +137,10 @@ class SimulationConfig:
   tle_line_2          : Optional[str]                = None
   tle_epoch_dt        : Optional[datetime]           = None
   orbit_determination : OrbitDeterminationConfig     = field(default_factory=OrbitDeterminationConfig)
+  optimize            : Optional[list]               = None
+  initial_maneuver_plan : Optional[str]              = None
+  resume_from         : Optional[str]                = None
+  decision_state      : Optional[DecisionState]      = None
 
   def __post_init__(self):
     if self.gravity is None:
