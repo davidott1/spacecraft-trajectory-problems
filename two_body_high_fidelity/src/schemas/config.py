@@ -102,25 +102,25 @@ class SimulationConfig:
   Complete simulation configuration.
   
   Attributes:
-    initial_state       : Initial state configuration
-    time_o_dt           : Start time (UTC)
-    time_f_dt           : End time (UTC)
-    spacecraft          : Spacecraft properties
-    gravity             : Gravity model configuration
-    comparison          : Comparison configuration
-    output_paths        : Output file paths
-    object_name         : Sanitized object name for filenames
-    object_name_display : Display name for plots
-    auto_download       : Auto-download missing data
-    propagation_config  : Propagation configuration (tolerances, method)
-    tle_line_1          : TLE line 1 (populated after loading)
-    tle_line_2          : TLE line 2 (populated after loading)
-    tle_epoch_dt        : TLE epoch datetime (populated after loading)
-    orbit_determination : Orbit determination configuration
-    optimize            : List of quantities to optimize (None = no optimization)
+    initial_state         : Initial state configuration
+    time_o_dt             : Start time (UTC)
+    time_f_dt             : End time (UTC)
+    spacecraft            : Spacecraft properties
+    gravity               : Gravity model configuration
+    comparison            : Comparison configuration
+    output_paths          : Output file paths
+    object_name           : Sanitized object name for filenames
+    object_name_display   : Display name for plots
+    auto_download         : Auto-download missing data
+    propagation_config    : Propagation configuration (tolerances, method)
+    tle_line_1            : TLE line 1 (populated after loading)
+    tle_line_2            : TLE line 2 (populated after loading)
+    tle_epoch_dt          : TLE epoch datetime (populated after loading)
+    orbit_determination   : Orbit determination configuration
+    optimize              : List of quantities to optimize (None = no optimization)
     initial_maneuver_plan : Maneuver plan filename
-    resume_from         : Path to previous run to resume from
-    decision_state      : DecisionState for optimization (populated after loading)
+    resume_from           : Path to previous run to resume from
+    decision_state        : DecisionState for optimization (populated after loading)
   """
   initial_state       : InitialStateConfig
   time_o_dt           : datetime
