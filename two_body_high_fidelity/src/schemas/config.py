@@ -10,12 +10,12 @@ from datetime    import datetime
 from pathlib     import Path
 from typing      import Optional
 
-from src.schemas.gravity     import GravityModelConfig
-from src.schemas.propagation import PropagationConfig
-from src.schemas.spacecraft  import SpacecraftProperties
-from src.schemas.state       import CartesianState
+from src.schemas.gravity             import GravityModelConfig
+from src.schemas.propagation         import PropagationConfig
+from src.schemas.spacecraft          import SpacecraftProperties
+from src.schemas.state               import CartesianState
 from src.schemas.orbit_determination import OrbitDeterminationConfig
-from src.schemas.optimization import DecisionState
+from src.schemas.optimization        import DecisionState
 
 
 @dataclass
@@ -122,25 +122,25 @@ class SimulationConfig:
     resume_from           : Path to previous run to resume from
     decision_state        : DecisionState for optimization (populated after loading)
   """
-  initial_state       : InitialStateConfig
-  time_o_dt           : datetime
-  time_f_dt           : datetime
-  spacecraft          : SpacecraftProperties         = field(default_factory=SpacecraftProperties)
-  gravity             : Optional[GravityModelConfig] = None
-  comparison          : ComparisonConfig             = field(default_factory=ComparisonConfig)
-  output_paths        : Optional[OutputPaths]        = None
-  object_name         : str                          = "object"
-  object_name_display : str                          = "Object"
-  auto_download       : bool                         = False
-  propagation_config  : Optional[PropagationConfig]  = None
-  tle_line_1          : Optional[str]                = None
-  tle_line_2          : Optional[str]                = None
-  tle_epoch_dt        : Optional[datetime]           = None
-  orbit_determination : OrbitDeterminationConfig     = field(default_factory=OrbitDeterminationConfig)
-  optimize            : Optional[list]               = None
+  initial_state         : InitialStateConfig
+  time_o_dt             : datetime
+  time_f_dt             : datetime
+  spacecraft            : SpacecraftProperties         = field(default_factory=SpacecraftProperties)
+  gravity               : Optional[GravityModelConfig] = None
+  comparison            : ComparisonConfig             = field(default_factory=ComparisonConfig)
+  output_paths          : Optional[OutputPaths]        = None
+  object_name           : str                          = "object"
+  object_name_display   : str                          = "Object"
+  auto_download         : bool                         = False
+  propagation_config    : Optional[PropagationConfig]  = None
+  tle_line_1            : Optional[str]                = None
+  tle_line_2            : Optional[str]                = None
+  tle_epoch_dt          : Optional[datetime]           = None
+  orbit_determination   : OrbitDeterminationConfig     = field(default_factory=OrbitDeterminationConfig)
+  optimize              : Optional[list]               = None
   initial_maneuver_plan : Optional[str]              = None
-  resume_from         : Optional[str]                = None
-  decision_state      : Optional[DecisionState]      = None
+  resume_from           : Optional[str]                = None
+  decision_state        : Optional[DecisionState]      = None
 
   def __post_init__(self):
     if self.gravity is None:

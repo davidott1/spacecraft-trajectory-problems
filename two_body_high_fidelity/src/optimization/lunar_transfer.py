@@ -20,32 +20,32 @@ Algorithm:
      f. Propagate under Moon two-body gravity to periapsis
      g. Compute ΔV₂ for LLO circularization at periapsis
   4. Refine best solution with scipy.optimize.minimize
-  5. Build output trajectory as PropagationResult in Earth-centered J2000
+  5. Build output trajectory with Nodes and Segments
 
 Output:
 -------
-  LunarTransferResult containing:
-    - ΔV₁, ΔV₂ vectors and magnitudes
-    - Transfer timing and geometry
-    - Individual trajectory legs
-    - Combined trajectory as PropagationResult (J2000, suitable for plotting)
+  OptimizationResult containing:
+    - Trajectory with nodes (departure, SOI, periapsis) and segments
+    - Objective value (total ΔV)
 
 Usage:
 ------
   from src.optimization.lunar_transfer import LunarTransferOptimizer
-  from src.schemas.optimization import LunarTransferConfig
+  from src.schemas.optimization import OptimizationProblem, OptimizationConfig
+  from src.schemas.optimization import DecisionState, Objective, BoundaryCondition, Constraint
 
-  config = LunarTransferConfig(
-    leo_altitude_m  = 200_000.0,
-    llo_altitude_m  = 100_000.0,
-    departure_epoch = datetime(2025, 10, 1),
+  problem = OptimizationProblem(
+    objective           = Objective(quantity='delta_v_total', nodes=[0, 2]),
+    decision_state      = DecisionState(epoch=datetime(2025, 10, 1)),
+    constraints         = Constraint(final=[BoundaryCondition(node=2, quantity='altitude', target=100_000.0)]),
+    optimization_config = OptimizationConfig(method='nelder-mead'),
   )
 
-  optimizer = LunarTransferOptimizer(config, initial_state_j2000)
+  optimizer = LunarTransferOptimizer(problem, initial_state_j2000)
   result = optimizer.solve()
 
-  # result.combined_trajectory is a PropagationResult in J2000
-  # result.delta_vel_total is the total ΔV in m/s
+  # result.trajectory contains Nodes and Segments
+  # result.objective_value is the total ΔV in m/s
 """
 import numpy as np
 
@@ -55,12 +55,9 @@ from typing          import Optional
 
 from src.model.constants         import SOLARSYSTEMCONSTANTS, NAIFIDS, CONVERTER
 from src.model.time_converter    import utc_to_et, et_to_utc
-from src.model.orbit_converter   import OrbitConverter
 from src.model.orbital_mechanics import compute_circular_velocity
 from src.schemas.time            import TimeStructure
-from src.schemas.propagation     import PropagationResult
-from src.schemas.state           import ClassicalOrbitalElements, ModifiedEquinoctialElements
-from src.schemas.optimization    import LunarTransferConfig, LunarTransferResult, TransferLeg
+from src.schemas.optimization    import OptimizationProblem, OptimizationConfig, OptimizationResult, Segment, Node, Trajectory
 
 from src.propagation.analytical_propagator import propagate_circular_orbit
 from src.model.orbital_mechanics           import compute_hohmann_velocities
@@ -81,7 +78,7 @@ class LunarTransferOptimizer:
   the patched conic approximation with Moon SOI boundary switching.
 
   Attributes:
-    config           : LunarTransferConfig
+    problem          : OptimizationProblem
     initial_state    : np.ndarray (6,) - Initial LEO state in J2000 [m, m/s]
     r_leo            : float - LEO orbital radius [m]
     r_llo            : float - LLO orbital radius [m]
@@ -100,26 +97,61 @@ class LunarTransferOptimizer:
 
   def __init__(
     self,
-    config        : LunarTransferConfig,
+    problem       : OptimizationProblem,
     initial_state : np.ndarray,
+    leo_altitude_m            : float = 200_000.0,
+    llo_altitude_m            : float = 100_000.0,
+    max_transfer_time_s       : float = 7.0 * 86400.0,
+    dv1_search_bounds_m_s     : tuple = (2800.0, 3400.0),
+    departure_search_window_s : float = 30.0 * 86400.0,
+    n_departure_candidates    : int   = 720,
+    llo_coast_orbits          : int   = 3,
   ):
     """
     Initialize the lunar transfer optimizer.
 
     Input:
     ------
-      config : LunarTransferConfig
-        Transfer configuration (altitudes, epochs, tolerances).
+      problem : OptimizationProblem
+        Optimization problem definition (objective, constraints, solver settings).
+        The departure epoch is taken from problem.decision_state.epoch.
       initial_state : np.ndarray (6,)
         Initial spacecraft state in Earth-centered J2000 [m, m/s].
-        Should be on a circular LEO orbit at the config departure epoch.
+        Should be on a circular LEO orbit at the departure epoch.
+      leo_altitude_m : float
+        LEO altitude above Earth surface [m].
+      llo_altitude_m : float
+        LLO altitude above Moon surface [m].
+      max_transfer_time_s : float
+        Maximum transfer time from departure to Moon SOI [s].
+      dv1_search_bounds_m_s : tuple
+        Search bounds for ΔV₁ magnitude [m/s].
+      departure_search_window_s : float
+        Search window for departure time [s] from departure epoch.
+      n_departure_candidates : int
+        Number of departure time candidates in grid search.
+      llo_coast_orbits : int
+        Number of LLO orbits to propagate after insertion.
     """
-    self.config        = config
+    self.problem       = problem
+    self.config        = problem.optimization_config
     self.initial_state = initial_state.copy()
 
+    # Problem-specific parameters
+    self.leo_altitude_m            = leo_altitude_m
+    self.llo_altitude_m            = llo_altitude_m
+    self.max_transfer_time_s       = max_transfer_time_s
+    self.dv1_search_bounds_m_s     = dv1_search_bounds_m_s
+    self.departure_search_window_s = departure_search_window_s
+    self.n_departure_candidates    = n_departure_candidates
+    self.llo_coast_orbits          = llo_coast_orbits
+
+    # Departure epoch from decision state
+    self.departure_epoch = problem.decision_state.epoch
+
     # Derived orbital radii
-    self.r_leo = self.EARTH_RADIUS + config.leo_altitude_m
-    self.r_llo = self.MOON_RADIUS  + config.llo_altitude_m
+    self.r_leo = self.EARTH_RADIUS + leo_altitude_m
+    self.r_llo = self.MOON_RADIUS  + llo_altitude_m
 
     # Circular velocities
     self.v_circ_leo = compute_circular_velocity(self.r_leo, self.EARTH_GP)
@@ -131,7 +163,7 @@ class LunarTransferOptimizer:
     # Hohmann transfer estimates (Earth-only, to Moon orbit distance)
     self.hohmann = compute_hohmann_velocities(self.r_leo, self.MOON_SMA, self.EARTH_GP)
 
-  def solve(self) -> LunarTransferResult:
+  def solve(self) -> OptimizationResult:
     """
     Find optimal patched conic lunar transfer.
 
@@ -140,16 +172,16 @@ class LunarTransferOptimizer:
 
     Output:
     -------
-      result : LunarTransferResult
+      result : OptimizationResult
         Transfer solution with trajectory, ΔV breakdown, and timing.
     """
-    t0_et = utc_to_et(self.config.departure_epoch)
+    t0_et = utc_to_et(self.departure_epoch)
 
     # Verify SPICE is loaded
     try:
       BodyVectorConverter.get_body_state(NAIFIDS.MOON, t0_et, NAIFIDS.EARTH)
     except Exception as e:
-      return LunarTransferResult(
+      return OptimizationResult(
         success = False,
         message = f"SPICE kernels not loaded. Call load_files() first. Error: {e}",
       )
@@ -163,16 +195,16 @@ class LunarTransferOptimizer:
     # Print configuration
     print()
     print("  Configuration")
-    print(f"    LEO Altitude         : {self.config.leo_altitude_m/1000:.1f} km")
-    print(f"    LLO Altitude         : {self.config.llo_altitude_m/1000:.1f} km")
+    print(f"    LEO Altitude         : {self.leo_altitude_m/1000:.1f} km")
+    print(f"    LLO Altitude         : {self.llo_altitude_m/1000:.1f} km")
     print(f"    LEO Radius           : {self.r_leo/1000:.1f} km")
     print(f"    LLO Radius           : {self.r_llo/1000:.1f} km")
     print(f"    V_circ LEO           : {self.v_circ_leo:.2f} m/s")
     print(f"    V_circ LLO           : {self.v_circ_llo:.2f} m/s")
     print(f"    Moon SOI Radius      : {self.soi_moon/1000:.1f} km")
-    print(f"    Departure Epoch      : {self.config.departure_epoch}")
-    print(f"    Search Window        : {self.config.departure_search_window_s/86400:.1f} days")
-    print(f"    Max Transfer Time    : {self.config.max_transfer_time_s/86400:.1f} days")
+    print(f"    Departure Epoch      : {self.departure_epoch}")
+    print(f"    Search Window        : {self.departure_search_window_s/86400:.1f} days")
+    print(f"    Max Transfer Time    : {self.max_transfer_time_s/86400:.1f} days")
 
     # Print Hohmann estimates
     print()
@@ -188,8 +220,8 @@ class LunarTransferOptimizer:
     print("  Progress")
     print("    Phase 1: Grid search over departure times")
 
-    search_window  = self.config.departure_search_window_s
-    n_candidates   = self.config.n_departure_candidates
+    search_window  = self.departure_search_window_s
+    n_candidates   = self.n_departure_candidates
     dv1_initial    = self.hohmann['delta_vel_mag_o']
 
     best_result    = None
@@ -230,14 +262,14 @@ class LunarTransferOptimizer:
       print("    - Expand the search window (departure_search_window_s)")
       print("    - Check that the LEO orbit plane passes near the Moon")
       print("    - Try a different departure epoch")
-      return LunarTransferResult(
+      return OptimizationResult(
         success = False,
         message = "No valid transfer found. The Moon may not be accessible from "
                   "this LEO orbit plane within the search window.",
       )
 
     # Phase 2: Local optimization
-    departure_dt_best = self.config.departure_epoch + timedelta(seconds=best_offset)
+    departure_dt_best = self.departure_epoch + timedelta(seconds=best_offset)
     print(f"    Phase 2: Refining best solution")
     print(f"      Best grid result: ΔV_total = {best_dv_total:.2f} m/s "
           f"at offset = {best_offset/86400:.2f} days "
@@ -247,8 +279,8 @@ class LunarTransferOptimizer:
       dt_offset_opt, delta_vel_mag_1_opt = x
       # Clamp to valid range
       dt_offset_opt       = max(0, min(search_window, dt_offset_opt))
-      delta_vel_mag_1_opt = max(self.config.dv1_search_bounds_m_s[0],
-                                min(self.config.dv1_search_bounds_m_s[1], delta_vel_mag_1_opt))
+      delta_vel_mag_1_opt = max(self.dv1_search_bounds_m_s[0],
+                                min(self.dv1_search_bounds_m_s[1], delta_vel_mag_1_opt))
       t_depart_et_opt = t0_et + dt_offset_opt
       result_opt = self._evaluate_transfer(t_depart_et_opt, delta_vel_mag_1_opt)
       if result_opt is None:
@@ -258,15 +290,16 @@ class LunarTransferOptimizer:
     x0 = [best_offset, best_dv1]
     opt = minimize(
       objective, x0,
-      method  = 'Nelder-Mead',
-      options = {'xatol': 10.0, 'fatol': 0.1, 'maxiter': 300, 'adaptive': True},
+      method  = self.config.method.title().replace('-', ''),
+      options = {'xatol': self.config.xatol, 'fatol': self.config.fatol,
+                 'maxiter': self.config.maxiter, 'adaptive': True},
     )
 
     # Evaluate final solution
     final_offset, final_dv1 = opt.x
     final_offset = max(0, min(search_window, final_offset))
-    final_dv1    = max(self.config.dv1_search_bounds_m_s[0],
-                       min(self.config.dv1_search_bounds_m_s[1], final_dv1))
+    final_dv1    = max(self.dv1_search_bounds_m_s[0],
+                       min(self.dv1_search_bounds_m_s[1], final_dv1))
     t_depart_et_final = t0_et + final_offset
     final_eval = self._evaluate_transfer(t_depart_et_final, final_dv1)
 
@@ -276,7 +309,7 @@ class LunarTransferOptimizer:
       final_offset      = best_offset
       t_depart_et_final = t0_et + final_offset
 
-    departure_dt_final = self.config.departure_epoch + timedelta(seconds=final_offset)
+    departure_dt_final = self.departure_epoch + timedelta(seconds=final_offset)
     print(f"      Optimized: ΔV_total = {final_eval['delta_vel_total']:.2f} m/s "
           f"at offset = {final_offset/86400:.2f} days "
           f"({departure_dt_final.strftime('%Y-%m-%d %H:%M')} UTC)")
@@ -286,7 +319,7 @@ class LunarTransferOptimizer:
     result = self._build_result(t_depart_et_final, final_eval)
 
     # Print summary
-    self._print_summary(result)
+    self._print_summary(result, final_eval)
 
     return result
 
@@ -327,7 +360,7 @@ class LunarTransferOptimizer:
           'r_peri'             : float
     """
     # Propagate LEO to departure time (analytical for circular orbit)
-    t0_et = utc_to_et(self.config.departure_epoch)
+    t0_et = utc_to_et(self.departure_epoch)
     dt_coast = t_depart_et - t0_et
 
     if abs(dt_coast) > 1.0:
@@ -351,7 +384,7 @@ class LunarTransferOptimizer:
       naif_id_secondary = NAIFIDS.MOON,
       naif_id_primary   = NAIFIDS.EARTH,
       soi_radius       = self.soi_moon,
-      max_time_s       = self.config.max_transfer_time_s,
+      max_time_s       = self.max_transfer_time_s,
       rtol             = self.config.rtol,
       atol             = self.config.atol,
     )
@@ -418,16 +451,16 @@ class LunarTransferOptimizer:
     self,
     t_depart_et : float,
     eval_result : dict,
-  ) -> LunarTransferResult:
+  ) -> OptimizationResult:
     """
-    Build LunarTransferResult from evaluation output.
+    Build OptimizationResult from evaluation output.
 
     Constructs the full trajectory by:
     1. Propagating Earth departure leg (post-burn to SOI)
     2. Propagating Moon arrival leg (SOI to periapsis)
     3. Propagating LLO coast (post-insertion circular orbit)
-    4. Transforming Moon-centered states to Earth-centered J2000
-    5. Combining all legs into a single PropagationResult
+    4. Creating Node objects at junction points
+    5. Assembling Trajectory from nodes and segments
 
     Input:
     ------
@@ -438,7 +471,7 @@ class LunarTransferOptimizer:
 
     Output:
     -------
-      result : LunarTransferResult
+      result : OptimizationResult
         Complete transfer solution.
     """
     t_soi  = eval_result['t_soi']
@@ -452,7 +485,7 @@ class LunarTransferOptimizer:
     earth_times  = eval_result['soi_result']['trajectory_times']
     earth_states = eval_result['soi_result']['trajectory_states']
 
-    earth_leg = TransferLeg(
+    earth_leg = Segment(
       name            = 'earth_departure',
       central_body    = 'EARTH',
       j2000_state_vec = earth_states,
@@ -468,7 +501,7 @@ class LunarTransferOptimizer:
     moon_times  = eval_result['peri_result']['trajectory_times']
     moon_states = eval_result['peri_result']['trajectory_states']
 
-    lunar_leg = TransferLeg(
+    lunar_leg = Segment(
       name            = 'lunar_arrival',
       central_body    = 'MOON',
       j2000_state_vec = moon_states,
@@ -495,7 +528,7 @@ class LunarTransferOptimizer:
 
     # LLO orbital period
     llo_period      = 2.0 * np.pi * np.sqrt(r_peri**3 / self.MOON_GP)
-    llo_coast_time  = self.config.llo_coast_orbits * llo_period
+    llo_coast_time  = self.llo_coast_orbits * llo_period
     n_llo_points    = max(500, int(llo_coast_time / 10))
 
     llo_prop = propagate_two_body(
@@ -511,7 +544,7 @@ class LunarTransferOptimizer:
     llo_times  = llo_prop['times']
     llo_states = llo_prop['states']
 
-    llo_leg = TransferLeg(
+    llo_leg = Segment(
       name            = 'llo_coast',
       central_body    = 'MOON',
       j2000_state_vec = llo_states,
@@ -522,177 +555,57 @@ class LunarTransferOptimizer:
     )
 
     # --------------------------------------------------
-    # Combine all legs into single PropagationResult
+    # Create nodes at junction points
     # --------------------------------------------------
-    combined = self._combine_legs(earth_leg, lunar_leg, llo_leg, departure_dt)
+    node_departure = Node(
+      name            = 'departure_burn',
+      central_body    = 'EARTH',
+      time_mns        = TimeStructure(initial=departure_dt, grid_relative_initial=np.array([0.0])),
+      time_pls        = TimeStructure(initial=departure_dt, grid_relative_initial=np.array([0.0])),
+      j2000_state_vec = eval_result['state_post_burn'],
+    )
+
+    soi_dt = et_to_utc(t_soi)
+    node_soi = Node(
+      name            = 'soi_crossing',
+      central_body    = 'MOON',
+      time_mns        = TimeStructure(initial=soi_dt, grid_relative_initial=np.array([0.0])),
+      time_pls        = TimeStructure(initial=soi_dt, grid_relative_initial=np.array([0.0])),
+      j2000_state_vec = eval_result['soi_result']['soi_state'],
+    )
+
+    periapsis_dt = et_to_utc(t_insertion)
+    node_periapsis = Node(
+      name            = 'llo_insertion',
+      central_body    = 'MOON',
+      time_mns        = TimeStructure(initial=periapsis_dt, grid_relative_initial=np.array([0.0])),
+      time_pls        = TimeStructure(initial=periapsis_dt, grid_relative_initial=np.array([0.0])),
+      j2000_state_vec = state_peri_moon,
+    )
+
+    # --------------------------------------------------
+    # Assemble trajectory
+    # --------------------------------------------------
+    trajectory = Trajectory(elements=[
+      node_departure, earth_leg, node_soi, lunar_leg, node_periapsis, llo_leg,
+    ])
 
     # --------------------------------------------------
     # Build result
     # --------------------------------------------------
-    periapsis_altitude = r_peri - self.MOON_RADIUS
-    arrival_dt = et_to_utc(t_insertion)
-    transfer_time = t_insertion - t_depart_et
-
-    return LunarTransferResult(
-      success               = True,
-      message               = "Patched conic transfer solution found",
-
-      delta_vel_vec_1       = eval_result['delta_vel_vec_1'],
-      delta_vel_vec_2       = eval_result['delta_vel_vec_2'],
-      delta_vel_mag_1       = eval_result['delta_vel_mag_1'],
-      delta_vel_mag_2       = eval_result['delta_vel_mag_2'],
-      delta_vel_total       = eval_result['delta_vel_total'],
-
-      departure_epoch       = departure_dt,
-      arrival_epoch         = arrival_dt,
-      transfer_time_s       = transfer_time,
-
-      soi_crossing_et       = t_soi,
-      soi_state_earth_j2000 = eval_result['soi_result']['soi_state'],
-      soi_state_moon        = eval_result['state_soi_moon'],
-      v_infinity_mag        = eval_result['v_infinity'],
-
-      periapsis_radius_m    = r_peri,
-      periapsis_altitude_m  = periapsis_altitude,
-
-      earth_departure_leg   = earth_leg,
-      lunar_arrival_leg     = lunar_leg,
-      llo_coast_leg         = llo_leg,
-
-      combined_trajectory   = combined,
+    return OptimizationResult(
+      success         = True,
+      message         = "Patched conic transfer solution found",
+      trajectory      = trajectory,
+      objective_value = eval_result['delta_vel_total'],
     )
 
-
-  def _combine_legs(
-    self,
-    earth_leg    : TransferLeg,
-    lunar_leg    : TransferLeg,
-    llo_leg      : TransferLeg,
-    departure_dt : datetime,
-  ) -> PropagationResult:
-    """
-    Combine trajectory legs into a single PropagationResult.
-
-    All states are expressed in Earth-centered J2000.
-    COE are computed relative to Earth (meaningful for Earth leg,
-    informational for Moon legs).
-
-    Input:
-    ------
-      earth_leg : TransferLeg
-        Earth departure trajectory.
-      lunar_leg : TransferLeg
-        Lunar arrival trajectory.
-      llo_leg : TransferLeg
-        LLO coast trajectory.
-      departure_dt : datetime
-        Departure epoch (UTC) for TimeGrid reference.
-
-    Output:
-    -------
-      combined : PropagationResult
-        Full trajectory in Earth-centered J2000.
-    """
-    # Transform Moon-centered legs to Earth-centered J2000
-    def _to_earth(leg: TransferLeg) -> np.ndarray:
-      """Return states in Earth-centered J2000 for any leg."""
-      if leg.central_body == 'EARTH':
-        return leg.j2000_state_vec
-      states_earth = np.zeros_like(leg.j2000_state_vec)
-      for i in range(leg.j2000_state_vec.shape[1]):
-        states_earth[:, i] = BodyVectorConverter.j2000_xyz__rel_moon_to_rel_earth(leg.j2000_state_vec[:, i], leg.time.grid.et[i])
-      return states_earth
-
-    # Concatenate states (skip duplicate boundary points)
-    all_states = np.hstack([
-      _to_earth(earth_leg),
-      _to_earth(lunar_leg)[:, 1:],  # Skip duplicate SOI point
-      _to_earth(llo_leg)[:, 1:],    # Skip duplicate insertion point
-    ])
-
-    all_times_et = np.concatenate([
-      earth_leg.time.grid.et,
-      lunar_leg.time.grid.et[1:],
-      llo_leg.time.grid.et[1:],
-    ])
-
-    # Compute deltas from departure
-    t0_et  = earth_leg.time.grid.et[0]
-    deltas = all_times_et - t0_et
-
-    # Create Time
-    time = TimeStructure(
-      initial                = departure_dt,
-      grid_relative_initial  = deltas,
-    )
-
-    # Compute COE relative to Earth at each point
-    n_points = all_states.shape[1]
-    coe_sma  = np.zeros(n_points)
-    coe_ecc  = np.zeros(n_points)
-    coe_inc  = np.zeros(n_points)
-    coe_raan = np.zeros(n_points)
-    coe_aop  = np.zeros(n_points)
-    coe_ta   = np.zeros(n_points)
-    coe_ea   = np.zeros(n_points)
-    coe_ma   = np.zeros(n_points)
-
-    mee_p = np.zeros(n_points)
-    mee_f = np.zeros(n_points)
-    mee_g = np.zeros(n_points)
-    mee_h = np.zeros(n_points)
-    mee_k = np.zeros(n_points)
-    mee_L = np.zeros(n_points)
-
-    for i in range(n_points):
-      pos_vec = all_states[0:3, i]
-      vel_vec = all_states[3:6, i]
-
-      try:
-        coe = OrbitConverter.pv_to_coe(pos_vec, vel_vec, self.EARTH_GP)
-        coe_sma[i]  = coe.sma  if np.isfinite(coe.sma)  else 0.0
-        coe_ecc[i]  = coe.ecc  if np.isfinite(coe.ecc)  else 0.0
-        coe_inc[i]  = coe.inc  if np.isfinite(coe.inc)  else 0.0
-        coe_raan[i] = coe.raan if np.isfinite(coe.raan) else 0.0
-        coe_aop[i]  = coe.aop  if np.isfinite(coe.aop)  else 0.0
-        coe_ta[i]   = coe.ta   if coe.ta is not None and np.isfinite(coe.ta) else 0.0
-        coe_ea[i]   = coe.ea   if coe.ea is not None and np.isfinite(coe.ea) else 0.0
-        coe_ma[i]   = coe.ma   if coe.ma is not None and np.isfinite(coe.ma) else 0.0
-      except Exception:
-        pass  # Leave as zeros for states near Moon
-
-      try:
-        mee = OrbitConverter.pv_to_mee(pos_vec, vel_vec, self.EARTH_GP)
-        mee_p[i] = mee.p if np.isfinite(mee.p) else 0.0
-        mee_f[i] = mee.f if np.isfinite(mee.f) else 0.0
-        mee_g[i] = mee.g if np.isfinite(mee.g) else 0.0
-        mee_h[i] = mee.h if np.isfinite(mee.h) else 0.0
-        mee_k[i] = mee.k if np.isfinite(mee.k) else 0.0
-        mee_L[i] = mee.L if np.isfinite(mee.L) else 0.0
-      except Exception:
-        pass
-
-    coe_time_series = ClassicalOrbitalElements(
-      sma=coe_sma, ecc=coe_ecc, inc=coe_inc, raan=coe_raan,
-      aop=coe_aop, ma=coe_ma, ta=coe_ta, ea=coe_ea,
-    )
-    mee_time_series = ModifiedEquinoctialElements(
-      p=mee_p, f=mee_f, g=mee_g, h=mee_h, k=mee_k, L=mee_L,
-    )
-
-    return PropagationResult(
-      success   = True,
-      message   = "Patched conic lunar transfer trajectory",
-      time      = time,
-      state     = all_states,
-      coe       = coe_time_series,
-      mee       = mee_time_series,
-    )
 
 
   def _print_summary(
     self,
-    result : LunarTransferResult,
+    result      : OptimizationResult,
+    eval_result : dict,
   ) -> None:
     """
     Print formatted summary of the transfer solution.
@@ -701,59 +614,63 @@ class LunarTransferOptimizer:
       print(f"\n  [ERROR] {result.message}")
       return
 
+    r_peri             = eval_result['r_peri']
+    t_soi              = eval_result['t_soi']
+    t_depart_et        = eval_result['t_depart_et']
+    t_insertion        = eval_result['peri_result']['periapsis_time_et']
+    periapsis_altitude = r_peri - self.MOON_RADIUS
+    transfer_time      = t_insertion - t_depart_et
+    departure_dt       = et_to_utc(t_depart_et)
+    arrival_dt         = et_to_utc(t_insertion)
+
     print()
     print("  Summary")
 
     # Delta-V breakdown
     print(f"    Delta-V")
-    print(f"      ΔV₁ (LEO departure)  : {result.delta_vel_mag_1:12.4f} m/s")
-    print(f"      ΔV₂ (LLO insertion)  : {result.delta_vel_mag_2:12.4f} m/s")
-    print(f"      Total ΔV             : {result.delta_vel_total:12.4f} m/s")
+    print(f"      ΔV₁ (LEO departure)  : {eval_result['delta_vel_mag_1']:12.4f} m/s")
+    print(f"      ΔV₂ (LLO insertion)  : {eval_result['delta_vel_mag_2']:12.4f} m/s")
+    print(f"      Total ΔV             : {eval_result['delta_vel_total']:12.4f} m/s")
 
     # Timing
     print(f"    Timing")
-    print(f"      Departure Epoch      : {result.departure_epoch}")
-    print(f"      Arrival Epoch        : {result.arrival_epoch}")
-    print(f"      Transfer Time        : {result.transfer_time_s/86400:.4f} days")
-    print(f"                           : {result.transfer_time_s/3600:.2f} hours")
+    print(f"      Departure Epoch      : {departure_dt}")
+    print(f"      Arrival Epoch        : {arrival_dt}")
+    print(f"      Transfer Time        : {transfer_time/86400:.4f} days")
+    print(f"                           : {transfer_time/3600:.2f} hours")
 
     # SOI crossing
-    soi_dt = et_to_utc(result.soi_crossing_et)
+    soi_dt = et_to_utc(t_soi)
     print(f"    Moon SOI Crossing")
     print(f"      Time                 : {soi_dt}")
-    print(f"      V∞ (hyperbolic excess): {result.v_infinity_mag:.2f} m/s")
+    print(f"      V∞ (hyperbolic excess): {eval_result['v_infinity']:.2f} m/s")
 
     # Periapsis
     print(f"    Moon Periapsis")
-    print(f"      Radius               : {result.periapsis_radius_m/1000:.2f} km")
-    print(f"      Altitude             : {result.periapsis_altitude_m/1000:.2f} km")
+    print(f"      Radius               : {r_peri/1000:.2f} km")
+    print(f"      Altitude             : {periapsis_altitude/1000:.2f} km")
 
     # LLO
-    llo_period = 2.0 * np.pi * np.sqrt(result.periapsis_radius_m**3 / self.MOON_GP)
+    llo_period = 2.0 * np.pi * np.sqrt(r_peri**3 / self.MOON_GP)
     print(f"    LLO (post-insertion)")
-    print(f"      V_circ               : {compute_circular_velocity(result.periapsis_radius_m, self.MOON_GP):.2f} m/s")
+    print(f"      V_circ               : {compute_circular_velocity(r_peri, self.MOON_GP):.2f} m/s")
     print(f"      Period               : {llo_period/60:.1f} min")
 
     # ΔV₁ vector
-    if result.delta_vel_vec_1 is not None:
-      dv1 = result.delta_vel_vec_1
-      print(f"    ΔV₁ Vector (J2000)")
-      print(f"      [{dv1[0]:>12.4f}, {dv1[1]:>12.4f}, {dv1[2]:>12.4f}] m/s")
+    dv1 = eval_result['delta_vel_vec_1']
+    print(f"    ΔV₁ Vector (J2000)")
+    print(f"      [{dv1[0]:>12.4f}, {dv1[1]:>12.4f}, {dv1[2]:>12.4f}] m/s")
 
     # ΔV₂ vector
-    if result.delta_vel_vec_2 is not None:
-      dv2 = result.delta_vel_vec_2
-      print(f"    ΔV₂ Vector (Moon-centered)")
-      print(f"      [{dv2[0]:>12.4f}, {dv2[1]:>12.4f}, {dv2[2]:>12.4f}] m/s")
+    dv2 = eval_result['delta_vel_vec_2']
+    print(f"    ΔV₂ Vector (Moon-centered)")
+    print(f"      [{dv2[0]:>12.4f}, {dv2[1]:>12.4f}, {dv2[2]:>12.4f}] m/s")
 
     # Trajectory statistics
-    if result.combined_trajectory is not None:
-      n_pts = result.combined_trajectory.state.shape[1]
+    if result.trajectory is not None:
+      segments = result.trajectory.segments
+      total_pts = sum(seg.j2000_state_vec.shape[1] for seg in segments)
       print(f"    Trajectory")
-      print(f"      Total Points         : {n_pts}")
-      if result.earth_departure_leg is not None:
-        print(f"      Earth Departure Leg  : {result.earth_departure_leg.j2000_state_vec.shape[1]} points")
-      if result.lunar_arrival_leg is not None:
-        print(f"      Lunar Arrival Leg    : {result.lunar_arrival_leg.j2000_state_vec.shape[1]} points")
-      if result.llo_coast_leg is not None:
-        print(f"      LLO Coast Leg        : {result.llo_coast_leg.j2000_state_vec.shape[1]} points")
+      print(f"      Total Points         : {total_pts}")
+      for seg in segments:
+        print(f"      {seg.name:<22s}: {seg.j2000_state_vec.shape[1]} points")

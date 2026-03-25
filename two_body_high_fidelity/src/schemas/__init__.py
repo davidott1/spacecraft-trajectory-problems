@@ -43,9 +43,16 @@ from src.schemas.measurement import (
   SimulatedMeasurements,
 )
 from src.schemas.optimization import (
-  LunarTransferConfig,
-  LunarTransferResult,
-  TransferLeg,
+  BoundaryCondition,
+  Constraint,
+  DecisionState,
+  Node,
+  Objective,
+  OptimizationConfig,
+  OptimizationProblem,
+  OptimizationResult,
+  Segment,
+  Trajectory,
 )
 
 __all__ = [
@@ -78,7 +85,14 @@ __all__ = [
   'TopocentricState',
   'SimulatedMeasurements',
   # Optimization
-  'LunarTransferConfig',
-  'LunarTransferResult',
-  'TransferLeg',
+  'BoundaryCondition',
+  'Constraint',
+  'DecisionState',
+  'Node',
+  'Objective',
+  'OptimizationConfig',
+  'OptimizationProblem',
+  'OptimizationResult',
+  'Segment',
+  'Trajectory',
 ]
