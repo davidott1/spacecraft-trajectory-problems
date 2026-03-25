@@ -9,10 +9,9 @@ import numpy as np
 
 from dataclasses import dataclass, field
 from datetime    import datetime
-from typing      import Optional, List
+from typing      import Optional, List, Union
 
 from src.schemas.time        import TimeStructure
-from src.schemas.propagation import PropagationResult
 from src.schemas.spacecraft  import ManeuversConfig
 
 
@@ -29,10 +28,10 @@ class DecisionState:
   whose corresponding variable flag is True.
 
   Attributes:
-    position              : Initial position vector [m], shape (3,)
-    velocity              : Initial velocity vector [m/s], shape (3,)
-    epoch                 : Initial epoch (UTC)
-    maneuvers             : Maneuver plan (list-like container of ImpulsiveManeuver)
+    position  : Initial position vector [m], shape (3,)
+    velocity  : Initial velocity vector [m/s], shape (3,)
+    epoch     : Initial epoch (UTC)
+    maneuvers : Maneuver plan (list-like container of ImpulsiveManeuver)
 
     variable_position          : Per-component variable flags for position [pos_x, pos_y, pos_z]
     variable_velocity          : Per-component variable flags for velocity [vel_x, vel_y, vel_z]
@@ -80,46 +79,17 @@ class DecisionState:
 
 
 @dataclass
-class LunarTransferConfig:
+class Segment:
   """
-  Configuration for Earth-to-Moon patched conic transfer optimization.
-
-  Attributes:
-    leo_altitude_m            : LEO altitude above Earth surface [m]
-    llo_altitude_m            : LLO altitude above Moon surface [m]
-    departure_epoch           : Earliest departure epoch (UTC)
-    max_transfer_time_s       : Maximum transfer time from departure to Moon SOI [s]
-    dv1_search_bounds_m_s     : Search bounds for ΔV₁ magnitude [m/s]
-    departure_search_window_s : Search window for departure time [s] from departure_epoch
-    n_departure_candidates    : Number of departure time candidates in grid search
-    llo_coast_orbits          : Number of LLO orbits to propagate after insertion
-    atol                      : Absolute tolerance for numerical integration
-    rtol                      : Relative tolerance for numerical integration
-  """
-  leo_altitude_m            : float               = 200_000.0
-  llo_altitude_m            : float               = 100_000.0
-  departure_epoch           : Optional[datetime]  = None
-  max_transfer_time_s       : float               = 7.0 * 86400.0
-  dv1_search_bounds_m_s     : tuple[float, float] = (2800.0, 3400.0)
-  departure_search_window_s : float               = 30.0 * 86400.0
-  n_departure_candidates    : int                 = 720
-  llo_coast_orbits          : int                 = 3
-  atol                      : float               = 1e-12
-  rtol                      : float               = 1e-12
-
-
-@dataclass
-class TransferLeg:
-  """
-  Single leg of a patched conic transfer trajectory.
+  Continuous trajectory segment.
 
   State is always expressed relative to central_body in the J2000 frame.
 
   Attributes:
-    name            : Leg identifier ('earth_departure', 'lunar_arrival', 'llo_coast')
-    central_body    : Central gravitational body for this leg ('EARTH' or 'MOON')
+    name            : Segment identifier (e.g. 'earth_departure', 'lunar_arrival')
+    central_body    : Central gravitational body for this segment ('EARTH', 'MOON', etc.)
     j2000_state_vec : State array centered on central_body, J2000 frame, shape (6, N) [m, m/s]
-    time            : TimeStructure for this leg
+    time            : TimeStructure for this segment
   """
   name            : str
   central_body    : str
@@ -128,67 +98,167 @@ class TransferLeg:
 
 
 @dataclass
-class LunarTransferResult:
+class Node:
   """
-  Result of lunar transfer optimization.
+  Discrete event point on a trajectory (e.g. maneuver, SOI crossing, periapsis).
+
+  Attributes:
+    name              : Node identifier (e.g. 'departure_burn', 'soi_crossing')
+    central_body      : Central gravitational body at this node
+    time_mns          : TimeStructure immediately before the node (minus side)
+    time_pls          : TimeStructure immediately after the node (plus side)
+    j2000_state_vec   : State vector at this node, J2000 frame, shape (6,) [m, m/s]
+  """
+  name            : str
+  central_body    : str
+  time_mns        : TimeStructure
+  time_pls        : TimeStructure
+  j2000_state_vec : np.ndarray
+
+
+@dataclass
+class Objective:
+  """
+  Optimization objective definition.
+
+  Specifies which quantity to minimize and at which nodes.
+
+  Attributes:
+    quantity : What to minimize ('delta_v_total')
+    nodes    : List of node indices whose contributions are summed
+  """
+  quantity : str        = 'delta_v_total'
+  nodes    : List[int]  = field(default_factory=list)
+
+
+@dataclass
+class BoundaryCondition:
+  """
+  Equality or inequality constraint at a specific node.
+
+  For equality:   quantity(node) == target
+  For inequality: quantity(node) <= target  (upper bound)
+                  quantity(node) >= target  (lower bound)
+
+  Attributes:
+    node     : Node index where this condition applies
+    quantity : Physical quantity to constrain ('altitude', 'velocity_mag', etc.)
+    target   : Target value [SI units]
+    type     : Constraint type ('equality', 'upper_bound', 'lower_bound')
+  """
+  node     : int
+  quantity : str
+  target   : float
+  type     : str   = 'equality'
+
+
+@dataclass
+class Constraint:
+  """
+  Collection of constraints on the trajectory.
+
+  Attributes:
+    initial       : Boundary conditions at the first node
+    final         : Boundary conditions at the last node
+    intermediate  : Boundary conditions at interior nodes (future use)
+  """
+  initial       : List[BoundaryCondition] = field(default_factory=list)
+  final         : List[BoundaryCondition] = field(default_factory=list)
+  intermediate  : List[BoundaryCondition] = field(default_factory=list)
+
+
+@dataclass
+class OptimizationConfig:
+  """
+  Solver settings for trajectory optimization.
+
+  Attributes:
+    method         : Optimization method ('nelder-mead', 'cobyla', etc.)
+    maxiter        : Maximum number of optimizer iterations
+    xatol          : Absolute tolerance on decision variables
+    fatol          : Absolute tolerance on objective function value
+    penalty_weight : Penalty weight for constraint violations
+    box_bounds     : Per-variable [min, max] bounds, shape (n_variables, 2)
+    atol           : Absolute tolerance for numerical integration
+    rtol           : Relative tolerance for numerical integration
+  """
+  method         : str            = 'nelder-mead'
+  maxiter        : int            = 300
+  xatol          : float          = 1.0
+  fatol          : float          = 0.1
+  penalty_weight : float          = 1e6
+  box_bounds     : Optional[np.ndarray] = None
+  atol           : float          = 1e-12
+  rtol           : float          = 1e-12
+
+
+@dataclass
+class Trajectory:
+  """
+  Ordered sequence of nodes and segments forming a complete trajectory.
+
+  Elements alternate: Node, Segment, Node, Segment, ..., Node.
+  Each element has an order index for sequencing.
+
+  Attributes:
+    elements : Ordered list of Nodes and Segments
+  """
+  elements : List[Union[Node, Segment]] = field(default_factory=list)
+
+  @property
+  def nodes(self) -> List[Node]:
+    return [e for e in self.elements if isinstance(e, Node)]
+
+  @property
+  def segments(self) -> List[Segment]:
+    return [e for e in self.elements if isinstance(e, Segment)]
+
+  @property
+  def n_nodes(self) -> int:
+    return len(self.nodes)
+
+  @property
+  def n_segments(self) -> int:
+    return len(self.segments)
+
+
+@dataclass
+class OptimizationProblem:
+  """
+  Complete trajectory optimization problem definition.
+
+  Attributes:
+    objective           : What to minimize
+    decision_state      : Variables and initial guess
+    constraints         : Boundary conditions on the trajectory
+    optimization_config : Solver settings
+    trajectory          : Result trajectory (populated after solving)
+  """
+  objective           : Objective
+  decision_state      : DecisionState
+  constraints         : Constraint
+  optimization_config : OptimizationConfig
+  trajectory          : Optional[Trajectory] = None
+
+
+@dataclass
+class OptimizationResult:
+  """
+  Result of trajectory optimization.
 
   Attributes:
     success               : Whether optimization succeeded
     message               : Status or error message
-
-    delta_vel_vec_1       : ΔV₁ vector in J2000 [m/s]
-    delta_vel_vec_2       : ΔV₂ vector in Moon-centered frame [m/s]
-    delta_vel_mag_1       : ΔV₁ magnitude [m/s]
-    delta_vel_mag_2       : ΔV₂ magnitude [m/s]
-    delta_vel_total       : Total ΔV [m/s]
-
-    departure_epoch       : Optimal departure epoch (UTC)
-    arrival_epoch         : Epoch at Moon periapsis (UTC)
-    transfer_time_s       : Transfer time from departure to Moon periapsis [s]
-
-    soi_crossing_et       : Ephemeris time at Moon SOI crossing [s past J2000]
-    soi_state_earth_j2000 : State at SOI crossing in Earth-centered J2000 (6,)
-    soi_state_moon        : State at SOI crossing in Moon-centered frame (6,)
-    v_infinity_mag        : Hyperbolic excess velocity at Moon SOI [m/s]
-
-    periapsis_radius_m    : Periapsis radius at Moon [m]
-    periapsis_altitude_m  : Periapsis altitude above Moon surface [m]
-
-    earth_departure_leg   : TransferLeg for Earth-centered departure phase
-    lunar_arrival_leg     : TransferLeg for Moon-centered arrival phase
-    llo_coast_leg         : TransferLeg for LLO coast phase
-
-    combined_trajectory   : Full trajectory as PropagationResult in Earth-centered J2000
+    trajectory            : Solved trajectory (nodes + segments)
+    objective_value       : Final objective function value
+    constraint_violations : Residual for each constraint (0 = satisfied)
+    n_iterations          : Number of optimizer iterations
+    n_function_evals      : Number of objective function evaluations
   """
   success               : bool
-  message               : str = ""
-
-  # Delta-V
-  delta_vel_vec_1       : Optional[np.ndarray] = None
-  delta_vel_vec_2       : Optional[np.ndarray] = None
-  delta_vel_mag_1       : float                = 0.0
-  delta_vel_mag_2       : float                = 0.0
-  delta_vel_total       : float                = 0.0
-
-  # Timing
-  departure_epoch       : Optional[datetime]   = None
-  arrival_epoch         : Optional[datetime]   = None
-  transfer_time_s       : float                = 0.0
-
-  # SOI crossing
-  soi_crossing_et       : float                = 0.0
-  soi_state_earth_j2000 : Optional[np.ndarray] = None
-  soi_state_moon        : Optional[np.ndarray] = None
-  v_infinity_mag        : float                = 0.0
-
-  # Periapsis at Moon
-  periapsis_radius_m    : float                = 0.0
-  periapsis_altitude_m  : float                = 0.0
-
-  # Trajectory legs
-  earth_departure_leg   : Optional[TransferLeg]        = None
-  lunar_arrival_leg     : Optional[TransferLeg]        = None
-  llo_coast_leg         : Optional[TransferLeg]        = None
-
-  # Combined trajectory in Earth-centered J2000
-  combined_trajectory   : Optional[PropagationResult]  = None
+  message               : str                    = ""
+  trajectory            : Optional[Trajectory]   = None
+  objective_value       : float                  = 0.0
+  constraint_violations : List[float]            = field(default_factory=list)
+  n_iterations          : int                    = 0
+  n_function_evals      : int                    = 0

@@ -238,39 +238,44 @@ class TestLunarTransfer:
     """
     Run a full lunar transfer optimization and verify the result.
     """
-    from src.schemas.optimization import LunarTransferConfig
+    from src.schemas.optimization import OptimizationProblem, OptimizationConfig, DecisionState, Objective, BoundaryCondition, Constraint
     from src.optimization.lunar_transfer import LunarTransferOptimizer
 
-    config = LunarTransferConfig(
-      leo_altitude_m            = 200_000.0,
-      llo_altitude_m            = 100_000.0,
-      departure_epoch           = datetime(2025, 10, 1),
-      departure_search_window_s = 30.0 * 86400.0,
-      n_departure_candidates    = 180,  # Coarser grid for faster test
-      max_transfer_time_s       = 7.0 * 86400.0,
+    problem = OptimizationProblem(
+      objective           = Objective(quantity='delta_v_total', nodes=[0, 2]),
+      decision_state      = DecisionState(epoch=datetime(2025, 10, 1)),
+      constraints         = Constraint(final=[BoundaryCondition(node=2, quantity='altitude', target=100_000.0)]),
+      optimization_config = OptimizationConfig(),
     )
 
     r_leo  = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR + 200_000.0
     v_circ = np.sqrt(SOLARSYSTEMCONSTANTS.EARTH.GP / r_leo)
     initial_state = np.array([r_leo, 0.0, 0.0, 0.0, v_circ, 0.0])
 
-    optimizer = LunarTransferOptimizer(config, initial_state)
+    optimizer = LunarTransferOptimizer(
+      problem, initial_state,
+      leo_altitude_m         = 200_000.0,
+      llo_altitude_m         = 100_000.0,
+      n_departure_candidates = 180,  # Coarser grid for faster test
+      max_transfer_time_s    = 7.0 * 86400.0,
+    )
     result    = optimizer.solve()
 
     if result.success:
-      # Verify physical constraints
-      assert result.delta_vel_mag_1 > 0, "ΔV₁ should be positive"
-      assert result.delta_vel_mag_2 > 0, "ΔV₂ should be positive"
-      assert result.delta_vel_total > 3000, f"Total ΔV = {result.delta_vel_total:.0f} m/s, expected > 3000 m/s"
-      assert result.delta_vel_total < 5000, f"Total ΔV = {result.delta_vel_total:.0f} m/s, expected < 5000 m/s"
-      assert result.transfer_time_s > 0, "Transfer time should be positive"
-      assert result.periapsis_altitude_m > 0, "Periapsis altitude should be above Moon surface"
+      # Verify objective value (total ΔV)
+      assert result.objective_value > 3000, f"Total ΔV = {result.objective_value:.0f} m/s, expected > 3000 m/s"
+      assert result.objective_value < 5000, f"Total ΔV = {result.objective_value:.0f} m/s, expected < 5000 m/s"
 
-      # Verify combined trajectory exists
-      assert result.combined_trajectory is not None
-      assert result.combined_trajectory.state.shape[0] == 6
-      assert result.combined_trajectory.state.shape[1] > 100
-      assert result.combined_trajectory.time is not None
+      # Verify trajectory structure
+      assert result.trajectory is not None
+      assert result.trajectory.n_nodes    >= 3, f"Expected >= 3 nodes, got {result.trajectory.n_nodes}"
+      assert result.trajectory.n_segments >= 2, f"Expected >= 2 segments, got {result.trajectory.n_segments}"
+
+      # Verify segments have state data
+      for seg in result.trajectory.segments:
+        assert seg.j2000_state_vec.shape[0] == 6
+        assert seg.j2000_state_vec.shape[1] > 10
+        assert seg.time is not None
     else:
       # No solution found for this geometry - that's OK, just note it
       pytest.skip(f"No transfer found for test geometry: {result.message}")
