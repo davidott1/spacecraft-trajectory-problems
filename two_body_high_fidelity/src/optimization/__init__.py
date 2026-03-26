@@ -13,7 +13,6 @@ Modules:
 
 from src.model.orbital_mechanics import compute_circular_velocity, compute_hohmann_velocities
 from src.model.frame_and_vector_converter import BodyVectorConverter
-from src.propagation.analytical_propagator import propagate_circular_orbit
 from src.optimization.patched_conic import (
   compute_soi_radius,
   propagate_to_soi,
@@ -27,7 +26,6 @@ __all__ = [
   'compute_soi_radius',
   'compute_circular_velocity',
   'compute_hohmann_velocities',
-  'propagate_circular_orbit',
   'BodyVectorConverter',
   'propagate_to_soi',
   'propagate_to_periapsis',

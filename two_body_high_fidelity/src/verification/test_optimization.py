@@ -10,8 +10,8 @@ TestPatchedConicFunctions
   - test_soi_radius_moon                : verify Moon SOI radius
   - test_circular_velocity              : verify circular velocity computation
   - test_hohmann_estimates              : verify Hohmann transfer estimates
-  - test_propagate_circular_orbit       : verify analytical circular orbit propagation
   - test_two_body_propagation_energy    : verify energy conservation in two-body propagation
+  - test_two_body_propagation_period    : verify orbit returns to start after one period
 
 TestLunarTransfer (requires SPICE)
   - test_evaluate_transfer_reaches_soi  : verify transfer orbit reaches Moon SOI
@@ -26,12 +26,10 @@ import numpy as np
 
 from datetime import datetime
 
-from src.model.constants      import SOLARSYSTEMCONSTANTS, CONVERTER
+from src.model.constants         import SOLARSYSTEMCONSTANTS, CONVERTER
 from src.model.orbital_mechanics import compute_circular_velocity, compute_hohmann_velocities
-from src.propagation.analytical_propagator import propagate_circular_orbit
 from src.optimization.patched_conic import (
   compute_soi_radius,
-
   propagate_two_body,
 )
 
@@ -91,9 +89,9 @@ class TestPatchedConicFunctions:
     assert 4.0 < tt_days < 6.0, f"Transfer time = {tt_days:.2f} days, expected ~5 days"
 
 
-  def test_propagate_circular_orbit_period(self):
+  def test_two_body_propagation_period(self):
     """
-    Verify analytical circular orbit propagation returns to start after one period.
+    Verify two-body propagation returns to start after one period (circular orbit).
     """
     r   = 7000.0e3
     gp  = SOLARSYSTEMCONSTANTS.EARTH.GP
@@ -103,13 +101,15 @@ class TestPatchedConicFunctions:
     state0 = np.array([r, 0.0, 0.0, 0.0, v, 0.0])
 
     # After one period, should return to start
-    state_T = propagate_circular_orbit(state0, T)
+    result = propagate_two_body(state0=state0, t0_et=0.0, tf_et=T, gp=gp, n_points=2)
+    assert result['success']
+    state_T = result['states'][:, -1]
 
     np.testing.assert_allclose(state0, state_T, atol=1e-3,
-      err_msg="Circular orbit did not return to start after one period")
+      err_msg="Orbit did not return to start after one period")
 
 
-  def test_propagate_circular_orbit_quarter(self):
+  def test_two_body_propagation_quarter(self):
     """
     Verify quarter-orbit propagation.
     """
@@ -121,7 +121,9 @@ class TestPatchedConicFunctions:
     state0 = np.array([r, 0.0, 0.0, 0.0, v, 0.0])
 
     # After quarter period, position should be at (0, r, 0)
-    state_quarter = propagate_circular_orbit(state0, T / 4.0)
+    result = propagate_two_body(state0=state0, t0_et=0.0, tf_et=T/4.0, gp=gp, n_points=2)
+    assert result['success']
+    state_quarter = result['states'][:, -1]
 
     np.testing.assert_allclose(
       state_quarter[0:3], [0.0, r, 0.0], atol=1e-3,
