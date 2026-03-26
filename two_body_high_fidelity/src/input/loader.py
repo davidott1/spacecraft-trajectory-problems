@@ -412,14 +412,16 @@ def load_maneuver_plan(
   init = data['initial_state']
 
   # Parse initial state
-  if 'epoch_iso_utc' not in init:
-    raise ValueError("initial_state must contain 'epoch_iso_utc'")
+  # Support both 'epoch' and 'epoch_iso_utc' field names
+  epoch_raw = init.get('epoch', init.get('epoch_iso_utc'))
+  if epoch_raw is None:
+    raise ValueError("initial_state must contain 'epoch' or 'epoch_iso_utc'")
   if 'pos_vec__m' not in init:
     raise ValueError("initial_state must contain 'pos_vec__m'")
   if 'vel_vec__m_per_s' not in init:
     raise ValueError("initial_state must contain 'vel_vec__m_per_s'")
 
-  epoch    = parse_time(init['epoch_iso_utc'])
+  epoch    = parse_time(epoch_raw)
   position = np.array(init['pos_vec__m'], dtype=float)
   velocity = np.array(init['vel_vec__m_per_s'], dtype=float)
 
@@ -442,12 +444,19 @@ def load_maneuver_plan(
     for i, m_data in enumerate(data['maneuvers']):
       if 'time_iso_utc' not in m_data:
         raise ValueError(f"Maneuver {i} missing 'time_iso_utc'")
-      if 'delta_vel__m_per_s' not in m_data:
-        raise ValueError(f"Maneuver {i} missing 'delta_vel__m_per_s'")
+      # Support both old and new field names
+      if 'delta_vel_vec__m_per_s' in m_data:
+        delta_vel_raw = m_data['delta_vel_vec__m_per_s']
+      elif 'delta_vel__m_per_s' in m_data:
+        delta_vel_raw = m_data['delta_vel__m_per_s']
+      else:
+        raise ValueError(f"Maneuver {i} missing 'delta_vel_vec__m_per_s'")
 
       time_dt       = parse_time(m_data['time_iso_utc'])
-      delta_vel_vec = np.array(m_data['delta_vel__m_per_s'], dtype=float)
+      delta_vel_vec = np.array(delta_vel_raw, dtype=float)
       frame         = m_data.get('frame', 'J2000')
+      name          = m_data.get('name', None)
+      description   = m_data.get('description', None)
 
       if len(delta_vel_vec) != 3:
         raise ValueError(f"Maneuver {i}: delta_vel__m_per_s must have 3 components, got {len(delta_vel_vec)}")
@@ -456,12 +465,15 @@ def load_maneuver_plan(
         time_dt       = time_dt,
         delta_vel_vec = delta_vel_vec,
         frame         = frame,
+        name          = name,
+        description   = description,
       ))
 
-      # Variable flags for this maneuver (default: fixed)
+      # Variable flags for this maneuver
+      # Defaults: time is fixed, delta-v components are all variable
       variable_maneuver_time.append(bool(m_data.get('variable_time', False)))
       variable_maneuver_delta_v.append(
-        np.array(m_data.get('variable_delta_v', [False, False, False]), dtype=bool)
+        np.array(m_data.get('variable_delta_vel_vec', m_data.get('variable_delta_v', [True, True, True])), dtype=bool)
       )
 
   return DecisionState(
@@ -513,13 +525,15 @@ def save_maneuver_plan(
     for i, m in enumerate(decision_state.maneuvers):
       m_dict = {
         'time_iso_utc':       m.time_dt.strftime('%Y-%m-%dT%H:%M:%S.%f'),
-        'delta_vel__m_per_s': m.delta_vel_vec.tolist(),
+        'delta_vel_vec__m_per_s': m.delta_vel_vec.tolist(),
         'frame':              m.frame,
+        'name':               m.name,
+        'description':        m.description,
       }
       if i < len(decision_state.variable_maneuver_time):
         m_dict['variable_time'] = decision_state.variable_maneuver_time[i]
       if i < len(decision_state.variable_maneuver_delta_v):
-        m_dict['variable_delta_v'] = decision_state.variable_maneuver_delta_v[i].tolist()
+        m_dict['variable_delta_vel_vec'] = decision_state.variable_maneuver_delta_v[i].tolist()
       maneuvers_list.append(m_dict)
     data['maneuvers'] = maneuvers_list
 
