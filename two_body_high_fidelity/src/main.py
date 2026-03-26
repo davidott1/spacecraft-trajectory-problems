@@ -413,9 +413,9 @@ def main(
     elif not decision_state.has_any_variable():
       print("\n  [WARNING] --optimize specified but no quantities marked as variable in the maneuver plan. Skipping optimization.")
     else:
-      # TODO: Run optimizer here
-      # The optimizer will update decision_state in-place with optimized values,
-      # then re-extract initial_state and update maneuvers.
+      from src.optimization.maneuver_optimizer import optimize_maneuver_plan
+      from src.schemas.optimization import OptimizationConfig
+
       section_title = "Trajectory Optimization"
       print("\n" + "-" * len(section_title))
       print(section_title)
@@ -423,8 +423,38 @@ def main(
       print()
       print(f"  Optimizing: {', '.join(config.optimize)}")
       print(f"  Variables:  {decision_state.n_variables}")
-      print(f"  [PLACEHOLDER] Optimizer not yet implemented")
       print()
+
+      # Build dynamics model for optimization (same as propagation)
+      opt_dynamics = AccelerationSTMDot(
+        gravity_config = config.gravity,
+        spacecraft     = config.spacecraft,
+      )
+
+      # Build propagation config for optimization
+      opt_propagation_config = PropagationConfig(
+        time_o_dt = decision_state.epoch,
+        time_f_dt = config.time_f_dt,
+      )
+
+      opt_result = optimize_maneuver_plan(
+        decision_state      = decision_state,
+        dynamics            = opt_dynamics,
+        propagation_config  = opt_propagation_config,
+      )
+
+      print()
+      if opt_result.success:
+        # Update initial state and maneuvers from optimized decision state
+        initial_state = np.concatenate([decision_state.position, decision_state.velocity])
+        initial_epoch_dt = decision_state.epoch
+        config.spacecraft.maneuvers = decision_state.maneuvers
+      else:
+        print(f"  [WARNING] Optimization did not converge: {opt_result.message}")
+        print(f"  Using best result found.")
+        initial_state = np.concatenate([decision_state.position, decision_state.velocity])
+        initial_epoch_dt = decision_state.epoch
+        config.spacecraft.maneuvers = decision_state.maneuvers
 
     # Save solved maneuver plan to output
     if decision_state is not None:
