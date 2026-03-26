@@ -290,7 +290,7 @@ class LunarTransferOptimizer:
     x0 = [best_offset, best_dv1]
     opt = minimize(
       objective, x0,
-      method  = self.config.method.title().replace('-', ''),
+      method  = self.config.method,
       options = {'xatol': self.config.xatol, 'fatol': self.config.fatol,
                  'maxiter': self.config.maxiter, 'adaptive': True},
     )
