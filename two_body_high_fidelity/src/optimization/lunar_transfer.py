@@ -59,7 +59,6 @@ from src.model.orbital_mechanics import compute_circular_velocity
 from src.schemas.time            import TimeStructure
 from src.schemas.optimization    import OptimizationProblem, OptimizationConfig, OptimizationResult, Segment, Node, Trajectory
 
-from src.propagation.analytical_propagator import propagate_circular_orbit
 from src.model.orbital_mechanics           import compute_hohmann_velocities
 from src.model.frame_and_vector_converter  import BodyVectorConverter
 from src.optimization.patched_conic        import (
@@ -359,12 +358,21 @@ class LunarTransferOptimizer:
           'state_post_burn'    : np.ndarray (6,)
           'r_peri'             : float
     """
-    # Propagate LEO to departure time (analytical for circular orbit)
+    # Propagate parking orbit to departure time
     t0_et = utc_to_et(self.departure_epoch)
     dt_coast = t_depart_et - t0_et
 
     if abs(dt_coast) > 1.0:
-      state_at_departure = propagate_circular_orbit(self.initial_state, dt_coast)
+      coast_result = propagate_two_body(
+        state0   = self.initial_state,
+        t0_et    = t0_et,
+        tf_et    = t_depart_et,
+        gp       = SOLARSYSTEMCONSTANTS.EARTH.GP,
+        n_points = 2,
+      )
+      if not coast_result['success']:
+        return None
+      state_at_departure = coast_result['states'][:, -1]
     else:
       state_at_departure = self.initial_state.copy()
 
