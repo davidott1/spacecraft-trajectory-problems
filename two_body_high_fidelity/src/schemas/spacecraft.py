@@ -142,6 +142,8 @@ class ImpulsiveManeuver:
   time_dt       : datetime
   delta_vel_vec : np.ndarray  # [3] in m/s
   frame         : str = 'J2000'  # 'J2000', 'RIC', 'RTN'
+  name          : Optional[str] = None
+  description   : Optional[str] = None
 
   def __post_init__(self):
     """Validate maneuver parameters."""

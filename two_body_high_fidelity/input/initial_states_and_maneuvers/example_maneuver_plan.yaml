@@ -20,27 +20,33 @@
 #   - RTN:   Radial-Tangential-Normal (orbit-aligned)
 
 initial_state:
-  epoch_iso_utc: "2025-10-01T00:00:00"
-  pos_vec__m:        [-4453783.586, -5038203.756, -426384.456]
-  vel_vec__m_per_s:  [3831.888, -2887.221, -6018.232]
-  frame: "J2000"
-
-  # Variable flags for initial state (default: false if omitted)
-  variable_epoch:    false
-  variable_position: [false, false, false]
-  variable_velocity: [false, false, false]
+  name              : equatorial                                                               # name of the object
+  frame             : J2000                                                                    # reference frame of the state vector
+  epoch             : 2025-10-01T00:00:00Z                                                     # epoch of the state vector in ISO format
+  coordinate_system : cartesian                                                                # coordinate system of the state vector
+  pos_vec__m        : 7000.0e3, 0.0e0, 0.0e0                                                   # position vector [m]
+  vel_vec__m_per_s  :    0.0e0, 7.5e3, 0.0e0                                                   # velocity vector [m/s]
+  mass__kg          : 420000.0                                                                 # mass [kg]
+  drag              :                                                                          # drag parameters
+    coeff           : 2.2                                                                      # drag coefficient, typically c_d [-]
+    area__m2        : 1000.0                                                                   # drag cross-sectional area [m²]
+  srp               :                                                                          # solar radiation pressure parameters
+    coeff           : 1.2                                                                      # solar radiation pressure coefficient, typically c_r [-]
+    area__m2        : 1000.0                                                                   # srp cross-sectional area [m²]
 
 maneuvers:
-  # First burn: Raise apogee (prograde at perigee)
-  - time_iso_utc: "2025-10-01T06:00:00"
-    delta_vel__m_per_s: [0.0, 50.0, 0.0]
+  - name: "burn1"
+    description: "Raise apogee (prograde at perigee)"
+    time_iso_utc: "2025-10-01T06:00:00"
+    delta_vel_vec__m_per_s: 0.0, 50.0, 0.0
     frame: "RIC"
-    variable_time:     true
-    variable_delta_v:  [false, true, false]
+    variable_time:     false
+    variable_delta_vel_vec:  true, true, true
 
-  # Second burn: Circularize at new apogee (prograde)
-  - time_iso_utc: "2025-10-01T12:00:00"
-    delta_vel__m_per_s: [0.0, 30.0, 0.0]
+  - name: "burn2"
+    description: "Circularize at new apogee (prograde)"
+    time_iso_utc: "2025-10-01T12:00:00"
+    delta_vel_vec__m_per_s: 0.0, 30.0, 0.0
     frame: "RIC"
-    variable_time:     true
-    variable_delta_v:  [false, true, false]
+    variable_time:     false
+    variable_delta_vel_vec:  true, true, true
