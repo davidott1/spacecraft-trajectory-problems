@@ -35,18 +35,18 @@ initial_state:
     area__m2        : 1000.0                                                                   # srp cross-sectional area [m²]
 
 maneuvers:
-  - name: "burn1"
-    description: "Raise apogee (prograde at perigee)"
-    time_iso_utc: "2025-10-01T06:00:00"
-    delta_vel_vec__m_per_s: 0.0, 50.0, 0.0
-    frame: "RIC"
-    variable_time:     false
-    variable_delta_vel_vec:  true, true, true
+  - name                   : "burn1"
+    description            : "Raise apogee (prograde at perigee)"
+    time_iso_utc           : "2025-10-01T06:00:00"
+    delta_vel_vec__m_per_s : 0.0, 50.0, 0.0
+    frame                  : "RIC"
+    variable_time          : false
+    variable_delta_vel_vec :  true, true, true
 
-  - name: "burn2"
-    description: "Circularize at new apogee (prograde)"
-    time_iso_utc: "2025-10-01T12:00:00"
-    delta_vel_vec__m_per_s: 0.0, 30.0, 0.0
-    frame: "RIC"
-    variable_time:     false
-    variable_delta_vel_vec:  true, true, true
+  - name                   : "burn2"
+    description            : "Circularize at new apogee (prograde)"
+    time_iso_utc           : "2025-10-01T12:00:00"
+    delta_vel_vec__m_per_s : 0.0, 30.0, 0.0
+    frame                  : "RIC"
+    variable_time          : false
+    variable_delta_vel_vec :  true, true, true
