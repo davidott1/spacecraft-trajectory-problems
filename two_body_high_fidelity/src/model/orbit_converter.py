@@ -614,9 +614,9 @@ class OrbitConverter:
     I = mee.I
     
     # Auxiliary quantities
-    s_sq = 1 + h**2 + k**2
-    w    = 1 + f * np.cos(L) + g * np.sin(L)
-    r    = p / w
+    s_sq    = 1 + h**2 + k**2
+    w       = 1 + f * np.cos(L) + g * np.sin(L)
+    pos_mag = p / w
     
     # Trigonometric quantities
     cos_L = np.cos(L)
@@ -627,7 +627,7 @@ class OrbitConverter:
     g_hat = np.array([   2 * I * k * h, (1 + k**2 - h**2) * I,      2 * h ]) / s_sq
     
     # Position vector
-    pos_vec = r * cos_L * f_hat + r * sin_L * g_hat
+    pos_vec = pos_mag * cos_L * f_hat + pos_mag * sin_L * g_hat
     
     # Velocity vector
     sqrt_gp_over_p = np.sqrt(gp / p)

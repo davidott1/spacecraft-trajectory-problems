@@ -443,12 +443,12 @@ class SphericalHarmonicsGravity:
     This avoids singularities at the poles.
     """
     x, y, z = pos_vec
-    r = np.linalg.norm(pos_vec)
+    pos_mag = np.linalg.norm(pos_vec)
     
     # Normalized coordinates
-    s = x / r  # cos(lon) * cos(lat)
-    t = y / r  # sin(lon) * cos(lat)
-    u = z / r  # sin(lat)
+    s = x / pos_mag  # cos(lon) * cos(lat)
+    t = y / pos_mag  # sin(lon) * cos(lat)
+    u = z / pos_mag  # sin(lat)
     
     Re = self.radius
     gp = self.gp
@@ -461,7 +461,7 @@ class SphericalHarmonicsGravity:
     W = np.zeros((n_max + 3, m_max + 3))
     
     # Seed values
-    rho = Re / r
+    rho = Re / pos_mag
     V[0, 0] = rho
     W[0, 0] = 0.0
     
@@ -601,13 +601,13 @@ class SphericalHarmonicsGravity:
     The partial derivatives of the acceleration vector.
     """
     x, y, z = pos_vec
-    r = np.linalg.norm(pos_vec)
-    r_sq = r * r
+    pos_mag = np.linalg.norm(pos_vec)
+    pos_mag_sq = pos_mag * pos_mag
     
     # Normalized coordinates
-    s = x / r
-    t = y / r
-    u = z / r
+    s = x / pos_mag
+    t = y / pos_mag
+    u = z / pos_mag
     
     Re = self.radius
     gp = self.gp
@@ -620,7 +620,7 @@ class SphericalHarmonicsGravity:
     W = np.zeros((n_max + 4, m_max + 4))
     
     # Seed values
-    rho = Re / r
+    rho = Re / pos_mag
     V[0, 0] = rho
     W[0, 0] = 0.0
     
@@ -889,8 +889,8 @@ class SphericalHarmonicsGravity:
     J[2, 1] = J[1, 2]
     
     # Point mass terms
-    pm_term = -gp / r_sq / r
-    pm_term3 = 3.0 * gp / (r_sq * r_sq * r)
+    pm_term = -gp / pos_mag_sq / pos_mag
+    pm_term3 = 3.0 * gp / (pos_mag_sq * pos_mag_sq * pos_mag)
     
     I_mat = np.eye(3)
     rr_T = np.outer(pos_vec, pos_vec)

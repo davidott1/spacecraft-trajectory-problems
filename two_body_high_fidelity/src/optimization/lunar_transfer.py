@@ -79,10 +79,10 @@ class LunarTransferOptimizer:
   Attributes:
     problem          : OptimizationProblem
     initial_state    : np.ndarray (6,) - Initial LEO state in J2000 [m, m/s]
-    r_leo            : float - LEO orbital radius [m]
-    r_llo            : float - LLO orbital radius [m]
-    v_circ_leo       : float - Circular velocity at LEO [m/s]
-    v_circ_llo       : float - Circular velocity at LLO [m/s]
+    radius_leo       : float - LEO orbital radius [m]
+    radius_llo       : float - LLO orbital radius [m]
+    vel_mag_circ_leo : float - Circular velocity at LEO [m/s]
+    vel_mag_circ_llo : float - Circular velocity at LLO [m/s]
     soi_moon         : float - Moon's sphere of influence radius [m]
     hohmann          : dict  - Hohmann transfer estimates
   """
@@ -149,18 +149,18 @@ class LunarTransferOptimizer:
     self.departure_epoch = problem.decision_state.epoch
 
     # Derived orbital radii
-    self.r_leo = self.EARTH_RADIUS + leo_altitude_m
-    self.r_llo = self.MOON_RADIUS  + llo_altitude_m
+    self.radius_leo = self.EARTH_RADIUS + leo_altitude_m
+    self.radius_llo = self.MOON_RADIUS  + llo_altitude_m
 
     # Circular velocities
-    self.v_circ_leo = compute_circular_velocity(self.r_leo, self.EARTH_GP)
-    self.v_circ_llo = compute_circular_velocity(self.r_llo, self.MOON_GP)
+    self.vel_mag_circ_leo = compute_circular_velocity(self.radius_leo, self.EARTH_GP)
+    self.vel_mag_circ_llo = compute_circular_velocity(self.radius_llo, self.MOON_GP)
 
     # Moon's sphere of influence
     self.soi_moon = compute_soi_radius(self.MOON_SMA, self.EARTH_GP, self.MOON_GP)
 
     # Hohmann transfer estimates (Earth-only, to Moon orbit distance)
-    self.hohmann = compute_hohmann_velocities(self.r_leo, self.MOON_SMA, self.EARTH_GP)
+    self.hohmann = compute_hohmann_velocities(self.radius_leo, self.MOON_SMA, self.EARTH_GP)
 
   def solve(self) -> OptimizationResult:
     """
@@ -196,10 +196,10 @@ class LunarTransferOptimizer:
     print("  Configuration")
     print(f"    LEO Altitude         : {self.leo_altitude_m/1000:.1f} km")
     print(f"    LLO Altitude         : {self.llo_altitude_m/1000:.1f} km")
-    print(f"    LEO Radius           : {self.r_leo/1000:.1f} km")
-    print(f"    LLO Radius           : {self.r_llo/1000:.1f} km")
-    print(f"    V_circ LEO           : {self.v_circ_leo:.2f} m/s")
-    print(f"    V_circ LLO           : {self.v_circ_llo:.2f} m/s")
+    print(f"    LEO Radius           : {self.radius_leo/1000:.1f} km")
+    print(f"    LLO Radius           : {self.radius_llo/1000:.1f} km")
+    print(f"    V_circ LEO           : {self.vel_mag_circ_leo:.2f} m/s")
+    print(f"    V_circ LLO           : {self.vel_mag_circ_llo:.2f} m/s")
     print(f"    Moon SOI Radius      : {self.soi_moon/1000:.1f} km")
     print(f"    Departure Epoch      : {self.departure_epoch}")
     print(f"    Search Window        : {self.departure_search_window_s/86400:.1f} days")
@@ -356,7 +356,7 @@ class LunarTransferOptimizer:
           't_soi'              : float
           'state_at_departure' : np.ndarray (6,)
           'state_post_burn'    : np.ndarray (6,)
-          'r_peri'             : float
+          'radius_peri'        : float
     """
     # Propagate parking orbit to departure time
     t0_et = utc_to_et(self.departure_epoch)
@@ -421,19 +421,19 @@ class LunarTransferOptimizer:
       return None
 
     # Check periapsis altitude
-    r_peri = peri_result['periapsis_radius']
-    if r_peri < self.MOON_RADIUS:
+    radius_peri = peri_result['periapsis_radius']
+    if radius_peri < self.MOON_RADIUS:
       return None  # Lunar impact
 
     # ΔV₂ for circularization at periapsis
-    v_peri         = peri_result['periapsis_velocity']
-    v_circ_at_peri = compute_circular_velocity(r_peri, self.MOON_GP)
-    delta_vel_mag_2 = abs(v_peri - v_circ_at_peri)
+    vel_mag_peri         = peri_result['periapsis_velocity']
+    vel_mag_circ_at_peri = compute_circular_velocity(radius_peri, self.MOON_GP)
+    delta_vel_mag_2 = abs(vel_mag_peri - vel_mag_circ_at_peri)
 
     # ΔV₂ direction: retrograde at periapsis (opposite to velocity)
-    v_peri_vec = peri_result['periapsis_state'][3:6]
-    v_peri_hat = v_peri_vec / np.linalg.norm(v_peri_vec)
-    delta_vel_vec_2 = -delta_vel_mag_2 * v_peri_hat  # Retrograde for capture
+    vel_peri_vec = peri_result['periapsis_state'][3:6]
+    vel_peri_hat = vel_peri_vec / np.linalg.norm(vel_peri_vec)
+    delta_vel_vec_2 = -delta_vel_mag_2 * vel_peri_hat  # Retrograde for capture
 
     delta_vel_total = delta_vel_mag_1 + delta_vel_mag_2
 
@@ -451,7 +451,7 @@ class LunarTransferOptimizer:
       't_soi'              : t_soi,
       'state_at_departure' : state_at_departure,
       'state_post_burn'    : state_post_burn,
-      'r_peri'             : r_peri,
+      'radius_peri'        : radius_peri,
     }
 
 
@@ -483,7 +483,7 @@ class LunarTransferOptimizer:
         Complete transfer solution.
     """
     t_soi  = eval_result['t_soi']
-    r_peri = eval_result['r_peri']
+    radius_peri = eval_result['radius_peri']
 
     departure_dt = et_to_utc(t_depart_et)
 
@@ -526,16 +526,16 @@ class LunarTransferOptimizer:
     state_peri_moon = eval_result['peri_result']['periapsis_state']
 
     # Apply ΔV₂ to circularize
-    v_peri_vec     = state_peri_moon[3:6]
-    v_peri_mag     = np.linalg.norm(v_peri_vec)
-    v_peri_hat     = v_peri_vec / v_peri_mag
-    v_circ_at_peri = compute_circular_velocity(r_peri, self.MOON_GP)
+    vel_peri_vec       = state_peri_moon[3:6]
+    vel_peri_mag       = np.linalg.norm(vel_peri_vec)
+    vel_peri_hat       = vel_peri_vec / vel_peri_mag
+    vel_mag_circ_at_peri = compute_circular_velocity(radius_peri, self.MOON_GP)
 
     state_llo_moon = state_peri_moon.copy()
-    state_llo_moon[3:6] = v_circ_at_peri * v_peri_hat  # Circular at same direction
+    state_llo_moon[3:6] = vel_mag_circ_at_peri * vel_peri_hat  # Circular at same direction
 
     # LLO orbital period
-    llo_period      = 2.0 * np.pi * np.sqrt(r_peri**3 / self.MOON_GP)
+    llo_period      = 2.0 * np.pi * np.sqrt(radius_peri**3 / self.MOON_GP)
     llo_coast_time  = self.llo_coast_orbits * llo_period
     n_llo_points    = max(500, int(llo_coast_time / 10))
 
@@ -622,11 +622,11 @@ class LunarTransferOptimizer:
       print(f"\n  [ERROR] {result.message}")
       return
 
-    r_peri             = eval_result['r_peri']
+    radius_peri        = eval_result['radius_peri']
     t_soi              = eval_result['t_soi']
     t_depart_et        = eval_result['t_depart_et']
     t_insertion        = eval_result['peri_result']['periapsis_time_et']
-    periapsis_altitude = r_peri - self.MOON_RADIUS
+    periapsis_altitude = radius_peri - self.MOON_RADIUS
     transfer_time      = t_insertion - t_depart_et
     departure_dt       = et_to_utc(t_depart_et)
     arrival_dt         = et_to_utc(t_insertion)
@@ -655,13 +655,13 @@ class LunarTransferOptimizer:
 
     # Periapsis
     print(f"    Moon Periapsis")
-    print(f"      Radius               : {r_peri/1000:.2f} km")
+    print(f"      Radius               : {radius_peri/1000:.2f} km")
     print(f"      Altitude             : {periapsis_altitude/1000:.2f} km")
 
     # LLO
-    llo_period = 2.0 * np.pi * np.sqrt(r_peri**3 / self.MOON_GP)
+    llo_period = 2.0 * np.pi * np.sqrt(radius_peri**3 / self.MOON_GP)
     print(f"    LLO (post-insertion)")
-    print(f"      V_circ               : {compute_circular_velocity(r_peri, self.MOON_GP):.2f} m/s")
+    print(f"      V_circ               : {compute_circular_velocity(radius_peri, self.MOON_GP):.2f} m/s")
     print(f"      Period               : {llo_period/60:.1f} min")
 
     # ΔV₁ vector
