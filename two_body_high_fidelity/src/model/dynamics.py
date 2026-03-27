@@ -2289,8 +2289,8 @@ class AtmosphericDrag:
           Partial derivative of acceleration w.r.t. velocity
       """
       # Position magnitude and altitude
-      r       = np.linalg.norm(pos_vec)
-      alt     = r - SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
+      pos_mag = np.linalg.norm(pos_vec)
+      alt     = pos_mag - SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
       
       # Constants
       omega_earth = np.array([0, 0, SOLARSYSTEMCONSTANTS.EARTH.OMEGA])
@@ -2312,13 +2312,13 @@ class AtmosphericDrag:
 
       # Gradient of density w.r.t. position
       # d(rho)/d(r) = -rho/H * (r_vec / r)
-      drho__dpos = -(rho / H) * (pos_vec / r)
+      drho__dpos = -(rho / H) * (pos_vec / pos_mag)
 
       # Relative velocity
       vel_rel_vec = vel_vec - np.cross(omega_earth, pos_vec)
-      v_rel       = np.linalg.norm(vel_rel_vec)
+      vel_mag_rel = np.linalg.norm(vel_rel_vec)
       
-      if v_rel == 0:
+      if vel_mag_rel == 0:
         return np.zeros((3, 3)), np.zeros((3, 3))
 
       # Drag factor B = 0.5 * Cd * A / m
@@ -2335,13 +2335,13 @@ class AtmosphericDrag:
       dv_rel_vec__dpos = -skew_omega
 
       # d(v_rel) / d(pos_vec) = (v_rel_vec^T / v_rel) @ d(v_rel_vec)/d(pos_vec)
-      dv_rel__dpos = (vel_rel_vec @ dv_rel_vec__dpos) / v_rel
+      dv_rel__dpos = (vel_rel_vec @ dv_rel_vec__dpos) / vel_mag_rel
 
       # Velocity Jacobian: d(acc) / d(vel)
       # a = -B * rho * v_rel * v_rel_vec
       # da/dv = -B * rho * ( v_rel * I + v_rel_vec * (v_rel_vec^T / v_rel) )
-      term_vv = np.outer(vel_rel_vec, vel_rel_vec) / v_rel
-      dacc__dvel = -B * rho * (v_rel * np.eye(3) + term_vv)
+      term_vv = np.outer(vel_rel_vec, vel_rel_vec) / vel_mag_rel
+      dacc__dvel = -B * rho * (vel_mag_rel * np.eye(3) + term_vv)
 
       # Position Jacobian: d(acc) / d(pos)
       # a = -B * rho * v_rel * v_rel_vec
@@ -2349,7 +2349,7 @@ class AtmosphericDrag:
       
       # Term 1: Variation of density
       # result is 3x3 matrix. outer product of (v_rel * v_rel_vec) and drho__dpos
-      term1 = np.outer(v_rel * vel_rel_vec, drho__dpos)
+      term1 = np.outer(vel_mag_rel * vel_rel_vec, drho__dpos)
 
       # Term 2: Variation of relative speed magnitude
       # result is 3x3. outer product of v_rel_vec and dv_rel__dpos
@@ -2357,7 +2357,7 @@ class AtmosphericDrag:
 
       # Term 3: Variation of relative velocity vector direction
       # result is 3x3. rho * v_rel * dv_rel_vec__dpos
-      term3 = rho * v_rel * dv_rel_vec__dpos
+      term3 = rho * vel_mag_rel * dv_rel_vec__dpos
 
       dacc__dpos = -B * (term1 + term2 + term3)
 
@@ -2668,15 +2668,15 @@ class SolarRadiationPressure:
         - Vokrouhlický, D. (1993). A&A 280, 295-304.
       """
       # Earth and Sun radii
-      r_earth = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
-      r_sun   = SOLARSYSTEMCONSTANTS.SUN.RADIUS.EQUATOR
+      radius_earth = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
+      radius_sun   = SOLARSYSTEMCONSTANTS.SUN.RADIUS.EQUATOR
 
       # Position magnitudes
-      r_sat = np.linalg.norm(earth_to_sat_pos_vec)
-      r_sun_mag = np.linalg.norm(earth_to_sun_pos_vec)
+      pos_mag_sat = np.linalg.norm(earth_to_sat_pos_vec)
+      pos_mag_sun = np.linalg.norm(earth_to_sun_pos_vec)
 
       # Unit vector from Earth to Sun
-      earth_to_sun_dir = earth_to_sun_pos_vec / r_sun_mag
+      earth_to_sun_dir = earth_to_sun_pos_vec / pos_mag_sun
 
       # Satellite position projected onto Sun direction
       sat_proj = np.dot(earth_to_sat_pos_vec, earth_to_sun_dir)
@@ -2687,8 +2687,8 @@ class SolarRadiationPressure:
 
       # Apparent radii of Sun and Earth as seen from satellite
       # (using small angle approximation for Sun's angular radius)
-      sun_angular_radius = np.arcsin(r_sun / (r_sun_mag - sat_proj))
-      earth_angular_radius = np.arcsin(r_earth / r_sat)
+      sun_angular_radius = np.arcsin(radius_sun / (pos_mag_sun - sat_proj))
+      earth_angular_radius = np.arcsin(radius_earth / pos_mag_sat)
 
       # Perpendicular distance from satellite to Sun-Earth line
       sat_perp_vec = earth_to_sat_pos_vec - sat_proj * earth_to_sun_dir

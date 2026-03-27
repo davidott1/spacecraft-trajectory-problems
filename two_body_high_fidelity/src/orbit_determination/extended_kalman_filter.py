@@ -439,30 +439,30 @@ class ExtendedKalmanFilter:
     def eom_with_stm(t, y):
       """Equations of motion with STM variational equations."""
       # State
-      r_vec = y[0:3]
-      v_vec = y[3:6]
+      pos_vec  = y[0:3]
+      vel_vec  = y[3:6]
       Phi_flat = y[6:42]
       Phi = Phi_flat.reshape((6, 6))
 
       # Position magnitude
-      r = np.linalg.norm(r_vec)
-      r3 = r**3
-      r5 = r**5
+      pos_mag       = np.linalg.norm(pos_vec)
+      pos_mag_cubed = pos_mag**3
+      pos_mag_fifth = pos_mag**5
 
       # Two-body acceleration
-      a_vec = -GM * r_vec / r3
+      acc_vec = -GM * pos_vec / pos_mag_cubed
 
       # State derivative
       dx = np.zeros(6)
-      dx[0:3] = v_vec
-      dx[3:6] = a_vec
+      dx[0:3] = vel_vec
+      dx[3:6] = acc_vec
 
       # A matrix (Jacobian of f w.r.t. x)
       A = np.zeros((6, 6))
       A[0:3, 3:6] = np.eye(3)
 
       # Gravity gradient
-      A[3:6, 0:3] = -GM / r3 * np.eye(3) + 3 * GM / r5 * np.outer(r_vec, r_vec)
+      A[3:6, 0:3] = -GM / pos_mag_cubed * np.eye(3) + 3 * GM / pos_mag_fifth * np.outer(pos_vec, pos_vec)
 
       # STM derivative: Phi_dot = A @ Phi
       dPhi = A @ Phi
