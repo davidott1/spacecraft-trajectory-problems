@@ -101,7 +101,7 @@ class LunarTransferOptimizer:
     leo_altitude_m            : float = 200_000.0,
     llo_altitude_m            : float = 100_000.0,
     max_transfer_time_s       : float = 7.0 * 86400.0,
-    dv1_search_bounds_m_s     : tuple = (2800.0, 3400.0),
+    dv1_search_bounds__m_per_s     : tuple = (2800.0, 3400.0),
     departure_search_window_s : float = 30.0 * 86400.0,
     n_departure_candidates    : int   = 720,
     llo_coast_orbits          : int   = 3,
@@ -123,7 +123,7 @@ class LunarTransferOptimizer:
         LLO altitude above Moon surface [m].
       max_transfer_time_s : float
         Maximum transfer time from departure to Moon SOI [s].
-      dv1_search_bounds_m_s : tuple
+      dv1_search_bounds__m_per_s : tuple
         Search bounds for ΔV₁ magnitude [m/s].
       departure_search_window_s : float
         Search window for departure time [s] from departure epoch.
@@ -140,7 +140,7 @@ class LunarTransferOptimizer:
     self.leo_altitude_m            = leo_altitude_m
     self.llo_altitude_m            = llo_altitude_m
     self.max_transfer_time_s       = max_transfer_time_s
-    self.dv1_search_bounds_m_s     = dv1_search_bounds_m_s
+    self.dv1_search_bounds__m_per_s     = dv1_search_bounds__m_per_s
     self.departure_search_window_s = departure_search_window_s
     self.n_departure_candidates    = n_departure_candidates
     self.llo_coast_orbits          = llo_coast_orbits
@@ -278,8 +278,8 @@ class LunarTransferOptimizer:
       dt_offset_opt, delta_vel_mag_1_opt = x
       # Clamp to valid range
       dt_offset_opt       = max(0, min(search_window, dt_offset_opt))
-      delta_vel_mag_1_opt = max(self.dv1_search_bounds_m_s[0],
-                                min(self.dv1_search_bounds_m_s[1], delta_vel_mag_1_opt))
+      delta_vel_mag_1_opt = max(self.dv1_search_bounds__m_per_s[0],
+                                min(self.dv1_search_bounds__m_per_s[1], delta_vel_mag_1_opt))
       t_depart_et_opt = t0_et + dt_offset_opt
       result_opt = self._evaluate_transfer(t_depart_et_opt, delta_vel_mag_1_opt)
       if result_opt is None:
@@ -297,8 +297,8 @@ class LunarTransferOptimizer:
     # Evaluate final solution
     final_offset, final_dv1 = opt.x
     final_offset = max(0, min(search_window, final_offset))
-    final_dv1    = max(self.dv1_search_bounds_m_s[0],
-                       min(self.dv1_search_bounds_m_s[1], final_dv1))
+    final_dv1    = max(self.dv1_search_bounds__m_per_s[0],
+                       min(self.dv1_search_bounds__m_per_s[1], final_dv1))
     t_depart_et_final = t0_et + final_offset
     final_eval = self._evaluate_transfer(t_depart_et_final, final_dv1)
 

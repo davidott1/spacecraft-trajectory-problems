@@ -2380,11 +2380,11 @@ class AtmosphericDrag:
         density : float
           Atmospheric density [kg/m³]
       """
-      altitude_km = altitude / 1000.0
+      altitude__km = altitude / 1000.0
       
       # Find the appropriate layer
       # Default to the highest layer if above (or vacuum)
-      if altitude_km > 1000.0:
+      if altitude__km > 1000.0:
           return 0.0
           
       # Find layer: last layer where h_base <= altitude
@@ -2393,7 +2393,7 @@ class AtmosphericDrag:
       H = 7.249
                  
       for layer in self.ATMOSPHERE_LAYERS:
-          if altitude_km >= layer[0]:
+          if altitude__km >= layer[0]:
               h_base = layer[0]
               rho_base = layer[1]
               H = layer[2]
@@ -2402,7 +2402,7 @@ class AtmosphericDrag:
               
       # Exponential model for the layer
       # rho = rho_base * exp(-(h - h_base) / H)
-      rho = rho_base * np.exp(-(altitude_km - h_base) / H)
+      rho = rho_base * np.exp(-(altitude__km - h_base) / H)
       
       return rho
 

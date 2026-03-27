@@ -50,10 +50,10 @@ class TestPatchedConicFunctions:
       gp_primary   = SOLARSYSTEMCONSTANTS.EARTH.GP,
       gp_secondary = SOLARSYSTEMCONSTANTS.MOON.GP,
     )
-    radius_soi_km = radius_soi / 1000.0
+    radius_soi__km = radius_soi / 1000.0
 
     # Moon SOI should be approximately 66,000 km
-    assert 60_000 < radius_soi_km < 70_000, f"Moon SOI = {radius_soi_km:.0f} km, expected ~66,000 km"
+    assert 60_000 < radius_soi__km < 70_000, f"Moon SOI = {radius_soi__km:.0f} km, expected ~66,000 km"
 
 
   def test_circular_velocity(self):
@@ -66,8 +66,8 @@ class TestPatchedConicFunctions:
     vel_mag_circ = compute_circular_velocity(pos_mag, gp)
 
     # LEO circular velocity should be approximately 7.78 km/s
-    vel_mag_circ_km_s = vel_mag_circ / 1000.0
-    assert 7.5 < vel_mag_circ_km_s < 8.0, f"vel_mag_circ = {vel_mag_circ_km_s:.3f} km/s, expected ~7.78 km/s"
+    vel_mag_circ__km_per_s = vel_mag_circ / 1000.0
+    assert 7.5 < vel_mag_circ__km_per_s < 8.0, f"vel_mag_circ = {vel_mag_circ__km_per_s:.3f} km/s, expected ~7.78 km/s"
 
 
   def test_hohmann_estimates(self):
@@ -81,12 +81,12 @@ class TestPatchedConicFunctions:
     estimates = compute_hohmann_velocities(radius_o, radius_f, gp)
 
     # ΔV₁ should be approximately 3.1 km/s
-    dv1_km_s = estimates['delta_vel_mag_o'] / 1000.0
-    assert 2.8 < dv1_km_s < 3.5, f"ΔV₁ = {dv1_km_s:.3f} km/s, expected ~3.1 km/s"
+    dv1__km_per_s = estimates['delta_vel_mag_o'] / 1000.0
+    assert 2.8 < dv1__km_per_s < 3.5, f"ΔV₁ = {dv1__km_per_s:.3f} km/s, expected ~3.1 km/s"
 
     # Transfer time should be approximately 5 days
-    tt_days = estimates['delta_time_of'] / 86400.0
-    assert 4.0 < tt_days < 6.0, f"Transfer time = {tt_days:.2f} days, expected ~5 days"
+    tt__days = estimates['delta_time_of'] / 86400.0
+    assert 4.0 < tt__days < 6.0, f"Transfer time = {tt__days:.2f} days, expected ~5 days"
 
 
   def test_two_body_propagation_period(self):
