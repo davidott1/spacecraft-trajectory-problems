@@ -24,11 +24,11 @@ from src.model.constants       import SOLARSYSTEMCONSTANTS, CONVERTER
 DELUXE_EPHEMERIS_COLUMNS = [
   'type',
   'time_utc',
-  'time_et_s',
-  'pos_x_m', 'pos_y_m', 'pos_z_m',
-  'vel_x_m_s', 'vel_y_m_s', 'vel_z_m_s',
-  'sma_m', 'ecc', 'inc_deg', 'raan_deg', 'aop_deg', 'ta_deg',
-  'imp_mnvr_x_m_s', 'imp_mnvr_y_m_s', 'imp_mnvr_z_m_s',
+  'time_et__s',
+  'pos_x__m', 'pos_y__m', 'pos_z__m',
+  'vel_x__m_per_s', 'vel_y__m_per_s', 'vel_z__m_per_s',
+  'sma__m', 'ecc', 'inc__deg', 'raan__deg', 'aop__deg', 'ta__deg',
+  'imp_mnvr_x__m_per_s', 'imp_mnvr_y__m_per_s', 'imp_mnvr_z__m_per_s',
   'imp_mnvr_frame',
 ]
 
