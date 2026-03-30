@@ -183,7 +183,6 @@ class TestLunarTransfer:
     Verify that a Hohmann-like transfer from LEO can reach the Moon's SOI.
     """
     from src.propagation.analytical_propagator import propagate_to_soi
-    from src.model.frame_and_vector_converter  import BodyVectorConverter
     from src.model.constants                   import NAIFIDS
     from src.model.time_converter              import utc_to_et
 
