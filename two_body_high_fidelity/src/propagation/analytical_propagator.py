@@ -1,17 +1,16 @@
 """
-Patched Conic Trajectory Module
-================================
+Analytical Propagator
+=====================
 
-Core functions for patched conic trajectory computation between two gravitational
-bodies. Provides sphere-of-influence detection, frame transformations, and
-two-body propagation with event detection.
+Two-body (Keplerian) propagation with optional event detection.
+Wraps scipy.integrate.solve_ivp using point-mass gravity for lightweight
+trajectory computation (e.g. patched conic transfers).
 
 Key Functions:
 --------------
-  compute_soi_radius          - Sphere of influence radius from mass ratio
-  propagate_to_soi            - Two-body propagation with SOI crossing event
-  propagate_to_periapsis      - Two-body propagation with periapsis event
-  propagate_two_body          - Simple two-body numerical propagation
+  propagate_to_soi       - Two-body propagation with SOI crossing event
+  propagate_to_periapsis - Two-body propagation with periapsis event
+  propagate_two_body     - Simple two-body numerical propagation
 
 Units:
 ------
@@ -21,42 +20,13 @@ Units:
   GP       : m³/s²
 """
 import numpy as np
-import spiceypy as spice
 
 from scipy.integrate import solve_ivp
 
-from src.model.constants import SOLARSYSTEMCONSTANTS, NAIFIDS, CONVERTER
 from src.model.dynamics import AccelerationSTMDot, GeneralStateEquationsOfMotion
 from src.model.frame_and_vector_converter import BodyVectorConverter
 from src.schemas.gravity import GravityModelConfig
 from src.schemas.spacecraft import SpacecraftProperties
-
-
-def compute_soi_radius(
-  sma          : float,
-  gp_primary   : float,
-  gp_secondary : float,
-) -> float:
-  """
-  Compute sphere of influence radius using Laplace's formula.
-
-  r_soi = a * (m_secondary / m_primary)^(2/5)
-
-  Input:
-  ------
-    sma : float
-      Semi-major axis of the secondary body's orbit around the primary [m].
-    gp_primary : float
-      Gravitational parameter of the primary body [m³/s²].
-    gp_secondary : float
-      Gravitational parameter of the secondary body [m³/s²].
-
-  Output:
-  -------
-    r_soi : float
-      Sphere of influence radius [m].
-  """
-  return sma * (gp_secondary / gp_primary) ** 0.4
 
 
 # --------------------------------------------------------------------------

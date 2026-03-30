@@ -89,3 +89,30 @@ def compute_hohmann_velocities(
     'vel_mag_o_pls'   : vel_mag_o_pls,
     'vel_mag_f_mns'   : vel_mag_f_mns,
   }
+
+
+def compute_soi_radius(
+  sma          : float,
+  gp_primary   : float,
+  gp_secondary : float,
+) -> float:
+  """
+  Compute sphere of influence radius using Laplace's formula.
+
+  r_soi = a * (m_secondary / m_primary)^(2/5)
+
+  Input:
+  ------
+    sma : float
+      Semi-major axis of the secondary body's orbit around the primary [m].
+    gp_primary : float
+      Gravitational parameter of the primary body [m³/s²].
+    gp_secondary : float
+      Gravitational parameter of the secondary body [m³/s²].
+
+  Output:
+  -------
+    r_soi : float
+      Sphere of influence radius [m].
+  """
+  return sma * (gp_secondary / gp_primary) ** 0.4

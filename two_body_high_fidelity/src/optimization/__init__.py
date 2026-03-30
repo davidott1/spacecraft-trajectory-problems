@@ -7,14 +7,12 @@ with minimum ΔV optimization.
 
 Modules:
 --------
-  patched_conic    : Core patched conic math (SOI, frame transforms, propagation)
-  lunar_transfer   : Earth-Moon transfer optimizer
+  lunar_transfer       : Earth-Moon transfer optimizer
+  maneuver_optimizer   : General-purpose impulsive maneuver optimizer
 """
 
-from src.model.orbital_mechanics import compute_circular_velocity, compute_hohmann_velocities
-from src.model.frame_and_vector_converter import BodyVectorConverter
-from src.optimization.patched_conic import (
-  compute_soi_radius,
+from src.model.orbital_mechanics import compute_circular_velocity, compute_hohmann_velocities, compute_soi_radius
+from src.propagation.analytical_propagator import (
   propagate_to_soi,
   propagate_to_periapsis,
   propagate_two_body,
@@ -26,7 +24,6 @@ __all__ = [
   'compute_soi_radius',
   'compute_circular_velocity',
   'compute_hohmann_velocities',
-  'BodyVectorConverter',
   'propagate_to_soi',
   'propagate_to_periapsis',
   'propagate_two_body',
