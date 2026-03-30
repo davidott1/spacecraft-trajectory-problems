@@ -59,10 +59,9 @@ from src.model.orbital_mechanics import compute_circular_velocity
 from src.schemas.time            import TimeStructure
 from src.schemas.optimization    import OptimizationProblem, OptimizationConfig, OptimizationResult, Segment, Node, Trajectory
 
-from src.model.orbital_mechanics           import compute_hohmann_velocities
+from src.model.orbital_mechanics           import compute_hohmann_velocities, compute_soi_radius
 from src.model.frame_and_vector_converter  import BodyVectorConverter
-from src.optimization.patched_conic        import (
-  compute_soi_radius,
+from src.propagation.analytical_propagator import (
   propagate_to_soi,
   propagate_to_periapsis,
   propagate_two_body,

@@ -27,11 +27,8 @@ import numpy as np
 from datetime import datetime
 
 from src.model.constants            import SOLARSYSTEMCONSTANTS, CONVERTER
-from src.model.orbital_mechanics    import compute_circular_velocity, compute_hohmann_velocities
-from src.optimization.patched_conic import (
-  compute_soi_radius,
-  propagate_two_body,
-)
+from src.model.orbital_mechanics           import compute_circular_velocity, compute_hohmann_velocities, compute_soi_radius
+from src.propagation.analytical_propagator import propagate_two_body
 
 
 class TestPatchedConicFunctions:
@@ -185,12 +182,12 @@ class TestLunarTransfer:
     """
     Verify that a Hohmann-like transfer from LEO can reach the Moon's SOI.
     """
-    from src.optimization.patched_conic import propagate_to_soi
-    from src.model.frame_and_vector_converter import BodyVectorConverter
-    from src.model.constants import NAIFIDS
-    from src.model.time_converter import utc_to_et
+    from src.propagation.analytical_propagator import propagate_to_soi
+    from src.model.frame_and_vector_converter  import BodyVectorConverter
+    from src.model.constants                   import NAIFIDS
+    from src.model.time_converter              import utc_to_et
 
-    gp_earth    = SOLARSYSTEMCONSTANTS.EARTH.GP
+    gp_earth     = SOLARSYSTEMCONSTANTS.EARTH.GP
     radius_leo   = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR + 200_000.0
     vel_mag_circ = np.sqrt(gp_earth / radius_leo)
 
