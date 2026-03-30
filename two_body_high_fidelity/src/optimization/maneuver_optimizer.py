@@ -32,7 +32,7 @@ from scipy.optimize import minimize
 
 from src.model.constants  import SOLARSYSTEMCONSTANTS
 from src.model.dynamics   import AccelerationSTMDot
-from src.propagation.propagator import propagate_with_maneuvers
+from src.propagation.numerical_propagator import propagate_with_maneuvers
 from src.schemas.optimization   import DecisionState, OptimizationConfig, OptimizationResult
 from src.schemas.propagation    import PropagationConfig
 
