@@ -193,14 +193,14 @@ class TestLunarTransfer:
     # Compute Hohmann ΔV₁
     sma_transfer   = (radius_leo + SOLARSYSTEMCONSTANTS.MOON.SMA) / 2.0
     vel_mag_depart = np.sqrt(gp_earth * (2.0 / radius_leo - 1.0 / sma_transfer))
-    dv1            = vel_mag_depart - vel_mag_circ
+    delta_vel_mag_1 = vel_mag_depart - vel_mag_circ
 
     # Initial state (equatorial circular LEO)
     state0 = np.array([radius_leo, 0.0, 0.0, 0.0, vel_mag_circ, 0.0])
 
     # Apply ΔV₁ (prograde)
     state_post = state0.copy()
-    state_post[4] += dv1  # Add to vy
+    state_post[4] += delta_vel_mag_1  # Add to vy
 
     # SOI radius
     soi_moon = compute_soi_radius(

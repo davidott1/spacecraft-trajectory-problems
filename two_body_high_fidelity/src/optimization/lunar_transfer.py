@@ -664,14 +664,14 @@ class LunarTransferOptimizer:
     print(f"      Period               : {llo_period/60:.1f} min")
 
     # ΔV₁ vector
-    dv1 = eval_result['delta_vel_vec_1']
+    delta_vel_vec_1 = eval_result['delta_vel_vec_1']
     print(f"    ΔV₁ Vector (J2000)")
-    print(f"      [{dv1[0]:>12.4f}, {dv1[1]:>12.4f}, {dv1[2]:>12.4f}] m/s")
+    print(f"      [{delta_vel_vec_1[0]:>12.4f}, {delta_vel_vec_1[1]:>12.4f}, {delta_vel_vec_1[2]:>12.4f}] m/s")
 
     # ΔV₂ vector
-    dv2 = eval_result['delta_vel_vec_2']
+    delta_vel_vec_2 = eval_result['delta_vel_vec_2']
     print(f"    ΔV₂ Vector (Moon-centered)")
-    print(f"      [{dv2[0]:>12.4f}, {dv2[1]:>12.4f}, {dv2[2]:>12.4f}] m/s")
+    print(f"      [{delta_vel_vec_2[0]:>12.4f}, {delta_vel_vec_2[1]:>12.4f}, {delta_vel_vec_2[2]:>12.4f}] m/s")
 
     # Trajectory statistics
     if result.trajectory is not None:
