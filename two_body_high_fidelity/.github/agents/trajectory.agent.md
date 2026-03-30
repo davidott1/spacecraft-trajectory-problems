@@ -38,6 +38,10 @@ The system lives in `src/` with these subsystems:
 - Tests go in `src/verification/` following existing pytest patterns
 - Do not modify SPICE kernel files or ephemeris data
 
+## Scope Discipline
+
+Do exactly what is asked — nothing more. Do not add unrequested features, refactors, debug logging, filtering logic, or "improvements." If you think something additional would be beneficial, ask first before making the change.
+
 ## Approach
 
 1. Before modifying physics code, verify the mathematical formulation and check existing implementations for conventions (coordinate frames, units, sign conventions)

@@ -544,32 +544,6 @@ def plot_mcreynolds_consistency(
 
   keep_indices = np.where(keep_mask)[0]
   n_points = len(keep_indices)
-  n_filtered = n_all - n_points
-  print(f"    [DEBUG] McReynolds: n_all={n_all}, n_filtered={n_filtered}, n_points={n_points}")
-
-  # Diagnostic: compute McReynolds in INERTIAL frame (no RIC) for debugging
-  chi_inertial_diag = np.zeros((6, n_points))
-  for i in range(n_points):
-    idx = keep_indices[i]
-    dx = state_filter[:, idx] - state_smoother[:, idx]
-    dP = np.diag(filter_covariances[:, :, idx] - smoother_covariances[:, :, idx])
-    dP_safe = np.abs(dP) + 1e-20
-    chi_inertial_diag[:, i] = dx / np.sqrt(dP_safe)
-  for j in range(6):
-    labels_6 = ['x','y','z','vx','vy','vz']
-    m = np.mean(chi_inertial_diag[j,:])
-    s = np.std(chi_inertial_diag[j,:])
-    print(f"    [DEBUG] Inertial {labels_6[j]}: mean={m:.4f}, std={s:.4f}")
-  # Also print sample P_f, P_s, diff at midpoint
-  mid = keep_indices[n_points // 2]
-  Pf_diag = np.diag(filter_covariances[:, :, mid])
-  Ps_diag = np.diag(smoother_covariances[:, :, mid])
-  print(f"    [DEBUG] Mid-point Pf diag: {Pf_diag}")
-  print(f"    [DEBUG] Mid-point Ps diag: {Ps_diag}")
-  print(f"    [DEBUG] Mid-point Pf-Ps  : {Pf_diag - Ps_diag}")
-  dx_mid = state_filter[:, mid] - state_smoother[:, mid]
-  print(f"    [DEBUG] Mid-point dx     : {dx_mid}")
-  print(f"    [DEBUG] Mid-point dx^2   : {dx_mid**2}")
 
   # Remap time to use only kept indices
   time = time[keep_indices]
@@ -718,7 +692,6 @@ def plot_mcreynolds_consistency(
   # Add statistics text
   mean_val = np.mean(chi_pos_all)
   std_val = np.std(chi_pos_all)
-  print(f"    [DEBUG] McReynolds Position Consistency: mean={mean_val:.2f}, std={std_val:.2f}")
   ax_pos_hist.text(0.95, 0.95, f'μ={mean_val:.2f}\nσ={std_val:.2f}',
                    transform=ax_pos_hist.transAxes, fontsize=9,
                    verticalalignment='top', horizontalalignment='right',
@@ -882,10 +855,10 @@ def plot_state_covariance_overlap(
     start_hours = np.arange(0, 25, 1.0)
 
   # Convert start hours to seconds and find nearest estimation index
-  start_times_s = start_hours * 3600.0
+  start_times__s = start_hours * 3600.0
   start_indices = []
   start_hours_actual = []
-  for t_start in start_times_s:
+  for t_start in start_times__s:
     idx = np.argmin(np.abs(times - t_start))
     if idx not in start_indices:  # Avoid duplicates
       start_indices.append(idx)
