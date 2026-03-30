@@ -106,8 +106,8 @@ def unpack_decision_vector(
   idx = 0
 
   if decision_state.variable_epoch:
-    offset_s = x[idx]; idx += 1
-    decision_state.epoch = decision_state.epoch + timedelta(seconds=float(offset_s))
+    offset__s = x[idx]; idx += 1
+    decision_state.epoch = decision_state.epoch + timedelta(seconds=float(offset__s))
 
   for i in range(3):
     if decision_state.variable_position[i]:
@@ -120,8 +120,8 @@ def unpack_decision_vector(
   if decision_state.maneuvers is not None:
     for j, m in enumerate(decision_state.maneuvers):
       if j < len(decision_state.variable_maneuver_time) and decision_state.variable_maneuver_time[j]:
-        offset_s = x[idx]; idx += 1
-        m.time_dt = m.time_dt + timedelta(seconds=float(offset_s))
+        offset__s = x[idx]; idx += 1
+        m.time_dt = m.time_dt + timedelta(seconds=float(offset__s))
 
       if j < len(decision_state.variable_maneuver_delta_v):
         dv_flags = decision_state.variable_maneuver_delta_v[j]

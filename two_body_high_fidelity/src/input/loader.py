@@ -1297,10 +1297,10 @@ def get_horizons_ephemeris(
   except Exception:
     start_time_str = f"{desired_time_o_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / N/A ET"
     end_time_str   = f"{desired_time_f_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC / N/A ET"
-  duration_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
+  duration__s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
   print(f"          Initial  : {start_time_str}")
   print(f"          Final    : {end_time_str}")
-  print(f"          Duration : {duration_s:.1f} s")
+  print(f"          Duration : {duration__s:.1f} s")
   
   # Load Horizons data
   result_horizons = load_horizons_ephemeris(
@@ -1384,12 +1384,12 @@ def process_horizons_result(
       start_time_str = f"{actual_start.strftime('%Y-%m-%d %H:%M:%S')} UTC / N/A ET"
       end_time_str   = f"{actual_end.strftime('%Y-%m-%d %H:%M:%S')} UTC / N/A ET"
 
-    duration_s = result_horizons['delta_time'][-1] - result_horizons['delta_time'][0]
+    duration__s = result_horizons['delta_time'][-1] - result_horizons['delta_time'][0]
 
     print(f"        Actual")
     print(f"          Initial  : {start_time_str}")
     print(f"          Final    : {end_time_str}")
-    print(f"          Duration : {duration_s:.1f} s")
+    print(f"          Duration : {duration__s:.1f} s")
     print(f"          Grid     : {len(result_horizons['delta_time'])} points")
 
     # Create plot_delta_time for seconds-based, zero-start plotting time

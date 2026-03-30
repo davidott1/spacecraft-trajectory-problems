@@ -43,7 +43,7 @@ def compute_topocentric_coordinates(
   # Extract J2000 state vectors
   j2000_state   = result.state
   j2000_pos_vec = j2000_state[0:3, :]
-  time_s        = result.time.grid.relative_initial
+  time__s       = result.time.grid.relative_initial
   n_points      = j2000_state.shape[1]
 
   # Convert epoch to ET
@@ -59,7 +59,7 @@ def compute_topocentric_coordinates(
 
   for i in range(n_points):
     # Current ephemeris time
-    epoch_et_i = epoch_et + time_s[i]
+    epoch_et_i = epoch_et + time__s[i]
 
     # Transform satellite position from J2000 to IAU_EARTH
     rot_mat_j2000_to_iau_earth = FrameConverter.j2000_to_iau_earth(epoch_et_i)
@@ -111,7 +111,7 @@ def compute_topocentric_coordinates_with_rates(
   j2000_state   = result.state
   j2000_pos_vec = j2000_state[0:3, :]
   j2000_vel_vec = j2000_state[3:6, :]
-  time_s        = result.time.grid.relative_initial
+  time__s       = result.time.grid.relative_initial
   n_points      = j2000_state.shape[1]
 
   # Convert epoch to ET
@@ -125,7 +125,7 @@ def compute_topocentric_coordinates_with_rates(
   sat_vel_bf_array = np.zeros((3, n_points))
 
   for i in range(n_points):
-    epoch_et_i = epoch_et + time_s[i]
+    epoch_et_i = epoch_et + time__s[i]
     sat_pos_bf_array[:, i], sat_vel_bf_array[:, i] = VectorConverter.j2000_to_iau_earth(
       j2000_pos_vec = j2000_pos_vec[:, i],
       j2000_vel_vec = j2000_vel_vec[:, i],
