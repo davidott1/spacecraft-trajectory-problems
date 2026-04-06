@@ -1,36 +1,36 @@
 """
-Lunar Transfer Optimizer
-========================
+Initial Guess Module
+====================
 
-Patched conic Earth-to-Moon transfer trajectory optimization.
+Generates initial trajectory guesses for the maneuver optimizer using
+low-fidelity analytical methods.
 
-Solves for the minimum total ΔV transfer from a circular Low Earth Orbit (LEO)
-to a circular Low Lunar Orbit (LLO) using the patched conic approximation.
+Currently implements a patched conic grid search for circular-orbit-to-
+circular-orbit transfers in the Earth-Moon system.
 
-Algorithm:
-----------
-  1. Compute Hohmann transfer estimates as initial guess
-  2. Grid search over departure times within search window
+Algorithm (PatchedConicGridSearch):
+-----------------------------------
+  1. Compute Hohmann transfer estimates as baseline
+  2. Grid search over departure times and ΔV₁ magnitudes
   3. For each candidate:
-     a. Propagate LEO to departure time (analytical circular orbit)
+     a. Propagate parking orbit to departure time (two-body)
      b. Apply ΔV₁ prograde burn
      c. Propagate transfer orbit under Earth two-body gravity
      d. Detect Moon SOI crossing using SPICE ephemeris
      e. Transform to Moon-centered frame at SOI boundary
      f. Propagate under Moon two-body gravity to periapsis
-     g. Compute ΔV₂ for LLO circularization at periapsis
-  4. Refine best solution with scipy.optimize.minimize
+     g. Compute ΔV₂ for circularization at periapsis
+  4. Refine best candidate with scipy.optimize.minimize
   5. Build output trajectory with Nodes and Segments
 
-Output:
--------
-  OptimizationResult containing:
-    - Trajectory with nodes (departure, SOI, periapsis) and segments
-    - Objective value (total ΔV)
+Classes:
+--------
+  PatchedConicGridSearch : 2-D grid search (departure time × ΔV₁) for
+                           circular-to-circular transfers via patched conics.
 
 Usage:
 ------
-  from src.optimization.lunar_transfer import LunarTransferOptimizer
+  from src.optimization.initial_guess import PatchedConicGridSearch
   from src.schemas.optimization import OptimizationProblem, OptimizationConfig
   from src.schemas.optimization import DecisionState, Objective, BoundaryCondition, Constraint
 
@@ -41,11 +41,8 @@ Usage:
     optimization_config = OptimizationConfig(method='nelder-mead'),
   )
 
-  optimizer = LunarTransferOptimizer(problem, initial_state_j2000)
-  result = optimizer.solve()
-
-  # result.trajectory contains Nodes and Segments
-  # result.objective_value is the total ΔV in m/s
+  search = PatchedConicGridSearch(problem, initial_state_j2000)
+  result = search.solve()
 """
 import numpy as np
 
@@ -68,20 +65,33 @@ from src.propagation.analytical_propagator import (
 )
 
 
-class LunarTransferOptimizer:
+class PatchedConicGridSearch:
   """
-  Patched conic Earth-to-Moon transfer optimizer.
+  Patched conic grid search for circular-to-circular orbit transfers.
 
-  Finds the minimum-ΔV transfer from circular LEO to circular LLO using
-  the patched conic approximation with Moon SOI boundary switching.
+  Finds the minimum-ΔV transfer between two circular orbits in a two-body
+  system with one SOI patch point. Currently configured for Earth-Moon
+  transfers (circular LEO → circular LLO).
+
+  The search grids over departure time and ΔV₁ magnitude, evaluates each
+  candidate using patched conic propagation (Earth two-body → SOI → Moon
+  two-body), and returns the best transfer found.
+
+  Assumptions:
+    - Patched conic approximation (two-body only, no perturbations)
+    - Impulsive maneuvers (instantaneous ΔV)
+    - Circular departure orbit (ΔV₁ applied prograde)
+    - Circular target orbit (ΔV₂ computed for circularization)
+    - Moon SOI as the single patch point
+    - Moon position from SPICE ephemeris (DE440)
 
   Attributes:
     problem          : OptimizationProblem
-    initial_state    : np.ndarray (6,) - Initial LEO state in J2000 [m, m/s]
-    radius_leo       : float - LEO orbital radius [m]
-    radius_llo       : float - LLO orbital radius [m]
-    vel_mag_circ_leo : float - Circular velocity at LEO [m/s]
-    vel_mag_circ_llo : float - Circular velocity at LLO [m/s]
+    initial_state    : np.ndarray (6,) - Initial state in J2000 [m, m/s]
+    radius_leo       : float - Departure orbit radius [m]
+    radius_llo       : float - Target orbit radius [m]
+    vel_mag_circ_leo : float - Circular velocity at departure orbit [m/s]
+    vel_mag_circ_llo : float - Circular velocity at target orbit [m/s]
     soi_moon         : float - Moon's sphere of influence radius [m]
     hohmann          : dict  - Hohmann transfer estimates
   """
@@ -95,18 +105,18 @@ class LunarTransferOptimizer:
 
   def __init__(
     self,
-    problem       : OptimizationProblem,
-    initial_state : np.ndarray,
-    leo_altitude_m            : float = 200_000.0,
-    llo_altitude_m            : float = 100_000.0,
-    max_transfer_time_s       : float = 7.0 * 86400.0,
-    dv1_search_bounds__m_per_s     : tuple = (2800.0, 3400.0),
-    departure_search_window_s : float = 30.0 * 86400.0,
-    n_departure_candidates    : int   = 720,
-    llo_coast_orbits          : int   = 3,
+    problem                                : OptimizationProblem,
+    initial_state                          : np.ndarray,
+    leo_altitude__m                        : float = 200_000.0,
+    llo_altitude__m                        : float = 100_000.0,
+    max_transfer_time__s                   : float = 7.0 * 86400.0,
+    delta_vel_mag_1_search_bounds__m_per_s : tuple = (2800.0, 3400.0),
+    departure_search_window__s             : float = 30.0 * 86400.0,
+    n_departure_candidates                 : int   = 720,
+    llo_coast_orbits                       : int   = 3,
   ):
     """
-    Initialize the lunar transfer optimizer.
+    Initialize the patched conic grid search.
 
     Input:
     ------
@@ -115,32 +125,32 @@ class LunarTransferOptimizer:
         The departure epoch is taken from problem.decision_state.epoch.
       initial_state : np.ndarray (6,)
         Initial spacecraft state in Earth-centered J2000 [m, m/s].
-        Should be on a circular LEO orbit at the departure epoch.
-      leo_altitude_m : float
-        LEO altitude above Earth surface [m].
-      llo_altitude_m : float
-        LLO altitude above Moon surface [m].
-      max_transfer_time_s : float
+        Should be on a circular orbit at the departure epoch.
+      leo_altitude__m : float
+        Departure orbit altitude above Earth surface [m].
+      llo_altitude__m : float
+        Target orbit altitude above Moon surface [m].
+      max_transfer_time__s : float
         Maximum transfer time from departure to Moon SOI [s].
-      dv1_search_bounds__m_per_s : tuple
+      delta_vel_mag_1_search_bounds__m_per_s : tuple
         Search bounds for ΔV₁ magnitude [m/s].
-      departure_search_window_s : float
+      departure_search_window__s : float
         Search window for departure time [s] from departure epoch.
       n_departure_candidates : int
         Number of departure time candidates in grid search.
       llo_coast_orbits : int
-        Number of LLO orbits to propagate after insertion.
+        Number of target orbits to propagate after insertion.
     """
     self.problem       = problem
     self.config        = problem.optimization_config
     self.initial_state = initial_state.copy()
 
     # Problem-specific parameters
-    self.leo_altitude_m            = leo_altitude_m
-    self.llo_altitude_m            = llo_altitude_m
-    self.max_transfer_time_s       = max_transfer_time_s
-    self.dv1_search_bounds__m_per_s     = dv1_search_bounds__m_per_s
-    self.departure_search_window_s = departure_search_window_s
+    self.leo_altitude__m            = leo_altitude__m
+    self.llo_altitude__m            = llo_altitude__m
+    self.max_transfer_time__s       = max_transfer_time__s
+    self.delta_vel_mag_1_search_bounds__m_per_s = delta_vel_mag_1_search_bounds__m_per_s
+    self.departure_search_window__s = departure_search_window__s
     self.n_departure_candidates    = n_departure_candidates
     self.llo_coast_orbits          = llo_coast_orbits
 
@@ -148,8 +158,8 @@ class LunarTransferOptimizer:
     self.departure_epoch = problem.decision_state.epoch
 
     # Derived orbital radii
-    self.radius_leo = self.EARTH_RADIUS + leo_altitude_m
-    self.radius_llo = self.MOON_RADIUS  + llo_altitude_m
+    self.radius_leo = self.EARTH_RADIUS + leo_altitude__m
+    self.radius_llo = self.MOON_RADIUS  + llo_altitude__m
 
     # Circular velocities
     self.vel_mag_circ_leo = compute_circular_velocity(self.radius_leo, self.EARTH_GP)
@@ -161,12 +171,12 @@ class LunarTransferOptimizer:
     # Hohmann transfer estimates (Earth-only, to Moon orbit distance)
     self.hohmann = compute_hohmann_velocities(self.radius_leo, self.MOON_SMA, self.EARTH_GP)
 
+
   def solve(self) -> OptimizationResult:
     """
-    Find optimal patched conic lunar transfer.
+    Find optimal patched conic transfer (convenience wrapper).
 
-    Performs a grid search over departure times followed by local optimization
-    to minimize total ΔV.
+    Runs grid_search(), then refine(), then builds and returns the full result.
 
     Output:
     -------
@@ -185,47 +195,68 @@ class LunarTransferOptimizer:
       )
 
     # Print header
-    title = "Lunar Transfer Optimization (Patched Conic)"
+    title = "Patched Conic Grid Search (Circular-to-Circular Transfer)"
     print("\n" + "-" * len(title))
     print(title)
     print("-" * len(title))
 
-    # Print configuration
-    print()
-    print("  Configuration")
-    print(f"    LEO Altitude         : {self.leo_altitude_m/1000:.1f} km")
-    print(f"    LLO Altitude         : {self.llo_altitude_m/1000:.1f} km")
-    print(f"    LEO Radius           : {self.radius_leo/1000:.1f} km")
-    print(f"    LLO Radius           : {self.radius_llo/1000:.1f} km")
-    print(f"    V_circ LEO           : {self.vel_mag_circ_leo:.2f} m/s")
-    print(f"    V_circ LLO           : {self.vel_mag_circ_llo:.2f} m/s")
-    print(f"    Moon SOI Radius      : {self.soi_moon/1000:.1f} km")
-    print(f"    Departure Epoch      : {self.departure_epoch}")
-    print(f"    Search Window        : {self.departure_search_window_s/86400:.1f} days")
-    print(f"    Max Transfer Time    : {self.max_transfer_time_s/86400:.1f} days")
-
-    # Print Hohmann estimates
-    print()
-    print("  Hohmann Transfer Estimates")
-    print(f"    ΔV₁ (departure)      : {self.hohmann['delta_vel_mag_o']:.2f} m/s")
-    print(f"    ΔV₂ (arrival)        : {self.hohmann['delta_vel_mag_f']:.2f} m/s")
-    print(f"    Total ΔV             : {self.hohmann['delta_vel_total']:.2f} m/s")
-    print(f"    Transfer Time        : {self.hohmann['delta_time_of']/86400:.2f} days")
-    print(f"    Transfer SMA         : {self.hohmann['sma_of']/1000:.1f} km")
+    self._print_configuration()
 
     # Phase 1: Grid search
     print()
     print("  Progress")
+    grid_result = self.grid_search()
+
+    if grid_result is None:
+      return OptimizationResult(
+        success = False,
+        message = "No valid transfer found. The Moon may not be accessible from "
+                  "this orbit plane within the search window.",
+      )
+
+    # Phase 2: Local refinement
+    refined_result = self.refine(grid_result)
+
+    # Phase 3: Build full trajectory
+    print("    Phase 3: Building trajectory")
+    t_depart_et_final = refined_result['t_depart_et']
+    result = self._build_result(t_depart_et_final, refined_result['eval'])
+
+    # Print summary
+    self._print_summary(result, refined_result['eval'])
+
+    return result
+
+
+  def grid_search(self) -> Optional[dict]:
+    """
+    Phase 1: Grid search over departure times and ΔV₁ magnitudes.
+
+    Scans n_departure_candidates evenly spaced departure times across the
+    search window, with multiple ΔV₁ multipliers at each time.
+
+    Output:
+    -------
+      best : dict | None
+        Best candidate found, or None if no valid transfer exists.
+        Keys:
+          'eval'            : dict from _evaluate_transfer
+          'delta_vel_total' : float - total ΔV [m/s]
+          'offset__s'       : float - departure time offset from epoch [s]
+          'delta_vel_mag_1' : float - ΔV₁ magnitude [m/s]
+    """
+    t0_et = utc_to_et(self.departure_epoch)
+
     print("    Phase 1: Grid search over departure times")
 
-    search_window  = self.departure_search_window_s
-    n_candidates   = self.n_departure_candidates
-    dv1_initial    = self.hohmann['delta_vel_mag_o']
+    search_window           = self.departure_search_window__s
+    n_candidates             = self.n_departure_candidates
+    delta_vel_mag_1_initial  = self.hohmann['delta_vel_mag_o']
 
-    best_result    = None
-    best_dv_total  = np.inf
-    best_offset    = 0.0
-    best_dv1       = dv1_initial
+    best_result              = None
+    best_delta_vel_total     = np.inf
+    best_offset              = 0.0
+    best_delta_vel_mag_1     = delta_vel_mag_1_initial
     n_soi_crossings = 0
 
     departure_offsets = np.linspace(0, search_window, n_candidates)
@@ -239,17 +270,17 @@ class LunarTransferOptimizer:
       t_depart_et = t0_et + dt_offset
 
       # Try a range of ΔV₁ values around Hohmann estimate
-      for dv1_mult in [0.98, 1.0, 1.02, 1.05]:
-        dv1_candidate = dv1_initial * dv1_mult
-        result = self._evaluate_transfer(t_depart_et, dv1_candidate)
+      for delta_vel_mag_1_mult in [0.98, 1.0, 1.02, 1.05]:
+        delta_vel_mag_1_candidate = delta_vel_mag_1_initial * delta_vel_mag_1_mult
+        result = self._evaluate_transfer(t_depart_et, delta_vel_mag_1_candidate)
 
         if result is not None:
           n_soi_crossings += 1
-          if result['delta_vel_total'] < best_dv_total:
-            best_dv_total = result['delta_vel_total']
-            best_result   = result
-            best_offset   = dt_offset
-            best_dv1      = dv1_candidate
+          if result['delta_vel_total'] < best_delta_vel_total:
+            best_delta_vel_total = result['delta_vel_total']
+            best_result          = result
+            best_offset          = dt_offset
+            best_delta_vel_mag_1 = delta_vel_mag_1_candidate
 
     print(f"      Grid search complete: {n_soi_crossings} total SOI crossings")
 
@@ -257,19 +288,52 @@ class LunarTransferOptimizer:
       print("      [ERROR] No valid transfer found in search window")
       print()
       print("  Suggestions:")
-      print("    - Expand the search window (departure_search_window_s)")
-      print("    - Check that the LEO orbit plane passes near the Moon")
+      print("    - Expand the search window (departure_search_window__s)")
+      print("    - Check that the departure orbit plane passes near the Moon")
       print("    - Try a different departure epoch")
-      return OptimizationResult(
-        success = False,
-        message = "No valid transfer found. The Moon may not be accessible from "
-                  "this LEO orbit plane within the search window.",
-      )
+      return None
 
-    # Phase 2: Local optimization
+    return {
+      'eval'            : best_result,
+      'delta_vel_total' : best_delta_vel_total,
+      'offset__s'       : best_offset,
+      'delta_vel_mag_1' : best_delta_vel_mag_1,
+    }
+
+
+  def refine(self, candidate: dict) -> dict:
+    """
+    Phase 2: Local optimization around a grid search candidate.
+
+    Uses scipy.optimize.minimize to refine the departure time offset and
+    ΔV₁ magnitude from the best grid search result.
+
+    Input:
+    ------
+      candidate : dict
+        Output from grid_search().
+
+    Output:
+    -------
+      refined : dict
+        Refined result with keys:
+          'eval'            : dict from _evaluate_transfer
+          'delta_vel_total' : float
+          'offset__s'       : float
+          'delta_vel_mag_1' : float
+          't_depart_et'     : float
+    """
+    t0_et = utc_to_et(self.departure_epoch)
+    search_window = self.departure_search_window__s
+
+    best_offset          = candidate['offset__s']
+    best_delta_vel_mag_1 = candidate['delta_vel_mag_1']
+    best_delta_vel_total = candidate['delta_vel_total']
+    best_eval            = candidate['eval']
+
     departure_dt_best = self.departure_epoch + timedelta(seconds=best_offset)
     print(f"    Phase 2: Refining best solution")
-    print(f"      Best grid result: ΔV_total = {best_dv_total:.2f} m/s "
+    print(f"      Best grid result: ΔV_total = {best_delta_vel_total:.2f} m/s "
           f"at offset = {best_offset/86400:.2f} days "
           f"({departure_dt_best.strftime('%Y-%m-%d %H:%M')} UTC)")
 
@@ -277,15 +341,15 @@ class LunarTransferOptimizer:
       dt_offset_opt, delta_vel_mag_1_opt = x
       # Clamp to valid range
       dt_offset_opt       = max(0, min(search_window, dt_offset_opt))
-      delta_vel_mag_1_opt = max(self.dv1_search_bounds__m_per_s[0],
-                                min(self.dv1_search_bounds__m_per_s[1], delta_vel_mag_1_opt))
+      delta_vel_mag_1_opt = max(self.delta_vel_mag_1_search_bounds__m_per_s[0],
+                                min(self.delta_vel_mag_1_search_bounds__m_per_s[1], delta_vel_mag_1_opt))
       t_depart_et_opt = t0_et + dt_offset_opt
       result_opt = self._evaluate_transfer(t_depart_et_opt, delta_vel_mag_1_opt)
       if result_opt is None:
         return 1e10
       return result_opt['delta_vel_total']
 
-    x0 = [best_offset, best_dv1]
+    x0 = [best_offset, best_delta_vel_mag_1]
     opt = minimize(
       objective, x0,
       method  = self.config.method,
@@ -294,16 +358,16 @@ class LunarTransferOptimizer:
     )
 
     # Evaluate final solution
-    final_offset, final_dv1 = opt.x
-    final_offset = max(0, min(search_window, final_offset))
-    final_dv1    = max(self.dv1_search_bounds__m_per_s[0],
-                       min(self.dv1_search_bounds__m_per_s[1], final_dv1))
+    final_offset, final_delta_vel_mag_1 = opt.x
+    final_offset          = max(0, min(search_window, final_offset))
+    final_delta_vel_mag_1 = max(self.delta_vel_mag_1_search_bounds__m_per_s[0],
+                                min(self.delta_vel_mag_1_search_bounds__m_per_s[1], final_delta_vel_mag_1))
     t_depart_et_final = t0_et + final_offset
-    final_eval = self._evaluate_transfer(t_depart_et_final, final_dv1)
+    final_eval = self._evaluate_transfer(t_depart_et_final, final_delta_vel_mag_1)
 
-    if final_eval is None or final_eval['delta_vel_total'] >= best_dv_total:
+    if final_eval is None or final_eval['delta_vel_total'] >= best_delta_vel_total:
       # Refinement didn't improve; use grid search result
-      final_eval        = best_result
+      final_eval        = best_eval
       final_offset      = best_offset
       t_depart_et_final = t0_et + final_offset
 
@@ -312,19 +376,42 @@ class LunarTransferOptimizer:
           f"at offset = {final_offset/86400:.2f} days "
           f"({departure_dt_final.strftime('%Y-%m-%d %H:%M')} UTC)")
 
-    # Phase 3: Build full trajectory
-    print("    Phase 3: Building trajectory")
-    result = self._build_result(t_depart_et_final, final_eval)
+    return {
+      'eval'            : final_eval,
+      'delta_vel_total' : final_eval['delta_vel_total'],
+      'offset__s'       : final_offset,
+      'delta_vel_mag_1' : final_delta_vel_mag_1,
+      't_depart_et'     : t_depart_et_final,
+    }
 
-    # Print summary
-    self._print_summary(result, final_eval)
 
-    return result
+  def _print_configuration(self):
+    """Print search configuration and Hohmann estimates."""
+    print()
+    print("  Configuration")
+    print(f"    LEO Altitude         : {self.leo_altitude__m/1000:.1f} km")
+    print(f"    LLO Altitude         : {self.llo_altitude__m/1000:.1f} km")
+    print(f"    LEO Radius           : {self.radius_leo/1000:.1f} km")
+    print(f"    LLO Radius           : {self.radius_llo/1000:.1f} km")
+    print(f"    V_circ LEO           : {self.vel_mag_circ_leo:.2f} m/s")
+    print(f"    V_circ LLO           : {self.vel_mag_circ_llo:.2f} m/s")
+    print(f"    Moon SOI Radius      : {self.soi_moon/1000:.1f} km")
+    print(f"    Departure Epoch      : {self.departure_epoch}")
+    print(f"    Search Window        : {self.departure_search_window__s/86400:.1f} days")
+    print(f"    Max Transfer Time    : {self.max_transfer_time__s/86400:.1f} days")
+
+    print()
+    print("  Hohmann Transfer Estimates")
+    print(f"    ΔV₁ (departure)      : {self.hohmann['delta_vel_mag_o']:.2f} m/s")
+    print(f"    ΔV₂ (arrival)        : {self.hohmann['delta_vel_mag_f']:.2f} m/s")
+    print(f"    Total ΔV             : {self.hohmann['delta_vel_total']:.2f} m/s")
+    print(f"    Transfer Time        : {self.hohmann['delta_time_of']/86400:.2f} days")
+    print(f"    Transfer SMA         : {self.hohmann['sma_of']/1000:.1f} km")
 
 
   def _evaluate_transfer(
     self,
-    t_depart_et    : float,
+    t_depart_et     : float,
     delta_vel_mag_1 : float,
   ) -> Optional[dict]:
     """
@@ -376,8 +463,8 @@ class LunarTransferOptimizer:
       state_at_departure = self.initial_state.copy()
 
     # Apply ΔV₁ (prograde tangential burn)
-    vel     = state_at_departure[3:6]
-    vel_hat = vel / np.linalg.norm(vel)
+    vel_vec         = state_at_departure[3:6]
+    vel_hat         = vel_vec / np.linalg.norm(vel_vec)
     delta_vel_vec_1 = delta_vel_mag_1 * vel_hat
 
     state_post_burn      = state_at_departure.copy()
@@ -390,19 +477,19 @@ class LunarTransferOptimizer:
       gp                = self.EARTH_GP,
       naif_id_secondary = NAIFIDS.MOON,
       naif_id_primary   = NAIFIDS.EARTH,
-      soi_radius       = self.soi_moon,
-      max_time_s       = self.max_transfer_time_s,
-      rtol             = self.config.rtol,
-      atol             = self.config.atol,
+      soi_radius        = self.soi_moon,
+      max_time__s       = self.max_transfer_time__s,
+      rtol              = self.config.rtol,
+      atol              = self.config.atol,
     )
 
     if not soi_result['success']:
       return None
 
     # Transform to Moon-centered frame at SOI crossing
-    t_soi          = soi_result['soi_time_et']
+    t_soi           = soi_result['soi_time_et']
     state_soi_earth = soi_result['soi_state']
-    state_soi_moon = BodyVectorConverter.j2000_xyz__rel_earth_to_rel_moon(state_soi_earth, t_soi)
+    state_soi_moon  = BodyVectorConverter.j2000_xyz__rel_earth_to_rel_moon(state_soi_earth, t_soi)
 
     v_infinity = np.linalg.norm(state_soi_moon[3:6])
 
@@ -411,7 +498,7 @@ class LunarTransferOptimizer:
       state0     = state_soi_moon,
       t0_et      = t_soi,
       gp         = self.MOON_GP,
-      max_time_s = 3.0 * 86400.0,  # Max 3 days around Moon
+      max_time__s = 3.0 * 86400.0,  # Max 3 days around Moon
       rtol       = self.config.rtol,
       atol       = self.config.atol,
     )
@@ -432,7 +519,7 @@ class LunarTransferOptimizer:
     # ΔV₂ direction: retrograde at periapsis (opposite to velocity)
     vel_peri_vec = peri_result['periapsis_state'][3:6]
     vel_peri_hat = vel_peri_vec / np.linalg.norm(vel_peri_vec)
-    delta_vel_vec_2 = -delta_vel_mag_2 * vel_peri_hat  # Retrograde for capture
+    delta_vel_vec_2 = -delta_vel_mag_2 * vel_peri_hat  # retrograde for capture
 
     delta_vel_total = delta_vel_mag_1 + delta_vel_mag_2
 
@@ -606,7 +693,6 @@ class LunarTransferOptimizer:
       trajectory      = trajectory,
       objective_value = eval_result['delta_vel_total'],
     )
-
 
 
   def _print_summary(
