@@ -37,10 +37,13 @@ The system lives in `src/` with these subsystems:
 - Keep force model functions in `dynamics.py` following the existing pattern: each returns an acceleration vector in m/s²
 - Tests go in `src/verification/` following existing pytest patterns
 - Do not modify SPICE kernel files or ephemeris data
+- All imports must be at the top of the file — no inline or deferred imports
 
 ## Scope Discipline
 
 Do exactly what is asked — nothing more. Do not add unrequested features, refactors, debug logging, filtering logic, or "improvements." If you think something additional would be beneficial, ask first before making the change.
+
+Always explain what you are about to do before making edits. Do not silently start changing files.
 
 ## Approach
 
