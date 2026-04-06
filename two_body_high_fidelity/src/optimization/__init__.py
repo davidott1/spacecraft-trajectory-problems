@@ -7,7 +7,7 @@ with minimum ΔV optimization.
 
 Modules:
 --------
-  lunar_transfer       : Earth-Moon transfer optimizer
+  initial_guess        : Initial trajectory guess generators (patched conic grid search)
   maneuver_optimizer   : General-purpose impulsive maneuver optimizer
 """
 
@@ -17,7 +17,7 @@ from src.propagation.analytical_propagator import (
   propagate_to_periapsis,
   propagate_two_body,
 )
-from src.optimization.lunar_transfer import LunarTransferOptimizer
+from src.optimization.initial_guess import PatchedConicGridSearch
 
 __all__ = [
   # Core functions
@@ -28,5 +28,5 @@ __all__ = [
   'propagate_to_periapsis',
   'propagate_two_body',
   # Optimizer
-  'LunarTransferOptimizer',
+  'PatchedConicGridSearch',
 ]

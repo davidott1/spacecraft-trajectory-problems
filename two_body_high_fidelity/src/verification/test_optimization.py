@@ -220,7 +220,7 @@ class TestLunarTransfer:
       naif_id_secondary = NAIFIDS.MOON,
       naif_id_primary   = NAIFIDS.EARTH,
       soi_radius        = soi_moon,
-      max_time_s        = 7.0 * 86400.0,
+      max_time__s       = 7.0 * 86400.0,
     )
 
     # The trajectory should at least propagate successfully
@@ -237,7 +237,7 @@ class TestLunarTransfer:
     Run a full lunar transfer optimization and verify the result.
     """
     from src.schemas.optimization import OptimizationProblem, OptimizationConfig, DecisionState, Objective, BoundaryCondition, Constraint
-    from src.optimization.lunar_transfer import LunarTransferOptimizer
+    from src.optimization.initial_guess import PatchedConicGridSearch
 
     problem = OptimizationProblem(
       objective           = Objective(quantity='delta_v_total', nodes=[0, 2]),
@@ -250,14 +250,14 @@ class TestLunarTransfer:
     vel_mag_circ = np.sqrt(SOLARSYSTEMCONSTANTS.EARTH.GP / radius_leo)
     initial_state = np.array([radius_leo, 0.0, 0.0, 0.0, vel_mag_circ, 0.0])
 
-    optimizer = LunarTransferOptimizer(
+    search = PatchedConicGridSearch(
       problem, initial_state,
-      leo_altitude_m         = 200_000.0,
-      llo_altitude_m         = 100_000.0,
-      n_departure_candidates = 180,  # Coarser grid for faster test
-      max_transfer_time_s    = 7.0 * 86400.0,
+      leo_altitude__m         = 200_000.0,
+      llo_altitude__m         = 100_000.0,
+      n_departure_candidates  = 180,  # Coarser grid for faster test
+      max_transfer_time__s    = 7.0 * 86400.0,
     )
-    result    = optimizer.solve()
+    result = search.solve()
 
     if result.success:
       # Verify objective value (total ΔV)

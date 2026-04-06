@@ -66,9 +66,9 @@ def propagate_to_soi(
   gp               : float,
   naif_id_secondary : int,
   naif_id_primary   : int,
-  soi_radius       : float,
-  max_time_s       : float,
-  rtol             : float = 1e-12,
+  soi_radius        : float,
+  max_time__s       : float,
+  rtol              : float = 1e-12,
   atol             : float = 1e-12,
 ) -> dict:
   """
@@ -91,7 +91,7 @@ def propagate_to_soi(
       NAIF ID of the primary body (e.g., Earth = 399).
     soi_radius : float
       Sphere of influence radius of the target body [m].
-    max_time_s : float
+    max_time__s : float
       Maximum propagation time [s].
     rtol : float
       Relative tolerance for integration.
@@ -119,10 +119,10 @@ def propagate_to_soi(
   soi_event.direction = -1  # trigger when entering SOI (distance decreasing)
 
   # Time span and evaluation points
-  time_span   = (time_et_o, time_et_o + max_time_s)
-  n_points = max(1000, int(max_time_s / 60))
+  time_span   = (time_et_o, time_et_o + max_time__s)
+  n_points = max(1000, int(max_time__s / 60))
   n_points = min(n_points, 50000)
-  time_eval   = np.linspace(time_et_o, time_et_o + max_time_s, n_points)
+  time_eval   = np.linspace(time_et_o, time_et_o + max_time__s, n_points)
 
   # Build EOM
   eom = _build_two_body_eom(gp)
@@ -167,12 +167,12 @@ def propagate_to_soi(
 
 
 def propagate_to_periapsis(
-  state0     : np.ndarray,
-  t0_et      : float,
-  gp         : float,
-  max_time_s : float,
-  rtol       : float = 1e-12,
-  atol       : float = 1e-12,
+  state0      : np.ndarray,
+  t0_et       : float,
+  gp          : float,
+  max_time__s : float,
+  rtol        : float = 1e-12,
+  atol        : float = 1e-12,
 ) -> dict:
   """
   Propagate under two-body gravity until periapsis passage.
@@ -188,7 +188,7 @@ def propagate_to_periapsis(
       Initial ephemeris time [s past J2000].
     gp : float
       Gravitational parameter of central body [m³/s²].
-    max_time_s : float
+    max_time__s : float
       Maximum propagation time [s].
     rtol : float
       Relative tolerance for integration.
@@ -216,10 +216,10 @@ def propagate_to_periapsis(
   periapsis_event.direction = 1  # r·v: negative → positive at periapsis on approach
 
   # Time span and evaluation points
-  t_span   = (t0_et, t0_et + max_time_s)
-  n_points = max(500, int(max_time_s / 10))
+  t_span   = (t0_et, t0_et + max_time__s)
+  n_points = max(500, int(max_time__s / 10))
   n_points = min(n_points, 10000)
-  t_eval   = np.linspace(t0_et, t0_et + max_time_s, n_points)
+  t_eval   = np.linspace(t0_et, t0_et + max_time__s, n_points)
 
   # Integrate
   eom = _build_two_body_eom(gp)
