@@ -170,15 +170,10 @@ def evaluate_objective(
   # Reconstruct initial state
   initial_state = np.concatenate([ds.position, ds.velocity])
 
-  # Check maneuver time ordering: burns must be after epoch and in sequence
+  # Check last burn is before propagation end time
   if ds.maneuvers and len(ds.maneuvers) > 0:
-    prev_time = ds.epoch
-    for m in ds.maneuvers:
-      if m.time_dt <= prev_time:
-        return config.penalty_weight  # bad ordering
-      prev_time = m.time_dt
     if ds.maneuvers[-1].time_dt >= propagation_config.time_f_dt:
-      return config.penalty_weight  # burn after end time
+      return config.penalty_weight
 
   # Propagate
   try:

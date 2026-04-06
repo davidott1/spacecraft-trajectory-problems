@@ -85,6 +85,8 @@ class ManeuversConfig:
   def __post_init__(self):
     if self._items is None:
       self._items = []
+    else:
+      self._items.sort(key=lambda m: m.time_dt)
 
   def __len__(self) -> int:
     """Return number of maneuvers."""
@@ -103,8 +105,9 @@ class ManeuversConfig:
     return len(self._items) > 0
 
   def append(self, maneuver: 'ImpulsiveManeuver'):
-    """Add a maneuver to the list."""
+    """Add a maneuver to the list, maintaining time order."""
     self._items.append(maneuver)
+    self._items.sort(key=lambda m: m.time_dt)
 
   @property
   def is_valid(self) -> bool:

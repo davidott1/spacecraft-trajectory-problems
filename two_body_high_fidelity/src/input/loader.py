@@ -1,3 +1,4 @@
+import warnings
 import yaml
 import sys
 import subprocess
@@ -348,6 +349,16 @@ def load_maneuvers(
 
     except Exception as e:
       raise ValueError(f"Error parsing maneuver {i}: {e}")
+
+  # Check time ordering — warn and sort if out of order
+  for i in range(1, len(maneuvers)):
+    if maneuvers[i].time_dt <= maneuvers[i - 1].time_dt:
+      warnings.warn(
+        f"Maneuvers in {maneuver_filepath.name} are not in chronological order. Sorting by time.",
+        UserWarning,
+      )
+      maneuvers.sort(key=lambda m: m.time_dt)
+      break
 
   return maneuvers
 
