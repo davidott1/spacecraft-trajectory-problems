@@ -38,7 +38,7 @@ The system lives in `src/` with these subsystems:
 - Tests go in `src/verification/` following existing pytest patterns
 - Do not modify SPICE kernel files or ephemeris data
 - All imports must be at the top of the file — no inline or deferred imports
-- Do not abbreviate impulsive maneuvers as dv1 or deltav. Use descriptive delta_vel_vec or delta_vel_mag for an impulsive maneuver vector or magnitude, respectively.
+- Do not abbreviate impulsive maneuvers as dv1 or deltav. Use descriptive delta_vel_vec or delta_vel_mag for an impulsive maneuver vector or magnitude, respectively. This applies everywhere: variable names, dict keys, print labels, comments, and docstrings unless otherwise instructed.
 - When units appear in variable names, separate the name from the unit with double underscores: <variable_name>__<units>.
 
 ## Scope Discipline
