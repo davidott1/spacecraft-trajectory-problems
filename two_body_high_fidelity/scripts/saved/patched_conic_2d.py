@@ -2,7 +2,7 @@
 """
 2D Patched Conic Transfer: Circular LEO -> Circular LLO
 ========================================================
-
+ 
 Analytical single-solution approach. No grid search.
 
 Setup:
