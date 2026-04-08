@@ -61,15 +61,15 @@ def _build_two_body_eom(
 # --------------------------------------------------------------------------
 
 def propagate_to_soi(
-  state_o          : np.ndarray,
-  time_et_o        : float,
-  gp               : float,
+  state_o           : np.ndarray,
+  time_et_o         : float,
+  gp                : float,
   naif_id_secondary : int,
   naif_id_primary   : int,
   soi_radius        : float,
   max_time__s       : float,
   rtol              : float = 1e-12,
-  atol             : float = 1e-12,
+  atol              : float = 1e-12,
 ) -> dict:
   """
   Propagate under central body two-body gravity until SOI crossing.
