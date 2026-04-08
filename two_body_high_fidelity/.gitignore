@@ -21,5 +21,6 @@ __pycache__/
 .env
 .vscode/
 
-# Ignore scripts directory
-scripts/
+# Ignore scripts directory (except saved/)
+scripts/*
+!scripts/saved/
