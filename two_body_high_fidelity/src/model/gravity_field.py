@@ -552,7 +552,7 @@ class SphericalHarmonicsGravity:
     acc_vec = scale * np.array([ax, ay, az])
     
     # Add Two-Body Point Mass term explicitly (n=0)
-    acc_vec += -gp * pos_vec / r**3
+    acc_vec += -gp * pos_vec / pos_mag**3
     
     return acc_vec
 

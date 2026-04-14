@@ -256,7 +256,11 @@ def print_paths(
   print(f"      JPL Horizons Folderpath  : <data_folderpath>/{config.output_paths.jpl_horizons_folderpath.relative_to(data_folderpath)}")
   print(f"      TLEs Folderpath          : <data_folderpath>/{config.output_paths.tles_folderpath.relative_to(data_folderpath)}")
   print(f"    Input Folderpath           : {input_folderpath}")
-  print(f"      Initial States Folderpath : <input_folderpath>/{config.output_paths.initial_states_folderpath.relative_to(input_folderpath)}")
+  try:
+    initial_states_rel = config.output_paths.initial_states_folderpath.relative_to(input_folderpath)
+    print(f"      Initial States Folderpath : <input_folderpath>/{initial_states_rel}")
+  except ValueError:
+    print(f"      Initial States Folderpath : {config.output_paths.initial_states_folderpath}")
 
 
 def print_configuration(
