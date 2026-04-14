@@ -386,7 +386,7 @@ def download_horizons_ephemeris(
       )
   
   # Add UTC time columns manually (TDB to UTC conversion)
-  tdb_times = Time(vectors['datetime_jd'], format='jd', scale='tdb')
+  tdb_times = AstropyTime(vectors['datetime_jd'], format='jd', scale='tdb')
   utc_times = tdb_times.utc
   
   # Calculate TDB-UTC offset
