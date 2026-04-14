@@ -22,11 +22,15 @@ Sweep:
   For each offset, propagate transfer -> SOI -> Moon periapsis.
   Plot trajectories color-coded by offset, plus periapsis altitude vs offset.
 """
+import os
+
 import numpy as np
 import matplotlib.pyplot as plt
 
 from scipy.integrate import solve_ivp
 from scipy.optimize  import brentq
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 
 # ============================================================
@@ -475,10 +479,12 @@ def main():
   cbar_traj.set_label('delta_anomaly [deg]', fontsize=10)
 
   plt.tight_layout()
-  plt.savefig('output/patched_conic_2d_sweep.png', dpi=150, bbox_inches='tight')
+  save_path = os.path.join(PROJECT_ROOT, 'output', 'patched_conic_2d_sweep.png')
+  os.makedirs(os.path.dirname(save_path), exist_ok=True)
+  plt.savefig(save_path, dpi=150, bbox_inches='tight')
   plt.show()
 
-  print(f"  Saved: output/patched_conic_2d_sweep.png")
+  print(f"  Saved: {save_path}")
   print("  Done!")
 
 
