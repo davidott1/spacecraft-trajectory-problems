@@ -152,6 +152,9 @@ class Canvas(QWidget):
         self.setStyleSheet("background-color: white;")
         self._v_held = False
         self.zoom = 1.0
+        self.pan_offset = QPointF(0, 0)
+        self.earth_center = QPointF(600, 450)
+        self.earth_radius = 50
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_V:
@@ -164,6 +167,11 @@ class Canvas(QWidget):
             self._v_held = False
         elif event.key() == Qt.Key.Key_O:
             self._o_held = False
+
+    def _screen_to_world(self, screen_pos):
+        wx = (screen_pos.x() - self.pan_offset.x()) / self.zoom
+        wy = (screen_pos.y() - self.pan_offset.y()) / self.zoom
+        return QPointF(wx, wy)
 
     def _triangle_polygon(self):
         x, y = self.tri_center.x(), self.tri_center.y()
@@ -222,29 +230,27 @@ class Canvas(QWidget):
     def _compute_orbit_for_shape(self, shape):
         """Compute Kepler orbit for triangle or square if it has a velocity vector."""
         if shape == "triangle" and self.tri_velocity_end is not None:
-            center = QPointF(self.width() / 2, self.height() / 2)
             vel = np.array([
                 self.tri_velocity_end.x() - self.tri_center.x(),
                 self.tri_velocity_end.y() - self.tri_center.y(),
             ])
             mu = 3.986e5  # km^3/s^2, Earth gravitational parameter
             self.tri_orbit = compute_kepler_orbit(
-                self.tri_center, vel, center, mu, ORBIT_NUM_POINTS,
+                self.tri_center, vel, self.earth_center, mu, ORBIT_NUM_POINTS,
             )
         elif shape == "square" and self.sq_velocity_end is not None:
-            center = QPointF(self.width() / 2, self.height() / 2)
             vel = np.array([
                 self.sq_velocity_end.x() - self.sq_center.x(),
                 self.sq_velocity_end.y() - self.sq_center.y(),
             ])
             mu = 3.986e5
             self.sq_orbit = compute_kepler_orbit(
-                self.sq_center, vel, center, mu, ORBIT_NUM_POINTS,
+                self.sq_center, vel, self.earth_center, mu, ORBIT_NUM_POINTS,
             )
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            pos = QPointF(event.pos())
+            pos = self._screen_to_world(QPointF(event.pos()))
             # V + click on triangle/square to draw velocity line
             # O + click on triangle/square to compute Kepler orbit
             # Shift-click to link two existing nodes (including triangle/square)
@@ -338,11 +344,11 @@ class Canvas(QWidget):
             if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
                 self.dragging = True
                 self.trajectories.append({"dots": [], "segments": []})
-                self.trajectories[-1]["dots"].append(QPointF(event.pos()))
+                self.trajectories[-1]["dots"].append(self._screen_to_world(QPointF(event.pos())))
                 self.update()
 
     def mouseMoveEvent(self, event):
-        pos = QPointF(event.pos())
+        pos = self._screen_to_world(QPointF(event.pos()))
         # Handle velocity line dragging (grab anywhere, scale by 1/t)
         if self.dragging_vel_end is not None:
             if self.dragging_vel_end == "triangle":
@@ -413,7 +419,7 @@ class Canvas(QWidget):
             return
         traj = self.trajectories[-1]
         last = traj["dots"][-1]
-        pos = event.pos()
+        pos = self._screen_to_world(QPointF(event.pos()))
         dx = pos.x() - last.x()
         dy = pos.y() - last.y()
         dist = math.hypot(dx, dy)
@@ -436,7 +442,7 @@ class Canvas(QWidget):
 
     def mouseDoubleClickEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            pos = QPointF(event.pos())
+            pos = self._screen_to_world(QPointF(event.pos()))
             if self._hit_triangle(pos):
                 self.tri_orbit_mode = not self.tri_orbit_mode
                 if self.tri_orbit_mode:
@@ -479,16 +485,22 @@ class Canvas(QWidget):
         self.zoom /= 1.2
         self.update()
 
+    def wheelEvent(self, event):
+        delta = event.pixelDelta()
+        if not delta.isNull():
+            self.pan_offset = QPointF(
+                self.pan_offset.x() + delta.x(),
+                self.pan_offset.y() + delta.y(),
+            )
+            self.update()
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Apply zoom centered on widget center
-        cx = self.width() / 2
-        cy = self.height() / 2
-        painter.translate(cx, cy)
+        # Apply pan and zoom
+        painter.translate(self.pan_offset.x(), self.pan_offset.y())
         painter.scale(self.zoom, self.zoom)
-        painter.translate(-cx, -cy)
 
         # Draw Kepler orbits
         painter.setPen(QPen(QColor("green"), 2))
@@ -505,16 +517,13 @@ class Canvas(QWidget):
         if self.sq_velocity_end is not None:
             painter.drawLine(self.sq_center, self.sq_velocity_end)
 
-        # Draw blue circle in center
-        center_x = self.width() / 2
-        center_y = self.height() / 2
-        circle_radius = 50
+        # Draw blue circle (Earth)
         painter.setBrush(QBrush(QColor("blue")))
         painter.setPen(QPen(QColor("blue"), 2))
-        painter.drawEllipse(QPointF(center_x, center_y), circle_radius, circle_radius)
+        painter.drawEllipse(self.earth_center, self.earth_radius, self.earth_radius)
 
         # Draw trajectories
-        center = QPointF(center_x, center_y)
+        center = self.earth_center
         for traj in self.trajectories:
             dots = traj["dots"]
             segments = traj["segments"]
@@ -618,7 +627,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Trajectory Builder")
-        self.setMinimumSize(800, 600)
+        self.setMinimumSize(1200, 900)
 
         canvas = Canvas()
         self.canvas = canvas
@@ -645,6 +654,8 @@ class MainWindow(QMainWindow):
         zoom_layout.addWidget(zoom_in_btn)
 
         layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         layout.addLayout(top_layout)
         layout.addWidget(canvas)
         layout.addLayout(zoom_layout)
