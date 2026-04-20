@@ -2,11 +2,16 @@
 Integration Tests for Optimization Module
 ==========================================
 
-Tests for PatchedConicGridSearch.hohmann factory and full solve pipeline.
-Requires SPICE kernels to be loaded.
+Tests for two-body propagation (propagator + integrator), PatchedConicGridSearch
+factory (SPICE + Hohmann + ephemeris), and full solve pipeline.
 
 Tests:
 ------
+TestTwoBodyPropagation
+  - test_period_roundtrip              : circular orbit returns to start after one period
+  - test_quarter_orbit                 : quarter-orbit position and velocity
+  - test_energy_conservation           : energy conserved over one elliptical orbit
+
 TestPatchedConicGridSearchHohmann
   - test_nominal_departure_within_one_leo_period  : departure_center__s < one LEO period
   - test_sweep_bounds_symmetric_about_nominal     : grid spans [center-half, center+half]
@@ -23,8 +28,80 @@ import numpy as np
 
 from datetime import datetime
 
-from src.model.constants         import SOLARSYSTEMCONSTANTS
-from src.model.orbital_mechanics import compute_circular_velocity
+from src.model.constants                       import SOLARSYSTEMCONSTANTS
+from src.model.orbital_mechanics               import compute_circular_velocity
+from src.propagation.analytical_propagator     import propagate_two_body
+
+
+class TestTwoBodyPropagation:
+  """
+  Integration tests for propagate_two_body (analytical propagator + solve_ivp).
+  The boundary under test is the wrapper function feeding initial conditions
+  to scipy's integrator and extracting results.
+  """
+
+  def test_period_roundtrip(self):
+    """
+    Circular orbit must return to its initial state after exactly one period.
+    """
+    pos_mag = 7000.0e3
+    gp      = SOLARSYSTEMCONSTANTS.EARTH.GP
+    vel_mag = np.sqrt(gp / pos_mag)
+    T       = 2.0 * np.pi * np.sqrt(pos_mag**3 / gp)
+    state0  = np.array([pos_mag, 0.0, 0.0, 0.0, vel_mag, 0.0])
+
+    result = propagate_two_body(state0=state0, t0_et=0.0, tf_et=T, gp=gp, n_points=2)
+
+    assert result['success']
+    np.testing.assert_allclose(
+      state0, result['states'][:, -1], atol=1e-3,
+      err_msg="Orbit did not return to start after one period",
+    )
+
+  def test_quarter_orbit(self):
+    """
+    After a quarter period, position rotates 90° and velocity rotates 90°.
+    """
+    pos_mag = 7000.0e3
+    gp      = SOLARSYSTEMCONSTANTS.EARTH.GP
+    vel_mag = np.sqrt(gp / pos_mag)
+    T       = 2.0 * np.pi * np.sqrt(pos_mag**3 / gp)
+    state0  = np.array([pos_mag, 0.0, 0.0, 0.0, vel_mag, 0.0])
+
+    result        = propagate_two_body(state0=state0, t0_et=0.0, tf_et=T/4.0, gp=gp, n_points=2)
+    state_quarter = result['states'][:, -1]
+
+    assert result['success']
+    np.testing.assert_allclose(
+      state_quarter[0:3], [0.0, pos_mag, 0.0], atol=1e-3,
+      err_msg="Quarter-orbit position incorrect",
+    )
+    np.testing.assert_allclose(
+      state_quarter[3:6], [-vel_mag, 0.0, 0.0], atol=1e-3,
+      err_msg="Quarter-orbit velocity incorrect",
+    )
+
+  def test_energy_conservation(self):
+    """
+    Specific energy must be conserved over one elliptical orbit.
+    """
+    gp      = SOLARSYSTEMCONSTANTS.EARTH.GP
+    pos_mag = 7000.0e3
+    vel_mag = np.sqrt(gp / pos_mag) * 1.1  # Slightly elliptical
+    state0  = np.array([pos_mag, 0.0, 0.0, 0.0, vel_mag, 0.0])
+
+    E0    = 0.5 * vel_mag**2 - gp / pos_mag
+    sma   = -gp / (2.0 * E0)
+    T_est = 2.0 * np.pi * np.sqrt(sma**3 / gp)
+
+    result = propagate_two_body(state0=state0, t0_et=0.0, tf_et=T_est, gp=gp, n_points=500)
+    assert result['success'], "Two-body propagation failed"
+
+    state_f   = result['states'][:, -1]
+    E_f       = 0.5 * np.linalg.norm(state_f[3:6])**2 - gp / np.linalg.norm(state_f[0:3])
+    rel_error = abs(E_f - E0) / abs(E0)
+
+    assert rel_error < 1e-10, f"Energy not conserved: relative error = {rel_error:.2e}"
 
 
 class TestPatchedConicGridSearchHohmann:
