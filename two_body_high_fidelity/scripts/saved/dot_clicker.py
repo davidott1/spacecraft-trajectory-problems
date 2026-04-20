@@ -5,12 +5,72 @@ import math
 import numpy as np
 
 from PyQt6.QtCore import Qt, QPointF
-from PyQt6.QtGui import QPainter, QBrush, QColor, QPen
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QVBoxLayout
+from PyQt6.QtGui import QPainter, QBrush, QColor, QPen, QPolygonF
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QVBoxLayout, QHBoxLayout
 
 GRAVITY_MAG = 9.81  # m/s^2, constant magnitude
 TIME_OF_FLIGHT = 5.0  # seconds
 ARC_NUM_POINTS = 50  # number of points to draw the parabolic arc
+ORBIT_NUM_POINTS = 200  # number of points to draw a Kepler orbit
+
+
+def compute_kepler_orbit(pos_center, vel_vec, grav_center, mu, num_points):
+    """Compute a full 2D Kepler orbit by propagating true anomaly.
+    pos_center: QPointF position of the node
+    vel_vec: np.array([vx, vy]) velocity vector (pixels/s, but treated as arbitrary units)
+    grav_center: QPointF center of gravity
+    mu: gravitational parameter (pixels^3/s^2-ish)
+    Returns list of QPointF or empty list if orbit is invalid."""
+    r_vec = np.array([pos_center.x() - grav_center.x(), pos_center.y() - grav_center.y()])
+    r = np.linalg.norm(r_vec)
+    v = np.linalg.norm(vel_vec)
+    if r < 1e-10 or v < 1e-10:
+        return []
+
+    # Specific angular momentum (scalar in 2D, z-component of cross product)
+    h = r_vec[0] * vel_vec[1] - r_vec[1] * vel_vec[0]
+    if abs(h) < 1e-10:
+        return []  # degenerate (radial trajectory)
+
+    # Specific energy
+    energy = 0.5 * v * v - mu / r
+
+    # Semi-latus rectum
+    p = h * h / mu
+
+    # Eccentricity vector
+    e_vec = (1.0 / mu) * ((v * v - mu / r) * r_vec - np.dot(r_vec, vel_vec) * vel_vec)
+    e = np.linalg.norm(e_vec)
+
+    if e >= 1.0:
+        # Hyperbolic or parabolic — just trace a partial arc
+        theta_max = math.acos(max(-1.0, min(1.0, -1.0 / e))) - 0.01 if e > 1.0 else math.pi * 0.99
+        thetas = np.linspace(-theta_max, theta_max, num_points)
+    else:
+        thetas = np.linspace(0, 2 * math.pi, num_points)
+
+    # Perifocal frame: e_hat along eccentricity vector
+    if e > 1e-10:
+        e_hat = e_vec / e
+    else:
+        e_hat = r_vec / r
+    # p_hat perpendicular (90 deg CCW)
+    p_hat = np.array([-e_hat[1], e_hat[0]])
+    # Make sure angular momentum sign is consistent
+    if h < 0:
+        p_hat = -p_hat
+
+    cx, cy = grav_center.x(), grav_center.y()
+    points = []
+    for theta in thetas:
+        denom = 1.0 + e * math.cos(theta)
+        if abs(denom) < 1e-10:
+            continue
+        r_theta = p / denom
+        x = cx + r_theta * (math.cos(theta) * e_hat[0] + math.sin(theta) * p_hat[0])
+        y = cy + r_theta * (math.cos(theta) * e_hat[1] + math.sin(theta) * p_hat[1])
+        points.append(QPointF(x, y))
+    return points
 
 
 def compute_dynamic_arc(p0, p1, center, time_of_flight, num_points):
@@ -45,30 +105,288 @@ def compute_dynamic_arc(p0, p1, center, time_of_flight, num_points):
 class Canvas(QWidget):
     def __init__(self):
         super().__init__()
-        self.trajectories = []  # list of {"dots": [], "segment_types": []}
-        self.segment_mode = "straight"  # current mode: "straight" or "dynamic"
+        self.trajectories = []  # list of {"dots": [QPointF], "segments": [(i, j)]}
         self.dot_radius = 5
         self.trace_spacing = 50
         self.dragging = False
+        self.dragging_shape = None  # "triangle" or "square" when dragging a shape
+        self.drag_offset = QPointF(0, 0)
+        self.dragging_dot = None  # QPointF reference when dragging a black node
+        self.shift_click_first = None  # first node selected for shift-click linking
+        self.v_dragging = None  # "triangle" or "square" when drawing a velocity line
+        self.dragging_vel_end = None  # "triangle" or "square" when dragging a velocity line
+        self.dragging_vel_t = 1.0  # parameter along line where grab occurred (0=center, 1=tip)
+        self.tri_velocity_end = None  # QPointF end of triangle velocity line
+        self.sq_velocity_end = None  # QPointF end of square velocity line
+        self.tri_orbit = []  # list of QPointF for triangle Kepler orbit
+        self.sq_orbit = []  # list of QPointF for square Kepler orbit
+        self.tri_orbit_mode = False
+        self.sq_orbit_mode = False
+        self._o_held = False
+
+        # Shape positions (center points)
+        self.tri_center = QPointF(25, 20)
+        self.tri_size = 20
+        self.sq_center = QPointF(55, 20)
+        self.sq_size = 18
+
         self.setStyleSheet("background-color: white;")
+        self._v_held = False
+        self.zoom = 1.0
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_S:
-            self.segment_mode = "straight"
-            self.window().setWindowTitle("Dot Clicker — Mode: Straight")
-        elif event.key() == Qt.Key.Key_D:
-            self.segment_mode = "dynamic"
-            self.window().setWindowTitle("Dot Clicker — Mode: Dynamic")
+        if event.key() == Qt.Key.Key_V:
+            self._v_held = True
+        elif event.key() == Qt.Key.Key_O:
+            self._o_held = True
+
+    def keyReleaseEvent(self, event):
+        if event.key() == Qt.Key.Key_V:
+            self._v_held = False
+        elif event.key() == Qt.Key.Key_O:
+            self._o_held = False
+
+    def _triangle_polygon(self):
+        x, y = self.tri_center.x(), self.tri_center.y()
+        s = self.tri_size
+        return QPolygonF([
+            QPointF(x - s / 2, y - s / 2),
+            QPointF(x + s / 2, y),
+            QPointF(x - s / 2, y + s / 2),
+        ])
+
+    def _hit_triangle(self, pos):
+        return self._triangle_polygon().containsPoint(pos, Qt.FillRule.WindingFill)
+
+    def _hit_square(self, pos):
+        x, y = self.sq_center.x(), self.sq_center.y()
+        s = self.sq_size
+        return abs(pos.x() - x) <= s / 2 and abs(pos.y() - y) <= s / 2
+
+    def _find_nearest_dot(self, pos, max_dist=15):
+        """Find the nearest dot (including triangle/square centers) across all
+        trajectories within max_dist pixels.
+        Returns (dot_point, trajectory_or_None) or (None, None)."""
+        best_dot = None
+        best_traj = None
+        best_dist = max_dist
+        for traj in self.trajectories:
+            for dot in traj["dots"]:
+                d = math.hypot(pos.x() - dot.x(), pos.y() - dot.y())
+                if d < best_dist:
+                    best_dist = d
+                    best_dot = dot
+                    best_traj = traj
+        # Check triangle center
+        d = math.hypot(pos.x() - self.tri_center.x(), pos.y() - self.tri_center.y())
+        if d < best_dist:
+            best_dist = d
+            best_dot = self.tri_center
+            best_traj = None
+        # Check square center
+        d = math.hypot(pos.x() - self.sq_center.x(), pos.y() - self.sq_center.y())
+        if d < best_dist:
+            best_dist = d
+            best_dot = self.sq_center
+            best_traj = None
+        return best_dot, best_traj
+
+    def _segment_exists(self, p0, p1):
+        """Check if a segment already exists between two points."""
+        for traj in self.trajectories:
+            dots = traj["dots"]
+            for i_start, i_end in traj["segments"]:
+                if (dots[i_start] is p0 and dots[i_end] is p1) or (dots[i_start] is p1 and dots[i_end] is p0):
+                    return True
+        return False
+
+    def _compute_orbit_for_shape(self, shape):
+        """Compute Kepler orbit for triangle or square if it has a velocity vector."""
+        if shape == "triangle" and self.tri_velocity_end is not None:
+            center = QPointF(self.width() / 2, self.height() / 2)
+            vel = np.array([
+                self.tri_velocity_end.x() - self.tri_center.x(),
+                self.tri_velocity_end.y() - self.tri_center.y(),
+            ])
+            mu = 3.986e5  # km^3/s^2, Earth gravitational parameter
+            self.tri_orbit = compute_kepler_orbit(
+                self.tri_center, vel, center, mu, ORBIT_NUM_POINTS,
+            )
+        elif shape == "square" and self.sq_velocity_end is not None:
+            center = QPointF(self.width() / 2, self.height() / 2)
+            vel = np.array([
+                self.sq_velocity_end.x() - self.sq_center.x(),
+                self.sq_velocity_end.y() - self.sq_center.y(),
+            ])
+            mu = 3.986e5
+            self.sq_orbit = compute_kepler_orbit(
+                self.sq_center, vel, center, mu, ORBIT_NUM_POINTS,
+            )
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-            self.dragging = True
-            # Start a new trajectory
-            self.trajectories.append({"dots": [], "segment_types": []})
-            self.trajectories[-1]["dots"].append(QPointF(event.pos()))
-            self.update()
+        if event.button() == Qt.MouseButton.LeftButton:
+            pos = QPointF(event.pos())
+            # V + click on triangle/square to draw velocity line
+            # O + click on triangle/square to compute Kepler orbit
+            # Shift-click to link two existing nodes (including triangle/square)
+            if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                dot, traj = self._find_nearest_dot(pos)
+                if dot is not None:
+                    if self.shift_click_first is None:
+                        self.shift_click_first = (dot, traj)
+                    else:
+                        first_dot, first_traj = self.shift_click_first
+                        if first_dot is not dot and not self._segment_exists(first_dot, dot):
+                            # Find trajectory to add segment to, prefer first_traj, then traj
+                            target_traj = first_traj or traj
+                            if target_traj is None:
+                                # Both are shape nodes, create a new trajectory
+                                target_traj = {"dots": [first_dot, dot], "segments": [(0, 1)]}
+                                self.trajectories.append(target_traj)
+                            else:
+                                # Add dots if not already present, then add segment
+                                if first_dot not in target_traj["dots"]:
+                                    target_traj["dots"].append(first_dot)
+                                if dot not in target_traj["dots"]:
+                                    target_traj["dots"].append(dot)
+                                i0 = target_traj["dots"].index(first_dot)
+                                i1 = target_traj["dots"].index(dot)
+                                target_traj["segments"].append((i0, i1))
+                            self.update()
+                        self.shift_click_first = None
+                return
+            # Check shapes for dragging, V-line, or O-orbit
+            if self._hit_triangle(pos):
+                if self._v_held:
+                    self.v_dragging = "triangle"
+                    self.tri_velocity_end = QPointF(pos)
+                    return
+                if self._o_held:
+                    self.tri_orbit_mode = not self.tri_orbit_mode
+                    if self.tri_orbit_mode:
+                        self._compute_orbit_for_shape("triangle")
+                    else:
+                        self.tri_orbit = []
+                    self.update()
+                    return
+                self.dragging_shape = "triangle"
+                self.drag_offset = self.tri_center - pos
+                return
+            if self._hit_square(pos):
+                if self._v_held:
+                    self.v_dragging = "square"
+                    self.sq_velocity_end = QPointF(pos)
+                    return
+                if self._o_held:
+                    self.sq_orbit_mode = not self.sq_orbit_mode
+                    if self.sq_orbit_mode:
+                        self._compute_orbit_for_shape("square")
+                    else:
+                        self.sq_orbit = []
+                    self.update()
+                    return
+                self.dragging_shape = "square"
+                self.drag_offset = self.sq_center - pos
+                return
+            # Check for dragging anywhere on a velocity line
+            if not event.modifiers():
+                for shape, center, vel_end in [
+                    ("triangle", self.tri_center, self.tri_velocity_end),
+                    ("square", self.sq_center, self.sq_velocity_end),
+                ]:
+                    if vel_end is not None:
+                        # Closest point on line segment center->vel_end to pos
+                        lx = vel_end.x() - center.x()
+                        ly = vel_end.y() - center.y()
+                        seg_len_sq = lx * lx + ly * ly
+                        if seg_len_sq > 1e-6:
+                            t = ((pos.x() - center.x()) * lx + (pos.y() - center.y()) * ly) / seg_len_sq
+                            t = max(0.05, min(1.0, t))  # clamp, avoid division near zero
+                            proj_x = center.x() + t * lx
+                            proj_y = center.y() + t * ly
+                            d = math.hypot(pos.x() - proj_x, pos.y() - proj_y)
+                            if d < 10:
+                                self.dragging_vel_end = shape
+                                self.dragging_vel_t = t
+                                return
+            # Check for dragging a black node (no modifier)
+            if not event.modifiers():
+                dot, traj = self._find_nearest_dot(pos)
+                if dot is not None and dot is not self.tri_center and dot is not self.sq_center:
+                    self.dragging_dot = dot
+                    return
+            # Trajectory drawing requires Cmd
+            if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+                self.dragging = True
+                self.trajectories.append({"dots": [], "segments": []})
+                self.trajectories[-1]["dots"].append(QPointF(event.pos()))
+                self.update()
 
     def mouseMoveEvent(self, event):
+        pos = QPointF(event.pos())
+        # Handle velocity line dragging (grab anywhere, scale by 1/t)
+        if self.dragging_vel_end is not None:
+            if self.dragging_vel_end == "triangle":
+                center = self.tri_center
+            else:
+                center = self.sq_center
+            dx = pos.x() - center.x()
+            dy = pos.y() - center.y()
+            t = self.dragging_vel_t
+            new_end = QPointF(center.x() + dx / t, center.y() + dy / t)
+            if self.dragging_vel_end == "triangle":
+                self.tri_velocity_end = new_end
+                if self.tri_orbit_mode:
+                    self._compute_orbit_for_shape("triangle")
+            else:
+                self.sq_velocity_end = new_end
+                if self.sq_orbit_mode:
+                    self._compute_orbit_for_shape("square")
+            self.update()
+            return
+        # Handle velocity line dragging
+        if self.v_dragging == "triangle":
+            self.tri_velocity_end = pos
+            if self.tri_orbit_mode:
+                self._compute_orbit_for_shape("triangle")
+            self.update()
+            return
+        if self.v_dragging == "square":
+            self.sq_velocity_end = pos
+            if self.sq_orbit_mode:
+                self._compute_orbit_for_shape("square")
+            self.update()
+            return
+        # Handle shape dragging
+        if self.dragging_shape == "triangle":
+            new_center = pos + self.drag_offset
+            delta = new_center - self.tri_center
+            self.tri_center.setX(new_center.x())
+            self.tri_center.setY(new_center.y())
+            if self.tri_velocity_end is not None:
+                self.tri_velocity_end = self.tri_velocity_end + delta
+            if self.tri_orbit_mode:
+                self._compute_orbit_for_shape("triangle")
+            self.update()
+            return
+        if self.dragging_shape == "square":
+            new_center = pos + self.drag_offset
+            delta = new_center - self.sq_center
+            self.sq_center.setX(new_center.x())
+            self.sq_center.setY(new_center.y())
+            if self.sq_velocity_end is not None:
+                self.sq_velocity_end = self.sq_velocity_end + delta
+            if self.sq_orbit_mode:
+                self._compute_orbit_for_shape("square")
+            self.update()
+            return
+        # Handle black node dragging
+        if self.dragging_dot is not None:
+            self.dragging_dot.setX(pos.x())
+            self.dragging_dot.setY(pos.y())
+            self.update()
+            return
+        # Handle trajectory drawing
         if not self.dragging:
             return
         if not (event.modifiers() & Qt.KeyboardModifier.ControlModifier):
@@ -90,28 +408,79 @@ class Canvas(QWidget):
                     last.x() + ux * self.trace_spacing * k,
                     last.y() + uy * self.trace_spacing * k,
                 )
-                self.trajectories[-1]["segment_types"].append(self.segment_mode)
+                self.trajectories[-1]["segments"].append(
+                    (len(self.trajectories[-1]["dots"]) - 1,
+                     len(self.trajectories[-1]["dots"]))
+                )
                 self.trajectories[-1]["dots"].append(interp)
             self.update()
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton and self.dragging:
-            self.dragging = False
-            traj = self.trajectories[-1]
-            if len(traj["dots"]) > 1:
-                traj["segment_types"].append(self.segment_mode)
-                traj["dots"].append(QPointF(traj["dots"][0]))
-                self.update()
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self.dragging_vel_end:
+                self.dragging_vel_end = None
+                return
+            if self.v_dragging:
+                self.v_dragging = None
+                return
+            if self.dragging_dot is not None:
+                self.dragging_dot = None
+                return
+            if self.dragging_shape:
+                self.dragging_shape = None
+                return
+            if self.dragging:
+                self.dragging = False
+
+    def zoom_in(self):
+        self.zoom *= 1.2
+        self.update()
+
+    def zoom_out(self):
+        self.zoom /= 1.2
+        self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
+        # Apply zoom centered on widget center
+        cx = self.width() / 2
+        cy = self.height() / 2
+        painter.translate(cx, cy)
+        painter.scale(self.zoom, self.zoom)
+        painter.translate(-cx, -cy)
+
+        # Draw green triangle (pointing right)
+        painter.setBrush(QBrush(QColor("green")))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawPolygon(self._triangle_polygon())
+
+        # Draw green square
+        sq_x = self.sq_center.x() - self.sq_size / 2
+        sq_y = self.sq_center.y() - self.sq_size / 2
+        painter.drawRect(int(sq_x), int(sq_y), self.sq_size, self.sq_size)
+
+        # Draw Kepler orbits
+        painter.setPen(QPen(QColor("green"), 2))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        for orbit in (self.tri_orbit, self.sq_orbit):
+            if len(orbit) > 1:
+                for k in range(len(orbit) - 1):
+                    painter.drawLine(orbit[k], orbit[k + 1])
+
+        # Draw velocity lines from triangle/square
+        painter.setPen(QPen(QColor("green"), 2))
+        if self.tri_velocity_end is not None:
+            painter.drawLine(self.tri_center, self.tri_velocity_end)
+        if self.sq_velocity_end is not None:
+            painter.drawLine(self.sq_center, self.sq_velocity_end)
+
         # Draw blue circle in center
         center_x = self.width() / 2
         center_y = self.height() / 2
         circle_radius = 50
-        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setBrush(QBrush(QColor("blue")))
         painter.setPen(QPen(QColor("blue"), 2))
         painter.drawEllipse(QPointF(center_x, center_y), circle_radius, circle_radius)
 
@@ -119,52 +488,64 @@ class Canvas(QWidget):
         center = QPointF(center_x, center_y)
         for traj in self.trajectories:
             dots = traj["dots"]
-            seg_types = traj["segment_types"]
+            segments = traj["segments"]
 
             # Draw segments
-            if len(dots) > 1:
-                for i in range(len(dots) - 1):
-                    seg_type = seg_types[i] if i < len(seg_types) else "straight"
-                    if seg_type == "straight":
-                        painter.setPen(QPen(QColor("black"), 2))
-                        painter.drawLine(dots[i], dots[i + 1])
-                    else:  # dynamic
-                        painter.setPen(QPen(QColor("red"), 2))
-                        arc_points = compute_dynamic_arc(
-                            dots[i], dots[i + 1], center,
-                            TIME_OF_FLIGHT, ARC_NUM_POINTS,
-                        )
-                        for j in range(len(arc_points) - 1):
-                            painter.drawLine(arc_points[j], arc_points[j + 1])
+            for i_start, i_end in segments:
+                painter.setPen(QPen(QColor("black"), 2))
+                arc_points = compute_dynamic_arc(
+                    dots[i_start], dots[i_end], center,
+                    TIME_OF_FLIGHT, ARC_NUM_POINTS,
+                )
+                for j in range(len(arc_points) - 1):
+                    painter.drawLine(arc_points[j], arc_points[j + 1])
 
-            # Draw dots on top
+            # Draw dots on top (skip shape centers)
             painter.setBrush(QBrush(QColor("black")))
             painter.setPen(Qt.PenStyle.NoPen)
             for dot in dots:
+                if dot is self.tri_center or dot is self.sq_center:
+                    continue
                 painter.drawEllipse(dot, self.dot_radius, self.dot_radius)
         painter.end()
 
 
     def clear(self):
         self.trajectories.clear()
+        self.shift_click_first = None
         self.update()
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Dot Clicker — Mode: Straight")
+        self.setWindowTitle("Dot Clicker")
         self.setMinimumSize(800, 600)
 
         canvas = Canvas()
+        self.canvas = canvas
 
         clear_button = QPushButton("Clear")
         clear_button.setFixedHeight(30)
         clear_button.clicked.connect(canvas.clear)
 
+        zoom_in_btn = QPushButton("+")
+        zoom_in_btn.setFixedSize(30, 30)
+        zoom_in_btn.clicked.connect(canvas.zoom_in)
+
+        zoom_out_btn = QPushButton("\u2212")
+        zoom_out_btn.setFixedSize(30, 30)
+        zoom_out_btn.clicked.connect(canvas.zoom_out)
+
+        zoom_layout = QHBoxLayout()
+        zoom_layout.addStretch()
+        zoom_layout.addWidget(zoom_out_btn)
+        zoom_layout.addWidget(zoom_in_btn)
+
         layout = QVBoxLayout()
         layout.addWidget(clear_button)
         layout.addWidget(canvas)
+        layout.addLayout(zoom_layout)
 
         container = QWidget()
         container.setLayout(layout)
