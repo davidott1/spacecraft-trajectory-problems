@@ -191,8 +191,8 @@ def create_high_fidelity_propagator(
       t_span = [et0, etf],
       y0     = y0,
       method = 'DOP853',
-      rtol   = 1e-12,
-      atol   = 1e-12,
+      rtol   = 1e-8,
+      atol   = 1e-8,
     )
 
     # Extract final state and STM

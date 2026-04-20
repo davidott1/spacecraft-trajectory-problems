@@ -54,3 +54,44 @@ Always explain what you are about to do before making edits. Do not silently sta
 3. When modifying schemas, ensure backward compatibility with existing YAML configs
 4. Run relevant tests after changes: `pytest src/verification/`
 5. For visualization changes, follow the existing matplotlib style in src/plot/
+
+## Testing Philosophy
+
+Tests live in `src/verification/unit/` and `src/verification/integration/`.
+
+### Unit Tests
+
+Verify that a single function or class produces the correct output for a given input. The function under test is the sole object of study — if the test fails, the bug is in that function.
+
+What to check:
+- **Mathematical correctness**: does the formula produce the right number?
+- **Edge cases**: zero input, degenerate orbits, boundary values
+- **Input validation**: bad inputs raise the right errors
+
+A telltale sign of a unit test: if you need to mock or stub a dependency to isolate the function, it's a unit test. But mocking is not required — a function that only uses math and constants is testable in isolation without mocks.
+
+### Integration Tests
+
+Verify that two or more components produce correct results when working together. The boundary between components is the object of study — if the test fails, the bug could be in component A, component B, or the glue connecting them.
+
+What to check:
+- **Data contracts across boundaries**: does component A's output have the shape/units/frame that component B expects?
+- **Frame/coordinate consistency**: does the force model use SPICE positions in the correct frame?
+- **Time reference consistency**: does the maneuver get applied at the right orbital position when converting between ET and datetime?
+- **Pipeline wiring**: are force models, trackers, and EKF actually connected when configured through `main()`?
+- **Statistical correctness across components**: does the EKF reduce uncertainty when fed measurements from the simulator?
+
+### The Rule
+
+- If the failure mode is *"X is wrong"*, write a unit test.
+- If the failure mode is *"X works, Y works, but X→Y fails because..."*, write an integration test.
+
+### Test Strength
+
+Tests range from weak to strong:
+
+- **Weak**: "did something happen?" — e.g. energy changed under perturbation
+- **Medium**: "did the right thing happen?" — e.g. prograde burn increases SMA, J2 RAAN regresses
+- **Strong**: "did the right thing happen by the right amount?" — e.g. numerical acceleration matches analytical tidal approximation from SPICE positions
+
+Weak tests are cheap and catch gross failures (force model silently disabled, wrong sign). Strong tests are harder but catch subtle bugs (wrong frame, wrong coefficient). A mix of both is ideal.

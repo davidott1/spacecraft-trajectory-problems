@@ -7,9 +7,11 @@ Requires SPICE kernels to be loaded.
 
 Tests:
 ------
-TestThirdBodyPropagation
-  - test_third_body_perturbs_energy         : Moon/Sun third-body breaks energy conservation
-  - test_third_body_raan_drift_differs_j2   : third-body changes RAAN drift vs J2-only
+TestThirdBodyFrameConsistency
+  - test_moon_acceleration_points_toward_moon : third-body acceleration from Moon points
+                                                toward SPICE Moon position (frame consistency)
+  - test_sun_acceleration_points_toward_sun   : third-body acceleration from Sun points
+                                                toward SPICE Sun position (frame consistency)
 
 TestPropagateWithManeuvers
   - test_maneuver_increases_sma             : prograde burn increases SMA
@@ -21,23 +23,32 @@ Usage:
 """
 import pytest
 import numpy as np
+import spiceypy as spice
 
 from datetime import datetime, timedelta
 
 from scipy.integrate import solve_ivp
 
-from src.model.dynamics        import AccelerationSTMDot, GeneralStateEquationsOfMotion
+from src.model.dynamics        import AccelerationSTMDot, GeneralStateEquationsOfMotion, ThirdBodyGravity
 from src.model.orbit_converter import OrbitConverter
-from src.model.constants       import SOLARSYSTEMCONSTANTS, CONVERTER
+from src.model.constants       import SOLARSYSTEMCONSTANTS
 from src.model.time_converter  import utc_to_et
-from src.schemas.gravity       import GravityModelConfig, SphericalHarmonicsConfig, ThirdBodyConfig
+from src.schemas.gravity       import GravityModelConfig
 from src.schemas.spacecraft    import SpacecraftProperties
 
 
-class TestThirdBodyPropagation:
+class TestThirdBodyFrameConsistency:
   """
-  Tests for propagation with third-body perturbations (Moon and Sun).
-  Requires SPICE kernels.
+  Tests that the third-body force model produces accelerations geometrically
+  consistent with SPICE body positions.
+
+  Uses the linear tidal approximation as the analytical reference:
+    a_tidal ≈ (GM/R³)(3(r·R̂)R̂ - r)
+  where R is the body position from SPICE and r is the satellite position.
+
+  The tidal direction depends on the body's SPICE position (frame-dependent).
+  If the force model queries SPICE in the wrong frame, the acceleration
+  vector points in the wrong direction and the angular mismatch is large.
   """
 
   @pytest.fixture(autouse=True)
@@ -45,97 +56,107 @@ class TestThirdBodyPropagation:
     pass
 
   @pytest.fixture
-  def epoch(self):
-    return datetime(2025, 10, 1)
-
-  @pytest.fixture
-  def leo_state(self):
-    gp      = SOLARSYSTEMCONSTANTS.EARTH.GP
-    sma     = 7000.0e3
-    vel_mag = np.sqrt(gp / sma)
-    return np.array([sma, 0.0, 0.0, 0.0, vel_mag, 0.0])
-
-  def test_third_body_perturbs_energy(self, leo_state, epoch):
-    """
-    Moon/Sun third-body forces must break energy conservation relative
-    to the two-body case (energy no longer constant).
-    """
-    gp     = SOLARSYSTEMCONSTANTS.EARTH.GP
-    sma    = 7000.0e3
-    period = 2.0 * np.pi * np.sqrt(sma**3 / gp)
-    t0_et  = utc_to_et(epoch)
-
-    def specific_energy(state):
-      return 0.5 * np.linalg.norm(state[3:6])**2 - gp / np.linalg.norm(state[0:3])
-
-    energy_o = specific_energy(leo_state)
-
-    accel_3b = AccelerationSTMDot(
-      gravity_config = GravityModelConfig(
-        gp         = gp,
-        third_body = ThirdBodyConfig(enabled=True, bodies=['MOON', 'SUN']),
-      ),
-      spacecraft = SpacecraftProperties(mass=1000.0),
-    )
-
-    eom_3b = GeneralStateEquationsOfMotion(accel_3b)
-    sol_3b = solve_ivp(
-      eom_3b.state_time_derivative, (t0_et, t0_et + 10 * period), leo_state,
-      method='DOP853', rtol=1e-10, atol=1e-12, dense_output=True,
-    )
-
-    energy_errors = [
-      abs(specific_energy(sol_3b.sol(t)) - energy_o) / abs(energy_o)
-      for t in np.linspace(t0_et, t0_et + 10 * period, 20)
+  def epochs_et(self):
+    """Three epochs spaced ~8 hours apart to avoid coincidental frame alignment."""
+    return [
+      utc_to_et(datetime(2025, 10, 1, 0, 0, 0)),
+      utc_to_et(datetime(2025, 10, 1, 8, 0, 0)),
+      utc_to_et(datetime(2025, 10, 1, 16, 0, 0)),
     ]
 
-    assert max(energy_errors) > 1e-12, \
-      "Third-body forces had no effect on energy — check force model is active"
+  @pytest.fixture
+  def leo_pos_vec(self):
+    """Satellite at [7000 km, 0, 0] in J2000."""
+    return np.array([7000.0e3, 0.0, 0.0])
 
-
-  def test_third_body_raan_drift_differs_j2(self, leo_state, epoch):
+  def test_moon_tidal_direction(self, leo_pos_vec, epochs_et):
     """
-    RAAN after 10 orbits must differ between J2-only and J2+third-body propagation.
+    Third-body acceleration from the Moon must align with the linear tidal
+    approximation derived from the Moon's SPICE J2000 position.
+
+    The tidal approximation is accurate to ~1% for LEO (r/R ≈ 0.02).
+    A frame error would cause a large angular mismatch at most epochs.
+    Tested at 3 epochs spaced 8 hours apart to avoid coincidental alignment.
     """
-    gp           = SOLARSYSTEMCONSTANTS.EARTH.GP
-    earth_rad_eq = SOLARSYSTEMCONSTANTS.EARTH.RADIUS.EQUATOR
-    sma          = 7000.0e3
-    inc          = 45.0 * CONVERTER.RAD_PER_DEG
-    vel_mag      = np.sqrt(gp / sma)
-    state_o      = np.array([sma, 0.0, 0.0, 0.0, vel_mag * np.cos(inc), vel_mag * np.sin(inc)])
-    period       = 2.0 * np.pi * np.sqrt(sma**3 / gp)
-    t0_et        = utc_to_et(epoch)
+    gp_moon    = SOLARSYSTEMCONSTANTS.MOON.GP
+    third_body = ThirdBodyGravity(bodies=['MOON'])
 
-    sh_config = SphericalHarmonicsConfig(coefficients=['J2'], gp=gp, radius=earth_rad_eq)
+    for epoch_et in epochs_et:
+      acc_vec = third_body.point_mass(epoch_et, leo_pos_vec)
 
-    accel_j2 = AccelerationSTMDot(
-      gravity_config = GravityModelConfig(gp=gp, spherical_harmonics=sh_config),
-      spacecraft     = SpacecraftProperties(mass=1000.0),
-    )
-    sol_j2  = solve_ivp(
-      GeneralStateEquationsOfMotion(accel_j2).state_time_derivative,
-      (t0_et, t0_et + 10 * period), state_o,
-      method='DOP853', rtol=1e-10, atol=1e-12,
-    )
-    raan_j2 = OrbitConverter.pv_to_coe(sol_j2.y[0:3, -1], sol_j2.y[3:6, -1], gp).raan
+      # Moon position from SPICE (km → m)
+      moon_state, _ = spice.spkez(301, epoch_et, 'J2000', 'NONE', 399)
+      moon_pos_vec  = np.array(moon_state[0:3]) * 1000.0
+      moon_pos_mag  = np.linalg.norm(moon_pos_vec)
+      moon_pos_hat  = moon_pos_vec / moon_pos_mag
 
-    accel_j2_3b = AccelerationSTMDot(
-      gravity_config = GravityModelConfig(
-        gp                  = gp,
-        spherical_harmonics = sh_config,
-        third_body          = ThirdBodyConfig(enabled=True, bodies=['MOON', 'SUN']),
-      ),
-      spacecraft = SpacecraftProperties(mass=1000.0),
-    )
-    sol_j2_3b  = solve_ivp(
-      GeneralStateEquationsOfMotion(accel_j2_3b).state_time_derivative,
-      (t0_et, t0_et + 10 * period), state_o,
-      method='DOP853', rtol=1e-10, atol=1e-12,
-    )
-    raan_j2_3b = OrbitConverter.pv_to_coe(sol_j2_3b.y[0:3, -1], sol_j2_3b.y[3:6, -1], gp).raan
+      # Linear tidal approximation: a ≈ (GM/R³)(3(r·R̂)R̂ - r)
+      tidal_expected = (gp_moon / moon_pos_mag**3) * (
+        3.0 * np.dot(leo_pos_vec, moon_pos_hat) * moon_pos_hat - leo_pos_vec
+      )
 
-    assert not np.isclose(raan_j2, raan_j2_3b, atol=1e-6), \
-      "Third-body had no effect on RAAN — check force model is active"
+      # Angular check: direction must match within 5°
+      acc_hat   = acc_vec / np.linalg.norm(acc_vec)
+      tidal_hat = tidal_expected / np.linalg.norm(tidal_expected)
+      cos_angle = np.dot(acc_hat, tidal_hat)
+      angle__deg = np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0)))
+
+      assert angle__deg < 5.0, (
+        f"Moon third-body acceleration misaligned by {angle__deg:.1f}° "
+        f"at ET={epoch_et:.0f} — possible frame error"
+      )
+
+      # Magnitude check: must agree within 5%
+      mag_ratio = np.linalg.norm(acc_vec) / np.linalg.norm(tidal_expected)
+      assert abs(mag_ratio - 1.0) < 0.05, (
+        f"Moon third-body magnitude ratio {mag_ratio:.4f} "
+        f"at ET={epoch_et:.0f}, expected ~1.0"
+      )
+
+  def test_sun_tidal_direction(self, leo_pos_vec, epochs_et):
+    """
+    Third-body acceleration from the Sun must align with the linear tidal
+    approximation derived from the Sun's SPICE J2000 position.
+
+    The Sun is ~23,000 Earth radii away, so the tidal approximation is
+    extremely accurate (r/R ≈ 5e-5). A frame error would cause a large
+    angular mismatch at most epochs.
+    Tested at 3 epochs spaced 8 hours apart to avoid coincidental alignment.
+    """
+    gp_sun     = SOLARSYSTEMCONSTANTS.SUN.GP
+    third_body = ThirdBodyGravity(bodies=['SUN'])
+
+    for epoch_et in epochs_et:
+      acc_vec = third_body.point_mass(epoch_et, leo_pos_vec)
+
+      # Sun position from SPICE (km → m)
+      sun_state, _ = spice.spkez(10, epoch_et, 'J2000', 'NONE', 399)
+      sun_pos_vec  = np.array(sun_state[0:3]) * 1000.0
+      sun_pos_mag  = np.linalg.norm(sun_pos_vec)
+      sun_pos_hat  = sun_pos_vec / sun_pos_mag
+
+      # Linear tidal approximation: a ≈ (GM/R³)(3(r·R̂)R̂ - r)
+      tidal_expected = (gp_sun / sun_pos_mag**3) * (
+        3.0 * np.dot(leo_pos_vec, sun_pos_hat) * sun_pos_hat - leo_pos_vec
+      )
+
+      # Angular check: direction must match within 1° (Sun is very far)
+      acc_hat   = acc_vec / np.linalg.norm(acc_vec)
+      tidal_hat = tidal_expected / np.linalg.norm(tidal_expected)
+      cos_angle = np.dot(acc_hat, tidal_hat)
+      angle__deg = np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0)))
+
+      assert angle__deg < 1.0, (
+        f"Sun third-body acceleration misaligned by {angle__deg:.4f}° "
+        f"at ET={epoch_et:.0f} — possible frame error"
+      )
+
+      # Magnitude check: must agree within 1%
+      mag_ratio = np.linalg.norm(acc_vec) / np.linalg.norm(tidal_expected)
+      assert abs(mag_ratio - 1.0) < 0.01, (
+        f"Sun third-body magnitude ratio {mag_ratio:.6f} "
+        f"at ET={epoch_et:.0f}, expected ~1.0"
+      )
 
 
 class TestPropagateWithManeuvers:
