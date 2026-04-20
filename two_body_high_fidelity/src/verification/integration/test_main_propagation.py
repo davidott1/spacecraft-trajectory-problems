@@ -12,30 +12,14 @@ is required.
 Tests:
 ------
 TestMainPropagation
-  - test_keplerian_propagation   : point-mass only, verifies SMA conservation
-  - test_high_fidelity_propagation : J2/J3/J4 + third-body + drag + SRP,
-                                     verifies SMA changes relative to Keplerian
+  - test_keplerian_propagation         : point-mass only, verifies SMA conservation
+  - test_high_fidelity_propagation     : J2/J3/J4 + third-body + drag + SRP,
+                                         verifies SMA changes relative to Keplerian
+  - test_full_forces_with_comparisons  : GPS satellite with all forces, TLE + JPL comparisons
 
 Usage:
 ------
   python -m pytest src/verification/integration/test_main_propagation.py -v
-
-Equivalent CLI commands:
-  # Keplerian
-  python -m src.main \\
-    --initial-state-source jpl_horizons \\
-    --initial-state-norad-id 25544 \\
-    --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00
-
-  # High-fidelity
-  python -m src.main \\
-    --initial-state-source jpl_horizons \\
-    --initial-state-norad-id 25544 \\
-    --timespan 2025-10-01T00:00:00 2025-10-02T00:00:00 \\
-    --gravity-harmonics-coefficients J2 J3 J4 \\
-    --third-bodies sun moon \\
-    --include-srp \\
-    --include-drag
 """
 import pytest
 import numpy as np
@@ -47,8 +31,9 @@ from src.model.orbit_converter import OrbitConverter
 from src.model.constants       import SOLARSYSTEMCONSTANTS
 
 
-NORAD_ID  = '25544'
-TIMESPAN  = [datetime(2025, 10, 1), datetime(2025, 10, 2)]
+NORAD_ID_ISS = '25544'
+NORAD_ID_GPS = '39166'
+TIMESPAN     = [datetime(2025, 10, 1), datetime(2025, 10, 2)]
 
 
 class TestMainPropagation:
@@ -71,7 +56,7 @@ class TestMainPropagation:
       - SMA is conserved to within 0.1% (no perturbations)
     """
     result = main(
-      initial_state_norad_id = NORAD_ID,
+      initial_state_norad_id = NORAD_ID_ISS,
       initial_state_filename = None,
       timespan               = TIMESPAN,
       initial_state_source   = 'jpl_horizons',
@@ -107,7 +92,7 @@ class TestMainPropagation:
       - Final altitude is physically reasonable for LEO (200–450 km)
     """
     result = main(
-      initial_state_norad_id = NORAD_ID,
+      initial_state_norad_id = NORAD_ID_ISS,
       initial_state_filename = None,
       timespan               = TIMESPAN,
       initial_state_source   = 'jpl_horizons',
@@ -142,3 +127,27 @@ class TestMainPropagation:
     assert 200.0 < altitude_f__km < 450.0, (
       f"Final altitude = {altitude_f__km:.1f} km, expected 200–450 km for ISS"
     )
+
+  def test_full_forces_with_comparisons(self):
+    """
+    GPS satellite (39166) with all force models, TLE and JPL Horizons
+    comparisons enabled. Exercises the widest force model and comparison
+    configuration over 1 day.
+
+    Verifies:
+      - Pipeline completes successfully with all forces and comparisons
+    """
+    result = main(
+      initial_state_norad_id = NORAD_ID_GPS,
+      initial_state_filename = None,
+      timespan               = TIMESPAN,
+      include_drag           = True,
+      compare_tle            = True,
+      compare_jpl_horizons   = True,
+      third_bodies           = ['SUN', 'MOON', 'MERCURY', 'VENUS', 'MARS', 'JUPITER', 'SATURN', 'URANUS', 'NEPTUNE', 'PLUTO'],
+      gravity_harmonics      = ['J2', 'J3', 'J4', 'C22', 'S22'],
+      include_srp            = True,
+      initial_state_source   = 'jpl_horizons',
+    )
+
+    assert result.success, f"Propagation failed: {result.message}"
