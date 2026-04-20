@@ -102,6 +102,25 @@ def compute_dynamic_arc(p0, p1, center, time_of_flight, num_points):
     return points
 
 
+def compute_arc_velocities(p0, p1, center, time_of_flight):
+    """Return (v0, vf) numpy arrays for the dynamic arc from p0 to p1."""
+    r0 = np.array([p0.x(), p0.y()])
+    rf = np.array([p1.x(), p1.y()])
+    c = np.array([center.x(), center.y()])
+    direction = c - r0
+    dist = np.linalg.norm(direction)
+    if dist < 1e-10:
+        disp = rf - r0
+        v = disp / time_of_flight
+        return v, v
+    g_hat = direction / dist
+    g_vec = GRAVITY_MAG * g_hat
+    tf = time_of_flight
+    v0 = (rf - r0) / tf - 0.5 * g_vec * tf
+    vf = v0 + g_vec * tf
+    return v0, vf
+
+
 class Canvas(QWidget):
     def __init__(self):
         super().__init__()
@@ -415,6 +434,26 @@ class Canvas(QWidget):
                 self.trajectories[-1]["dots"].append(interp)
             self.update()
 
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            pos = QPointF(event.pos())
+            if self._hit_triangle(pos):
+                self.tri_orbit_mode = not self.tri_orbit_mode
+                if self.tri_orbit_mode:
+                    self._compute_orbit_for_shape("triangle")
+                else:
+                    self.tri_orbit = []
+                self.update()
+                return
+            if self._hit_square(pos):
+                self.sq_orbit_mode = not self.sq_orbit_mode
+                if self.sq_orbit_mode:
+                    self._compute_orbit_for_shape("square")
+                else:
+                    self.sq_orbit = []
+                self.update()
+                return
+
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             if self.dragging_vel_end:
@@ -450,16 +489,6 @@ class Canvas(QWidget):
         painter.translate(cx, cy)
         painter.scale(self.zoom, self.zoom)
         painter.translate(-cx, -cy)
-
-        # Draw green triangle (pointing right)
-        painter.setBrush(QBrush(QColor("green")))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawPolygon(self._triangle_polygon())
-
-        # Draw green square
-        sq_x = self.sq_center.x() - self.sq_size / 2
-        sq_y = self.sq_center.y() - self.sq_size / 2
-        painter.drawRect(int(sq_x), int(sq_y), self.sq_size, self.sq_size)
 
         # Draw Kepler orbits
         painter.setPen(QPen(QColor("green"), 2))
@@ -500,13 +529,82 @@ class Canvas(QWidget):
                 for j in range(len(arc_points) - 1):
                     painter.drawLine(arc_points[j], arc_points[j + 1])
 
-            # Draw dots on top (skip shape centers)
-            painter.setBrush(QBrush(QColor("black")))
-            painter.setPen(Qt.PenStyle.NoPen)
-            for dot in dots:
+        # Draw delta-velocity vectors at nodes with exactly 2 neighboring segments
+        painter.setPen(QPen(QColor("black"), 2))
+        for traj in self.trajectories:
+            dots = traj["dots"]
+            segments = traj["segments"]
+            for k, dot in enumerate(dots):
+                if dot is self.tri_center or dot is self.sq_center:
+                    continue
+                # Find segments where this node is an endpoint
+                incoming_vel = None  # arrival velocity at node
+                outgoing_vel = None  # departure velocity from node
+                for i_start, i_end in segments:
+                    if i_end == k:
+                        _, vf = compute_arc_velocities(
+                            dots[i_start], dots[i_end], center, TIME_OF_FLIGHT)
+                        incoming_vel = vf
+                    elif i_start == k:
+                        v0, _ = compute_arc_velocities(
+                            dots[i_start], dots[i_end], center, TIME_OF_FLIGHT)
+                        outgoing_vel = v0
+                if incoming_vel is not None and outgoing_vel is not None:
+                    dv = outgoing_vel - incoming_vel
+                    painter.drawLine(
+                        dot,
+                        QPointF(dot.x() + dv[0], dot.y() + dv[1]),
+                    )
+
+        # Draw delta-velocity vectors at triangle/square when they have
+        # both a velocity vector and an attached segment
+        for shape_center, vel_end in [
+            (self.tri_center, self.tri_velocity_end),
+            (self.sq_center, self.sq_velocity_end),
+        ]:
+            if vel_end is None:
+                continue
+            shape_vel = np.array([
+                vel_end.x() - shape_center.x(),
+                vel_end.y() - shape_center.y(),
+            ])
+            for traj in self.trajectories:
+                dots = traj["dots"]
+                for i_start, i_end in traj["segments"]:
+                    if dots[i_start] is shape_center:
+                        v0, _ = compute_arc_velocities(
+                            dots[i_start], dots[i_end], center, TIME_OF_FLIGHT)
+                        dv = v0 - shape_vel
+                        painter.drawLine(
+                            shape_center,
+                            QPointF(shape_center.x() + dv[0], shape_center.y() + dv[1]),
+                        )
+                    elif dots[i_end] is shape_center:
+                        _, vf = compute_arc_velocities(
+                            dots[i_start], dots[i_end], center, TIME_OF_FLIGHT)
+                        dv = shape_vel - vf
+                        painter.drawLine(
+                            shape_center,
+                            QPointF(shape_center.x() + dv[0], shape_center.y() + dv[1]),
+                        )
+
+        # Draw all dots on top of everything
+        painter.setBrush(QBrush(QColor("black")))
+        painter.setPen(Qt.PenStyle.NoPen)
+        for traj in self.trajectories:
+            for dot in traj["dots"]:
                 if dot is self.tri_center or dot is self.sq_center:
                     continue
                 painter.drawEllipse(dot, self.dot_radius, self.dot_radius)
+
+        # Draw green triangle and square on top of everything
+        painter.setBrush(QBrush(QColor("green")))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawPolygon(self._triangle_polygon())
+        sq_x = self.sq_center.x() - self.sq_size / 2
+        sq_y = self.sq_center.y() - self.sq_size / 2
+        painter.drawRect(int(sq_x), int(sq_y), self.sq_size, self.sq_size)
+
         painter.end()
 
 
@@ -519,15 +617,19 @@ class Canvas(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Dot Clicker")
+        self.setWindowTitle("Trajectory Builder")
         self.setMinimumSize(800, 600)
 
         canvas = Canvas()
         self.canvas = canvas
 
         clear_button = QPushButton("Clear")
-        clear_button.setFixedHeight(30)
+        clear_button.setFixedSize(50, 25)
         clear_button.clicked.connect(canvas.clear)
+
+        top_layout = QHBoxLayout()
+        top_layout.addStretch()
+        top_layout.addWidget(clear_button)
 
         zoom_in_btn = QPushButton("+")
         zoom_in_btn.setFixedSize(30, 30)
@@ -543,7 +645,7 @@ class MainWindow(QMainWindow):
         zoom_layout.addWidget(zoom_in_btn)
 
         layout = QVBoxLayout()
-        layout.addWidget(clear_button)
+        layout.addLayout(top_layout)
         layout.addWidget(canvas)
         layout.addLayout(zoom_layout)
 
