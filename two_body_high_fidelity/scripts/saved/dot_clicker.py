@@ -3,6 +3,7 @@ import sys
 import math
 
 import numpy as np
+from scipy.optimize import minimize as scipy_minimize
 
 from PyQt6.QtCore import Qt, QPointF
 from PyQt6.QtGui import QPainter, QBrush, QColor, QPen, QPolygonF
@@ -622,6 +623,127 @@ class Canvas(QWidget):
         self.shift_click_first = None
         self.update()
 
+    def optimize(self):
+        """Minimize sum of squared delta-velocity magnitudes by adjusting black node positions."""
+        # Collect all movable (black) dots that participate in at least one segment
+        center = np.array([self.earth_center.x(), self.earth_center.y()])
+        movable_dots = []  # list of QPointF references
+        movable_set = set()  # ids to avoid duplicates
+
+        for traj in self.trajectories:
+            dots = traj["dots"]
+            for i_start, i_end in traj["segments"]:
+                for idx in (i_start, i_end):
+                    dot = dots[idx]
+                    if dot is not self.tri_center and dot is not self.sq_center:
+                        if id(dot) not in movable_set:
+                            movable_set.add(id(dot))
+                            movable_dots.append(dot)
+
+        if not movable_dots:
+            return
+
+        # Map dot id -> index into decision variable array
+        dot_id_to_var_idx = {id(d): i for i, d in enumerate(movable_dots)}
+        n_vars = len(movable_dots) * 2  # x, y per dot
+
+        # Build segment list as (dot_start, dot_end) with references
+        all_segments = []
+        for traj in self.trajectories:
+            dots = traj["dots"]
+            for i_start, i_end in traj["segments"]:
+                all_segments.append((dots[i_start], dots[i_end]))
+
+        # Fixed shape data
+        shape_data = []
+        for shape_center, vel_end in [
+            (self.tri_center, self.tri_velocity_end),
+            (self.sq_center, self.sq_velocity_end),
+        ]:
+            if vel_end is not None:
+                shape_vel = np.array([
+                    vel_end.x() - shape_center.x(),
+                    vel_end.y() - shape_center.y(),
+                ])
+                shape_pos = np.array([shape_center.x(), shape_center.y()])
+                shape_data.append((shape_center, shape_pos, shape_vel))
+
+        def get_pos(dot, x_vec):
+            if id(dot) in dot_id_to_var_idx:
+                idx = dot_id_to_var_idx[id(dot)]
+                return x_vec[2 * idx: 2 * idx + 2]
+            return np.array([dot.x(), dot.y()])
+
+        def arc_vels(r0, rf):
+            direction = center - r0
+            dist = np.linalg.norm(direction)
+            if dist < 1e-10:
+                v = (rf - r0) / TIME_OF_FLIGHT
+                return v, v
+            g_vec = GRAVITY_MAG * direction / dist
+            v0 = (rf - r0) / TIME_OF_FLIGHT - 0.5 * g_vec * TIME_OF_FLIGHT
+            vf = v0 + g_vec * TIME_OF_FLIGHT
+            return v0, vf
+
+        def objective(x_vec):
+            cost = 0.0
+            # Build per-node incoming/outgoing velocities
+            node_incoming = {}  # id(dot) -> vf
+            node_outgoing = {}  # id(dot) -> v0
+            for dot_s, dot_e in all_segments:
+                r0 = get_pos(dot_s, x_vec)
+                rf = get_pos(dot_e, x_vec)
+                v0, vf = arc_vels(r0, rf)
+                # Outgoing at start node
+                if id(dot_s) in node_outgoing:
+                    pass  # only first outgoing used
+                else:
+                    node_outgoing[id(dot_s)] = v0
+                # Incoming at end node
+                if id(dot_e) in node_incoming:
+                    pass  # only first incoming used
+                else:
+                    node_incoming[id(dot_e)] = vf
+
+            # Delta-v at black nodes with both incoming and outgoing
+            for dot in movable_dots:
+                d_id = id(dot)
+                if d_id in node_incoming and d_id in node_outgoing:
+                    dv = node_outgoing[d_id] - node_incoming[d_id]
+                    cost += np.dot(dv, dv)
+
+            # Delta-v at shape nodes
+            for shape_center, shape_pos, shape_vel in shape_data:
+                s_id = id(shape_center)
+                if s_id in node_outgoing:
+                    dv = node_outgoing[s_id] - shape_vel
+                    cost += np.dot(dv, dv)
+                if s_id in node_incoming:
+                    dv = shape_vel - node_incoming[s_id]
+                    cost += np.dot(dv, dv)
+
+            return cost
+
+        # Initial guess
+        x0 = np.zeros(n_vars)
+        for i, dot in enumerate(movable_dots):
+            x0[2 * i] = dot.x()
+            x0[2 * i + 1] = dot.y()
+
+        result = scipy_minimize(objective, x0, method="L-BFGS-B")
+
+        # Apply result
+        for i, dot in enumerate(movable_dots):
+            dot.setX(result.x[2 * i])
+            dot.setY(result.x[2 * i + 1])
+
+        # Recompute orbits if active
+        if self.tri_orbit_mode:
+            self._compute_orbit_for_shape("triangle")
+        if self.sq_orbit_mode:
+            self._compute_orbit_for_shape("square")
+        self.update()
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -636,9 +758,16 @@ class MainWindow(QMainWindow):
         clear_button.setFixedSize(50, 25)
         clear_button.clicked.connect(canvas.clear)
 
+        optimize_button = QPushButton("Optimize")
+        optimize_button.setFixedSize(70, 25)
+        optimize_button.clicked.connect(canvas.optimize)
+
         top_layout = QHBoxLayout()
         top_layout.addStretch()
+        top_layout.addWidget(optimize_button)
+        top_layout.addSpacing(10)
         top_layout.addWidget(clear_button)
+        top_layout.addSpacing(20)
 
         zoom_in_btn = QPushButton("+")
         zoom_in_btn.setFixedSize(30, 30)
@@ -652,6 +781,7 @@ class MainWindow(QMainWindow):
         zoom_layout.addStretch()
         zoom_layout.addWidget(zoom_out_btn)
         zoom_layout.addWidget(zoom_in_btn)
+        zoom_layout.addSpacing(20)
 
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
