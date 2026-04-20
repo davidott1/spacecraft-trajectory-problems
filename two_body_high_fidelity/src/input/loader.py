@@ -432,9 +432,15 @@ def load_maneuver_plan(
   if 'vel_vec__m_per_s' not in init:
     raise ValueError("initial_state must contain 'vel_vec__m_per_s'")
 
-  epoch    = parse_time(epoch_raw)
-  position = np.array(init['pos_vec__m'], dtype=float)
-  velocity = np.array(init['vel_vec__m_per_s'], dtype=float)
+  epoch    = epoch_raw if isinstance(epoch_raw, datetime) else parse_time(epoch_raw)
+
+  def _parse_vec(raw):
+    if isinstance(raw, str):
+      return np.array([float(x.strip()) for x in raw.replace('[', '').replace(']', '').split(',')])
+    return np.array(raw, dtype=float)
+
+  position = _parse_vec(init['pos_vec__m'])
+  velocity = _parse_vec(init['vel_vec__m_per_s'])
 
   if len(position) != 3:
     raise ValueError(f"pos_vec__m must have 3 components, got {len(position)}")
@@ -463,8 +469,9 @@ def load_maneuver_plan(
       else:
         raise ValueError(f"Maneuver {i} missing 'delta_vel_vec__m_per_s'")
 
-      time_dt       = parse_time(m_data['time_iso_utc'])
-      delta_vel_vec = np.array(delta_vel_raw, dtype=float)
+      time_raw      = m_data['time_iso_utc']
+      time_dt       = time_raw if isinstance(time_raw, datetime) else parse_time(time_raw)
+      delta_vel_vec = _parse_vec(delta_vel_raw)
       frame         = m_data.get('frame', 'J2000')
       name          = m_data.get('name', None)
       description   = m_data.get('description', None)
