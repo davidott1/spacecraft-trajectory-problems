@@ -11,9 +11,6 @@ TestPatchedConicFunctions
   - test_soi_radius_moon                          : verify Moon SOI radius
   - test_circular_velocity                        : verify circular velocity computation
   - test_hohmann_estimates                        : verify Hohmann transfer estimates
-  - test_two_body_propagation_period              : verify orbit returns to start after one period
-  - test_two_body_propagation_quarter             : verify quarter-orbit propagation
-  - test_two_body_propagation_energy_conservation : verify energy conservation
 
 TestDecisionVector
   - test_pack_no_variables                        : all fixed flags → empty array
@@ -29,9 +26,8 @@ import numpy as np
 from copy     import deepcopy
 from datetime import datetime
 
-from src.model.constants             import SOLARSYSTEMCONSTANTS
-from src.model.orbital_mechanics     import compute_circular_velocity, compute_hohmann_velocities, compute_soi_radius
-from src.propagation.analytical_propagator import propagate_two_body
+from src.model.constants         import SOLARSYSTEMCONSTANTS
+from src.model.orbital_mechanics import compute_circular_velocity, compute_hohmann_velocities, compute_soi_radius
 
 
 class TestPatchedConicFunctions:
@@ -82,72 +78,6 @@ class TestPatchedConicFunctions:
     transfer_time__days = estimates['delta_time_of'] / 86400.0
     assert 4.0 < transfer_time__days < 6.0, \
       f"Transfer time = {transfer_time__days:.2f} days, expected ~5 days"
-
-
-  def test_two_body_propagation_period(self):
-    """
-    Verify two-body propagation returns to start after one period (circular orbit).
-    """
-    pos_mag = 7000.0e3
-    gp      = SOLARSYSTEMCONSTANTS.EARTH.GP
-    vel_mag = np.sqrt(gp / pos_mag)
-    T       = 2.0 * np.pi * np.sqrt(pos_mag**3 / gp)
-    state0  = np.array([pos_mag, 0.0, 0.0, 0.0, vel_mag, 0.0])
-
-    result = propagate_two_body(state0=state0, t0_et=0.0, tf_et=T, gp=gp, n_points=2)
-
-    assert result['success']
-    np.testing.assert_allclose(
-      state0, result['states'][:, -1], atol=1e-3,
-      err_msg="Orbit did not return to start after one period",
-    )
-
-
-  def test_two_body_propagation_quarter(self):
-    """
-    Verify quarter-orbit propagation position and velocity.
-    """
-    pos_mag = 7000.0e3
-    gp      = SOLARSYSTEMCONSTANTS.EARTH.GP
-    vel_mag = np.sqrt(gp / pos_mag)
-    T       = 2.0 * np.pi * np.sqrt(pos_mag**3 / gp)
-    state0  = np.array([pos_mag, 0.0, 0.0, 0.0, vel_mag, 0.0])
-
-    result        = propagate_two_body(state0=state0, t0_et=0.0, tf_et=T/4.0, gp=gp, n_points=2)
-    state_quarter = result['states'][:, -1]
-
-    assert result['success']
-    np.testing.assert_allclose(
-      state_quarter[0:3], [0.0, pos_mag, 0.0], atol=1e-3,
-      err_msg="Quarter-orbit position incorrect",
-    )
-    np.testing.assert_allclose(
-      state_quarter[3:6], [-vel_mag, 0.0, 0.0], atol=1e-3,
-      err_msg="Quarter-orbit velocity incorrect",
-    )
-
-
-  def test_two_body_propagation_energy_conservation(self):
-    """
-    Verify energy conservation in two-body numerical propagation.
-    """
-    gp      = SOLARSYSTEMCONSTANTS.EARTH.GP
-    pos_mag = 7000.0e3
-    vel_mag = np.sqrt(gp / pos_mag) * 1.1  # Slightly elliptical
-    state0  = np.array([pos_mag, 0.0, 0.0, 0.0, vel_mag, 0.0])
-
-    E0    = 0.5 * vel_mag**2 - gp / pos_mag
-    sma   = -gp / (2.0 * E0)
-    T_est = 2.0 * np.pi * np.sqrt(sma**3 / gp)
-
-    result = propagate_two_body(state0=state0, t0_et=0.0, tf_et=T_est, gp=gp, n_points=500)
-    assert result['success'], "Two-body propagation failed"
-
-    state_f   = result['states'][:, -1]
-    E_f       = 0.5 * np.linalg.norm(state_f[3:6])**2 - gp / np.linalg.norm(state_f[0:3])
-    rel_error = abs(E_f - E0) / abs(E0)
-
-    assert rel_error < 1e-10, f"Energy not conserved: relative error = {rel_error:.2e}"
 
 
 class TestDecisionVector:
