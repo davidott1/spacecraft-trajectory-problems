@@ -5,16 +5,17 @@ import math
 import numpy as np
 from scipy.optimize import brentq, minimize as scipy_minimize
 
-from PyQt6.QtCore import Qt, QPointF
+from PyQt6.QtCore import Qt, QPointF, QRectF
 from PyQt6.QtGui import QPainter, QBrush, QColor, QPen, QPolygonF
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QVBoxLayout, QHBoxLayout
 
-GRAVITY_MAG = 9.81  # m/s^2, constant magnitude
-TIME_OF_FLIGHT = 3600.0  # seconds (1 hour)
+# Canonical units: 1 DU = 6371 km, 1 TU = sqrt(DU^3 / mu_km) ~ 806.4 s, mu = 1 DU^3/TU^2.
+GRAVITY_MAG = 1.0  # DU/TU^2 (~ 9.81e-3 km/s^2 in canonical units)
+TIME_OF_FLIGHT = 1.5  # TU (~ 1200 s)
 ARC_NUM_POINTS = 50  # number of points to draw the parabolic arc
 ORBIT_NUM_POINTS = 200  # number of points to draw a Kepler orbit
-MU = 3.986e5  # gravitational parameter for Lambert arcs (consistent with Kepler orbits)
-VEL_SCALE = 1000.0  # display scale: velocity_end = center + vel * VEL_SCALE
+MU = 1.0  # canonical gravitational parameter
+VEL_SCALE = 1.0  # display scale: velocity_end = center + vel * VEL_SCALE
 
 
 def compute_kepler_orbit(pos_center, vel_vec, grav_center, mu, num_points):
@@ -76,45 +77,50 @@ def compute_kepler_orbit(pos_center, vel_vec, grav_center, mu, num_points):
     return points
 
 
-# --- Old constant-gravity arc functions (commented out) ---
-# def compute_dynamic_arc(p0, p1, center, time_of_flight, num_points):
-#     """Compute parabolic arc points between p0 and p1 under constant gravity
-#     directed from p0 toward center."""
-#     r0 = np.array([p0.x(), p0.y()])
-#     rf = np.array([p1.x(), p1.y()])
-#     c = np.array([center.x(), center.y()])
-#     direction = c - r0
-#     dist = np.linalg.norm(direction)
-#     if dist < 1e-10:
-#         return [p0, p1]
-#     g_hat = direction / dist
-#     g_vec = GRAVITY_MAG * g_hat
-#     tf = time_of_flight
-#     v0 = (rf - r0) / tf - 0.5 * g_vec * tf
-#     points = []
-#     for t in np.linspace(0, tf, num_points):
-#         pos = r0 + v0 * t + 0.5 * g_vec * t * t
-#         points.append(QPointF(pos[0], pos[1]))
-#     return points
-#
-# def compute_arc_velocities(p0, p1, center, time_of_flight):
-#     """Return (v0, vf) numpy arrays for the dynamic arc from p0 to p1."""
-#     r0 = np.array([p0.x(), p0.y()])
-#     rf = np.array([p1.x(), p1.y()])
-#     c = np.array([center.x(), center.y()])
-#     direction = c - r0
-#     dist = np.linalg.norm(direction)
-#     if dist < 1e-10:
-#         disp = rf - r0
-#         v = disp / time_of_flight
-#         return v, v
-#     g_hat = direction / dist
-#     g_vec = GRAVITY_MAG * g_hat
-#     tf = time_of_flight
-#     v0 = (rf - r0) / tf - 0.5 * g_vec * tf
-#     vf = v0 + g_vec * tf
-#     return v0, vf
-# --- End old functions ---
+def compute_parabolic_arc(p0, p1, center, time_of_flight, num_points, g_vec=None):
+    """Compute parabolic arc points between p0 and p1 under constant gravity.
+    If g_vec is None, gravity is GRAVITY_MAG directed from p0 toward center;
+    otherwise the supplied (2,) vector is used directly."""
+    r0 = np.array([p0.x(), p0.y()])
+    rf = np.array([p1.x(), p1.y()])
+    if g_vec is None:
+        c = np.array([center.x(), center.y()])
+        direction = c - r0
+        dist = np.linalg.norm(direction)
+        if dist < 1e-10:
+            return [p0, p1]
+        g_vec = GRAVITY_MAG * (direction / dist)
+    else:
+        g_vec = np.asarray(g_vec, dtype=float)
+    tf = time_of_flight
+    v0 = (rf - r0) / tf - 0.5 * g_vec * tf
+    points = []
+    for t in np.linspace(0, tf, num_points):
+        pos = r0 + v0 * t + 0.5 * g_vec * t * t
+        points.append(QPointF(pos[0], pos[1]))
+    return points
+
+
+def compute_parabolic_arc_velocities(p0, p1, center, time_of_flight, g_vec=None):
+    """Return (v0, vf) numpy arrays for the parabolic arc from p0 to p1.
+    If g_vec is None, gravity is GRAVITY_MAG directed from p0 toward center."""
+    r0 = np.array([p0.x(), p0.y()])
+    rf = np.array([p1.x(), p1.y()])
+    if g_vec is None:
+        c = np.array([center.x(), center.y()])
+        direction = c - r0
+        dist = np.linalg.norm(direction)
+        if dist < 1e-10:
+            disp = rf - r0
+            v = disp / time_of_flight
+            return v, v
+        g_vec = GRAVITY_MAG * (direction / dist)
+    else:
+        g_vec = np.asarray(g_vec, dtype=float)
+    tf = time_of_flight
+    v0 = (rf - r0) / tf - 0.5 * g_vec * tf
+    vf = v0 + g_vec * tf
+    return v0, vf
 
 
 def _stumpff_c(z):
@@ -267,8 +273,8 @@ class Canvas(QWidget):
     def __init__(self):
         super().__init__()
         self.trajectories = []  # list of {"dots": [QPointF], "segments": [(i, j)]}
-        self.dot_radius = 637
-        self.trace_spacing = 6371
+        self.dot_radius = 0.10  # DU
+        self.trace_spacing = 1.0  # DU
         self.dragging = False
         self.dragging_shape = None  # "triangle" or "square" when dragging a shape
         self.drag_offset = QPointF(0, 0)
@@ -276,13 +282,13 @@ class Canvas(QWidget):
         self.shift_click_first = None  # first node selected for shift-click linking
         self.dragging_vel_end = None  # "triangle" or "square" when dragging a velocity line
         self.dragging_vel_t = 1.0  # parameter along line where grab occurred (0=center, 1=tip)
-        # Shape positions (center points) — placed in orbit around earth
+        # Shape positions (center points) — placed in orbit around earth (DU)
         self.earth_center = QPointF(0, 0)
-        self.earth_radius = 6371
-        self.tri_center = QPointF(9550, 0)
-        self.tri_size = 2548
-        self.sq_center = QPointF(-9550, 0)
-        self.sq_size = 2293
+        self.earth_radius = 1.0  # DU
+        self.tri_center = QPointF(1.5, 0)
+        self.tri_size = 0.4
+        self.sq_center = QPointF(-1.5, 0)
+        self.sq_size = 0.36
 
         # Initialize circular velocity for each shape (prograde = CCW with y-up)
         tri_r = math.hypot(self.tri_center.x(), self.tri_center.y())
@@ -301,14 +307,73 @@ class Canvas(QWidget):
         self.sq_orbit = []  # list of QPointF for square Kepler orbit
         self.tri_orbit_mode = True
         self.sq_orbit_mode = True
+        self.arc_model_mode = "conic"  # "conic" (Lambert) or "parabola"
+        self.env_mode = "two_body"  # "two_body" or "constant_gravity"
+        # Per-segment time of flight used for rendering. Optimizers may overwrite.
+        self.render_tof = TIME_OF_FLIGHT
+        # Active continuous-optimization mode: None | "energy" | "fuel".
+        # When set, every drag release re-runs the optimizer.
+        self.optimize_mode = None
 
         self.setStyleSheet("background-color: white;")
-        self.zoom = 50.0 / 6371.0
+        self.zoom = 50.0  # pixels per DU
         self.pan_offset = QPointF(600, 450)
 
         # Compute initial orbits
         self._compute_orbit_for_shape("triangle")
         self._compute_orbit_for_shape("square")
+
+    def get_arc_model_button_text(self):
+        if self.arc_model_mode == "conic":
+            return "Arc Model: Conic"
+        return "Arc Model: Parabola"
+
+    def toggle_arc_model_mode(self):
+        if self.arc_model_mode == "conic":
+            self.arc_model_mode = "parabola"
+        else:
+            self.arc_model_mode = "conic"
+        self.update()
+
+    def get_env_button_text(self):
+        if self.env_mode == "two_body":
+            return "Env: Two-Body"
+        return "Env: Constant-Gravity"
+
+    def toggle_env_mode(self):
+        if self.env_mode == "two_body":
+            self.env_mode = "constant_gravity"
+        else:
+            self.env_mode = "two_body"
+        # Recompute orbits (will be ignored visually in CG mode)
+        if self.tri_orbit_mode:
+            self._compute_orbit_for_shape("triangle")
+        if self.sq_orbit_mode:
+            self._compute_orbit_for_shape("square")
+        self.update()
+
+    def _constant_g_vec(self):
+        # Down in y-up world coordinates
+        return np.array([0.0, -GRAVITY_MAG])
+
+    def _compute_segment_arc(self, p0, p1, center, time_of_flight, num_points):
+        if self.env_mode == "constant_gravity":
+            return compute_parabolic_arc(
+                p0, p1, center, time_of_flight, num_points,
+                g_vec=self._constant_g_vec(),
+            )
+        if self.arc_model_mode == "parabola":
+            return compute_parabolic_arc(p0, p1, center, time_of_flight, num_points)
+        return compute_dynamic_arc(p0, p1, center, time_of_flight, num_points)
+
+    def _compute_segment_velocities(self, p0, p1, center, time_of_flight):
+        if self.env_mode == "constant_gravity":
+            return compute_parabolic_arc_velocities(
+                p0, p1, center, time_of_flight, g_vec=self._constant_g_vec(),
+            )
+        if self.arc_model_mode == "parabola":
+            return compute_parabolic_arc_velocities(p0, p1, center, time_of_flight)
+        return compute_arc_velocities(p0, p1, center, time_of_flight)
 
     def keyPressEvent(self, event):
         pass
@@ -338,9 +403,9 @@ class Canvas(QWidget):
         s = self.sq_size
         return abs(pos.x() - x) <= s / 2 and abs(pos.y() - y) <= s / 2
 
-    def _find_nearest_dot(self, pos, max_dist=1911):
+    def _find_nearest_dot(self, pos, max_dist=0.30):
         """Find the nearest dot (including triangle/square centers) across all
-        trajectories within max_dist pixels.
+        trajectories within max_dist (DU).
         Returns (dot_point, trajectory_or_None) or (None, None)."""
         best_dot = None
         best_traj = None
@@ -382,18 +447,16 @@ class Canvas(QWidget):
                 self.tri_velocity_end.x() - self.tri_center.x(),
                 self.tri_velocity_end.y() - self.tri_center.y(),
             ]) / VEL_SCALE
-            mu = 3.986e5  # km^3/s^2, Earth gravitational parameter
             self.tri_orbit = compute_kepler_orbit(
-                self.tri_center, vel, self.earth_center, mu, ORBIT_NUM_POINTS,
+                self.tri_center, vel, self.earth_center, MU, ORBIT_NUM_POINTS,
             )
         elif shape == "square" and self.sq_velocity_end is not None:
             vel = np.array([
                 self.sq_velocity_end.x() - self.sq_center.x(),
                 self.sq_velocity_end.y() - self.sq_center.y(),
             ]) / VEL_SCALE
-            mu = 3.986e5
             self.sq_orbit = compute_kepler_orbit(
-                self.sq_center, vel, self.earth_center, mu, ORBIT_NUM_POINTS,
+                self.sq_center, vel, self.earth_center, MU, ORBIT_NUM_POINTS,
             )
 
     def mousePressEvent(self, event):
@@ -454,7 +517,7 @@ class Canvas(QWidget):
                             proj_x = center.x() + t * lx
                             proj_y = center.y() + t * ly
                             d = math.hypot(pos.x() - proj_x, pos.y() - proj_y)
-                            if d < 1911:
+                            if d < 0.30:
                                 self.dragging_vel_end = shape
                                 self.dragging_vel_t = t
                                 return
@@ -491,6 +554,7 @@ class Canvas(QWidget):
                 self.sq_velocity_end = new_end
                 if self.sq_orbit_mode:
                     self._compute_orbit_for_shape("square")
+            self._run_active_optimizer()
             self.update()
             return
         # Handle shape dragging
@@ -503,6 +567,7 @@ class Canvas(QWidget):
                 self.tri_velocity_end = self.tri_velocity_end + delta
             if self.tri_orbit_mode:
                 self._compute_orbit_for_shape("triangle")
+            self._run_active_optimizer()
             self.update()
             return
         if self.dragging_shape == "square":
@@ -514,6 +579,7 @@ class Canvas(QWidget):
                 self.sq_velocity_end = self.sq_velocity_end + delta
             if self.sq_orbit_mode:
                 self._compute_orbit_for_shape("square")
+            self._run_active_optimizer()
             self.update()
             return
         # Handle black node dragging
@@ -556,17 +622,20 @@ class Canvas(QWidget):
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
+            geometry_changed = False
             if self.dragging_vel_end:
                 self.dragging_vel_end = None
-                return
-            if self.dragging_dot is not None:
+                geometry_changed = True
+            elif self.dragging_dot is not None:
                 self.dragging_dot = None
-                return
-            if self.dragging_shape:
+                geometry_changed = True
+            elif self.dragging_shape:
                 self.dragging_shape = None
-                return
-            if self.dragging:
+                geometry_changed = True
+            elif self.dragging:
                 self.dragging = False
+            if geometry_changed:
+                self._run_active_optimizer()
 
     def zoom_in(self):
         self.zoom *= 1.2
@@ -580,8 +649,8 @@ class Canvas(QWidget):
         delta = event.pixelDelta()
         if not delta.isNull():
             self.pan_offset = QPointF(
-                self.pan_offset.x() + delta.x(),
-                self.pan_offset.y() + delta.y(),
+                self.pan_offset.x() - delta.x(),
+                self.pan_offset.y() - delta.y(),
             )
             self.update()
 
@@ -593,15 +662,16 @@ class Canvas(QWidget):
         painter.translate(self.pan_offset.x(), self.pan_offset.y())
         painter.scale(self.zoom, -self.zoom)
 
-        # Draw Kepler orbits
-        pen = QPen(QColor("green"), 2)
-        pen.setCosmetic(True)
-        painter.setPen(pen)
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        for orbit in (self.tri_orbit, self.sq_orbit):
-            if len(orbit) > 1:
-                for k in range(len(orbit) - 1):
-                    painter.drawLine(orbit[k], orbit[k + 1])
+        # Draw Kepler orbits (only in two-body env)
+        if self.env_mode == "two_body":
+            pen = QPen(QColor("green"), 2)
+            pen.setCosmetic(True)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            for orbit in (self.tri_orbit, self.sq_orbit):
+                if len(orbit) > 1:
+                    for k in range(len(orbit) - 1):
+                        painter.drawLine(orbit[k], orbit[k + 1])
 
         # Draw velocity lines from triangle/square
         pen = QPen(QColor("green"), 2)
@@ -612,12 +682,13 @@ class Canvas(QWidget):
         if self.sq_velocity_end is not None:
             painter.drawLine(self.sq_center, self.sq_velocity_end)
 
-        # Draw blue circle (Earth)
-        painter.setBrush(QBrush(QColor("blue")))
-        pen = QPen(QColor("blue"), 2)
-        pen.setCosmetic(True)
-        painter.setPen(pen)
-        painter.drawEllipse(self.earth_center, self.earth_radius, self.earth_radius)
+        # Draw blue circle (Earth) only in two-body env
+        if self.env_mode == "two_body":
+            painter.setBrush(QBrush(QColor("blue")))
+            pen = QPen(QColor("blue"), 2)
+            pen.setCosmetic(True)
+            painter.setPen(pen)
+            painter.drawEllipse(self.earth_center, self.earth_radius, self.earth_radius)
 
         # Draw trajectories
         center = self.earth_center
@@ -630,9 +701,9 @@ class Canvas(QWidget):
                 pen = QPen(QColor("black"), 2)
                 pen.setCosmetic(True)
                 painter.setPen(pen)
-                arc_points = compute_dynamic_arc(
+                arc_points = self._compute_segment_arc(
                     dots[i_start], dots[i_end], center,
-                    TIME_OF_FLIGHT, ARC_NUM_POINTS,
+                    self.render_tof, ARC_NUM_POINTS,
                 )
                 for j in range(len(arc_points) - 1):
                     painter.drawLine(arc_points[j], arc_points[j + 1])
@@ -652,12 +723,12 @@ class Canvas(QWidget):
                 outgoing_vel = None  # departure velocity from node
                 for i_start, i_end in segments:
                     if i_end == k:
-                        _, vf = compute_arc_velocities(
-                            dots[i_start], dots[i_end], center, TIME_OF_FLIGHT)
+                        _, vf = self._compute_segment_velocities(
+                            dots[i_start], dots[i_end], center, self.render_tof)
                         incoming_vel = vf
                     elif i_start == k:
-                        v0, _ = compute_arc_velocities(
-                            dots[i_start], dots[i_end], center, TIME_OF_FLIGHT)
+                        v0, _ = self._compute_segment_velocities(
+                            dots[i_start], dots[i_end], center, self.render_tof)
                         outgoing_vel = v0
                 if incoming_vel is not None and outgoing_vel is not None:
                     dv = outgoing_vel - incoming_vel
@@ -682,16 +753,16 @@ class Canvas(QWidget):
                 dots = traj["dots"]
                 for i_start, i_end in traj["segments"]:
                     if dots[i_start] is shape_center:
-                        v0, _ = compute_arc_velocities(
-                            dots[i_start], dots[i_end], center, TIME_OF_FLIGHT)
+                        v0, _ = self._compute_segment_velocities(
+                            dots[i_start], dots[i_end], center, self.render_tof)
                         dv = v0 - shape_vel
                         painter.drawLine(
                             shape_center,
                             QPointF(shape_center.x() + dv[0] * VEL_SCALE, shape_center.y() + dv[1] * VEL_SCALE),
                         )
                     elif dots[i_end] is shape_center:
-                        _, vf = compute_arc_velocities(
-                            dots[i_start], dots[i_end], center, TIME_OF_FLIGHT)
+                        _, vf = self._compute_segment_velocities(
+                            dots[i_start], dots[i_end], center, self.render_tof)
                         dv = shape_vel - vf
                         painter.drawLine(
                             shape_center,
@@ -713,7 +784,7 @@ class Canvas(QWidget):
         painter.drawPolygon(self._triangle_polygon())
         sq_x = self.sq_center.x() - self.sq_size / 2
         sq_y = self.sq_center.y() - self.sq_size / 2
-        painter.drawRect(int(sq_x), int(sq_y), self.sq_size, self.sq_size)
+        painter.drawRect(QRectF(sq_x, sq_y, self.sq_size, self.sq_size))
 
         painter.end()
 
@@ -777,18 +848,18 @@ class Canvas(QWidget):
             return np.array([dot.x(), dot.y()])
 
         def arc_vels(r0, rf, tof):
-            r1_rel = r0 - center
-            r2_rel = rf - center
-            if np.linalg.norm(r1_rel) < 1e-10 or np.linalg.norm(r2_rel) < 1e-10:
-                v = (rf - r0) / tof
-                return v, v
-            return lambert_solve(r1_rel, r2_rel, tof, MU)
+            p0 = QPointF(r0[0], r0[1])
+            p1 = QPointF(rf[0], rf[1])
+            return self._compute_segment_velocities(p0, p1, self.earth_center, tof)
+
+        # Mass-leak smoothing so |dv| is differentiable at zero for gradient solvers.
+        fuel_eps = 1e-4
 
         def dv_cost(dv):
             if cost_mode == "energy":
                 return np.dot(dv, dv)
             else:
-                return np.linalg.norm(dv)
+                return math.sqrt(dv[0] * dv[0] + dv[1] * dv[1] + fuel_eps * fuel_eps)
 
         def objective(x_vec):
             tof = x_vec[n_pos_vars]
@@ -826,6 +897,128 @@ class Canvas(QWidget):
 
             return cost
 
+        # Analytic gradient for the parabolic arc model.
+        cg_mode = self.env_mode == "constant_gravity"
+        const_g_vec = self._constant_g_vec() if cg_mode else None
+
+        def parabola_gradient(x_vec):
+            tof = x_vec[n_pos_vars]
+            grad = np.zeros(n_vars)
+            g = GRAVITY_MAG
+            I2 = np.eye(2)
+
+            # Per-segment velocities and Jacobians wrt (r0, rf, tf).
+            seg_data_local = []
+            for dot_s, dot_e in all_segments:
+                r0 = get_pos(dot_s, x_vec)
+                rf = get_pos(dot_e, x_vec)
+                if cg_mode:
+                    g_vec = const_g_vec
+                    v0 = (rf - r0) / tof - 0.5 * g_vec * tof
+                    vf = (rf - r0) / tof + 0.5 * g_vec * tof
+                    # dg_vec / d r0 = 0 in constant-gravity mode
+                    J_v0_r0 = -I2 / tof
+                    J_v0_rf = I2 / tof
+                    J_v0_tf = -(rf - r0) / (tof * tof) - 0.5 * g_vec
+                    J_vf_r0 = -I2 / tof
+                    J_vf_rf = I2 / tof
+                    J_vf_tf = -(rf - r0) / (tof * tof) + 0.5 * g_vec
+                else:
+                    d = center - r0
+                    dist = float(np.linalg.norm(d))
+                    if dist < 1e-12:
+                        v0 = (rf - r0) / tof
+                        vf = v0.copy()
+                        J_v0_r0 = -I2 / tof
+                        J_v0_rf = I2 / tof
+                        J_v0_tf = -(rf - r0) / (tof * tof)
+                        J_vf_r0 = J_v0_r0
+                        J_vf_rf = J_v0_rf
+                        J_vf_tf = J_v0_tf
+                    else:
+                        g_hat = d / dist
+                        g_vec = g * g_hat
+                        v0 = (rf - r0) / tof - 0.5 * g_vec * tof
+                        vf = (rf - r0) / tof + 0.5 * g_vec * tof
+                        # d g_hat / d r0 = (1/dist) * (-I + g_hat g_hat^T)
+                        dgvec_dr0 = (g / dist) * (-I2 + np.outer(g_hat, g_hat))
+                        J_v0_r0 = -I2 / tof - 0.5 * tof * dgvec_dr0
+                        J_v0_rf = I2 / tof
+                        J_v0_tf = -(rf - r0) / (tof * tof) - 0.5 * g_vec
+                        J_vf_r0 = -I2 / tof + 0.5 * tof * dgvec_dr0
+                        J_vf_rf = I2 / tof
+                        J_vf_tf = -(rf - r0) / (tof * tof) + 0.5 * g_vec
+                seg_data_local.append({
+                    "dot_s": dot_s, "dot_e": dot_e,
+                    "v0": v0, "vf": vf,
+                    "J_v0_r0": J_v0_r0, "J_v0_rf": J_v0_rf, "J_v0_tf": J_v0_tf,
+                    "J_vf_r0": J_vf_r0, "J_vf_rf": J_vf_rf, "J_vf_tf": J_vf_tf,
+                })
+
+            # Same first-occurrence convention as objective.
+            node_outgoing_seg = {}
+            node_incoming_seg = {}
+            for i, sd in enumerate(seg_data_local):
+                s_id = id(sd["dot_s"])
+                e_id = id(sd["dot_e"])
+                if s_id not in node_outgoing_seg:
+                    node_outgoing_seg[s_id] = i
+                if e_id not in node_incoming_seg:
+                    node_incoming_seg[e_id] = i
+
+            def add_pos_grad(dot, vec2):
+                if id(dot) in dot_id_to_var_idx:
+                    idx = dot_id_to_var_idx[id(dot)]
+                    grad[2 * idx: 2 * idx + 2] += vec2
+
+            def accumulate(dv, contribs):
+                if cost_mode == "energy":
+                    factor = 2.0
+                else:
+                    factor = 1.0 / math.sqrt(dv[0] * dv[0] + dv[1] * dv[1] + fuel_eps * fuel_eps)
+                for kind, dot, J in contribs:
+                    if kind == "pos":
+                        add_pos_grad(dot, factor * (dv @ J))
+                    else:
+                        grad[n_pos_vars] += factor * float(np.dot(dv, J))
+
+            # Black movable midpoint nodes
+            for dot in movable_dots:
+                d_id = id(dot)
+                if d_id in node_incoming_seg and d_id in node_outgoing_seg:
+                    sin = seg_data_local[node_incoming_seg[d_id]]
+                    sout = seg_data_local[node_outgoing_seg[d_id]]
+                    dv = sout["v0"] - sin["vf"]
+                    contribs = [
+                        ("pos", sin["dot_s"], -sin["J_vf_r0"]),
+                        ("pos", dot, sout["J_v0_r0"] - sin["J_vf_rf"]),
+                        ("pos", sout["dot_e"], sout["J_v0_rf"]),
+                        ("tof", None, sout["J_v0_tf"] - sin["J_vf_tf"]),
+                    ]
+                    accumulate(dv, contribs)
+
+            # Shape nodes (r_shape is fixed)
+            for shape_center, shape_pos, shape_vel in shape_data:
+                s_id = id(shape_center)
+                if s_id in node_outgoing_seg:
+                    sout = seg_data_local[node_outgoing_seg[s_id]]
+                    dv = sout["v0"] - shape_vel
+                    contribs = [
+                        ("pos", sout["dot_e"], sout["J_v0_rf"]),
+                        ("tof", None, sout["J_v0_tf"]),
+                    ]
+                    accumulate(dv, contribs)
+                if s_id in node_incoming_seg:
+                    sin = seg_data_local[node_incoming_seg[s_id]]
+                    dv = shape_vel - sin["vf"]
+                    contribs = [
+                        ("pos", sin["dot_s"], -sin["J_vf_r0"]),
+                        ("tof", None, -sin["J_vf_tf"]),
+                    ]
+                    accumulate(dv, contribs)
+
+            return grad
+
         # Initial guess: positions + shared TOF
         x0 = np.zeros(n_vars)
         for i, dot in enumerate(movable_dots):
@@ -833,15 +1026,18 @@ class Canvas(QWidget):
             x0[2 * i + 1] = dot.y()
         x0[n_pos_vars] = TIME_OF_FLIGHT
 
-        # Bounds: no bounds on positions, TOF bounded to [60, 36000] seconds
-        bounds = [(None, None)] * n_pos_vars + [(60.0, 36000.0)]
+        # BFGS is unconstrained; use analytic Jacobian for parabola/CG modes.
+        use_parabola = self.env_mode == "constant_gravity" or self.arc_model_mode == "parabola"
+        if use_parabola:
+            result = scipy_minimize(objective, x0, method="BFGS", jac=parabola_gradient)
+        else:
+            result = scipy_minimize(objective, x0, method="BFGS")
 
-        result = scipy_minimize(objective, x0, method="L-BFGS-B", bounds=bounds)
-
-        # Apply result: update positions
+        # Apply result: update positions and rendering tof
         for i, dot in enumerate(movable_dots):
             dot.setX(result.x[2 * i])
             dot.setY(result.x[2 * i + 1])
+        self.render_tof = float(result.x[n_pos_vars])
 
         # Recompute orbits if active
         if self.tri_orbit_mode:
@@ -855,6 +1051,18 @@ class Canvas(QWidget):
 
     def optimize_fuel(self):
         self._optimize_common("fuel")
+
+    def set_optimize_mode(self, mode):
+        """mode in {None, 'energy', 'fuel'}. When set, runs once immediately
+        and then on every subsequent drag release."""
+        assert mode in (None, "energy", "fuel")
+        self.optimize_mode = mode
+        if mode is not None:
+            self._optimize_common(mode)
+
+    def _run_active_optimizer(self):
+        if self.optimize_mode is not None:
+            self._optimize_common(self.optimize_mode)
 
 
 class MainWindow(QMainWindow):
@@ -872,13 +1080,61 @@ class MainWindow(QMainWindow):
 
         optimize_energy_btn = QPushButton("Optimize: Min Energy")
         optimize_energy_btn.setFixedSize(150, 25)
-        optimize_energy_btn.clicked.connect(canvas.optimize_energy)
+        optimize_energy_btn.setCheckable(True)
 
         optimize_fuel_btn = QPushButton("Optimize: Min Fuel")
         optimize_fuel_btn.setFixedSize(130, 25)
-        optimize_fuel_btn.clicked.connect(canvas.optimize_fuel)
+        optimize_fuel_btn.setCheckable(True)
+
+        def on_energy_toggled(checked):
+            if checked:
+                # Mutually exclusive with fuel
+                if optimize_fuel_btn.isChecked():
+                    optimize_fuel_btn.blockSignals(True)
+                    optimize_fuel_btn.setChecked(False)
+                    optimize_fuel_btn.blockSignals(False)
+                canvas.set_optimize_mode("energy")
+            else:
+                if not optimize_fuel_btn.isChecked():
+                    canvas.set_optimize_mode(None)
+
+        def on_fuel_toggled(checked):
+            if checked:
+                if optimize_energy_btn.isChecked():
+                    optimize_energy_btn.blockSignals(True)
+                    optimize_energy_btn.setChecked(False)
+                    optimize_energy_btn.blockSignals(False)
+                canvas.set_optimize_mode("fuel")
+            else:
+                if not optimize_energy_btn.isChecked():
+                    canvas.set_optimize_mode(None)
+
+        optimize_energy_btn.toggled.connect(on_energy_toggled)
+        optimize_fuel_btn.toggled.connect(on_fuel_toggled)
+
+        arc_model_btn = QPushButton(canvas.get_arc_model_button_text())
+        arc_model_btn.setFixedSize(155, 25)
+
+        def toggle_arc_model_button():
+            canvas.toggle_arc_model_mode()
+            arc_model_btn.setText(canvas.get_arc_model_button_text())
+
+        arc_model_btn.clicked.connect(toggle_arc_model_button)
+
+        env_btn = QPushButton(canvas.get_env_button_text())
+        env_btn.setFixedSize(180, 25)
+
+        def toggle_env_button():
+            canvas.toggle_env_mode()
+            env_btn.setText(canvas.get_env_button_text())
+
+        env_btn.clicked.connect(toggle_env_button)
 
         top_layout = QHBoxLayout()
+        top_layout.addStretch()
+        top_layout.addWidget(env_btn)
+        top_layout.addSpacing(10)
+        top_layout.addWidget(arc_model_btn)
         top_layout.addStretch()
         top_layout.addWidget(optimize_energy_btn)
         top_layout.addSpacing(10)
