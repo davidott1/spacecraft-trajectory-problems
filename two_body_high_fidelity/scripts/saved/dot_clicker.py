@@ -449,6 +449,7 @@ class Canvas(QWidget):
         self.dragging_vel_end = None  # "triangle" or "square" when dragging a velocity line
         self.dragging_vel_t = 1.0  # parameter along line where grab occurred (0=center, 1=tip)
         self.x_held = False  # X key held: click black node to delete + merge segments
+        self.v_held = False  # V key held: click on a segment to insert a node at nearest integer*tof
         # Shape positions (center points) — placed in orbit around earth (DU)
         self.earth_center = QPointF(0, 0)
         self.earth_radius = 1.0  # DU
@@ -547,10 +548,14 @@ class Canvas(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_X:
             self.x_held = True
+        elif event.key() == Qt.Key.Key_V:
+            self.v_held = True
 
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key.Key_X:
             self.x_held = False
+        elif event.key() == Qt.Key.Key_V:
+            self.v_held = False
 
     def _screen_to_world(self, screen_pos):
         wx = (screen_pos.x() - self.pan_offset.x()) / self.zoom
@@ -610,6 +615,56 @@ class Canvas(QWidget):
                 if (dots[i_start] is p0 and dots[i_end] is p1) or (dots[i_start] is p1 and dots[i_end] is p0):
                     return True
         return False
+
+    def _insert_node_on_segment(self, pos):
+        """V+click insert: find the segment whose arc passes nearest pos.
+        Densely sample the arc to find the continuous time fraction
+        t* in (0, N) closest to the click (N = segment mult). Round t* to
+        nearest integer k. If k is 0 or N (existing endpoint), do nothing.
+        Otherwise split into two segments with mults k and N-k."""
+        click_world = np.array([pos.x(), pos.y()])
+        center = self.earth_center
+        best = None  # (dist, traj, seg_idx, t_star, n_int)
+        dense = 200  # samples per segment for continuous projection
+        for traj in self.trajectories:
+            dots = traj["dots"]
+            for s_idx, (i_start, i_end, mult) in enumerate(traj["segments"]):
+                n_int = int(round(mult))
+                if n_int < 2:
+                    continue
+                arc_pts = self._compute_segment_arc(
+                    dots[i_start], dots[i_end], center,
+                    self.render_tof * mult, dense + 1,
+                )
+                # Find sample closest in space; t in [0, N].
+                best_local = None
+                for j, p in enumerate(arc_pts):
+                    d = math.hypot(click_world[0] - p.x(), click_world[1] - p.y())
+                    if best_local is None or d < best_local[0]:
+                        best_local = (d, j)
+                d_min, j_min = best_local
+                t_star = (j_min / dense) * n_int
+                if best is None or d_min < best[0]:
+                    best = (d_min, traj, s_idx, t_star, n_int)
+        if best is None:
+            return False
+        _, traj, s_idx, t_star, n_int = best
+        k = int(round(t_star))
+        if k <= 0 or k >= n_int:
+            return False
+        i_start, i_end, mult = traj["segments"][s_idx]
+        # Place the new dot at the arc point at time = k * tof along segment.
+        arc_pts = self._compute_segment_arc(
+            traj["dots"][i_start], traj["dots"][i_end], center,
+            self.render_tof * mult, n_int + 1,
+        )
+        new_pt = arc_pts[k]
+        new_dot = QPointF(new_pt.x(), new_pt.y())
+        traj["dots"].append(new_dot)
+        new_idx = len(traj["dots"]) - 1
+        traj["segments"][s_idx] = (i_start, new_idx, float(k))
+        traj["segments"].insert(s_idx + 1, (new_idx, i_end, float(n_int - k)))
+        return True
 
     def _delete_black_node(self, dot):
         """X+click delete: remove a black node that has exactly one incoming
@@ -681,6 +736,14 @@ class Canvas(QWidget):
             if self.x_held:
                 dot, _traj = self._find_nearest_dot(pos)
                 if dot is not None and self._delete_black_node(dot):
+                    self._run_active_optimizer()
+                    self.update()
+                return
+            # V + click on a segment to insert a black node at the closest
+            # integer multiple of tof along the segment. No-op if the rounded
+            # multiplier hits an existing endpoint.
+            if self.v_held:
+                if self._insert_node_on_segment(pos):
                     self._run_active_optimizer()
                     self.update()
                 return
