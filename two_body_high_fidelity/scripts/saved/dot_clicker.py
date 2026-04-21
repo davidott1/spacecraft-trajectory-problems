@@ -498,6 +498,7 @@ class Canvas(QWidget):
             self.arc_model_mode = "parabola"
         else:
             self.arc_model_mode = "conic"
+        self._run_active_optimizer()
         self.update()
 
     def get_env_button_text(self):
@@ -515,6 +516,7 @@ class Canvas(QWidget):
             self._compute_orbit_for_shape("triangle")
         if self.sq_orbit_mode:
             self._compute_orbit_for_shape("square")
+        self._run_active_optimizer()
         self.update()
 
     def _constant_g_vec(self):
@@ -695,8 +697,27 @@ class Canvas(QWidget):
             # Trajectory drawing requires Cmd
             if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
                 self.dragging = True
-                self.trajectories.append({"dots": [], "segments": []})
-                self.trajectories[-1]["dots"].append(self._screen_to_world(QPointF(event.pos())))
+                start_pos = self._screen_to_world(QPointF(event.pos()))
+                # If Cmd-pressing close to a shape center, start trajectory at
+                # that shape (dots[0]) and use the mouse pos as the next node.
+                snap_thresh = 75.0 / self.zoom  # 75 px in world DU
+                snap_node = None
+                d_tri = math.hypot(
+                    start_pos.x() - self.tri_center.x(),
+                    start_pos.y() - self.tri_center.y(),
+                )
+                d_sq = math.hypot(
+                    start_pos.x() - self.sq_center.x(),
+                    start_pos.y() - self.sq_center.y(),
+                )
+                if d_tri < snap_thresh and d_tri <= d_sq:
+                    snap_node = self.tri_center
+                elif d_sq < snap_thresh:
+                    snap_node = self.sq_center
+                if snap_node is not None:
+                    self.trajectories.append({"dots": [snap_node, start_pos], "segments": [(0, 1)]})
+                else:
+                    self.trajectories.append({"dots": [start_pos], "segments": []})
                 self.update()
 
     def mouseMoveEvent(self, event):
@@ -799,6 +820,32 @@ class Canvas(QWidget):
                 geometry_changed = True
             elif self.dragging:
                 self.dragging = False
+                # If last dot of the just-drawn trajectory is close to a shape
+                # center, append the shape as the next node and add a segment
+                # from the last dot to the shape.
+                if self.trajectories:
+                    traj = self.trajectories[-1]
+                    if traj["segments"] and traj["dots"]:
+                        last = traj["dots"][-1]
+                        snap_thresh = 75.0 / self.zoom
+                        d_tri = math.hypot(last.x() - self.tri_center.x(), last.y() - self.tri_center.y())
+                        d_sq = math.hypot(last.x() - self.sq_center.x(), last.y() - self.sq_center.y())
+                        snap_node = None
+                        if d_tri < snap_thresh and d_tri <= d_sq:
+                            snap_node = self.tri_center
+                        elif d_sq < snap_thresh:
+                            snap_node = self.sq_center
+                        if snap_node is not None and snap_node is not last:
+                            i_last = len(traj["dots"]) - 1
+                            if snap_node in traj["dots"]:
+                                i_snap = traj["dots"].index(snap_node)
+                            else:
+                                traj["dots"].append(snap_node)
+                                i_snap = len(traj["dots"]) - 1
+                            if not self._segment_exists(last, snap_node):
+                                traj["segments"].append((i_last, i_snap))
+                                geometry_changed = True
+                            self.update()
             if geometry_changed:
                 self._run_active_optimizer()
 
