@@ -437,7 +437,8 @@ def compute_arc_velocities(p0, p1, center, time_of_flight):
 class Canvas(QWidget):
     def __init__(self):
         super().__init__()
-        self.trajectories = []  # list of {"dots": [QPointF], "segments": [(i, j)]}
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.trajectories = []  # list of {"dots": [QPointF], "segments": [(i, j, mult)]}
         self.dot_radius = 0.10  # DU
         self.trace_spacing = 1.0  # DU
         self.dragging = False
@@ -447,6 +448,7 @@ class Canvas(QWidget):
         self.shift_click_first = None  # first node selected for shift-click linking
         self.dragging_vel_end = None  # "triangle" or "square" when dragging a velocity line
         self.dragging_vel_t = 1.0  # parameter along line where grab occurred (0=center, 1=tip)
+        self.x_held = False  # X key held: click black node to delete + merge segments
         # Shape positions (center points) — placed in orbit around earth (DU)
         self.earth_center = QPointF(0, 0)
         self.earth_radius = 1.0  # DU
@@ -543,10 +545,12 @@ class Canvas(QWidget):
         return compute_arc_velocities(p0, p1, center, time_of_flight)
 
     def keyPressEvent(self, event):
-        pass
+        if event.key() == Qt.Key.Key_X:
+            self.x_held = True
 
     def keyReleaseEvent(self, event):
-        pass
+        if event.key() == Qt.Key.Key_X:
+            self.x_held = False
 
     def _screen_to_world(self, screen_pos):
         wx = (screen_pos.x() - self.pan_offset.x()) / self.zoom
@@ -602,9 +606,52 @@ class Canvas(QWidget):
         """Check if a segment already exists between two points."""
         for traj in self.trajectories:
             dots = traj["dots"]
-            for i_start, i_end in traj["segments"]:
+            for i_start, i_end, _ in traj["segments"]:
                 if (dots[i_start] is p0 and dots[i_end] is p1) or (dots[i_start] is p1 and dots[i_end] is p0):
                     return True
+        return False
+
+    def _delete_black_node(self, dot):
+        """X+click delete: remove a black node that has exactly one incoming
+        and one outgoing segment in the same trajectory; merge the two
+        segments into one with mult = m_in + m_out. No-op otherwise."""
+        if dot is self.tri_center or dot is self.sq_center:
+            return False
+        for traj in self.trajectories:
+            dots = traj["dots"]
+            if dot not in dots:
+                continue
+            k = dots.index(dot)
+            in_seg_idx = None
+            out_seg_idx = None
+            for s_idx, (i_start, i_end, _m) in enumerate(traj["segments"]):
+                if i_end == k:
+                    if in_seg_idx is not None:
+                        return False
+                    in_seg_idx = s_idx
+                elif i_start == k:
+                    if out_seg_idx is not None:
+                        return False
+                    out_seg_idx = s_idx
+            if in_seg_idx is None or out_seg_idx is None:
+                return False
+            i_prev, _, m_in = traj["segments"][in_seg_idx]
+            _, i_next, m_out = traj["segments"][out_seg_idx]
+            # Build merged segment list, drop the two old segments.
+            new_segments = [s for s_idx, s in enumerate(traj["segments"])
+                            if s_idx not in (in_seg_idx, out_seg_idx)]
+            new_segments.append((i_prev, i_next, m_in + m_out))
+            # Remove the dot and renumber indices in segments above k.
+            del dots[k]
+            renumbered = []
+            for i_s, i_e, m in new_segments:
+                if i_s > k:
+                    i_s -= 1
+                if i_e > k:
+                    i_e -= 1
+                renumbered.append((i_s, i_e, m))
+            traj["segments"] = renumbered
+            return True
         return False
 
     def _compute_orbit_for_shape(self, shape):
@@ -629,6 +676,14 @@ class Canvas(QWidget):
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             pos = self._screen_to_world(QPointF(event.pos()))
+            # X + click on a black node to delete it and merge its two
+            # incident segments (mult = m_in + m_out).
+            if self.x_held:
+                dot, _traj = self._find_nearest_dot(pos)
+                if dot is not None and self._delete_black_node(dot):
+                    self._run_active_optimizer()
+                    self.update()
+                return
             # V + click on triangle/square to draw velocity line
             # O + click on triangle/square to compute Kepler orbit
             # Shift-click to link two existing nodes (including triangle/square)
@@ -644,7 +699,7 @@ class Canvas(QWidget):
                             target_traj = first_traj or traj
                             if target_traj is None:
                                 # Both are shape nodes, create a new trajectory
-                                target_traj = {"dots": [first_dot, dot], "segments": [(0, 1)]}
+                                target_traj = {"dots": [first_dot, dot], "segments": [(0, 1, 1.0)]}
                                 self.trajectories.append(target_traj)
                             else:
                                 # Add dots if not already present, then add segment
@@ -654,7 +709,7 @@ class Canvas(QWidget):
                                     target_traj["dots"].append(dot)
                                 i0 = target_traj["dots"].index(first_dot)
                                 i1 = target_traj["dots"].index(dot)
-                                target_traj["segments"].append((i0, i1))
+                                target_traj["segments"].append((i0, i1, 1.0))
                             self.update()
                         self.shift_click_first = None
                 return
@@ -715,7 +770,7 @@ class Canvas(QWidget):
                 elif d_sq < snap_thresh:
                     snap_node = self.sq_center
                 if snap_node is not None:
-                    self.trajectories.append({"dots": [snap_node, start_pos], "segments": [(0, 1)]})
+                    self.trajectories.append({"dots": [snap_node, start_pos], "segments": [(0, 1, 1.0)]})
                 else:
                     self.trajectories.append({"dots": [start_pos], "segments": []})
                 self.update()
@@ -798,7 +853,8 @@ class Canvas(QWidget):
                 )
                 self.trajectories[-1]["segments"].append(
                     (len(self.trajectories[-1]["dots"]) - 1,
-                     len(self.trajectories[-1]["dots"]))
+                     len(self.trajectories[-1]["dots"]),
+                     1.0)
                 )
                 self.trajectories[-1]["dots"].append(interp)
             self.update()
@@ -843,7 +899,7 @@ class Canvas(QWidget):
                                 traj["dots"].append(snap_node)
                                 i_snap = len(traj["dots"]) - 1
                             if not self._segment_exists(last, snap_node):
-                                traj["segments"].append((i_last, i_snap))
+                                traj["segments"].append((i_last, i_snap, 1.0))
                                 geometry_changed = True
                             self.update()
             if geometry_changed:
@@ -909,13 +965,13 @@ class Canvas(QWidget):
             segments = traj["segments"]
 
             # Draw segments
-            for i_start, i_end in segments:
+            for i_start, i_end, mult in segments:
                 pen = QPen(QColor("black"), 2)
                 pen.setCosmetic(True)
                 painter.setPen(pen)
                 arc_points = self._compute_segment_arc(
                     dots[i_start], dots[i_end], center,
-                    self.render_tof, ARC_NUM_POINTS,
+                    self.render_tof * mult, ARC_NUM_POINTS,
                 )
                 for j in range(len(arc_points) - 1):
                     painter.drawLine(arc_points[j], arc_points[j + 1])
@@ -933,14 +989,14 @@ class Canvas(QWidget):
                 # Find segments where this node is an endpoint
                 incoming_vel = None  # arrival velocity at node
                 outgoing_vel = None  # departure velocity from node
-                for i_start, i_end in segments:
+                for i_start, i_end, mult in segments:
                     if i_end == k:
                         _, vf = self._compute_segment_velocities(
-                            dots[i_start], dots[i_end], center, self.render_tof)
+                            dots[i_start], dots[i_end], center, self.render_tof * mult)
                         incoming_vel = vf
                     elif i_start == k:
                         v0, _ = self._compute_segment_velocities(
-                            dots[i_start], dots[i_end], center, self.render_tof)
+                            dots[i_start], dots[i_end], center, self.render_tof * mult)
                         outgoing_vel = v0
                 if incoming_vel is not None and outgoing_vel is not None:
                     dv = outgoing_vel - incoming_vel
@@ -963,10 +1019,10 @@ class Canvas(QWidget):
             ]) / VEL_SCALE
             for traj in self.trajectories:
                 dots = traj["dots"]
-                for i_start, i_end in traj["segments"]:
+                for i_start, i_end, mult in traj["segments"]:
                     if dots[i_start] is shape_center:
                         v0, _ = self._compute_segment_velocities(
-                            dots[i_start], dots[i_end], center, self.render_tof)
+                            dots[i_start], dots[i_end], center, self.render_tof * mult)
                         dv = v0 - shape_vel
                         painter.drawLine(
                             shape_center,
@@ -974,7 +1030,7 @@ class Canvas(QWidget):
                         )
                     elif dots[i_end] is shape_center:
                         _, vf = self._compute_segment_velocities(
-                            dots[i_start], dots[i_end], center, self.render_tof)
+                            dots[i_start], dots[i_end], center, self.render_tof * mult)
                         dv = shape_vel - vf
                         painter.drawLine(
                             shape_center,
@@ -1015,7 +1071,7 @@ class Canvas(QWidget):
 
         for traj in self.trajectories:
             dots = traj["dots"]
-            for i_start, i_end in traj["segments"]:
+            for i_start, i_end, _mult in traj["segments"]:
                 for idx in (i_start, i_end):
                     dot = dots[idx]
                     if dot is not self.tri_center and dot is not self.sq_center:
@@ -1030,12 +1086,12 @@ class Canvas(QWidget):
         dot_id_to_var_idx = {id(d): i for i, d in enumerate(movable_dots)}
         n_pos_vars = len(movable_dots) * 2  # x, y per dot
 
-        # Build segment list as (dot_start, dot_end) with references
+        # Build segment list as (dot_start, dot_end, mult) with references
         all_segments = []
         for traj in self.trajectories:
             dots = traj["dots"]
-            for i_start, i_end in traj["segments"]:
-                all_segments.append((dots[i_start], dots[i_end]))
+            for i_start, i_end, mult in traj["segments"]:
+                all_segments.append((dots[i_start], dots[i_end], mult))
 
         n_vars = n_pos_vars + 1  # positions + single shared TOF
 
@@ -1079,10 +1135,10 @@ class Canvas(QWidget):
             # Build per-node incoming/outgoing velocities
             node_incoming = {}  # id(dot) -> vf
             node_outgoing = {}  # id(dot) -> v0
-            for dot_s, dot_e in all_segments:
+            for dot_s, dot_e, mult in all_segments:
                 r0 = get_pos(dot_s, x_vec)
                 rf = get_pos(dot_e, x_vec)
-                v0, vf = arc_vels(r0, rf, tof)
+                v0, vf = arc_vels(r0, rf, tof * mult)
                 # Outgoing at start node
                 if id(dot_s) not in node_outgoing:
                     node_outgoing[id(dot_s)] = v0
@@ -1121,45 +1177,49 @@ class Canvas(QWidget):
 
             # Per-segment velocities and Jacobians wrt (r0, rf, tf).
             seg_data_local = []
-            for dot_s, dot_e in all_segments:
+            for dot_s, dot_e, mult in all_segments:
                 r0 = get_pos(dot_s, x_vec)
                 rf = get_pos(dot_e, x_vec)
+                tof_seg = tof * mult
                 if cg_mode:
                     g_vec = const_g_vec
-                    v0 = (rf - r0) / tof - 0.5 * g_vec * tof
-                    vf = (rf - r0) / tof + 0.5 * g_vec * tof
+                    v0 = (rf - r0) / tof_seg - 0.5 * g_vec * tof_seg
+                    vf = (rf - r0) / tof_seg + 0.5 * g_vec * tof_seg
                     # dg_vec / d r0 = 0 in constant-gravity mode
-                    J_v0_r0 = -I2 / tof
-                    J_v0_rf = I2 / tof
-                    J_v0_tf = -(rf - r0) / (tof * tof) - 0.5 * g_vec
-                    J_vf_r0 = -I2 / tof
-                    J_vf_rf = I2 / tof
-                    J_vf_tf = -(rf - r0) / (tof * tof) + 0.5 * g_vec
+                    J_v0_r0 = -I2 / tof_seg
+                    J_v0_rf = I2 / tof_seg
+                    J_v0_tf = -(rf - r0) / (tof_seg * tof_seg) - 0.5 * g_vec
+                    J_vf_r0 = -I2 / tof_seg
+                    J_vf_rf = I2 / tof_seg
+                    J_vf_tf = -(rf - r0) / (tof_seg * tof_seg) + 0.5 * g_vec
                 else:
                     d = center - r0
                     dist = float(np.linalg.norm(d))
                     if dist < 1e-12:
-                        v0 = (rf - r0) / tof
+                        v0 = (rf - r0) / tof_seg
                         vf = v0.copy()
-                        J_v0_r0 = -I2 / tof
-                        J_v0_rf = I2 / tof
-                        J_v0_tf = -(rf - r0) / (tof * tof)
+                        J_v0_r0 = -I2 / tof_seg
+                        J_v0_rf = I2 / tof_seg
+                        J_v0_tf = -(rf - r0) / (tof_seg * tof_seg)
                         J_vf_r0 = J_v0_r0
                         J_vf_rf = J_v0_rf
                         J_vf_tf = J_v0_tf
                     else:
                         g_hat = d / dist
                         g_vec = g * g_hat
-                        v0 = (rf - r0) / tof - 0.5 * g_vec * tof
-                        vf = (rf - r0) / tof + 0.5 * g_vec * tof
+                        v0 = (rf - r0) / tof_seg - 0.5 * g_vec * tof_seg
+                        vf = (rf - r0) / tof_seg + 0.5 * g_vec * tof_seg
                         # d g_hat / d r0 = (1/dist) * (-I + g_hat g_hat^T)
                         dgvec_dr0 = (g / dist) * (-I2 + np.outer(g_hat, g_hat))
-                        J_v0_r0 = -I2 / tof - 0.5 * tof * dgvec_dr0
-                        J_v0_rf = I2 / tof
-                        J_v0_tf = -(rf - r0) / (tof * tof) - 0.5 * g_vec
-                        J_vf_r0 = -I2 / tof + 0.5 * tof * dgvec_dr0
-                        J_vf_rf = I2 / tof
-                        J_vf_tf = -(rf - r0) / (tof * tof) + 0.5 * g_vec
+                        J_v0_r0 = -I2 / tof_seg - 0.5 * tof_seg * dgvec_dr0
+                        J_v0_rf = I2 / tof_seg
+                        J_v0_tf = -(rf - r0) / (tof_seg * tof_seg) - 0.5 * g_vec
+                        J_vf_r0 = -I2 / tof_seg + 0.5 * tof_seg * dgvec_dr0
+                        J_vf_rf = I2 / tof_seg
+                        J_vf_tf = -(rf - r0) / (tof_seg * tof_seg) + 0.5 * g_vec
+                # Chain rule: d/d tof_var = (d/d tof_seg) * mult
+                J_v0_tf = J_v0_tf * mult
+                J_vf_tf = J_vf_tf * mult
                 seg_data_local.append({
                     "dot_s": dot_s, "dot_e": dot_e,
                     "v0": v0, "vf": vf,
@@ -1239,12 +1299,15 @@ class Canvas(QWidget):
             grad = np.zeros(n_vars)
 
             seg_data_local = []
-            for dot_s, dot_e in all_segments:
+            for dot_s, dot_e, mult in all_segments:
                 r0 = get_pos(dot_s, x_vec)
                 rf = get_pos(dot_e, x_vec)
                 v0, vf, J_v0_r0, J_v0_rf, J_v0_tf, J_vf_r0, J_vf_rf, J_vf_tf = (
-                    lambert_solve_with_jac(r0, rf, tof, MU)
+                    lambert_solve_with_jac(r0, rf, tof * mult, MU)
                 )
+                # Chain rule: d/d tof_var = (d/d tof_seg) * mult
+                J_v0_tf = J_v0_tf * mult
+                J_vf_tf = J_vf_tf * mult
                 seg_data_local.append({
                     "dot_s": dot_s, "dot_e": dot_e,
                     "v0": v0, "vf": vf,
