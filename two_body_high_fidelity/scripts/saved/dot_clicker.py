@@ -574,6 +574,20 @@ class Canvas(QWidget):
         s = self.sq_size
         return abs(pos.x() - x) <= s / 2 and abs(pos.y() - y) <= s / 2
 
+    def _snap_target_for(self, pos, r_inner, r_outer):
+        """Pick the closer of triangle/square if within r_outer of pos.
+        Returns (shape_dot, distance, mode) where mode is 'inner' (d < r_inner),
+        'outer' (r_inner <= d < r_outer), or None (no snap)."""
+        d_tri = math.hypot(pos.x() - self.tri_center.x(), pos.y() - self.tri_center.y())
+        d_sq = math.hypot(pos.x() - self.sq_center.x(), pos.y() - self.sq_center.y())
+        if d_tri <= d_sq and d_tri < r_outer:
+            shape, d = self.tri_center, d_tri
+        elif d_sq < r_outer:
+            shape, d = self.sq_center, d_sq
+        else:
+            return None, None, None
+        return shape, d, ('inner' if d < r_inner else 'outer')
+
     def _find_nearest_dot(self, pos, max_dist=0.30):
         """Find the nearest dot (including triangle/square centers) across all
         trajectories within max_dist (DU).
@@ -841,12 +855,15 @@ class Canvas(QWidget):
                             self.update()
                         self.shift_click_first = None
                 return
-            # Check shapes for dragging, V-line, or O-orbit
-            if self._hit_triangle(pos):
+            # Check shapes for dragging, V-line, or O-orbit. Cmd is reserved
+            # for trajectory drawing, so don't translate shapes or grab
+            # velocity arrows while Cmd is held.
+            cmd_held = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
+            if not cmd_held and self._hit_triangle(pos):
                 self.dragging_shape = "triangle"
                 self.drag_offset = self.tri_center - pos
                 return
-            if self._hit_square(pos):
+            if not cmd_held and self._hit_square(pos):
                 self.dragging_shape = "square"
                 self.drag_offset = self.sq_center - pos
                 return
@@ -887,23 +904,16 @@ class Canvas(QWidget):
                     self.update()
                     return
                 self.dragging = True
-                # If Cmd-pressing close to a shape center, start trajectory at
-                # that shape (dots[0]) and use the mouse pos as the next node.
-                snap_thresh = 75.0 / self.zoom  # 75 px in world DU
-                snap_node = None
-                d_tri = math.hypot(
-                    start_pos.x() - self.tri_center.x(),
-                    start_pos.y() - self.tri_center.y(),
-                )
-                d_sq = math.hypot(
-                    start_pos.x() - self.sq_center.x(),
-                    start_pos.y() - self.sq_center.y(),
-                )
-                if d_tri < snap_thresh and d_tri <= d_sq:
-                    snap_node = self.tri_center
-                elif d_sq < snap_thresh:
-                    snap_node = self.sq_center
-                if snap_node is not None:
+                # Two-radius snap to triangle/square:
+                #   inner (< 30 px): trajectory starts AT the shape itself
+                #   outer (30..75 px): shape + free node at click + connector
+                #   beyond 75 px: free node at click, no connection
+                r_inner = 30.0 / self.zoom
+                r_outer = 75.0 / self.zoom
+                snap_node, _, snap_mode = self._snap_target_for(start_pos, r_inner, r_outer)
+                if snap_mode == 'inner':
+                    self.trajectories.append({"dots": [snap_node], "segments": []})
+                elif snap_mode == 'outer':
                     self.trajectories.append({"dots": [snap_node, start_pos], "segments": [(0, 1, 1.0)]})
                 else:
                     self.trajectories.append({"dots": [start_pos], "segments": []})
@@ -1010,31 +1020,46 @@ class Canvas(QWidget):
                 geometry_changed = True
             elif self.dragging:
                 self.dragging = False
-                # If last dot of the just-drawn trajectory is close to a shape
-                # center, append the shape as the next node and add a segment
-                # from the last dot to the shape.
+                # Two-radius snap on release (mirror of press):
+                #   inner (< 30 px): replace last free dot with the shape
+                #   outer (30..75 px): append shape + connector segment
+                #   beyond: leave as-is
                 if self.trajectories:
                     traj = self.trajectories[-1]
                     if traj["segments"] and traj["dots"]:
                         last = traj["dots"][-1]
-                        snap_thresh = 75.0 / self.zoom
-                        d_tri = math.hypot(last.x() - self.tri_center.x(), last.y() - self.tri_center.y())
-                        d_sq = math.hypot(last.x() - self.sq_center.x(), last.y() - self.sq_center.y())
-                        snap_node = None
-                        if d_tri < snap_thresh and d_tri <= d_sq:
-                            snap_node = self.tri_center
-                        elif d_sq < snap_thresh:
-                            snap_node = self.sq_center
+                        r_inner = 30.0 / self.zoom
+                        r_outer = 75.0 / self.zoom
+                        snap_node, _, snap_mode = self._snap_target_for(last, r_inner, r_outer)
                         if snap_node is not None and snap_node is not last:
                             i_last = len(traj["dots"]) - 1
-                            if snap_node in traj["dots"]:
-                                i_snap = traj["dots"].index(snap_node)
-                            else:
-                                traj["dots"].append(snap_node)
-                                i_snap = len(traj["dots"]) - 1
-                            if not self._segment_exists(last, snap_node):
-                                traj["segments"].append((i_last, i_snap, 1.0))
+                            if snap_mode == 'inner':
+                                # Replace the last free dot with the shape;
+                                # update any segments referencing i_last.
+                                if snap_node in traj["dots"]:
+                                    i_snap = traj["dots"].index(snap_node)
+                                    new_segs = []
+                                    for (i_s, i_e, m) in traj["segments"]:
+                                        if i_s == i_last:
+                                            i_s = i_snap
+                                        if i_e == i_last:
+                                            i_e = i_snap
+                                        if i_s != i_e:
+                                            new_segs.append((i_s, i_e, m))
+                                    traj["segments"] = new_segs
+                                    del traj["dots"][i_last]
+                                else:
+                                    traj["dots"][i_last] = snap_node
                                 geometry_changed = True
+                            else:  # 'outer'
+                                if snap_node in traj["dots"]:
+                                    i_snap = traj["dots"].index(snap_node)
+                                else:
+                                    traj["dots"].append(snap_node)
+                                    i_snap = len(traj["dots"]) - 1
+                                if not self._segment_exists(last, snap_node):
+                                    traj["segments"].append((i_last, i_snap, 1.0))
+                                    geometry_changed = True
                             self.update()
             if geometry_changed:
                 self._run_active_optimizer()
@@ -1171,7 +1196,15 @@ class Canvas(QWidget):
                             QPointF(shape_center.x() + dv[0] * VEL_SCALE, shape_center.y() + dv[1] * VEL_SCALE),
                         )
 
-        # Draw all dots on top of everything
+        # Draw green triangle and square
+        painter.setBrush(QBrush(QColor("green")))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawPolygon(self._triangle_polygon())
+        sq_x = self.sq_center.x() - self.sq_size / 2
+        sq_y = self.sq_center.y() - self.sq_size / 2
+        painter.drawRect(QRectF(sq_x, sq_y, self.sq_size, self.sq_size))
+
+        # Draw all black dots on top of everything (including shapes)
         painter.setBrush(QBrush(QColor("black")))
         painter.setPen(Qt.PenStyle.NoPen)
         for traj in self.trajectories:
@@ -1179,14 +1212,6 @@ class Canvas(QWidget):
                 if dot is self.tri_center or dot is self.sq_center:
                     continue
                 painter.drawEllipse(dot, self.dot_radius, self.dot_radius)
-
-        # Draw green triangle and square on top of everything
-        painter.setBrush(QBrush(QColor("green")))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawPolygon(self._triangle_polygon())
-        sq_x = self.sq_center.x() - self.sq_size / 2
-        sq_y = self.sq_center.y() - self.sq_size / 2
-        painter.drawRect(QRectF(sq_x, sq_y, self.sq_size, self.sq_size))
 
         painter.end()
 
@@ -1569,11 +1594,11 @@ class MainWindow(QMainWindow):
         clear_button.setFixedSize(50, 25)
         clear_button.clicked.connect(canvas.clear)
 
-        optimize_energy_btn = QPushButton("Optimize: Min Energy")
+        optimize_energy_btn = QPushButton("Minimize: Energy")
         optimize_energy_btn.setFixedSize(150, 25)
         optimize_energy_btn.setCheckable(True)
 
-        optimize_fuel_btn = QPushButton("Optimize: Min Fuel")
+        optimize_fuel_btn = QPushButton("Minimize: Fuel")
         optimize_fuel_btn.setFixedSize(130, 25)
         optimize_fuel_btn.setCheckable(True)
 
@@ -1622,7 +1647,7 @@ class MainWindow(QMainWindow):
         env_btn.clicked.connect(toggle_env_button)
 
         top_layout = QHBoxLayout()
-        top_layout.addStretch()
+        top_layout.addSpacing(10)
         top_layout.addWidget(env_btn)
         top_layout.addSpacing(10)
         top_layout.addWidget(arc_model_btn)
@@ -1630,9 +1655,9 @@ class MainWindow(QMainWindow):
         top_layout.addWidget(optimize_energy_btn)
         top_layout.addSpacing(10)
         top_layout.addWidget(optimize_fuel_btn)
-        top_layout.addSpacing(10)
+        top_layout.addStretch()
         top_layout.addWidget(clear_button)
-        top_layout.addSpacing(20)
+        top_layout.addSpacing(10)
 
         zoom_in_btn = QPushButton("+")
         zoom_in_btn.setFixedSize(30, 30)
@@ -1646,7 +1671,7 @@ class MainWindow(QMainWindow):
         zoom_layout.addStretch()
         zoom_layout.addWidget(zoom_out_btn)
         zoom_layout.addWidget(zoom_in_btn)
-        zoom_layout.addSpacing(20)
+        zoom_layout.addSpacing(10)
 
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
