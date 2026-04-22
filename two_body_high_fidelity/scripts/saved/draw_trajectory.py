@@ -5,7 +5,7 @@ import math
 import numpy as np
 from scipy.optimize import brentq, minimize as scipy_minimize
 
-from PyQt6.QtCore import Qt, QPointF, QRectF
+from PyQt6.QtCore import Qt, QPointF, QRectF, QEvent
 from PyQt6.QtGui import QPainter, QBrush, QColor, QPen, QPolygonF
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QVBoxLayout, QHBoxLayout
 
@@ -16,6 +16,70 @@ ARC_NUM_POINTS = 50  # number of points to draw the parabolic arc
 ORBIT_NUM_POINTS = 200  # number of points to draw a Kepler orbit
 MU = 1.0  # canonical gravitational parameter
 VEL_SCALE = 2.0  # display scale: velocity_end = center + vel * VEL_SCALE
+# Rotating frame: 1 revolution per 24 hours. With 1 TU ~ 806.4 s, 24 h ~ 107.14 TU.
+ROT_PERIOD_TU = 24.0 * 3600.0 / 806.4
+OMEGA_ROT = 2.0 * math.pi / ROT_PERIOD_TU  # rad / TU, +z (CCW in y-up world)
+
+
+def propagate_kepler_period(pos_center, vel_vec, grav_center, mu, num_points):
+    """Sample positions equally in time over one orbital period for an
+    elliptic Kepler orbit. Returns (times, points) with num_points samples
+    spanning t in [0, T]. Returns ([], []) if non-elliptic / degenerate."""
+    r0 = np.array([pos_center.x() - grav_center.x(), pos_center.y() - grav_center.y()])
+    v0 = np.asarray(vel_vec, dtype=float)
+    r = np.linalg.norm(r0)
+    v = np.linalg.norm(v0)
+    if r < 1e-10 or v < 1e-10:
+        return [], []
+    energy = 0.5 * v * v - mu / r
+    if energy >= 0:
+        return [], []
+    a = -mu / (2.0 * energy)
+    h = r0[0] * v0[1] - r0[1] * v0[0]
+    e_vec = (1.0 / mu) * ((v * v - mu / r) * r0 - np.dot(r0, v0) * v0)
+    e = float(np.linalg.norm(e_vec))
+    if e >= 1.0:
+        return [], []
+    p = a * (1.0 - e * e)
+    n = math.sqrt(mu / a ** 3)
+    period = 2.0 * math.pi / n
+    if e > 1e-12:
+        cos_th0 = float(np.dot(e_vec, r0) / (e * r))
+        cos_th0 = max(-1.0, min(1.0, cos_th0))
+        theta0 = math.acos(cos_th0)
+        if np.dot(r0, v0) < 0:
+            theta0 = -theta0
+        e_hat = e_vec / e
+    else:
+        theta0 = 0.0
+        e_hat = r0 / r
+    p_hat = np.array([-e_hat[1], e_hat[0]])
+    if h < 0:
+        p_hat = -p_hat
+    E0 = 2.0 * math.atan2(math.sqrt(1.0 - e) * math.sin(theta0 / 2.0),
+                          math.sqrt(1.0 + e) * math.cos(theta0 / 2.0))
+    M0 = E0 - e * math.sin(E0)
+
+    cx, cy = grav_center.x(), grav_center.y()
+    times, points = [], []
+    for k in range(num_points):
+        t = period * k / (num_points - 1)
+        M = M0 + n * t
+        E = M if e < 0.8 else math.pi
+        for _ in range(50):
+            f = E - e * math.sin(E) - M
+            fp = 1.0 - e * math.cos(E)
+            dE = -f / fp
+            E += dE
+            if abs(dE) < 1e-12:
+                break
+        theta = 2.0 * math.atan2(math.sqrt(1.0 + e) * math.sin(E / 2.0),
+                                 math.sqrt(1.0 - e) * math.cos(E / 2.0))
+        rk = p / (1.0 + e * math.cos(theta))
+        pos = rk * (math.cos(theta) * e_hat + math.sin(theta) * p_hat)
+        times.append(t)
+        points.append(QPointF(cx + pos[0], cy + pos[1]))
+    return times, points
 
 
 def compute_kepler_orbit(pos_center, vel_vec, grav_center, mu, num_points):
@@ -557,6 +621,65 @@ class Canvas(QWidget):
             return compute_parabolic_arc_velocities(p0, p1, center, time_of_flight)
         return compute_arc_velocities(p0, p1, center, time_of_flight)
 
+    # ---------- Rotating-frame rendering helpers ----------
+    def _rot_angle(self, t):
+        # Mapping inertial -> rotating uses R(-omega * t).
+        return -OMEGA_ROT * t
+
+    def _rotate_point_about_earth(self, p, t):
+        """Rotate a world-coord QPointF about earth_center by R(-omega*t)."""
+        if self.frame_mode != "rotating" or t == 0.0:
+            return p
+        ang = self._rot_angle(t)
+        c, s = math.cos(ang), math.sin(ang)
+        cx, cy = self.earth_center.x(), self.earth_center.y()
+        dx = p.x() - cx
+        dy = p.y() - cy
+        return QPointF(cx + c * dx - s * dy, cy + s * dx + c * dy)
+
+    def _rotate_vec(self, v, t):
+        """Rotate a 2-vector by R(-omega*t)."""
+        if self.frame_mode != "rotating" or t == 0.0:
+            return np.asarray(v, dtype=float)
+        ang = self._rot_angle(t)
+        c, s = math.cos(ang), math.sin(ang)
+        return np.array([c * v[0] - s * v[1], s * v[0] + c * v[1]])
+
+    def _rotating_velocity(self, v_inertial, p_world, t):
+        """Map inertial velocity at world point p (and time t) to the rotating frame.
+        v_rot = R(-omega*t) * (v_inertial - omega x r).
+        With omega = +omega * z_hat in 2D y-up: omega x r = omega * (-r_y, +r_x)."""
+        if self.frame_mode != "rotating":
+            return np.asarray(v_inertial, dtype=float)
+        rx = p_world.x() - self.earth_center.x()
+        ry = p_world.y() - self.earth_center.y()
+        v_rel = np.array([v_inertial[0] - OMEGA_ROT * (-ry),
+                          v_inertial[1] - OMEGA_ROT * (rx)])
+        return self._rotate_vec(v_rel, t)
+
+    def _traj_node_times(self, traj):
+        """Return {dot_index: cumulative_tof_from_first_node} by walking segments
+        in their list order, accumulating render_tof * mult."""
+        node_t = {}
+        for i_start, i_end, mult in traj["segments"]:
+            if i_start not in node_t:
+                node_t[i_start] = 0.0
+            node_t[i_end] = node_t[i_start] + self.render_tof * mult
+        return node_t
+
+    def _square_time(self):
+        """Square is the 'arrival' body (t = tf). Find the largest node time
+        at which sq_center participates in any trajectory. Returns 0 if none."""
+        t_max = 0.0
+        for traj in self.trajectories:
+            dots = traj["dots"]
+            node_t = self._traj_node_times(traj)
+            for k, dot in enumerate(dots):
+                if dot is self.sq_center and k in node_t:
+                    if node_t[k] > t_max:
+                        t_max = node_t[k]
+        return t_max
+
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_X:
             self.x_held = True
@@ -1094,6 +1217,32 @@ class Canvas(QWidget):
             )
             self.update()
 
+    def _zoom_about(self, screen_pt, factor):
+        """Multiply zoom by factor, keeping the world point under screen_pt fixed."""
+        # World point under cursor before zoom: (sx - px)/z, (py - sy)/z.
+        # After zoom z' = z*factor, we want same world point under same screen pt:
+        #   px' = sx - (sx - px) * factor
+        #   py' = sy + (py - sy) * factor   (y-flipped)
+        sx, sy = screen_pt.x(), screen_pt.y()
+        px, py = self.pan_offset.x(), self.pan_offset.y()
+        self.pan_offset = QPointF(
+            sx - (sx - px) * factor,
+            sy + (py - sy) * factor,
+        )
+        self.zoom *= factor
+        self.update()
+
+    def event(self, ev):
+        # macOS trackpad pinch is delivered as a NativeGesture (ZoomNativeGesture).
+        if ev.type() == QEvent.Type.NativeGesture:
+            if ev.gestureType() == Qt.NativeGestureType.ZoomNativeGesture:
+                # value() is incremental scale delta (e.g. +0.05 spread, -0.03 pinch).
+                factor = 1.0 + ev.value()
+                if factor > 0.01:
+                    self._zoom_about(ev.position(), factor)
+                return True
+        return super().event(ev)
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -1102,8 +1251,10 @@ class Canvas(QWidget):
         painter.translate(self.pan_offset.x(), self.pan_offset.y())
         painter.scale(self.zoom, -self.zoom)
 
-        # Draw Kepler orbits (only in two-body env)
-        if self.env_mode == "two_body":
+        # Draw Kepler orbits as green ellipses only in inertial frame.
+        # In rotating frame they're replaced by the time-parameterized
+        # amber traces below.
+        if self.env_mode == "two_body" and self.frame_mode == "inertial":
             pen = QPen(QColor("green"), 2)
             pen.setCosmetic(True)
             painter.setPen(pen)
@@ -1113,14 +1264,65 @@ class Canvas(QWidget):
                     for k in range(len(orbit) - 1):
                         painter.drawLine(orbit[k], orbit[k + 1])
 
-        # Draw velocity lines from triangle/square
+        # Rotating-frame view of the triangle/square full orbits, time-parameterized.
+        # Triangle: sample t_orb in [0, T_tri], absolute time = 0 + t_orb.
+        # Square:   sample t_orb in [0, T_sq],  absolute time = tf + t_orb.
+        if self.env_mode == "two_body" and self.frame_mode == "rotating":
+            t_sq2 = self._square_time()
+            specs = []
+            if self.tri_velocity_end is not None:
+                tri_vel = np.array([
+                    self.tri_velocity_end.x() - self.tri_center.x(),
+                    self.tri_velocity_end.y() - self.tri_center.y(),
+                ]) / VEL_SCALE
+                specs.append((self.tri_center, tri_vel, 0.0))
+            if self.sq_velocity_end is not None:
+                sq_vel = np.array([
+                    self.sq_velocity_end.x() - self.sq_center.x(),
+                    self.sq_velocity_end.y() - self.sq_center.y(),
+                ]) / VEL_SCALE
+                specs.append((self.sq_center, sq_vel, t_sq2))
+            for shape_center, vel, t_anchor in specs:
+                times, pts = propagate_kepler_period(
+                    shape_center, vel, self.earth_center, MU, 200,
+                )
+                if not pts:
+                    continue
+                pen = QPen(QColor("green"), 2)
+                pen.setCosmetic(True)
+                painter.setPen(pen)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                rot_pts = [
+                    self._rotate_point_about_earth(p, t_anchor + t)
+                    for p, t in zip(pts, times)
+                ]
+                for k in range(len(rot_pts) - 1):
+                    painter.drawLine(rot_pts[k], rot_pts[k + 1])
+
+        # Draw velocity lines from triangle/square (triangle at t=0, square at t=tf)
         pen = QPen(QColor("green"), 2)
         pen.setCosmetic(True)
         painter.setPen(pen)
         if self.tri_velocity_end is not None:
-            painter.drawLine(self.tri_center, self.tri_velocity_end)
+            v_in = np.array([self.tri_velocity_end.x() - self.tri_center.x(),
+                             self.tri_velocity_end.y() - self.tri_center.y()]) / VEL_SCALE
+            v_disp = self._rotating_velocity(v_in, self.tri_center, 0.0)
+            painter.drawLine(
+                self.tri_center,
+                QPointF(self.tri_center.x() + v_disp[0] * VEL_SCALE,
+                        self.tri_center.y() + v_disp[1] * VEL_SCALE),
+            )
         if self.sq_velocity_end is not None:
-            painter.drawLine(self.sq_center, self.sq_velocity_end)
+            v_in = np.array([self.sq_velocity_end.x() - self.sq_center.x(),
+                             self.sq_velocity_end.y() - self.sq_center.y()]) / VEL_SCALE
+            t_sq = self._square_time()
+            v_disp = self._rotating_velocity(v_in, self.sq_center, t_sq)
+            anchor = self._rotate_point_about_earth(self.sq_center, t_sq)
+            painter.drawLine(
+                anchor,
+                QPointF(anchor.x() + v_disp[0] * VEL_SCALE,
+                        anchor.y() + v_disp[1] * VEL_SCALE),
+            )
 
         # Draw blue circle (Earth) only in two-body env
         if self.env_mode == "two_body":
@@ -1135,18 +1337,31 @@ class Canvas(QWidget):
         for traj in self.trajectories:
             dots = traj["dots"]
             segments = traj["segments"]
+            node_t = self._traj_node_times(traj)
 
             # Draw segments
             for i_start, i_end, mult in segments:
                 pen = QPen(QColor("black"), 2)
                 pen.setCosmetic(True)
                 painter.setPen(pen)
+                seg_tof = self.render_tof * mult
                 arc_points = self._compute_segment_arc(
                     dots[i_start], dots[i_end], center,
-                    self.render_tof * mult, ARC_NUM_POINTS,
+                    seg_tof, ARC_NUM_POINTS,
                 )
-                for j in range(len(arc_points) - 1):
-                    painter.drawLine(arc_points[j], arc_points[j + 1])
+                t_start = node_t.get(i_start, 0.0)
+                if self.frame_mode == "rotating" and len(arc_points) > 1:
+                    n = len(arc_points)
+                    rot_pts = [
+                        self._rotate_point_about_earth(
+                            arc_points[j], t_start + (j / (n - 1)) * seg_tof
+                        )
+                        for j in range(n)
+                    ]
+                else:
+                    rot_pts = arc_points
+                for j in range(len(rot_pts) - 1):
+                    painter.drawLine(rot_pts[j], rot_pts[j + 1])
 
         # Draw delta-velocity vectors at nodes with exactly 2 neighboring segments
         pen = QPen(QColor("black"), 2)
@@ -1155,6 +1370,7 @@ class Canvas(QWidget):
         for traj in self.trajectories:
             dots = traj["dots"]
             segments = traj["segments"]
+            node_t = self._traj_node_times(traj)
             for k, dot in enumerate(dots):
                 if dot is self.tri_center or dot is self.sq_center:
                     continue
@@ -1172,9 +1388,13 @@ class Canvas(QWidget):
                         outgoing_vel = v0
                 if incoming_vel is not None and outgoing_vel is not None:
                     dv = outgoing_vel - incoming_vel
+                    t_node = node_t.get(k, 0.0)
+                    dv_disp = self._rotate_vec(dv, t_node)
+                    anchor = self._rotate_point_about_earth(dot, t_node)
                     painter.drawLine(
-                        dot,
-                        QPointF(dot.x() + dv[0] * VEL_SCALE, dot.y() + dv[1] * VEL_SCALE),
+                        anchor,
+                        QPointF(anchor.x() + dv_disp[0] * VEL_SCALE,
+                                anchor.y() + dv_disp[1] * VEL_SCALE),
                     )
 
         # Draw delta-velocity vectors at triangle/square when they have
@@ -1191,40 +1411,102 @@ class Canvas(QWidget):
             ]) / VEL_SCALE
             for traj in self.trajectories:
                 dots = traj["dots"]
+                node_t = self._traj_node_times(traj)
                 for i_start, i_end, mult in traj["segments"]:
+                    seg_tof = self.render_tof * mult
                     if dots[i_start] is shape_center:
                         v0, _ = self._compute_segment_velocities(
-                            dots[i_start], dots[i_end], center, self.render_tof * mult)
+                            dots[i_start], dots[i_end], center, seg_tof)
                         dv = v0 - shape_vel
+                        t_anchor = node_t.get(i_start, 0.0)
+                        anchor = self._rotate_point_about_earth(shape_center, t_anchor)
+                        dv_disp = self._rotate_vec(dv, t_anchor)
                         painter.drawLine(
-                            shape_center,
-                            QPointF(shape_center.x() + dv[0] * VEL_SCALE, shape_center.y() + dv[1] * VEL_SCALE),
+                            anchor,
+                            QPointF(anchor.x() + dv_disp[0] * VEL_SCALE,
+                                    anchor.y() + dv_disp[1] * VEL_SCALE),
                         )
                     elif dots[i_end] is shape_center:
                         _, vf = self._compute_segment_velocities(
-                            dots[i_start], dots[i_end], center, self.render_tof * mult)
+                            dots[i_start], dots[i_end], center, seg_tof)
                         dv = shape_vel - vf
+                        t_anchor = node_t.get(i_end, 0.0)
+                        anchor = self._rotate_point_about_earth(shape_center, t_anchor)
+                        dv_disp = self._rotate_vec(dv, t_anchor)
                         painter.drawLine(
-                            shape_center,
-                            QPointF(shape_center.x() + dv[0] * VEL_SCALE, shape_center.y() + dv[1] * VEL_SCALE),
+                            anchor,
+                            QPointF(anchor.x() + dv_disp[0] * VEL_SCALE,
+                                    anchor.y() + dv_disp[1] * VEL_SCALE),
                         )
 
-        # Draw green triangle and square
+        # Draw green triangle and square (square at t=tf in rotating frame)
         painter.setBrush(QBrush(QColor("green")))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawPolygon(self._triangle_polygon())
-        sq_x = self.sq_center.x() - self.sq_size / 2
-        sq_y = self.sq_center.y() - self.sq_size / 2
+        sq_anchor = self._rotate_point_about_earth(self.sq_center, self._square_time())
+        sq_x = sq_anchor.x() - self.sq_size / 2
+        sq_y = sq_anchor.y() - self.sq_size / 2
         painter.drawRect(QRectF(sq_x, sq_y, self.sq_size, self.sq_size))
 
         # Draw all black dots on top of everything (including shapes)
         painter.setBrush(QBrush(QColor("black")))
         painter.setPen(Qt.PenStyle.NoPen)
         for traj in self.trajectories:
-            for dot in traj["dots"]:
+            node_t = self._traj_node_times(traj)
+            for k, dot in enumerate(traj["dots"]):
                 if dot is self.tri_center or dot is self.sq_center:
                     continue
-                painter.drawEllipse(dot, self.dot_radius, self.dot_radius)
+                p = self._rotate_point_about_earth(dot, node_t.get(k, 0.0))
+                painter.drawEllipse(p, self.dot_radius, self.dot_radius)
+
+        # Bottom-left axes overlay: inertial (t=0) vs rotating-frame at t=tf.
+        # Drawn in screen pixels so zoom/pan don't affect it. The frame the
+        # observer is in stays fixed; the other frame rotates.
+        #   inertial mode:  xhato fixed,         xhatf = R(+omega*tf) xhat
+        #   rotating mode:  xhatf fixed at tf,   xhato = R(-omega*tf) xhat
+        painter.resetTransform()
+        ox, oy = 60, self.height() - 60
+        L = 40  # axis length in pixels
+        t_sq = self._square_time()
+        # Small title above the axes labeling the *other* frame (the one that
+        # rotates relative to the current view).
+        title = "rotating frame" if self.frame_mode == "inertial" else "inertial frame"
+        title_font = painter.font()
+        prev_size = title_font.pointSize()
+        title_font.setPointSize(11)
+        painter.setFont(title_font)
+        painter.setPen(QPen(QColor(180, 180, 180)))
+        painter.drawText(QPointF(ox - L / 2, oy - L - 18), title)
+        title_font.setPointSize(prev_size if prev_size > 0 else 10)
+        painter.setFont(title_font)
+        if self.frame_mode == "inertial":
+            ang_o = 0.0
+            ang_f = OMEGA_ROT * t_sq
+        else:
+            ang_o = -OMEGA_ROT * t_sq
+            ang_f = 0.0
+        # Inertial axes (xhato, yhato): white-ish
+        co, so = math.cos(ang_o), math.sin(ang_o)
+        pen = QPen(QColor(220, 220, 220), 2)
+        pen.setCosmetic(True)
+        painter.setPen(pen)
+        xo_tip = QPointF(ox + L * co, oy - L * so)
+        yo_tip = QPointF(ox - L * so, oy - L * co)
+        painter.drawLine(QPointF(ox, oy), xo_tip)
+        painter.drawLine(QPointF(ox, oy), yo_tip)
+        painter.drawText(QPointF(xo_tip.x() + 4, xo_tip.y() + 4), "xhato")
+        painter.drawText(QPointF(yo_tip.x() + 4, yo_tip.y() - 2), "yhato")
+        # Rotating-frame axes at t=tf (xhatf, yhatf): blue
+        cf, sf = math.cos(ang_f), math.sin(ang_f)
+        pen = QPen(QColor(120, 200, 255), 2)
+        pen.setCosmetic(True)
+        painter.setPen(pen)
+        xf_tip = QPointF(ox + L * cf, oy - L * sf)
+        yf_tip = QPointF(ox - L * sf, oy - L * cf)
+        painter.drawLine(QPointF(ox, oy), xf_tip)
+        painter.drawLine(QPointF(ox, oy), yf_tip)
+        painter.drawText(QPointF(xf_tip.x() + 4, xf_tip.y() + 4), "xhatf")
+        painter.drawText(QPointF(yf_tip.x() + 4, yf_tip.y() - 2), "yhatf")
 
         painter.end()
 
