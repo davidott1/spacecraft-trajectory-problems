@@ -449,7 +449,6 @@ class Canvas(QWidget):
         self.dragging_vel_end = None  # "triangle" or "square" when dragging a velocity line
         self.dragging_vel_t = 1.0  # parameter along line where grab occurred (0=center, 1=tip)
         self.x_held = False  # X key held: click black node to delete + merge segments
-        self.v_held = False  # V key held: click on a segment to insert a node at nearest integer*tof
         # Shape positions (center points) — placed in orbit around earth (DU)
         self.earth_center = QPointF(0, 0)
         self.earth_radius = 1.0  # DU
@@ -548,14 +547,10 @@ class Canvas(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_X:
             self.x_held = True
-        elif event.key() == Qt.Key.Key_V:
-            self.v_held = True
 
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key.Key_X:
             self.x_held = False
-        elif event.key() == Qt.Key.Key_V:
-            self.v_held = False
 
     def _screen_to_world(self, screen_pos):
         wx = (screen_pos.x() - self.pan_offset.x()) / self.zoom
@@ -616,12 +611,61 @@ class Canvas(QWidget):
                     return True
         return False
 
-    def _insert_node_on_segment(self, pos):
-        """V+click insert: find the segment whose arc passes nearest pos.
+    def _delete_segment_at(self, pos, arc_max_dist, endpoint_min_dist):
+        """X+click delete-segment: locate the segment whose arc passes nearest
+        pos. Succeeds only if the click is within arc_max_dist of the arc and
+        farther than endpoint_min_dist from each endpoint. Removes the segment;
+        any dots that become orphaned (no remaining incident segments) are
+        removed too. Empty trajectories are pruned."""
+        click = np.array([pos.x(), pos.y()])
+        center = self.earth_center
+        best = None  # (dist, traj, seg_idx)
+        dense = 200
+        for traj in self.trajectories:
+            dots = traj["dots"]
+            for s_idx, (i_start, i_end, mult) in enumerate(traj["segments"]):
+                arc_pts = self._compute_segment_arc(
+                    dots[i_start], dots[i_end], center,
+                    self.render_tof * mult, dense + 1,
+                )
+                # Point-to-line-segment distance over consecutive samples.
+                d_min = float("inf")
+                for j in range(len(arc_pts) - 1):
+                    a = np.array([arc_pts[j].x(), arc_pts[j].y()])
+                    b = np.array([arc_pts[j + 1].x(), arc_pts[j + 1].y()])
+                    ab = b - a
+                    L2 = float(ab @ ab)
+                    if L2 < 1e-30:
+                        d = float(np.linalg.norm(click - a))
+                    else:
+                        t = max(0.0, min(1.0, float((click - a) @ ab) / L2))
+                        proj = a + t * ab
+                        d = float(np.linalg.norm(click - proj))
+                    if d < d_min:
+                        d_min = d
+                if best is None or d_min < best[0]:
+                    best = (d_min, traj, s_idx)
+        if best is None or best[0] > arc_max_dist:
+            return False
+        _, traj, s_idx = best
+        i_start, i_end, _ = traj["segments"][s_idx]
+        d_s = math.hypot(click[0] - traj["dots"][i_start].x(),
+                         click[1] - traj["dots"][i_start].y())
+        d_e = math.hypot(click[0] - traj["dots"][i_end].x(),
+                         click[1] - traj["dots"][i_end].y())
+        if d_s < endpoint_min_dist or d_e < endpoint_min_dist:
+            return False
+        del traj["segments"][s_idx]
+        return True
+
+    def _insert_node_on_segment(self, pos, max_dist=None):
+        """Cmd+click insert: find the segment whose arc passes nearest pos.
         Densely sample the arc to find the continuous time fraction
         t* in (0, N) closest to the click (N = segment mult). Round t* to
         nearest integer k. If k is 0 or N (existing endpoint), do nothing.
-        Otherwise split into two segments with mults k and N-k."""
+        Otherwise split into two segments with mults k and N-k.
+        If max_dist is given, the click must lie within that world-distance
+        of the chosen arc; otherwise no-op."""
         click_world = np.array([pos.x(), pos.y()])
         center = self.earth_center
         best = None  # (dist, traj, seg_idx, t_star, n_int)
@@ -648,6 +692,8 @@ class Canvas(QWidget):
                     best = (d_min, traj, s_idx, t_star, n_int)
         if best is None:
             return False
+        if max_dist is not None and best[0] > max_dist:
+            return False
         _, traj, s_idx, t_star, n_int = best
         k = int(round(t_star))
         if k <= 0 or k >= n_int:
@@ -667,9 +713,12 @@ class Canvas(QWidget):
         return True
 
     def _delete_black_node(self, dot):
-        """X+click delete: remove a black node that has exactly one incoming
-        and one outgoing segment in the same trajectory; merge the two
-        segments into one with mult = m_in + m_out. No-op otherwise."""
+        """X+click delete a black node. Cases:
+        - 1 incoming + 1 outgoing segment in the same trajectory: remove
+          the node and merge the two segments (mult = m_in + m_out).
+        - 0 incident segments (orphan): just remove the node, prune empty
+          trajectories.
+        Other configurations are no-ops."""
         if dot is self.tri_center or dot is self.sq_center:
             return False
         for traj in self.trajectories:
@@ -688,6 +737,20 @@ class Canvas(QWidget):
                     if out_seg_idx is not None:
                         return False
                     out_seg_idx = s_idx
+            # Orphan node: no incident segments, just remove it.
+            if in_seg_idx is None and out_seg_idx is None:
+                del dots[k]
+                renumbered = []
+                for i_s, i_e, m in traj["segments"]:
+                    if i_s > k:
+                        i_s -= 1
+                    if i_e > k:
+                        i_e -= 1
+                    renumbered.append((i_s, i_e, m))
+                traj["segments"] = renumbered
+                if not traj["dots"]:
+                    self.trajectories.remove(traj)
+                return True
             if in_seg_idx is None or out_seg_idx is None:
                 return False
             i_prev, _, m_in = traj["segments"][in_seg_idx]
@@ -733,17 +796,19 @@ class Canvas(QWidget):
             pos = self._screen_to_world(QPointF(event.pos()))
             # X + click on a black node to delete it and merge its two
             # incident segments (mult = m_in + m_out).
+            # X + click on a segment (within 1 px of arc, >5 px from each
+            # endpoint) to delete that segment.
             if self.x_held:
-                dot, _traj = self._find_nearest_dot(pos)
-                if dot is not None and self._delete_black_node(dot):
+                # Try segment delete first (requires click >5 px from each
+                # endpoint), so a click on a line near a node doesn't take
+                # the node with it.
+                if self._delete_segment_at(pos, arc_max_dist=2.0 / self.zoom,
+                                           endpoint_min_dist=5.0 / self.zoom):
                     self._run_active_optimizer()
                     self.update()
-                return
-            # V + click on a segment to insert a black node at the closest
-            # integer multiple of tof along the segment. No-op if the rounded
-            # multiplier hits an existing endpoint.
-            if self.v_held:
-                if self._insert_node_on_segment(pos):
+                    return
+                dot, _traj = self._find_nearest_dot(pos, max_dist=5.0 / self.zoom)
+                if dot is not None and self._delete_black_node(dot):
                     self._run_active_optimizer()
                     self.update()
                 return
@@ -814,8 +879,14 @@ class Canvas(QWidget):
                     return
             # Trajectory drawing requires Cmd
             if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-                self.dragging = True
                 start_pos = self._screen_to_world(QPointF(event.pos()))
+                # If close to an existing arc, insert a node there instead of
+                # starting a new trajectory.
+                if self._insert_node_on_segment(start_pos, max_dist=25.0 / self.zoom):
+                    self._run_active_optimizer()
+                    self.update()
+                    return
+                self.dragging = True
                 # If Cmd-pressing close to a shape center, start trajectory at
                 # that shape (dots[0]) and use the mouse pos as the next node.
                 snap_thresh = 75.0 / self.zoom  # 75 px in world DU
