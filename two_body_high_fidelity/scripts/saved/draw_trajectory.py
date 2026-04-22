@@ -476,6 +476,7 @@ class Canvas(QWidget):
         self.sq_orbit_mode = True
         self.arc_model_mode = "conic"  # "conic" (Lambert) or "parabola"
         self.env_mode = "two_body"  # "two_body" or "constant_gravity"
+        self.frame_mode = "inertial"  # "inertial" or "rotating"
         # Per-segment time of flight used for rendering. Optimizers may overwrite.
         self.render_tof = TIME_OF_FLIGHT
         # Active continuous-optimization mode: None | "energy" | "fuel".
@@ -519,6 +520,18 @@ class Canvas(QWidget):
         if self.sq_orbit_mode:
             self._compute_orbit_for_shape("square")
         self._run_active_optimizer()
+        self.update()
+
+    def get_frame_button_text(self):
+        if self.frame_mode == "inertial":
+            return "Frame: Inertial"
+        return "Frame: Rotating"
+
+    def toggle_frame_mode(self):
+        if self.frame_mode == "inertial":
+            self.frame_mode = "rotating"
+        else:
+            self.frame_mode = "inertial"
         self.update()
 
     def _constant_g_vec(self):
@@ -1646,11 +1659,22 @@ class MainWindow(QMainWindow):
 
         env_btn.clicked.connect(toggle_env_button)
 
+        frame_btn = QPushButton(canvas.get_frame_button_text())
+        frame_btn.setFixedSize(140, 25)
+
+        def toggle_frame_button():
+            canvas.toggle_frame_mode()
+            frame_btn.setText(canvas.get_frame_button_text())
+
+        frame_btn.clicked.connect(toggle_frame_button)
+
         top_layout = QHBoxLayout()
         top_layout.addSpacing(10)
         top_layout.addWidget(env_btn)
         top_layout.addSpacing(10)
         top_layout.addWidget(arc_model_btn)
+        top_layout.addSpacing(10)
+        top_layout.addWidget(frame_btn)
         top_layout.addStretch()
         top_layout.addWidget(optimize_energy_btn)
         top_layout.addSpacing(10)
