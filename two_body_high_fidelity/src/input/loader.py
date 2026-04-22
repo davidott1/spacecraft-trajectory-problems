@@ -433,11 +433,18 @@ def load_maneuver_plan(
     raise ValueError("initial_state must contain 'vel_vec__m_per_s'")
 
   epoch    = epoch_raw if isinstance(epoch_raw, datetime) else parse_time(epoch_raw)
+  if epoch.tzinfo is not None:
+    epoch = epoch.replace(tzinfo=None)
 
   def _parse_vec(raw):
     if isinstance(raw, str):
       return np.array([float(x.strip()) for x in raw.replace('[', '').replace(']', '').split(',')])
     return np.array(raw, dtype=float)
+
+  def _parse_bool_vec(raw):
+    if isinstance(raw, str):
+      return np.array([x.strip().lower() == 'true' for x in raw.replace('[', '').replace(']', '').split(',')], dtype=bool)
+    return np.array(raw, dtype=bool)
 
   position = _parse_vec(init['pos_vec__m'])
   velocity = _parse_vec(init['vel_vec__m_per_s'])
@@ -449,8 +456,8 @@ def load_maneuver_plan(
 
   # Parse initial state variable flags (default: all fixed)
   variable_epoch    = bool(init.get('variable_epoch', False))
-  variable_position = np.array(init.get('variable_position', [False, False, False]), dtype=bool)
-  variable_velocity = np.array(init.get('variable_velocity', [False, False, False]), dtype=bool)
+  variable_position = _parse_bool_vec(init.get('variable_position', [False, False, False]))
+  variable_velocity = _parse_bool_vec(init.get('variable_velocity', [False, False, False]))
 
   # Parse maneuvers (optional)
   maneuvers_config          = ManeuversConfig()
@@ -471,6 +478,8 @@ def load_maneuver_plan(
 
       time_raw      = m_data['time_iso_utc']
       time_dt       = time_raw if isinstance(time_raw, datetime) else parse_time(time_raw)
+      if time_dt.tzinfo is not None:
+        time_dt = time_dt.replace(tzinfo=None)
       delta_vel_vec = _parse_vec(delta_vel_raw)
       frame         = m_data.get('frame', 'J2000')
       name          = m_data.get('name', None)
@@ -491,7 +500,7 @@ def load_maneuver_plan(
       # Defaults: time is fixed, delta-v components are all variable
       variable_maneuver_time.append(bool(m_data.get('variable_time', False)))
       variable_maneuver_delta_v.append(
-        np.array(m_data.get('variable_delta_vel_vec', m_data.get('variable_delta_v', [True, True, True])), dtype=bool)
+        _parse_bool_vec(m_data.get('variable_delta_vel_vec', m_data.get('variable_delta_v', [True, True, True])))
       )
 
   return DecisionState(
