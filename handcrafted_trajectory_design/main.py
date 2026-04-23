@@ -1,13 +1,24 @@
 import sys
 
 import math
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 from scipy.optimize import brentq, minimize as scipy_minimize
 
-from PyQt6.QtCore import Qt, QPointF, QRectF, QEvent
+from PyQt6.QtCore import Qt, QPointF, QRectF, QEvent, QObject, pyqtSignal
 from PyQt6.QtGui import QPainter, QBrush, QColor, QPen, QPolygonF
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QVBoxLayout, QHBoxLayout
+
+
+class _OptSignals(QObject):
+    """Helper QObject to marshal optimizer results from a worker thread back
+    to the Qt main thread. Cross-thread signal emission uses a queued
+    connection automatically, so the connected slot runs on the main thread."""
+
+    done = pyqtSignal(object)
+    progress = pyqtSignal(object)
 
 # Canonical units: 1 DU = 6371 km, 1 TU = sqrt(DU^3 / mu_km) ~ 806.4 s, mu = 1 DU^3/TU^2.
 GRAVITY_MAG = 1.0  # DU/TU^2 (~ 9.81e-3 km/s^2 in canonical units)
@@ -645,6 +656,17 @@ class Canvas(QWidget):
         # Active continuous-optimization mode: None | "energy" | "fuel".
         # When set, every drag release re-runs the optimizer.
         self.optimize_mode = None
+
+        # --- Off-thread optimizer plumbing -----------------------------------
+        # Solves triggered via _run_active_optimizer (drag-release) run on a
+        # background thread so dragging stays responsive during long solves.
+        # Button-click optimizers stay synchronous to give immediate feedback.
+        self._opt_executor = ThreadPoolExecutor(max_workers=1)
+        self._opt_signals = _OptSignals()
+        self._opt_signals.done.connect(self._on_opt_done)
+        self._opt_signals.progress.connect(self._on_opt_progress)
+        self._opt_running = False
+        self._opt_restart = False
 
         self.setStyleSheet("background-color: white;")
         self.zoom = 50.0  # pixels per DU
@@ -1615,8 +1637,19 @@ class Canvas(QWidget):
         self.shift_click_first = None
         self.update()
 
-    def _optimize_common(self, cost_mode):
-        """Shared optimizer logic. cost_mode='energy' uses sum(|dv|^2), 'fuel' uses sum(|dv|)."""
+    def _optimize_common(self, cost_mode, apply=True, progress_callback=None):
+        """Shared optimizer logic. cost_mode='energy' uses sum(|dv|^2), 'fuel' uses sum(|dv|).
+
+        If apply=False, the solve runs without mutating self; instead it
+        returns (new_x, n_pos_vars, movable_dots) which the caller passes to
+        `_optimize_common_apply` on the Qt main thread. This variant is safe
+        to call from a worker thread.
+
+        If progress_callback is provided, it is invoked as
+        `progress_callback(xk, n_pos_vars, movable_dots)` on every BFGS
+        iteration (scipy's own callback). Safe to call from a worker thread
+        if the callback only emits signals.
+        """
         # Collect all movable (black) dots that participate in at least one segment
         center_np = np.array([self.earth_center.x(), self.earth_center.y()])
         movable_dots = []  # list of QPointF references
@@ -1993,10 +2026,22 @@ class Canvas(QWidget):
             x0[2 * i + 1] = dot.y()
         x0[n_pos_vars] = TIME_OF_FLIGHT
 
-        result = scipy_minimize(
-            fun_and_grad_active, x0, method="BFGS", jac=True,
-            options={"gtol": 1e-6},
-        )
+        if progress_callback is not None:
+            def scipy_cb(xk):
+                progress_callback(xk, n_pos_vars, movable_dots)
+            result = scipy_minimize(
+                fun_and_grad_active, x0, method="BFGS", jac=True,
+                options={"gtol": 1e-6}, callback=scipy_cb,
+            )
+        else:
+            result = scipy_minimize(
+                fun_and_grad_active, x0, method="BFGS", jac=True,
+                options={"gtol": 1e-6},
+            )
+
+        if not apply:
+            # Return everything needed to apply later on the main thread.
+            return result.x.copy(), n_pos_vars, movable_dots
 
         # Apply result: update positions and rendering tof
         for i, dot in enumerate(movable_dots):
@@ -2005,6 +2050,18 @@ class Canvas(QWidget):
         self.render_tof = float(result.x[n_pos_vars])
 
         # Recompute orbits if active
+        if self.tri_orbit_mode:
+            self._compute_orbit_for_shape("triangle")
+        if self.sq_orbit_mode:
+            self._compute_orbit_for_shape("square")
+        self.update()
+
+    def _optimize_common_apply(self, new_x, n_pos_vars, movable_dots):
+        """Apply an off-thread solve result on the main thread."""
+        for i, dot in enumerate(movable_dots):
+            dot.setX(float(new_x[2 * i]))
+            dot.setY(float(new_x[2 * i + 1]))
+        self.render_tof = float(new_x[n_pos_vars])
         if self.tri_orbit_mode:
             self._compute_orbit_for_shape("triangle")
         if self.sq_orbit_mode:
@@ -2026,8 +2083,64 @@ class Canvas(QWidget):
             self._optimize_common(mode)
 
     def _run_active_optimizer(self):
-        if self.optimize_mode is not None:
-            self._optimize_common(self.optimize_mode)
+        """Kick off the active optimizer asynchronously. If a solve is already
+        in flight, mark that it should be restarted when it finishes so its
+        (now-stale) result is discarded."""
+        if self.optimize_mode is None:
+            return
+        if self._opt_running:
+            self._opt_restart = True
+            return
+        self._opt_running = True
+        self._opt_executor.submit(self._opt_worker, self.optimize_mode)
+
+    def _opt_worker(self, cost_mode):
+        """Worker-thread entry point. Runs the solve without mutating self
+        and emits the result via a queued signal to the main thread. A
+        throttled progress callback streams intermediate BFGS iterates so
+        the UI can animate the trajectory morphing toward the optimum."""
+        last_emit = [0.0]
+        min_dt = 0.04  # ~25 fps cap for progress frames
+
+        def cb(xk, n_pos_vars, movable_dots):
+            if self._opt_restart:
+                # User moved something else; skip stale progress frames.
+                return
+            now = time.perf_counter()
+            if now - last_emit[0] < min_dt:
+                return
+            last_emit[0] = now
+            self._opt_signals.progress.emit((xk.copy(), n_pos_vars, movable_dots))
+
+        try:
+            result = self._optimize_common(cost_mode, apply=False, progress_callback=cb)
+        except Exception as e:  # noqa: BLE001 - surface any failure to main thread
+            result = ("__err__", repr(e))
+        self._opt_signals.done.emit(result)
+
+    def _on_opt_progress(self, payload):
+        """Main-thread slot: apply an intermediate BFGS iterate so the user
+        sees a smooth morph into the optimum. Skip if a restart is queued."""
+        if self._opt_restart:
+            return
+        new_x, n_pos_vars, movable_dots = payload
+        self._optimize_common_apply(new_x, n_pos_vars, movable_dots)
+
+    def _on_opt_done(self, result):
+        """Main-thread handler for worker-thread results. Discards stale
+        results if a restart was requested during the solve."""
+        self._opt_running = False
+        if self._opt_restart:
+            self._opt_restart = False
+            self._run_active_optimizer()
+            return
+        if result is None:
+            return
+        if isinstance(result, tuple) and len(result) == 2 and result[0] == "__err__":
+            print(f"optimize error: {result[1]}")
+            return
+        new_x, n_pos_vars, movable_dots = result
+        self._optimize_common_apply(new_x, n_pos_vars, movable_dots)
 
 
 class MainWindow(QMainWindow):
