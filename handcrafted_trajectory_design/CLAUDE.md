@@ -88,13 +88,54 @@ Toggled via top-bar buttons; setters re-run the active optimizer and repaint.
 - Per-node first-occurrence convention: if a node is the start/end of
   multiple segments, only the first in `all_segments` order is used. Gradient
   code mirrors this.
-- Gradient paths: `parabola_gradient` (analytic, handles both CG and
-  two-body+parabola) or `lambert_gradient` (uses `lambert_solve_with_jac`).
-  Chain rule applies `* mult` when converting per-segment `tof_seg` to the
-  shared `tof` variable.
-- Solver: `scipy.optimize.minimize(method="BFGS", jac=...)`. Unconstrained.
+- Single fused evaluator: `fun_and_grad(x_vec)` computes per-segment
+  `(v0, vf, Jacobians)` once and uses them for both the cost and gradient,
+  passed to BFGS as `jac=True`. Parabolic and Lambert branches share the
+  same accumulation code (`seg_parabola`, `seg_lambert`).
+- Chain rule applies `* mult` when converting per-segment `tof_seg`
+  derivatives to the shared `tof` variable.
+- Solver: `scipy.optimize.minimize(method="BFGS", jac=True)`. Unconstrained.
+- Warm-start cache `z_cache[i]` persists the converged Lambert universal
+  variable `z` per segment across BFGS iterations — subsequent Newton
+  solves typically converge in 1–2 iterations.
 - After solving, writes positions back into the QPointF dot objects and
   updates `render_tof`.
+
+### Performance notes
+
+Optimizations applied (benchmark: 8 midpoints, two_body + conic):
+
+- Newton iteration on the Lambert universal-variable equation `F(z)=0`,
+  with `brentq` as a fallback. Replaces bisection-only search.
+- `_stumpff_all(z)` returns `(C, S, C', S')` in one call, sharing a single
+  `sqrt` + trig/hyperbolic evaluation.
+- Merged objective + gradient into one `fun_and_grad` call (halves Lambert
+  work vs. separate `fun` and `jac`).
+- Direct numpy in the optimizer hot path — no QPointF construction or
+  `.x()/.y()` attribute access per segment evaluation.
+- Warm-starting `z` between BFGS iterations.
+- `node_incoming_seg` / `node_outgoing_seg` maps computed once outside the
+  solver loop (depend only on segment ordering).
+
+Measured speedups vs. original (`scipy.optimize.minimize` wall time,
+n_mid=8):
+
+| env / model / cost | before | after | speedup |
+|---|---:|---:|---:|
+| two_body / conic / energy | 515 ms | 117 ms | 4.4× |
+| two_body / conic / fuel | 1086 ms | 251 ms | 4.3× |
+| two_body / parabola / fuel | 235 ms | 177 ms | 1.3× |
+| constant_gravity / conic / energy | 44 ms | 29 ms | 1.5× |
+
+Standalone Lambert microbenchmark:
+
+| | before | after |
+|---|---:|---:|
+| `lambert_solve` | ~215 µs | 76 µs |
+| `lambert_solve_with_jac` | ~407 µs | 172 µs |
+
+RK4 (`compute_dynamic_arc`) is only used for rendering, never inside the
+optimizer loop.
 
 ## Interaction (input)
 
