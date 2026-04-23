@@ -514,6 +514,39 @@ def lambert_solve_with_jac(r1_vec, r2_vec, dt, mu, z_init=0.0):
     return v1, v2, Jv1_r1, Jv1_r2, Jv1_dt, Jv2_r1, Jv2_r2, Jv2_dt, z
 
 
+# --- Optional Numba acceleration -------------------------------------------
+# Replace the two public Lambert entry points with thin wrappers around the
+# njit kernels. On any failure flag (degenerate geometry, Newton non-
+# convergence), fall back to the pure-Python implementations above, which
+# include the brentq bracketed solver. Pure-Python versions are preserved
+# under the `_py` names so tests / debugging can compare.
+try:
+    import lambert_numba as _lnb  # triggers JIT warmup on import
+    _lambert_solve_py = lambert_solve
+    _lambert_solve_with_jac_py = lambert_solve_with_jac
+
+    def lambert_solve(r1_vec, r2_vec, dt, mu):
+        r1_arr = np.ascontiguousarray(r1_vec, dtype=np.float64)
+        r2_arr = np.ascontiguousarray(r2_vec, dtype=np.float64)
+        ok, v1, v2 = _lnb.lambert_solve_nb(r1_arr, r2_arr, float(dt), float(mu))
+        if ok:
+            return v1, v2
+        return _lambert_solve_py(r1_vec, r2_vec, dt, mu)
+
+    def lambert_solve_with_jac(r1_vec, r2_vec, dt, mu, z_init=0.0):
+        r1_arr = np.ascontiguousarray(r1_vec, dtype=np.float64)
+        r2_arr = np.ascontiguousarray(r2_vec, dtype=np.float64)
+        out = _lnb.lambert_with_jac_nb(
+            r1_arr, r2_arr, float(dt), float(mu), float(z_init)
+        )
+        if out[0]:
+            # (v1, v2, Jv1_r1, Jv1_r2, Jv1_dt, Jv2_r1, Jv2_r2, Jv2_dt, z)
+            return out[1:]
+        return _lambert_solve_with_jac_py(r1_vec, r2_vec, dt, mu, z_init=z_init)
+except ImportError:
+    pass
+
+
 def _kepler_deriv(state, mu):
     """Derivative for 2D Kepler propagation. state = [rx, ry, vx, vy]."""
     r = math.sqrt(state[0] ** 2 + state[1] ** 2)
@@ -1860,7 +1893,7 @@ class Canvas(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Trajectory Builder")
+        self.setWindowTitle("Hand-Crafted Trajectory Design")
         self.setMinimumSize(1200, 900)
 
         canvas = Canvas()

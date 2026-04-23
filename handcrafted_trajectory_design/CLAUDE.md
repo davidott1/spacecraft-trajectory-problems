@@ -1,8 +1,9 @@
 # handcrafted_trajectory_design
 
 Interactive PyQt6 tool for hand-building 2D impulsive-burn trajectories around a
-single central body, with optional continuous re-optimization. Single-file app:
-[main.py](main.py).
+single central body, with optional continuous re-optimization. Main app:
+[main.py](main.py). Numba-accelerated Lambert kernels:
+[lambert_numba.py](lambert_numba.py).
 
 ## Run
 
@@ -10,7 +11,8 @@ single central body, with optional continuous re-optimization. Single-file app:
 python main.py
 ```
 
-Requires: `PyQt6`, `numpy`, `scipy`.
+Requires: `PyQt6`, `numpy`, `scipy`, `numba` (optional — falls back to pure
+Python if missing).
 
 ## Units & constants (canonical)
 
@@ -116,23 +118,30 @@ Optimizations applied (benchmark: 8 midpoints, two_body + conic):
 - Warm-starting `z` between BFGS iterations.
 - `node_incoming_seg` / `node_outgoing_seg` maps computed once outside the
   solver loop (depend only on segment ordering).
+- Numba `@njit` kernels for `stumpff_all`, `lambert_z_newton`,
+  `lambert_solve_nb`, and `lambert_with_jac_nb` in
+  [lambert_numba.py](lambert_numba.py). `main.py` wraps the public
+  `lambert_solve` / `lambert_solve_with_jac` names so the Numba path is
+  used when available and the pure-Python implementations (including the
+  `brentq` fallback) run on failure or when Numba is missing. JIT is
+  warmed up on import, so the first UI interaction does not stall.
 
 Measured speedups vs. original (`scipy.optimize.minimize` wall time,
 n_mid=8):
 
-| env / model / cost | before | after | speedup |
-|---|---:|---:|---:|
-| two_body / conic / energy | 515 ms | 117 ms | 4.4× |
-| two_body / conic / fuel | 1086 ms | 251 ms | 4.3× |
-| two_body / parabola / fuel | 235 ms | 177 ms | 1.3× |
-| constant_gravity / conic / energy | 44 ms | 29 ms | 1.5× |
+| env / model / cost | original | pre-numba | with numba | total speedup |
+|---|---:|---:|---:|---:|
+| two_body / conic / energy | 515 ms | 117 ms | 33 ms | 15.6× |
+| two_body / conic / fuel | 1086 ms | 251 ms | 77 ms | 14.1× |
+| two_body / parabola / fuel | 235 ms | 177 ms | 176 ms | 1.3× (parabola does not use Lambert) |
+| constant_gravity / conic / energy | 44 ms | 29 ms | 29 ms | 1.5× (constant-gravity conic uses parabola) |
 
 Standalone Lambert microbenchmark:
 
-| | before | after |
-|---|---:|---:|
-| `lambert_solve` | ~215 µs | 76 µs |
-| `lambert_solve_with_jac` | ~407 µs | 172 µs |
+| | original | pre-numba | with numba |
+|---|---:|---:|---:|
+| `lambert_solve` | ~215 µs | 76 µs | ~4 µs |
+| `lambert_solve_with_jac` | ~407 µs | 172 µs | ~7 µs |
 
 RK4 (`compute_dynamic_arc`) is only used for rendering, never inside the
 optimizer loop.
