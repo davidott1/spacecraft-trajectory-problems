@@ -1993,7 +1993,10 @@ class Canvas(QWidget):
             x0[2 * i + 1] = dot.y()
         x0[n_pos_vars] = TIME_OF_FLIGHT
 
-        result = scipy_minimize(fun_and_grad_active, x0, method="BFGS", jac=True)
+        result = scipy_minimize(
+            fun_and_grad_active, x0, method="BFGS", jac=True,
+            options={"gtol": 1e-6},
+        )
 
         # Apply result: update positions and rendering tof
         for i, dot in enumerate(movable_dots):
