@@ -318,6 +318,531 @@ def lambert_with_jac_nb(r1_vec, r2_vec, dt, mu, z_init):
     return 1, v1, v2, Jv1_r1, Jv1_r2, Jv1_dt, Jv2_r1, Jv2_r2, Jv2_dt, z
 
 
+# ---------------------------------------------------------------------------
+# Batched fun_and_grad: runs the entire BFGS inner evaluation (all segments
+# + dv-node accumulation) in a single njit call. Eliminates N Python->njit
+# crossings per BFGS iteration and avoids per-segment numpy allocations.
+#
+# Segment-start/end kinds:
+#   0 = movable (use x_vec[2*var_idx : 2*var_idx+2])
+#   1 = shape triangle (use shape_pos_tri)
+#   2 = shape square   (use shape_pos_sq)
+#   3 = fixed (use seg_*_fixed[i])
+#
+# dv-node kinds:
+#   0 = movable midpoint (has both in_seg and out_seg)
+#   1 = shape outgoing   (shape is start of out_seg)
+#   2 = shape incoming   (shape is end of in_seg)
+# ---------------------------------------------------------------------------
+
+
+@njit(cache=True, fastmath=False, inline="always")
+def _seg_pos(x_vec, kind, var_idx, shape_pos_tri, shape_pos_sq, fixed_xy):
+    """Resolve a segment-endpoint position. fixed_xy is (2,) and only used when kind==3."""
+    if kind == 0:
+        out = np.empty(2)
+        out[0] = x_vec[2 * var_idx]
+        out[1] = x_vec[2 * var_idx + 1]
+        return out
+    if kind == 1:
+        return shape_pos_tri
+    if kind == 2:
+        return shape_pos_sq
+    return fixed_xy
+
+
+@njit(cache=True, fastmath=False)
+def _solve_segment(
+    r0, rf, tof_seg, mult, z_init,
+    center, mu, use_parabola, cg_mode, const_g_vec, g_mag,
+    # output slots (all preallocated views into per-segment arrays):
+    v0_out, vf_out,
+    Jv0_r0_out, Jv0_rf_out, Jv0_dt_out,
+    Jvf_r0_out, Jvf_rf_out, Jvf_dt_out,
+):
+    """Solve one segment (parabola or Lambert) and write results into
+    preallocated out slots. dt-Jacobians already multiplied by mult.
+
+    Returns (ok, z) where z is the converged universal-variable (for
+    warm-starting; 0.0 for parabola).
+    """
+    if use_parabola:
+        # Parabolic arc: r(t) = r0 + v0 t + 0.5 g t^2. g is constant in
+        # constant-gravity env, else points from r0 -> center with magnitude g_mag.
+        if cg_mode:
+            gx = const_g_vec[0]
+            gy = const_g_vec[1]
+            dgvec_dr0_xx = 0.0
+            dgvec_dr0_xy = 0.0
+            dgvec_dr0_yx = 0.0
+            dgvec_dr0_yy = 0.0
+        else:
+            dx = center[0] - r0[0]
+            dy = center[1] - r0[1]
+            dist = math.sqrt(dx * dx + dy * dy)
+            if dist < 1e-12:
+                gx = 0.0
+                gy = 0.0
+                dgvec_dr0_xx = 0.0
+                dgvec_dr0_xy = 0.0
+                dgvec_dr0_yx = 0.0
+                dgvec_dr0_yy = 0.0
+            else:
+                inv_d = 1.0 / dist
+                ghx = dx * inv_d
+                ghy = dy * inv_d
+                gx = g_mag * ghx
+                gy = g_mag * ghy
+                # dgvec_dr0 = (g_mag / dist) * (-I2 + outer(g_hat, g_hat))
+                # note d(g_hat)/d(r0) = (g_hat g_hat^T - I) / dist, and g_vec = g_mag * (center - r0)/dist
+                # so dg_vec/dr0 = -(g_mag / dist) (I - g_hat g_hat^T) = (g_mag / dist)(g_hat g_hat^T - I)
+                fac = g_mag * inv_d
+                dgvec_dr0_xx = fac * (ghx * ghx - 1.0)
+                dgvec_dr0_xy = fac * (ghx * ghy)
+                dgvec_dr0_yx = fac * (ghy * ghx)
+                dgvec_dr0_yy = fac * (ghy * ghy - 1.0)
+        inv_t = 1.0 / tof_seg
+        disp_x = rf[0] - r0[0]
+        disp_y = rf[1] - r0[1]
+        meanv_x = disp_x * inv_t
+        meanv_y = disp_y * inv_t
+        half_g_t_x = 0.5 * gx * tof_seg
+        half_g_t_y = 0.5 * gy * tof_seg
+        v0_out[0] = meanv_x - half_g_t_x
+        v0_out[1] = meanv_y - half_g_t_y
+        vf_out[0] = meanv_x + half_g_t_x
+        vf_out[1] = meanv_y + half_g_t_y
+        # J_v0_r0 = -I/t - 0.5 t * dgvec_dr0
+        Jv0_r0_out[0, 0] = -inv_t - 0.5 * tof_seg * dgvec_dr0_xx
+        Jv0_r0_out[0, 1] = -0.5 * tof_seg * dgvec_dr0_xy
+        Jv0_r0_out[1, 0] = -0.5 * tof_seg * dgvec_dr0_yx
+        Jv0_r0_out[1, 1] = -inv_t - 0.5 * tof_seg * dgvec_dr0_yy
+        # J_v0_rf = I/t
+        Jv0_rf_out[0, 0] = inv_t
+        Jv0_rf_out[0, 1] = 0.0
+        Jv0_rf_out[1, 0] = 0.0
+        Jv0_rf_out[1, 1] = inv_t
+        # J_v0_tf_seg = -disp / t^2 - 0.5 * g_vec   ; then multiply by mult
+        Jv0_dt_out[0] = (-disp_x * inv_t * inv_t - 0.5 * gx) * mult
+        Jv0_dt_out[1] = (-disp_y * inv_t * inv_t - 0.5 * gy) * mult
+        # J_vf_r0 = -I/t + 0.5 t * dgvec_dr0
+        Jvf_r0_out[0, 0] = -inv_t + 0.5 * tof_seg * dgvec_dr0_xx
+        Jvf_r0_out[0, 1] = 0.5 * tof_seg * dgvec_dr0_xy
+        Jvf_r0_out[1, 0] = 0.5 * tof_seg * dgvec_dr0_yx
+        Jvf_r0_out[1, 1] = -inv_t + 0.5 * tof_seg * dgvec_dr0_yy
+        # J_vf_rf = I/t
+        Jvf_rf_out[0, 0] = inv_t
+        Jvf_rf_out[0, 1] = 0.0
+        Jvf_rf_out[1, 0] = 0.0
+        Jvf_rf_out[1, 1] = inv_t
+        Jvf_dt_out[0] = (-disp_x * inv_t * inv_t + 0.5 * gx) * mult
+        Jvf_dt_out[1] = (-disp_y * inv_t * inv_t + 0.5 * gy) * mult
+        return 1, 0.0
+
+    # Lambert branch. Use translated vectors (relative to gravity center).
+    r1x = r0[0] - center[0]
+    r1y = r0[1] - center[1]
+    r2x = rf[0] - center[0]
+    r2y = rf[1] - center[1]
+
+    r1 = math.sqrt(r1x * r1x + r1y * r1y)
+    r2 = math.sqrt(r2x * r2x + r2y * r2y)
+    if r1 < 1e-10 or r2 < 1e-10 or tof_seg < 1e-10:
+        # straight-line fallback
+        return _fill_straight_line(
+            r1x, r1y, r2x, r2y, tof_seg, mult,
+            v0_out, vf_out,
+            Jv0_r0_out, Jv0_rf_out, Jv0_dt_out,
+            Jvf_r0_out, Jvf_rf_out, Jvf_dt_out,
+        )
+
+    cos_dtheta = (r1x * r2x + r1y * r2y) / (r1 * r2)
+    if cos_dtheta > 1.0:
+        cos_dtheta = 1.0
+    elif cos_dtheta < -1.0:
+        cos_dtheta = -1.0
+    cross_z = r1x * r2y - r1y * r2x
+    dtheta = math.acos(cos_dtheta)
+    if cross_z < 0.0:
+        dtheta = 2.0 * math.pi - dtheta
+    sin_dtheta = math.sin(dtheta)
+    if abs(sin_dtheta) < 1e-14 or abs(1.0 - cos_dtheta) < 1e-14:
+        return _fill_straight_line(
+            r1x, r1y, r2x, r2y, tof_seg, mult,
+            v0_out, vf_out,
+            Jv0_r0_out, Jv0_rf_out, Jv0_dt_out,
+            Jvf_r0_out, Jvf_rf_out, Jvf_dt_out,
+        )
+
+    A = sin_dtheta * math.sqrt(r1 * r2 / (1.0 - cos_dtheta))
+    ok, z, C, S, y = lambert_z_newton(r1, r2, A, tof_seg, mu, z_init)
+    if ok == 0 or y <= 0.0 or C <= 0.0 or abs(A) < 1e-15:
+        # Caller will detect ok==0 and may retry via Python fallback.
+        return 0, 0.0
+
+    _, _, Cp, Sp = stumpff_all(z)
+    sqrtC = math.sqrt(C)
+    sqrty = math.sqrt(y)
+    C15 = C * sqrtC
+    C25 = C * C15
+    y15 = y * sqrty
+    chi = (z * S - 1.0) / sqrtC
+    dchi_dz = (S + z * Sp) / sqrtC - (z * S - 1.0) * Cp / (2.0 * C15)
+
+    inv_2A = 1.0 / (2.0 * A)
+    dA_dr1_x = ((r2 / r1) * r1x + r2x) * inv_2A
+    dA_dr1_y = ((r2 / r1) * r1y + r2y) * inv_2A
+    dA_dr2_x = ((r1 / r2) * r2x + r1x) * inv_2A
+    dA_dr2_y = ((r1 / r2) * r2y + r1y) * inv_2A
+
+    inv_r1 = 1.0 / r1
+    inv_r2 = 1.0 / r2
+    dyz_dr1_x = r1x * inv_r1 + dA_dr1_x * chi
+    dyz_dr1_y = r1y * inv_r1 + dA_dr1_y * chi
+    dyz_dr2_x = r2x * inv_r2 + dA_dr2_x * chi
+    dyz_dr2_y = r2y * inv_r2 + dA_dr2_y * chi
+    dy_dz = A * dchi_dz
+
+    dF_dy = 1.5 * S * sqrty / C15 + A / (2.0 * sqrty)
+    dF_dC = -1.5 * y15 * S / C25
+    dF_dS = y15 / C15
+    dF_dA = sqrty
+    dF_dz = dF_dy * dy_dz + dF_dC * Cp + dF_dS * Sp
+    if abs(dF_dz) < 1e-20:
+        return 0, 0.0
+
+    dFz_dr1_x = dF_dy * dyz_dr1_x + dF_dA * dA_dr1_x
+    dFz_dr1_y = dF_dy * dyz_dr1_y + dF_dA * dA_dr1_y
+    dFz_dr2_x = dF_dy * dyz_dr2_x + dF_dA * dA_dr2_x
+    dFz_dr2_y = dF_dy * dyz_dr2_y + dF_dA * dA_dr2_y
+    dFz_dt = -math.sqrt(mu)
+
+    inv_dFz = 1.0 / dF_dz
+    dz_dr1_x = -dFz_dr1_x * inv_dFz
+    dz_dr1_y = -dFz_dr1_y * inv_dFz
+    dz_dr2_x = -dFz_dr2_x * inv_dFz
+    dz_dr2_y = -dFz_dr2_y * inv_dFz
+    dz_dt = -dFz_dt * inv_dFz
+
+    dy_dr1_x = dyz_dr1_x + dy_dz * dz_dr1_x
+    dy_dr1_y = dyz_dr1_y + dy_dz * dz_dr1_y
+    dy_dr2_x = dyz_dr2_x + dy_dz * dz_dr2_x
+    dy_dr2_y = dyz_dr2_y + dy_dz * dz_dr2_y
+    dy_dt = dy_dz * dz_dt
+
+    f_ = 1.0 - y / r1
+    g_ = A * math.sqrt(y / mu)
+    gdot = 1.0 - y / r2
+    inv_g = 1.0 / g_
+    v1x = (r2x - f_ * r1x) * inv_g
+    v1y = (r2y - f_ * r1y) * inv_g
+    v2x = (gdot * r2x - r1x) * inv_g
+    v2y = (gdot * r2y - r1y) * inv_g
+
+    y_over_r1sq = y / (r1 * r1)
+    y_over_r2sq = y / (r2 * r2)
+    df_dr1_x = -dy_dr1_x / r1 + y_over_r1sq * (r1x * inv_r1)
+    df_dr1_y = -dy_dr1_y / r1 + y_over_r1sq * (r1y * inv_r1)
+    df_dr2_x = -dy_dr2_x / r1
+    df_dr2_y = -dy_dr2_y / r1
+    df_dt = -dy_dt / r1
+
+    dgdot_dr1_x = -dy_dr1_x / r2
+    dgdot_dr1_y = -dy_dr1_y / r2
+    dgdot_dr2_x = -dy_dr2_x / r2 + y_over_r2sq * (r2x * inv_r2)
+    dgdot_dr2_y = -dy_dr2_y / r2 + y_over_r2sq * (r2y * inv_r2)
+    dgdot_dt = -dy_dt / r2
+
+    sq_yom = math.sqrt(y / mu)
+    A_2sqyM = A / (2.0 * math.sqrt(y * mu))
+    dg_dr1_x = dA_dr1_x * sq_yom + A_2sqyM * dy_dr1_x
+    dg_dr1_y = dA_dr1_y * sq_yom + A_2sqyM * dy_dr1_y
+    dg_dr2_x = dA_dr2_x * sq_yom + A_2sqyM * dy_dr2_x
+    dg_dr2_y = dA_dr2_y * sq_yom + A_2sqyM * dy_dr2_y
+    dg_dt = A_2sqyM * dy_dt
+
+    v0_out[0] = v1x
+    v0_out[1] = v1y
+    vf_out[0] = v2x
+    vf_out[1] = v2y
+
+    Jv0_r0_out[0, 0] = (-r1x * df_dr1_x - f_) * inv_g - v1x * dg_dr1_x * inv_g
+    Jv0_r0_out[0, 1] = (-r1x * df_dr1_y) * inv_g - v1x * dg_dr1_y * inv_g
+    Jv0_r0_out[1, 0] = (-r1y * df_dr1_x) * inv_g - v1y * dg_dr1_x * inv_g
+    Jv0_r0_out[1, 1] = (-r1y * df_dr1_y - f_) * inv_g - v1y * dg_dr1_y * inv_g
+
+    Jv0_rf_out[0, 0] = (1.0 - r1x * df_dr2_x) * inv_g - v1x * dg_dr2_x * inv_g
+    Jv0_rf_out[0, 1] = (-r1x * df_dr2_y) * inv_g - v1x * dg_dr2_y * inv_g
+    Jv0_rf_out[1, 0] = (-r1y * df_dr2_x) * inv_g - v1y * dg_dr2_x * inv_g
+    Jv0_rf_out[1, 1] = (1.0 - r1y * df_dr2_y) * inv_g - v1y * dg_dr2_y * inv_g
+
+    Jv0_dt_out[0] = ((-df_dt * r1x) * inv_g - v1x * dg_dt * inv_g) * mult
+    Jv0_dt_out[1] = ((-df_dt * r1y) * inv_g - v1y * dg_dt * inv_g) * mult
+
+    Jvf_r0_out[0, 0] = (r2x * dgdot_dr1_x - 1.0) * inv_g - v2x * dg_dr1_x * inv_g
+    Jvf_r0_out[0, 1] = (r2x * dgdot_dr1_y) * inv_g - v2x * dg_dr1_y * inv_g
+    Jvf_r0_out[1, 0] = (r2y * dgdot_dr1_x) * inv_g - v2y * dg_dr1_x * inv_g
+    Jvf_r0_out[1, 1] = (r2y * dgdot_dr1_y - 1.0) * inv_g - v2y * dg_dr1_y * inv_g
+
+    Jvf_rf_out[0, 0] = (r2x * dgdot_dr2_x + gdot) * inv_g - v2x * dg_dr2_x * inv_g
+    Jvf_rf_out[0, 1] = (r2x * dgdot_dr2_y) * inv_g - v2x * dg_dr2_y * inv_g
+    Jvf_rf_out[1, 0] = (r2y * dgdot_dr2_x) * inv_g - v2y * dg_dr2_x * inv_g
+    Jvf_rf_out[1, 1] = (r2y * dgdot_dr2_y + gdot) * inv_g - v2y * dg_dr2_y * inv_g
+
+    Jvf_dt_out[0] = ((dgdot_dt * r2x) * inv_g - v2x * dg_dt * inv_g) * mult
+    Jvf_dt_out[1] = ((dgdot_dt * r2y) * inv_g - v2y * dg_dt * inv_g) * mult
+
+    return 1, z
+
+
+@njit(cache=True, fastmath=False, inline="always")
+def _fill_straight_line(
+    r1x, r1y, r2x, r2y, tof_seg, mult,
+    v0_out, vf_out,
+    Jv0_r0_out, Jv0_rf_out, Jv0_dt_out,
+    Jvf_r0_out, Jvf_rf_out, Jvf_dt_out,
+):
+    """Mirror of the Python _straight_line branch, writing into preallocated slots."""
+    t = tof_seg if tof_seg > 1e-10 else 1e-10
+    inv_t = 1.0 / t
+    vx = (r2x - r1x) * inv_t
+    vy = (r2y - r1y) * inv_t
+    v0_out[0] = vx
+    v0_out[1] = vy
+    vf_out[0] = vx
+    vf_out[1] = vy
+    Jv0_r0_out[0, 0] = -inv_t
+    Jv0_r0_out[0, 1] = 0.0
+    Jv0_r0_out[1, 0] = 0.0
+    Jv0_r0_out[1, 1] = -inv_t
+    Jv0_rf_out[0, 0] = inv_t
+    Jv0_rf_out[0, 1] = 0.0
+    Jv0_rf_out[1, 0] = 0.0
+    Jv0_rf_out[1, 1] = inv_t
+    Jv0_dt_out[0] = -vx * inv_t * mult
+    Jv0_dt_out[1] = -vy * inv_t * mult
+    Jvf_r0_out[0, 0] = -inv_t
+    Jvf_r0_out[0, 1] = 0.0
+    Jvf_r0_out[1, 0] = 0.0
+    Jvf_r0_out[1, 1] = -inv_t
+    Jvf_rf_out[0, 0] = inv_t
+    Jvf_rf_out[0, 1] = 0.0
+    Jvf_rf_out[1, 0] = 0.0
+    Jvf_rf_out[1, 1] = inv_t
+    Jvf_dt_out[0] = -vx * inv_t * mult
+    Jvf_dt_out[1] = -vy * inv_t * mult
+    return 1, 0.0
+
+
+@njit(cache=True, fastmath=False)
+def fun_and_grad_batch(
+    x_vec, n_pos_vars,
+    # segment metadata (all length N)
+    seg_start_kind, seg_end_kind,
+    seg_start_var_idx, seg_end_var_idx,
+    seg_start_fixed, seg_end_fixed,
+    seg_mult,
+    # shape + env
+    shape_pos_tri, shape_pos_sq,
+    center_np, mu,
+    use_parabola, cg_mode, const_g_vec, g_mag,
+    # dv-node metadata (length M)
+    dv_type, dv_in_seg, dv_out_seg,
+    dv_center_var_idx, dv_shape_vel,
+    # cost mode
+    energy_mode, fuel_eps,
+    # work buffers (length N; preallocated by caller)
+    v0_buf, vf_buf,
+    Jv0_r0_buf, Jv0_rf_buf, Jv0_dt_buf,
+    Jvf_r0_buf, Jvf_rf_buf, Jvf_dt_buf,
+    z_cache,
+    # scratch grad buffer (length n_vars; preallocated)
+    grad_out,
+    ok_out,
+):
+    """Single-shot fun + grad. Returns cost (float). Writes grad into grad_out
+    and per-segment ok flags into ok_out."""
+    tof = x_vec[n_pos_vars]
+    N = seg_mult.shape[0]
+
+    # Zero the grad buffer.
+    for k in range(grad_out.shape[0]):
+        grad_out[k] = 0.0
+
+    # --- Stage 1: per-segment velocities + Jacobians.
+    for i in range(N):
+        mult = seg_mult[i]
+        tof_seg = tof * mult
+
+        # Resolve r0 and rf.
+        ks = seg_start_kind[i]
+        if ks == 0:
+            idx = seg_start_var_idx[i]
+            r0x = x_vec[2 * idx]
+            r0y = x_vec[2 * idx + 1]
+        elif ks == 1:
+            r0x = shape_pos_tri[0]
+            r0y = shape_pos_tri[1]
+        elif ks == 2:
+            r0x = shape_pos_sq[0]
+            r0y = shape_pos_sq[1]
+        else:
+            r0x = seg_start_fixed[i, 0]
+            r0y = seg_start_fixed[i, 1]
+
+        ke = seg_end_kind[i]
+        if ke == 0:
+            idx = seg_end_var_idx[i]
+            rfx = x_vec[2 * idx]
+            rfy = x_vec[2 * idx + 1]
+        elif ke == 1:
+            rfx = shape_pos_tri[0]
+            rfy = shape_pos_tri[1]
+        elif ke == 2:
+            rfx = shape_pos_sq[0]
+            rfy = shape_pos_sq[1]
+        else:
+            rfx = seg_end_fixed[i, 0]
+            rfy = seg_end_fixed[i, 1]
+
+        r0 = np.empty(2)
+        r0[0] = r0x
+        r0[1] = r0y
+        rf = np.empty(2)
+        rf[0] = rfx
+        rf[1] = rfy
+
+        ok, z_new = _solve_segment(
+            r0, rf, tof_seg, mult, z_cache[i],
+            center_np, mu, use_parabola, cg_mode, const_g_vec, g_mag,
+            v0_buf[i], vf_buf[i],
+            Jv0_r0_buf[i], Jv0_rf_buf[i], Jv0_dt_buf[i],
+            Jvf_r0_buf[i], Jvf_rf_buf[i], Jvf_dt_buf[i],
+        )
+        ok_out[i] = ok
+        if ok == 1 and not use_parabola:
+            z_cache[i] = z_new
+
+    # If any segment failed, caller will fall back. Return early with cost=0
+    # to avoid propagating garbage; grad will be recomputed in Python.
+    any_fail = 0
+    for i in range(N):
+        if ok_out[i] == 0:
+            any_fail = 1
+            break
+    if any_fail == 1:
+        return 0.0
+
+    # --- Stage 2: dv-node accumulation.
+    cost = 0.0
+    M = dv_type.shape[0]
+    for k in range(M):
+        t = dv_type[k]
+        if t == 0:
+            # Movable midpoint: dv = v0[out] - vf[in]
+            i_in = dv_in_seg[k]
+            i_out = dv_out_seg[k]
+            dvx = v0_buf[i_out, 0] - vf_buf[i_in, 0]
+            dvy = v0_buf[i_out, 1] - vf_buf[i_in, 1]
+        elif t == 1:
+            # Shape outgoing: dv = v0[out] - shape_vel
+            i_out = dv_out_seg[k]
+            i_in = -1
+            dvx = v0_buf[i_out, 0] - dv_shape_vel[k, 0]
+            dvy = v0_buf[i_out, 1] - dv_shape_vel[k, 1]
+        else:
+            # Shape incoming: dv = shape_vel - vf[in]
+            i_in = dv_in_seg[k]
+            i_out = -1
+            dvx = dv_shape_vel[k, 0] - vf_buf[i_in, 0]
+            dvy = dv_shape_vel[k, 1] - vf_buf[i_in, 1]
+
+        d2 = dvx * dvx + dvy * dvy
+        if energy_mode:
+            cost += d2
+            factor = 2.0
+        else:
+            mag = math.sqrt(d2 + fuel_eps * fuel_eps)
+            cost += mag
+            if mag < 1e-30:
+                factor = 0.0
+            else:
+                factor = 1.0 / mag
+
+        if t == 0:
+            # Contributions:
+            #   upstream start (seg i_in's start): Jacobian = -Jvf_r0[i_in]
+            #   center (midpoint): Jacobian = Jv0_r0[i_out] - Jvf_rf[i_in]
+            #   downstream end (seg i_out's end): Jacobian = Jv0_rf[i_out]
+            #   tof: Jv0_dt[i_out] - Jvf_dt[i_in]
+            # Upstream start.
+            us_kind = seg_start_kind[i_in]
+            if us_kind == 0:
+                us_idx = seg_start_var_idx[i_in]
+                # grad += factor * dv @ (-Jvf_r0[i_in])
+                J00 = Jvf_r0_buf[i_in, 0, 0]
+                J01 = Jvf_r0_buf[i_in, 0, 1]
+                J10 = Jvf_r0_buf[i_in, 1, 0]
+                J11 = Jvf_r0_buf[i_in, 1, 1]
+                grad_out[2 * us_idx]     += factor * (-(dvx * J00 + dvy * J10))
+                grad_out[2 * us_idx + 1] += factor * (-(dvx * J01 + dvy * J11))
+            # Center.
+            c_idx = dv_center_var_idx[k]
+            if c_idx >= 0:
+                # J = Jv0_r0[i_out] - Jvf_rf[i_in]
+                J00 = Jv0_r0_buf[i_out, 0, 0] - Jvf_rf_buf[i_in, 0, 0]
+                J01 = Jv0_r0_buf[i_out, 0, 1] - Jvf_rf_buf[i_in, 0, 1]
+                J10 = Jv0_r0_buf[i_out, 1, 0] - Jvf_rf_buf[i_in, 1, 0]
+                J11 = Jv0_r0_buf[i_out, 1, 1] - Jvf_rf_buf[i_in, 1, 1]
+                grad_out[2 * c_idx]     += factor * (dvx * J00 + dvy * J10)
+                grad_out[2 * c_idx + 1] += factor * (dvx * J01 + dvy * J11)
+            # Downstream end.
+            ds_kind = seg_end_kind[i_out]
+            if ds_kind == 0:
+                ds_idx = seg_end_var_idx[i_out]
+                J00 = Jv0_rf_buf[i_out, 0, 0]
+                J01 = Jv0_rf_buf[i_out, 0, 1]
+                J10 = Jv0_rf_buf[i_out, 1, 0]
+                J11 = Jv0_rf_buf[i_out, 1, 1]
+                grad_out[2 * ds_idx]     += factor * (dvx * J00 + dvy * J10)
+                grad_out[2 * ds_idx + 1] += factor * (dvx * J01 + dvy * J11)
+            # tof.
+            grad_out[n_pos_vars] += factor * (
+                dvx * (Jv0_dt_buf[i_out, 0] - Jvf_dt_buf[i_in, 0])
+                + dvy * (Jv0_dt_buf[i_out, 1] - Jvf_dt_buf[i_in, 1])
+            )
+        elif t == 1:
+            # Shape outgoing. Contrib: downstream end + tof.
+            ds_kind = seg_end_kind[i_out]
+            if ds_kind == 0:
+                ds_idx = seg_end_var_idx[i_out]
+                J00 = Jv0_rf_buf[i_out, 0, 0]
+                J01 = Jv0_rf_buf[i_out, 0, 1]
+                J10 = Jv0_rf_buf[i_out, 1, 0]
+                J11 = Jv0_rf_buf[i_out, 1, 1]
+                grad_out[2 * ds_idx]     += factor * (dvx * J00 + dvy * J10)
+                grad_out[2 * ds_idx + 1] += factor * (dvx * J01 + dvy * J11)
+            grad_out[n_pos_vars] += factor * (
+                dvx * Jv0_dt_buf[i_out, 0] + dvy * Jv0_dt_buf[i_out, 1]
+            )
+        else:
+            # Shape incoming. Contrib: upstream start + tof (both negated).
+            us_kind = seg_start_kind[i_in]
+            if us_kind == 0:
+                us_idx = seg_start_var_idx[i_in]
+                J00 = Jvf_r0_buf[i_in, 0, 0]
+                J01 = Jvf_r0_buf[i_in, 0, 1]
+                J10 = Jvf_r0_buf[i_in, 1, 0]
+                J11 = Jvf_r0_buf[i_in, 1, 1]
+                grad_out[2 * us_idx]     += factor * (-(dvx * J00 + dvy * J10))
+                grad_out[2 * us_idx + 1] += factor * (-(dvx * J01 + dvy * J11))
+            grad_out[n_pos_vars] += factor * (
+                -(dvx * Jvf_dt_buf[i_in, 0] + dvy * Jvf_dt_buf[i_in, 1])
+            )
+
+    return cost
+
+
 def _warmup():
     """Force JIT compilation on a known-good geometry."""
     r1 = np.array([1.0, 0.0])
@@ -326,6 +851,73 @@ def _warmup():
     lambert_z_newton(1.0, 1.0, 0.9, 1.5, 1.0, 0.0)
     lambert_solve_nb(r1, r2, 1.5, 1.0)
     lambert_with_jac_nb(r1, r2, 1.5, 1.0, 0.0)
+
+    # Warm up batch path: trivial 1-segment two_body/conic case.
+    x_vec = np.array([1.0, 0.0, 0.0, 1.0, 1.5])  # two movable dots + tof
+    seg_start_kind = np.array([0], dtype=np.int64)
+    seg_end_kind = np.array([0], dtype=np.int64)
+    seg_start_var_idx = np.array([0], dtype=np.int64)
+    seg_end_var_idx = np.array([1], dtype=np.int64)
+    seg_start_fixed = np.zeros((1, 2))
+    seg_end_fixed = np.zeros((1, 2))
+    seg_mult = np.array([1.0])
+    shape_pos_tri = np.zeros(2)
+    shape_pos_sq = np.zeros(2)
+    center = np.zeros(2)
+    const_g = np.array([0.0, -1.0])
+    dv_type = np.zeros(0, dtype=np.int64)
+    dv_in_seg = np.zeros(0, dtype=np.int64)
+    dv_out_seg = np.zeros(0, dtype=np.int64)
+    dv_center_var_idx = np.zeros(0, dtype=np.int64)
+    dv_shape_vel = np.zeros((0, 2))
+    v0_buf = np.zeros((1, 2))
+    vf_buf = np.zeros((1, 2))
+    Jv0_r0_buf = np.zeros((1, 2, 2))
+    Jv0_rf_buf = np.zeros((1, 2, 2))
+    Jv0_dt_buf = np.zeros((1, 2))
+    Jvf_r0_buf = np.zeros((1, 2, 2))
+    Jvf_rf_buf = np.zeros((1, 2, 2))
+    Jvf_dt_buf = np.zeros((1, 2))
+    z_cache = np.zeros(1)
+    grad_out = np.zeros(5)
+    ok_out = np.zeros(1, dtype=np.int64)
+
+    # Warm two_body + conic:
+    fun_and_grad_batch(
+        x_vec, 4,
+        seg_start_kind, seg_end_kind,
+        seg_start_var_idx, seg_end_var_idx,
+        seg_start_fixed, seg_end_fixed,
+        seg_mult,
+        shape_pos_tri, shape_pos_sq,
+        center, 1.0,
+        False, False, const_g, 1.0,
+        dv_type, dv_in_seg, dv_out_seg,
+        dv_center_var_idx, dv_shape_vel,
+        True, 1e-4,
+        v0_buf, vf_buf,
+        Jv0_r0_buf, Jv0_rf_buf, Jv0_dt_buf,
+        Jvf_r0_buf, Jvf_rf_buf, Jvf_dt_buf,
+        z_cache, grad_out, ok_out,
+    )
+    # Warm parabola branch:
+    fun_and_grad_batch(
+        x_vec, 4,
+        seg_start_kind, seg_end_kind,
+        seg_start_var_idx, seg_end_var_idx,
+        seg_start_fixed, seg_end_fixed,
+        seg_mult,
+        shape_pos_tri, shape_pos_sq,
+        center, 1.0,
+        True, True, const_g, 1.0,
+        dv_type, dv_in_seg, dv_out_seg,
+        dv_center_var_idx, dv_shape_vel,
+        False, 1e-4,
+        v0_buf, vf_buf,
+        Jv0_r0_buf, Jv0_rf_buf, Jv0_dt_buf,
+        Jvf_r0_buf, Jvf_rf_buf, Jvf_dt_buf,
+        z_cache, grad_out, ok_out,
+    )
 
 
 _warmup()

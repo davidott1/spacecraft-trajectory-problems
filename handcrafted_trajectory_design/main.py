@@ -522,6 +522,7 @@ def lambert_solve_with_jac(r1_vec, r2_vec, dt, mu, z_init=0.0):
 # under the `_py` names so tests / debugging can compare.
 try:
     import lambert_numba as _lnb  # triggers JIT warmup on import
+    _NUMBA_AVAILABLE = True
     _lambert_solve_py = lambert_solve
     _lambert_solve_with_jac_py = lambert_solve_with_jac
 
@@ -544,6 +545,7 @@ try:
             return out[1:]
         return _lambert_solve_with_jac_py(r1_vec, r2_vec, dt, mu, z_init=z_init)
 except ImportError:
+    _NUMBA_AVAILABLE = False
     pass
 
 
@@ -1849,6 +1851,141 @@ class Canvas(QWidget):
 
             return cost, grad
 
+        # --- Batched numba path -----------------------------------------------
+        # When numba is available, build per-segment metadata arrays once,
+        # preallocate all work buffers, and replace `fun_and_grad` with a
+        # single njit call that does both velocity solve and dv-node
+        # accumulation. Falls back to the Python `fun_and_grad` above if any
+        # Lambert Newton iteration reports failure (rare; handled via
+        # ok_out).
+        fun_and_grad_active = fun_and_grad
+        if _NUMBA_AVAILABLE:
+            N = len(all_segments)
+
+            # Resolve segment start/end kinds and variable indices.
+            _KIND_MOV = 0
+            _KIND_TRI = 1
+            _KIND_SQ = 2
+            _KIND_FIX = 3
+
+            def _endpoint_meta(dot):
+                idx = dot_id_to_var_idx.get(id(dot))
+                if idx is not None:
+                    return _KIND_MOV, idx, 0.0, 0.0
+                if dot is self.tri_center:
+                    return _KIND_TRI, -1, 0.0, 0.0
+                if dot is self.sq_center:
+                    return _KIND_SQ, -1, 0.0, 0.0
+                return _KIND_FIX, -1, dot.x(), dot.y()
+
+            seg_start_kind = np.empty(N, dtype=np.int64)
+            seg_end_kind = np.empty(N, dtype=np.int64)
+            seg_start_var_idx = np.empty(N, dtype=np.int64)
+            seg_end_var_idx = np.empty(N, dtype=np.int64)
+            seg_start_fixed = np.zeros((N, 2))
+            seg_end_fixed = np.zeros((N, 2))
+            seg_mult_arr = np.empty(N)
+            for i, (dot_s, dot_e, mult) in enumerate(all_segments):
+                ks, vs, fsx, fsy = _endpoint_meta(dot_s)
+                ke, ve, fex, fey = _endpoint_meta(dot_e)
+                seg_start_kind[i] = ks
+                seg_end_kind[i] = ke
+                seg_start_var_idx[i] = vs
+                seg_end_var_idx[i] = ve
+                seg_start_fixed[i, 0] = fsx
+                seg_start_fixed[i, 1] = fsy
+                seg_end_fixed[i, 0] = fex
+                seg_end_fixed[i, 1] = fey
+                seg_mult_arr[i] = mult
+
+            # Build dv-node metadata, mirroring the Python loops.
+            dv_type_list = []
+            dv_in_seg_list = []
+            dv_out_seg_list = []
+            dv_center_var_idx_list = []
+            dv_shape_vel_list = []
+
+            for dot in movable_dots:
+                d_id = id(dot)
+                i_in = node_incoming_seg.get(d_id)
+                i_out = node_outgoing_seg.get(d_id)
+                if i_in is None or i_out is None:
+                    continue
+                dv_type_list.append(0)
+                dv_in_seg_list.append(i_in)
+                dv_out_seg_list.append(i_out)
+                dv_center_var_idx_list.append(dot_id_to_var_idx[d_id])
+                dv_shape_vel_list.append((0.0, 0.0))
+
+            for shape_center, shape_pos, shape_vel in shape_data:
+                s_id = id(shape_center)
+                i_out = node_outgoing_seg.get(s_id)
+                if i_out is not None:
+                    dv_type_list.append(1)
+                    dv_in_seg_list.append(-1)
+                    dv_out_seg_list.append(i_out)
+                    dv_center_var_idx_list.append(-1)
+                    dv_shape_vel_list.append((float(shape_vel[0]), float(shape_vel[1])))
+                i_in = node_incoming_seg.get(s_id)
+                if i_in is not None:
+                    dv_type_list.append(2)
+                    dv_in_seg_list.append(i_in)
+                    dv_out_seg_list.append(-1)
+                    dv_center_var_idx_list.append(-1)
+                    dv_shape_vel_list.append((float(shape_vel[0]), float(shape_vel[1])))
+
+            dv_type_arr = np.array(dv_type_list, dtype=np.int64)
+            dv_in_seg_arr = np.array(dv_in_seg_list, dtype=np.int64) if dv_in_seg_list else np.zeros(0, dtype=np.int64)
+            dv_out_seg_arr = np.array(dv_out_seg_list, dtype=np.int64) if dv_out_seg_list else np.zeros(0, dtype=np.int64)
+            dv_center_var_idx_arr = np.array(dv_center_var_idx_list, dtype=np.int64) if dv_center_var_idx_list else np.zeros(0, dtype=np.int64)
+            dv_shape_vel_arr = np.array(dv_shape_vel_list) if dv_shape_vel_list else np.zeros((0, 2))
+
+            shape_pos_tri = shape_pos_by_id.get(id(self.tri_center), np.array([self.tri_center.x(), self.tri_center.y()]))
+            shape_pos_sq = shape_pos_by_id.get(id(self.sq_center), np.array([self.sq_center.x(), self.sq_center.y()]))
+
+            const_g_vec_arr = const_g_vec if const_g_vec is not None else np.zeros(2)
+
+            # Preallocate work buffers (shared across all BFGS iterations).
+            v0_buf = np.empty((N, 2))
+            vf_buf = np.empty((N, 2))
+            Jv0_r0_buf = np.empty((N, 2, 2))
+            Jv0_rf_buf = np.empty((N, 2, 2))
+            Jv0_dt_buf = np.empty((N, 2))
+            Jvf_r0_buf = np.empty((N, 2, 2))
+            Jvf_rf_buf = np.empty((N, 2, 2))
+            Jvf_dt_buf = np.empty((N, 2))
+            z_cache_arr = np.zeros(N)
+            grad_out = np.empty(n_vars)
+            ok_out = np.empty(N, dtype=np.int64)
+
+            def fun_and_grad_numba(x_vec):
+                cost = _lnb.fun_and_grad_batch(
+                    x_vec, n_pos_vars,
+                    seg_start_kind, seg_end_kind,
+                    seg_start_var_idx, seg_end_var_idx,
+                    seg_start_fixed, seg_end_fixed,
+                    seg_mult_arr,
+                    shape_pos_tri, shape_pos_sq,
+                    center_np, MU,
+                    use_parabola, cg_mode, const_g_vec_arr, g_mag,
+                    dv_type_arr, dv_in_seg_arr, dv_out_seg_arr,
+                    dv_center_var_idx_arr, dv_shape_vel_arr,
+                    energy_mode, fuel_eps,
+                    v0_buf, vf_buf,
+                    Jv0_r0_buf, Jv0_rf_buf, Jv0_dt_buf,
+                    Jvf_r0_buf, Jvf_rf_buf, Jvf_dt_buf,
+                    z_cache_arr, grad_out, ok_out,
+                )
+                if not np.all(ok_out == 1):
+                    # Rare: Newton failed for at least one segment. Fall back to
+                    # the pure-Python evaluator (which uses brentq) for this call.
+                    return fun_and_grad(x_vec)
+                # Copy grad so scipy's finite-difference checks don't see our
+                # reused buffer mutate between iterations.
+                return float(cost), grad_out.copy()
+
+            fun_and_grad_active = fun_and_grad_numba
+
         # Initial guess: positions + shared TOF
         x0 = np.zeros(n_vars)
         for i, dot in enumerate(movable_dots):
@@ -1856,7 +1993,7 @@ class Canvas(QWidget):
             x0[2 * i + 1] = dot.y()
         x0[n_pos_vars] = TIME_OF_FLIGHT
 
-        result = scipy_minimize(fun_and_grad, x0, method="BFGS", jac=True)
+        result = scipy_minimize(fun_and_grad_active, x0, method="BFGS", jac=True)
 
         # Apply result: update positions and rendering tof
         for i, dot in enumerate(movable_dots):
