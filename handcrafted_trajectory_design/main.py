@@ -42,6 +42,8 @@ VEL_SCALE = 2.0  # display scale: velocity_end = center + vel * VEL_SCALE
 # fewer (larger) burns while energy-optimal spreads it more evenly.
 DV_SCALE_DEFAULTS = {"energy": 30.0, "fuel": 10.0, None: 10.0}
 DV_SCALE_MAX = 30.0 * VEL_SCALE  # slider upper bound (== 60.0)
+# Hard-coded "small" delta-v threshold for the prune-small-dvs button (DU/TU).
+SMALL_DV_THRESHOLD = 0.1
 # Rotating frame: 1 revolution per 24 hours. With 1 TU ~ 806.4 s, 24 h ~ 107.14 TU.
 ROT_PERIOD_TU = 24.0 * 3600.0 / 806.4
 OMEGA_ROT = 2.0 * math.pi / ROT_PERIOD_TU  # rad / TU, +z (CCW in y-up world)
@@ -2296,6 +2298,54 @@ class Canvas(QWidget):
     def optimize_fuel(self):
         self._optimize_common("fuel")
 
+    def prune_small_dvs(self, threshold=SMALL_DV_THRESHOLD):
+        """Iteratively remove interior black nodes whose |dv| is below
+        threshold. Removes one node at a time (smallest dv first) and
+        re-runs the active optimizer between removals so the trajectory
+        adjusts. Shape-attached dvs are not eligible."""
+        center = self.earth_center
+        skip = set()  # id(dot) for nodes _delete_black_node refused
+        while True:
+            candidates = []  # (mag, dot)
+            for traj in self.trajectories:
+                dots = traj["dots"]
+                segments = traj["segments"]
+                for k, dot in enumerate(dots):
+                    if dot is self.tri_center or dot is self.sq_center:
+                        continue
+                    if id(dot) in skip:
+                        continue
+                    in_v = out_v = None
+                    in_count = out_count = 0
+                    for i_start, i_end, mult in segments:
+                        seg_tof = self._seg_tof(
+                            dots[i_start], dots[i_end], mult)
+                        if i_end == k:
+                            in_count += 1
+                            _, vf = self._compute_segment_velocities(
+                                dots[i_start], dots[i_end], center, seg_tof)
+                            in_v = vf
+                        elif i_start == k:
+                            out_count += 1
+                            v0, _ = self._compute_segment_velocities(
+                                dots[i_start], dots[i_end], center, seg_tof)
+                            out_v = v0
+                    if in_count != 1 or out_count != 1:
+                        continue
+                    mag = float(np.linalg.norm(out_v - in_v))
+                    if mag < threshold:
+                        candidates.append((mag, dot))
+            if not candidates:
+                break
+            candidates.sort(key=lambda x: x[0])
+            _, dot = candidates[0]
+            if not self._delete_black_node(dot):
+                skip.add(id(dot))
+                continue
+            if self.optimize_mode is not None:
+                self._optimize_common(self.optimize_mode)
+        self.update()
+
     def set_optimize_mode(self, mode):
         """mode in {None, 'energy', 'fuel'}. When set, runs once immediately
         and then on every subsequent drag release."""
@@ -2474,7 +2524,13 @@ class MainWindow(QMainWindow):
         zoom_out_btn.setFixedSize(30, 30)
         zoom_out_btn.clicked.connect(canvas.zoom_out)
 
+        prune_btn = QPushButton("Remove small \u0394v")
+        prune_btn.setFixedSize(160, 25)
+        prune_btn.clicked.connect(lambda: canvas.prune_small_dvs())
+
         zoom_layout = QHBoxLayout()
+        zoom_layout.addSpacing(10)
+        zoom_layout.addWidget(prune_btn)
         zoom_layout.addStretch()
         zoom_layout.addWidget(zoom_out_btn)
         zoom_layout.addWidget(zoom_in_btn)
