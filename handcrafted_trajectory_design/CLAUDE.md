@@ -14,6 +14,11 @@ python main.py
 Requires: `PyQt6`, `numpy`, `scipy`, `numba` (optional — falls back to pure
 Python if missing).
 
+## Conventions
+
+- Prefer short commit messages — single-line subject, no body unless the
+  change really needs it.
+
 ## Units & constants (canonical)
 
 - 1 DU = 6371 km, 1 TU ≈ 806.4 s, `MU = 1` DU³/TU².
@@ -75,6 +80,39 @@ Toggled via top-bar buttons; setters re-run the active optimizer and repaint.
   equation. Used by the BFGS optimizer for the conic model.
 - Straight-line fallback is used for degenerate geometries; both the values
   and the returned Jacobians are consistent for that fallback.
+
+## Sundman-style time scaling
+
+The shared time decision variable is `tau` (stored in `self.render_tof`).
+Per-segment physical time is computed as
+
+    tof_seg = tau * s^alpha * mult,    alpha = 1.5
+    s = (|r0 - earth_center| + |rf - earth_center|) / 2
+
+This matches Kepler's period scaling (T ~ a^1.5) so the same `tau` produces
+appropriately longer physical TOFs at larger orbital radii. It also avoids
+the degenerate "tof → 0 collapses all dvs" minimum that the unscaled
+parameterization sometimes settles into.
+
+- Helpers: `Canvas._seg_pos_mag_star(p0, p1)` and `Canvas._seg_tof(p0, p1, mult)`.
+- Used everywhere a per-segment physical TOF is needed: rendering arcs,
+  rendering dv arrows, `_traj_node_times`, click-on-arc tests, segment
+  insertion. Centralized so per-segment time is computed exactly the same
+  way in every code path.
+- `_solve_segment` continues to take physical `tof_seg`; the kernels
+  `fun_and_grad_batch` / `lm_eval_batch` (and the Python `fun_and_grad`
+  fallback) compute `s, tof_seg = tau * s^1.5 * mult` per segment, call the
+  solver, then apply `_apply_sundman_fixup` to convert the raw
+  per-tof_seg Jacobians into per-tau Jacobians by chain rule:
+  - `dv/dT_new = dv/d_tof_seg * s^1.5 * mult` (rescale the dt-Jacobian).
+  - `dv/dr0 += 0.75 * tau * sqrt(s) * (dv/d_tof_seg * mult) * r0_hat^T`
+    where `r0_hat = (r0 - center)/|r0 - center|` (outer product).
+  - Same for `r_f`.
+- Fixup must be applied BEFORE rescaling the dt-Jacobian, since the
+  position-extras use the raw per-tof_seg derivative (i.e., the value
+  stored in `Jv0_dt` before scaling).
+- Verified by finite difference: gradient and LM Jacobian agree with
+  numerical derivatives to ~1e-10 in both energy and fuel modes.
 
 ## Optimizer (`_optimize_common`)
 

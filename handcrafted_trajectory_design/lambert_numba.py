@@ -634,6 +634,59 @@ def _fill_straight_line(
     return 1, 0.0
 
 
+@njit(cache=True, fastmath=False, inline="always")
+def _apply_sundman_fixup(
+    r0, rf, center, tau,
+    r0_mag, rf_mag, sqrt_s, s_pow,
+    Jv0_r0_out, Jv0_rf_out, Jv0_dt_out,
+    Jvf_r0_out, Jvf_rf_out, Jvf_dt_out,
+):
+    """Apply chain-rule fixup converting per-tof_seg Jacobians (as written by
+    `_solve_segment`) into per-tau Jacobians under the time scaling
+        tof_seg = tau * s^1.5 * mult,   s = (|r0-c| + |rf-c|) / 2.
+
+    Position-Jacobians gain an outer-product term from tof_seg's dependence
+    on r0/rf via s. dt-Jacobians are rescaled from per-T_old to per-tau.
+
+    NOTE: Position-extras must be applied BEFORE rescaling dt-Jacobians,
+    since they use the original (per-T_old) values.
+
+    Sign convention: stored Jv0_dt_out = (dv0/d_tof_seg) * mult = dv0/dT_old.
+    Position chain-rule contribution:
+        dv/dr0[a, b] += 0.75 * tau * sqrt_s * Jv0_dt_out[a] * r0_hat[b]
+    where r0_hat = (r0 - center) / |r0 - center|.
+    """
+    fac = 0.75 * tau * sqrt_s
+    if r0_mag > 1e-10:
+        inv_r0 = 1.0 / r0_mag
+        r0_hat_x = (r0[0] - center[0]) * inv_r0
+        r0_hat_y = (r0[1] - center[1]) * inv_r0
+        Jv0_r0_out[0, 0] += fac * Jv0_dt_out[0] * r0_hat_x
+        Jv0_r0_out[0, 1] += fac * Jv0_dt_out[0] * r0_hat_y
+        Jv0_r0_out[1, 0] += fac * Jv0_dt_out[1] * r0_hat_x
+        Jv0_r0_out[1, 1] += fac * Jv0_dt_out[1] * r0_hat_y
+        Jvf_r0_out[0, 0] += fac * Jvf_dt_out[0] * r0_hat_x
+        Jvf_r0_out[0, 1] += fac * Jvf_dt_out[0] * r0_hat_y
+        Jvf_r0_out[1, 0] += fac * Jvf_dt_out[1] * r0_hat_x
+        Jvf_r0_out[1, 1] += fac * Jvf_dt_out[1] * r0_hat_y
+    if rf_mag > 1e-10:
+        inv_rf = 1.0 / rf_mag
+        rf_hat_x = (rf[0] - center[0]) * inv_rf
+        rf_hat_y = (rf[1] - center[1]) * inv_rf
+        Jv0_rf_out[0, 0] += fac * Jv0_dt_out[0] * rf_hat_x
+        Jv0_rf_out[0, 1] += fac * Jv0_dt_out[0] * rf_hat_y
+        Jv0_rf_out[1, 0] += fac * Jv0_dt_out[1] * rf_hat_x
+        Jv0_rf_out[1, 1] += fac * Jv0_dt_out[1] * rf_hat_y
+        Jvf_rf_out[0, 0] += fac * Jvf_dt_out[0] * rf_hat_x
+        Jvf_rf_out[0, 1] += fac * Jvf_dt_out[0] * rf_hat_y
+        Jvf_rf_out[1, 0] += fac * Jvf_dt_out[1] * rf_hat_x
+        Jvf_rf_out[1, 1] += fac * Jvf_dt_out[1] * rf_hat_y
+    Jv0_dt_out[0] *= s_pow
+    Jv0_dt_out[1] *= s_pow
+    Jvf_dt_out[0] *= s_pow
+    Jvf_dt_out[1] *= s_pow
+
+
 @njit(cache=True, fastmath=False)
 def fun_and_grad_batch(
     x_vec, n_pos_vars,
@@ -672,7 +725,6 @@ def fun_and_grad_batch(
     # --- Stage 1: per-segment velocities + Jacobians.
     for i in range(N):
         mult = seg_mult[i]
-        tof_seg = tof * mult
 
         # Resolve r0 and rf.
         ks = seg_start_kind[i]
@@ -712,6 +764,21 @@ def fun_and_grad_batch(
         rf[0] = rfx
         rf[1] = rfy
 
+        # Sundman-style time scaling: tof_seg = tau * s^1.5 * mult,
+        # s = (|r0-c| + |rf-c|) / 2 (distance from earth_center).
+        dx0 = r0x - center_np[0]
+        dy0 = r0y - center_np[1]
+        dxf = rfx - center_np[0]
+        dyf = rfy - center_np[1]
+        r0_mag = math.sqrt(dx0 * dx0 + dy0 * dy0)
+        rf_mag = math.sqrt(dxf * dxf + dyf * dyf)
+        s = 0.5 * (r0_mag + rf_mag)
+        if s < 1e-12:
+            s = 1e-12
+        sqrt_s = math.sqrt(s)
+        s_pow = s * sqrt_s
+        tof_seg = tof * s_pow * mult
+
         ok, z_new = _solve_segment(
             r0, rf, tof_seg, mult, z_cache[i],
             center_np, mu, use_parabola, cg_mode, const_g_vec, g_mag,
@@ -722,6 +789,13 @@ def fun_and_grad_batch(
         ok_out[i] = ok
         if ok == 1 and not use_parabola:
             z_cache[i] = z_new
+        if ok == 1:
+            _apply_sundman_fixup(
+                r0, rf, center_np, tof,
+                r0_mag, rf_mag, sqrt_s, s_pow,
+                Jv0_r0_buf[i], Jv0_rf_buf[i], Jv0_dt_buf[i],
+                Jvf_r0_buf[i], Jvf_rf_buf[i], Jvf_dt_buf[i],
+            )
 
     # If any segment failed, caller will fall back. Return early with cost=0
     # to avoid propagating garbage; grad will be recomputed in Python.
@@ -882,7 +956,6 @@ def lm_eval_batch(
     # --- Stage 1: per-segment velocity + Jacobian solve (same as fun_and_grad_batch).
     for i in range(N):
         mult = seg_mult[i]
-        tof_seg = tof * mult
 
         ks = seg_start_kind[i]
         if ks == 0:
@@ -921,6 +994,20 @@ def lm_eval_batch(
         rf[0] = rfx
         rf[1] = rfy
 
+        # Sundman-style time scaling.
+        dx0 = r0x - center_np[0]
+        dy0 = r0y - center_np[1]
+        dxf = rfx - center_np[0]
+        dyf = rfy - center_np[1]
+        r0_mag = math.sqrt(dx0 * dx0 + dy0 * dy0)
+        rf_mag = math.sqrt(dxf * dxf + dyf * dyf)
+        s = 0.5 * (r0_mag + rf_mag)
+        if s < 1e-12:
+            s = 1e-12
+        sqrt_s = math.sqrt(s)
+        s_pow = s * sqrt_s
+        tof_seg = tof * s_pow * mult
+
         ok, z_new = _solve_segment(
             r0, rf, tof_seg, mult, z_cache[i],
             center_np, mu, use_parabola, cg_mode, const_g_vec, g_mag,
@@ -931,6 +1018,13 @@ def lm_eval_batch(
         ok_out[i] = ok
         if ok == 1 and not use_parabola:
             z_cache[i] = z_new
+        if ok == 1:
+            _apply_sundman_fixup(
+                r0, rf, center_np, tof,
+                r0_mag, rf_mag, sqrt_s, s_pow,
+                Jv0_r0_buf[i], Jv0_rf_buf[i], Jv0_dt_buf[i],
+                Jvf_r0_buf[i], Jvf_rf_buf[i], Jvf_dt_buf[i],
+            )
 
     # Zero-fill outputs.
     for i in range(2 * M):

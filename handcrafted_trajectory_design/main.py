@@ -734,6 +734,24 @@ class Canvas(QWidget):
             return compute_parabolic_arc(p0, p1, center, time_of_flight, num_points)
         return compute_dynamic_arc(p0, p1, center, time_of_flight, num_points)
 
+    # ---------- Sundman-style time scaling ----------
+    # The shared optimizer decision variable is `tau` (stored in
+    # `self.render_tof`), not physical time. Per-segment physical TOF is
+    #     tof_seg = tau * s^alpha * mult
+    # with alpha = 1.5 (Sundman/Kepler exponent) and
+    #     s = (|r0 - earth_center| + |rf - earth_center|) / 2.
+    # This matches Kepler's period scaling (T ~ a^1.5) and gives the optimizer
+    # a more uniform parameterization across orbits at different scales.
+    def _seg_pos_mag_star(self, p0, p1):
+        cx = self.earth_center.x()
+        cy = self.earth_center.y()
+        return 0.5 * (math.hypot(p0.x() - cx, p0.y() - cy)
+                      + math.hypot(p1.x() - cx, p1.y() - cy))
+
+    def _seg_tof(self, p0, p1, mult):
+        s = self._seg_pos_mag_star(p0, p1)
+        return self.render_tof * s * math.sqrt(s) * mult  # tau * s^1.5 * mult
+
     def _compute_segment_velocities(self, p0, p1, center, time_of_flight):
         if self.env_mode == "constant_gravity":
             return compute_parabolic_arc_velocities(
@@ -781,12 +799,13 @@ class Canvas(QWidget):
 
     def _traj_node_times(self, traj):
         """Return {dot_index: cumulative_tof_from_first_node} by walking segments
-        in their list order, accumulating render_tof * mult."""
+        in their list order, accumulating each segment's Sundman-scaled time."""
         node_t = {}
+        dots = traj["dots"]
         for i_start, i_end, mult in traj["segments"]:
             if i_start not in node_t:
                 node_t[i_start] = 0.0
-            node_t[i_end] = node_t[i_start] + self.render_tof * mult
+            node_t[i_end] = node_t[i_start] + self._seg_tof(dots[i_start], dots[i_end], mult)
         return node_t
 
     def _square_time(self):
@@ -898,7 +917,7 @@ class Canvas(QWidget):
             for s_idx, (i_start, i_end, mult) in enumerate(traj["segments"]):
                 arc_pts = self._compute_segment_arc(
                     dots[i_start], dots[i_end], center,
-                    self.render_tof * mult, dense + 1,
+                    self._seg_tof(dots[i_start], dots[i_end], mult), dense + 1,
                 )
                 # Point-to-line-segment distance over consecutive samples.
                 d_min = float("inf")
@@ -950,7 +969,7 @@ class Canvas(QWidget):
                     continue
                 arc_pts = self._compute_segment_arc(
                     dots[i_start], dots[i_end], center,
-                    self.render_tof * mult, dense + 1,
+                    self._seg_tof(dots[i_start], dots[i_end], mult), dense + 1,
                 )
                 # Find sample closest in space; t in [0, N].
                 best_local = None
@@ -974,7 +993,7 @@ class Canvas(QWidget):
         # Place the new dot at the arc point at time = k * tof along segment.
         arc_pts = self._compute_segment_arc(
             traj["dots"][i_start], traj["dots"][i_end], center,
-            self.render_tof * mult, n_int + 1,
+            self._seg_tof(traj["dots"][i_start], traj["dots"][i_end], mult), n_int + 1,
         )
         new_pt = arc_pts[k]
         new_dot = QPointF(new_pt.x(), new_pt.y())
@@ -1466,7 +1485,7 @@ class Canvas(QWidget):
                 pen = QPen(QColor("black"), 2)
                 pen.setCosmetic(True)
                 painter.setPen(pen)
-                seg_tof = self.render_tof * mult
+                seg_tof = self._seg_tof(dots[i_start], dots[i_end], mult)
                 arc_points = self._compute_segment_arc(
                     dots[i_start], dots[i_end], center,
                     seg_tof, ARC_NUM_POINTS,
@@ -1502,11 +1521,11 @@ class Canvas(QWidget):
                 for i_start, i_end, mult in segments:
                     if i_end == k:
                         _, vf = self._compute_segment_velocities(
-                            dots[i_start], dots[i_end], center, self.render_tof * mult)
+                            dots[i_start], dots[i_end], center, self._seg_tof(dots[i_start], dots[i_end], mult))
                         incoming_vel = vf
                     elif i_start == k:
                         v0, _ = self._compute_segment_velocities(
-                            dots[i_start], dots[i_end], center, self.render_tof * mult)
+                            dots[i_start], dots[i_end], center, self._seg_tof(dots[i_start], dots[i_end], mult))
                         outgoing_vel = v0
                 if incoming_vel is not None and outgoing_vel is not None:
                     dv = outgoing_vel - incoming_vel
@@ -1535,7 +1554,7 @@ class Canvas(QWidget):
                 dots = traj["dots"]
                 node_t = self._traj_node_times(traj)
                 for i_start, i_end, mult in traj["segments"]:
-                    seg_tof = self.render_tof * mult
+                    seg_tof = self._seg_tof(dots[i_start], dots[i_end], mult)
                     if dots[i_start] is shape_center:
                         v0, _ = self._compute_segment_velocities(
                             dots[i_start], dots[i_end], center, seg_tof)
@@ -1813,15 +1832,42 @@ class Canvas(QWidget):
             for i, (dot_s, dot_e, mult) in enumerate(all_segments):
                 r0 = get_pos(dot_s, x_vec)
                 rf = get_pos(dot_e, x_vec)
-                tof_seg = tof * mult
+                # Sundman-style time scaling: tof_seg = tau * s^1.5 * mult.
+                d0 = r0 - center_np
+                df = rf - center_np
+                r0_mag = math.sqrt(d0[0] * d0[0] + d0[1] * d0[1])
+                rf_mag = math.sqrt(df[0] * df[0] + df[1] * df[1])
+                s = 0.5 * (r0_mag + rf_mag)
+                if s < 1e-12:
+                    s = 1e-12
+                sqrt_s = math.sqrt(s)
+                s_pow = s * sqrt_s
+                tof_seg = tof * s_pow * mult
                 if use_parabola:
                     out = seg_parabola(r0, rf, tof_seg, mult)
-                    seg_data_local[i] = (dot_s, dot_e) + out
                 else:
                     out = seg_lambert(r0, rf, tof_seg, mult, z_cache[i])
-                    # Last element is z; store for next iteration.
                     z_cache[i] = out[-1]
-                    seg_data_local[i] = (dot_s, dot_e) + out[:-1]
+                    out = out[:-1]
+                # out = (v0, vf, Jv0_r0, Jv0_rf, Jv0_dt, Jvf_r0, Jvf_rf, Jvf_dt)
+                v0_, vf_, Jv0_r0, Jv0_rf, Jv0_dt, Jvf_r0, Jvf_rf, Jvf_dt = out
+                # Apply Sundman chain-rule fixup (mirrors _apply_sundman_fixup in numba).
+                fac = 0.75 * tof * sqrt_s
+                if r0_mag > 1e-10:
+                    r0_hat = d0 / r0_mag
+                    Jv0_r0 = Jv0_r0 + fac * np.outer(Jv0_dt, r0_hat)
+                    Jvf_r0 = Jvf_r0 + fac * np.outer(Jvf_dt, r0_hat)
+                if rf_mag > 1e-10:
+                    rf_hat = df / rf_mag
+                    Jv0_rf = Jv0_rf + fac * np.outer(Jv0_dt, rf_hat)
+                    Jvf_rf = Jvf_rf + fac * np.outer(Jvf_dt, rf_hat)
+                Jv0_dt = Jv0_dt * s_pow
+                Jvf_dt = Jvf_dt * s_pow
+                seg_data_local[i] = (
+                    dot_s, dot_e, v0_, vf_,
+                    Jv0_r0, Jv0_rf, Jv0_dt,
+                    Jvf_r0, Jvf_rf, Jvf_dt,
+                )
 
             # Accumulate cost and gradient contributions.
             def accumulate(dv, contribs):
