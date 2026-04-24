@@ -643,7 +643,7 @@ class Canvas(QWidget):
         self.earth_radius = 1.0  # DU
         self.tri_center = QPointF(1.5, 0)
         self.tri_size = 0.4
-        self.sq_center = QPointF(-1.5, 0)
+        self.sq_center = QPointF(-4.0, 0)
         self.sq_size = 0.36
 
         # Initialize circular velocity for each shape (prograde = CCW with y-up)
@@ -2193,7 +2193,7 @@ class Canvas(QWidget):
     def _lm_solve(
         self, x0, lm_eval, n_pos_vars, energy_mode, fuel_eps,
         progress_callback=None, movable_dots=None,
-        max_iter=30, tol_grad=1e-7, tol_step=1e-9,
+        max_iter=10000, tol_grad=1e-7, tol_step=1e-9,
         lam_init=1e-3, lam_up=10.0, lam_down=0.4,
     ):
         """Levenberg-Marquardt / IRLS solver.
