@@ -2,6 +2,7 @@ import sys
 
 import math
 import time
+import types
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
@@ -2019,6 +2020,37 @@ class Canvas(QWidget):
 
             fun_and_grad_active = fun_and_grad_numba
 
+            # ---- Levenberg-Marquardt setup ---------------------------------
+            # Count residual rows (2 per dv-node) for buffer sizing.
+            M_dv = int(dv_type_arr.shape[0])
+            r_buf = np.empty(2 * M_dv)
+            J_buf = np.empty((2 * M_dv, n_vars))
+
+            def lm_eval(x_vec):
+                """Returns (cost, residual r, Jacobian J). cost is the actual
+                BFGS cost (energy: sum |dv|^2; fuel: sum sqrt(|dv|^2 + eps^2)).
+                If any segment fails, returns (inf, None, None)."""
+                cost = _lnb.lm_eval_batch(
+                    x_vec, n_pos_vars,
+                    seg_start_kind, seg_end_kind,
+                    seg_start_var_idx, seg_end_var_idx,
+                    seg_start_fixed, seg_end_fixed,
+                    seg_mult_arr,
+                    shape_pos_tri, shape_pos_sq,
+                    center_np, MU,
+                    use_parabola, cg_mode, const_g_vec_arr, g_mag,
+                    dv_type_arr, dv_in_seg_arr, dv_out_seg_arr,
+                    dv_center_var_idx_arr, dv_shape_vel_arr,
+                    energy_mode, fuel_eps,
+                    v0_buf, vf_buf,
+                    Jv0_r0_buf, Jv0_rf_buf, Jv0_dt_buf,
+                    Jvf_r0_buf, Jvf_rf_buf, Jvf_dt_buf,
+                    z_cache_arr, ok_out, r_buf, J_buf,
+                )
+                if not np.all(ok_out == 1):
+                    return float("inf"), None, None
+                return float(cost), r_buf.copy(), J_buf.copy()
+
         # Initial guess: positions + shared TOF
         x0 = np.zeros(n_vars)
         for i, dot in enumerate(movable_dots):
@@ -2026,18 +2058,39 @@ class Canvas(QWidget):
             x0[2 * i + 1] = dot.y()
         x0[n_pos_vars] = TIME_OF_FLIGHT
 
-        if progress_callback is not None:
-            def scipy_cb(xk):
-                progress_callback(xk, n_pos_vars, movable_dots)
-            result = scipy_minimize(
-                fun_and_grad_active, x0, method="BFGS", jac=True,
-                options={"gtol": 1e-6}, callback=scipy_cb,
-            )
-        else:
-            result = scipy_minimize(
-                fun_and_grad_active, x0, method="BFGS", jac=True,
-                options={"gtol": 1e-6},
-            )
+        # ---- Solver: prefer LM/IRLS when numba is available --------------
+        # LM/IRLS exploits the sum-of-squared-residuals structure: dv per
+        # node is a small residual, the Jacobian is structured, and
+        # H_GN = J^T W J converges super-linearly near the optimum. For
+        # smoothed-L1 (fuel) we use IRLS weights w_i = 1/sqrt(|dv_i|^2+eps^2).
+        # Falls back to BFGS on degeneracy.
+        used_lm = False
+        if _NUMBA_AVAILABLE and M_dv > 0:
+            try:
+                x_lm, lm_ok = self._lm_solve(
+                    x0, lm_eval, n_pos_vars, energy_mode, fuel_eps,
+                    progress_callback=progress_callback,
+                    movable_dots=movable_dots,
+                )
+                if lm_ok:
+                    used_lm = True
+                    result = types.SimpleNamespace(x=x_lm)
+            except Exception:
+                used_lm = False
+
+        if not used_lm:
+            if progress_callback is not None:
+                def scipy_cb(xk):
+                    progress_callback(xk, n_pos_vars, movable_dots)
+                result = scipy_minimize(
+                    fun_and_grad_active, x0, method="BFGS", jac=True,
+                    options={"gtol": 1e-6}, callback=scipy_cb,
+                )
+            else:
+                result = scipy_minimize(
+                    fun_and_grad_active, x0, method="BFGS", jac=True,
+                    options={"gtol": 1e-6},
+                )
 
         if not apply:
             # Return everything needed to apply later on the main thread.
@@ -2067,6 +2120,106 @@ class Canvas(QWidget):
         if self.sq_orbit_mode:
             self._compute_orbit_for_shape("square")
         self.update()
+
+    def _lm_solve(
+        self, x0, lm_eval, n_pos_vars, energy_mode, fuel_eps,
+        progress_callback=None, movable_dots=None,
+        max_iter=30, tol_grad=1e-7, tol_step=1e-9,
+        lam_init=1e-3, lam_up=10.0, lam_down=0.4,
+    ):
+        """Levenberg-Marquardt / IRLS solver.
+
+        Decision variables x: positions + shared TOF.
+        Residual r = stacked dv vectors (per dv-node, 2 components each).
+        Cost f(x) = sum_i phi(|dv_i|) where phi(u)=u^2 (energy) or
+        phi(u)=sqrt(u^2 + eps^2) (fuel, smoothed-L1).
+
+        Reduced normal equations:
+          (J^T W J + lam D) p = -J^T W r
+        where W = diag(w_k) with w_k = 1 (energy) or w_k = 1/sqrt(|dv_k|^2+eps^2)
+        (IRLS); D = diag(diag(J^T W J)) (Marquardt scaling).
+
+        Returns (x_new, ok). ok=False if no descent could be made; caller
+        should fall back to BFGS.
+        """
+        x = x0.copy()
+        cost, r, J = lm_eval(x)
+        if r is None:
+            return x, False
+
+        n_vars = x.size
+        M = r.size // 2
+
+        def weights_from_r(r_vec):
+            """IRLS weights per residual row. For energy: phi(u)=u^2 → derivative
+            and Hessian both linear in r → effective weight=1. For fuel:
+            phi(u)=sqrt(u^2+eps^2) → Gauss-Newton weight is 1/sqrt(...) per node."""
+            if energy_mode:
+                return np.ones(2 * M)
+            w = np.empty(2 * M)
+            for k in range(M):
+                dvx = r_vec[2 * k]
+                dvy = r_vec[2 * k + 1]
+                wk = 1.0 / math.sqrt(dvx * dvx + dvy * dvy + fuel_eps * fuel_eps)
+                w[2 * k] = wk
+                w[2 * k + 1] = wk
+            return w
+
+        lam = lam_init
+        for _it in range(max_iter):
+            w = weights_from_r(r)
+            # Build Gauss-Newton system: H = J^T W J, g = J^T W r
+            JW = J * w[:, None]
+            H = JW.T @ J
+            g = JW.T @ r  # this is the gradient of f for energy (factor 2 absorbed only matters for scale; fine for LM)
+
+            # Convergence check on gradient.
+            if np.linalg.norm(g, ord=np.inf) < tol_grad:
+                break
+
+            diag_H = np.maximum(np.diag(H), 1e-12)
+
+            # Try LM step; on failure, increase lam and retry.
+            accepted = False
+            for _inner in range(10):
+                A = H + lam * np.diag(diag_H)
+                try:
+                    L = np.linalg.cholesky(A)
+                    p = np.linalg.solve(L.T, np.linalg.solve(L, -g))
+                except np.linalg.LinAlgError:
+                    lam *= lam_up
+                    continue
+
+                x_new = x + p
+                cost_new, r_new, J_new = lm_eval(x_new)
+                if r_new is None or not np.isfinite(cost_new):
+                    lam *= lam_up
+                    continue
+
+                if cost_new < cost:
+                    # Accept.
+                    step_norm = float(np.linalg.norm(p))
+                    x = x_new
+                    cost = cost_new
+                    r = r_new
+                    J = J_new
+                    lam = max(lam * lam_down, 1e-12)
+                    accepted = True
+
+                    if progress_callback is not None and movable_dots is not None:
+                        progress_callback(x, n_pos_vars, movable_dots)
+
+                    if step_norm < tol_step * (1.0 + np.linalg.norm(x)):
+                        return x, True
+                    break
+                else:
+                    lam *= lam_up
+
+            if not accepted:
+                # No step found in 10 inner tries; bail to BFGS.
+                return x, False
+
+        return x, True
 
     def optimize_energy(self):
         self._optimize_common("energy")

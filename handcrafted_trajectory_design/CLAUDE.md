@@ -96,7 +96,27 @@ Toggled via top-bar buttons; setters re-run the active optimizer and repaint.
   same accumulation code (`seg_parabola`, `seg_lambert`).
 - Chain rule applies `* mult` when converting per-segment `tof_seg`
   derivatives to the shared `tof` variable.
-- Solver: `scipy.optimize.minimize(method="BFGS", jac=True)`. Unconstrained.
+- Solver (preferred, when numba is available): **Levenberg-Marquardt /
+  IRLS** in `Canvas._lm_solve`. Exploits the sum-of-squared-residuals
+  structure: residual `r` = stacked dv vectors (2 per dv-node), Jacobian
+  `J` = ∂r/∂x assembled inside the `lm_eval_batch` njit kernel.
+  - Normal equations: `(J^T W J + λ diag(J^T W J)) p = -J^T W r`, solved
+    via Cholesky.
+  - Energy mode: W = I (Gauss-Newton).
+  - Fuel mode: IRLS with weights `w_k = 1/sqrt(|dv_k|^2 + ε^2)` per
+    dv-node, automatically rederived from the smoothed-L1 cost.
+  - Adaptive damping: `λ ← λ · 0.4` on accept, `λ ← λ · 10` on reject.
+    Inner loop tries up to 10 damping growths per iteration.
+  - 5-15 outer iterations typical; bails to BFGS if no descent found
+    or if any Lambert segment fails (Newton + brentq fallback then
+    runs in the BFGS path).
+  - Yields 3-15× speedup over batched-numba BFGS, particularly at
+    larger N and in fuel mode. Often finds better local minima at
+    N≥100 because LM damping handles non-convexity better than
+    BFGS's quasi-Newton update from a poor initial Hessian.
+- Solver (fallback): `scipy.optimize.minimize(method="BFGS", jac=True,
+  options={"gtol": 1e-6})`. Unconstrained. Used when numba is missing,
+  M_dv=0, or LM bails (degenerate geometry).
 - Warm-start cache `z_cache[i]` persists the converged Lambert universal
   variable `z` per segment across BFGS iterations — subsequent Newton
   solves typically converge in 1–2 iterations.

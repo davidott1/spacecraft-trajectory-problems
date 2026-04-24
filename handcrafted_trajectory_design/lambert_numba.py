@@ -843,6 +843,197 @@ def fun_and_grad_batch(
     return cost
 
 
+@njit(cache=True, fastmath=False)
+def lm_eval_batch(
+    x_vec, n_pos_vars,
+    # segment metadata (length N)
+    seg_start_kind, seg_end_kind,
+    seg_start_var_idx, seg_end_var_idx,
+    seg_start_fixed, seg_end_fixed,
+    seg_mult,
+    # shape + env
+    shape_pos_tri, shape_pos_sq,
+    center_np, mu,
+    use_parabola, cg_mode, const_g_vec, g_mag,
+    # dv-node metadata (length M)
+    dv_type, dv_in_seg, dv_out_seg,
+    dv_center_var_idx, dv_shape_vel,
+    # cost mode
+    energy_mode, fuel_eps,
+    # work buffers (length N; preallocated)
+    v0_buf, vf_buf,
+    Jv0_r0_buf, Jv0_rf_buf, Jv0_dt_buf,
+    Jvf_r0_buf, Jvf_rf_buf, Jvf_dt_buf,
+    z_cache,
+    ok_out,
+    # LM outputs (preallocated)
+    r_out,   # (2M,) — residual dv vector stacked per-node
+    J_out,   # (2M, n_vars) — Jacobian of r wrt x; zero-filled inside
+):
+    """Levenberg-Marquardt / Gauss-Newton evaluator. Returns cost (scalar),
+    writes residual vector r_out and Jacobian J_out. Does NOT apply fuel
+    weights — caller does that. Writes ok_out per segment; on any failure
+    caller should reject the step."""
+    tof = x_vec[n_pos_vars]
+    N = seg_mult.shape[0]
+    M = dv_type.shape[0]
+    n_vars = n_pos_vars + 1
+
+    # --- Stage 1: per-segment velocity + Jacobian solve (same as fun_and_grad_batch).
+    for i in range(N):
+        mult = seg_mult[i]
+        tof_seg = tof * mult
+
+        ks = seg_start_kind[i]
+        if ks == 0:
+            idx = seg_start_var_idx[i]
+            r0x = x_vec[2 * idx]
+            r0y = x_vec[2 * idx + 1]
+        elif ks == 1:
+            r0x = shape_pos_tri[0]
+            r0y = shape_pos_tri[1]
+        elif ks == 2:
+            r0x = shape_pos_sq[0]
+            r0y = shape_pos_sq[1]
+        else:
+            r0x = seg_start_fixed[i, 0]
+            r0y = seg_start_fixed[i, 1]
+
+        ke = seg_end_kind[i]
+        if ke == 0:
+            idx = seg_end_var_idx[i]
+            rfx = x_vec[2 * idx]
+            rfy = x_vec[2 * idx + 1]
+        elif ke == 1:
+            rfx = shape_pos_tri[0]
+            rfy = shape_pos_tri[1]
+        elif ke == 2:
+            rfx = shape_pos_sq[0]
+            rfy = shape_pos_sq[1]
+        else:
+            rfx = seg_end_fixed[i, 0]
+            rfy = seg_end_fixed[i, 1]
+
+        r0 = np.empty(2)
+        r0[0] = r0x
+        r0[1] = r0y
+        rf = np.empty(2)
+        rf[0] = rfx
+        rf[1] = rfy
+
+        ok, z_new = _solve_segment(
+            r0, rf, tof_seg, mult, z_cache[i],
+            center_np, mu, use_parabola, cg_mode, const_g_vec, g_mag,
+            v0_buf[i], vf_buf[i],
+            Jv0_r0_buf[i], Jv0_rf_buf[i], Jv0_dt_buf[i],
+            Jvf_r0_buf[i], Jvf_rf_buf[i], Jvf_dt_buf[i],
+        )
+        ok_out[i] = ok
+        if ok == 1 and not use_parabola:
+            z_cache[i] = z_new
+
+    # Zero-fill outputs.
+    for i in range(2 * M):
+        r_out[i] = 0.0
+        for j in range(n_vars):
+            J_out[i, j] = 0.0
+
+    # If any segment failed, bail with cost=huge; caller rejects the step.
+    any_fail = 0
+    for i in range(N):
+        if ok_out[i] == 0:
+            any_fail = 1
+            break
+    if any_fail == 1:
+        return 1e30
+
+    # --- Stage 2: per-dv-node residual + Jacobian rows.
+    cost = 0.0
+    for k in range(M):
+        t = dv_type[k]
+        if t == 0:
+            i_in = dv_in_seg[k]
+            i_out = dv_out_seg[k]
+            dvx = v0_buf[i_out, 0] - vf_buf[i_in, 0]
+            dvy = v0_buf[i_out, 1] - vf_buf[i_in, 1]
+        elif t == 1:
+            i_out = dv_out_seg[k]
+            i_in = -1
+            dvx = v0_buf[i_out, 0] - dv_shape_vel[k, 0]
+            dvy = v0_buf[i_out, 1] - dv_shape_vel[k, 1]
+        else:
+            i_in = dv_in_seg[k]
+            i_out = -1
+            dvx = dv_shape_vel[k, 0] - vf_buf[i_in, 0]
+            dvy = dv_shape_vel[k, 1] - vf_buf[i_in, 1]
+
+        rx = 2 * k
+        ry = 2 * k + 1
+        r_out[rx] = dvx
+        r_out[ry] = dvy
+
+        d2 = dvx * dvx + dvy * dvy
+        if energy_mode:
+            cost += d2
+        else:
+            cost += math.sqrt(d2 + fuel_eps * fuel_eps)
+
+        # Write J rows. Use += so that if a node's upstream_start happens to
+        # coincide with its downstream_end (tiny loops), contributions add.
+        if t == 0:
+            # dv = v0[i_out] - vf[i_in]
+            # upstream_start: J = -Jvf_r0[i_in]
+            us_kind = seg_start_kind[i_in]
+            if us_kind == 0:
+                us_idx = seg_start_var_idx[i_in]
+                J_out[rx, 2 * us_idx]     += -Jvf_r0_buf[i_in, 0, 0]
+                J_out[rx, 2 * us_idx + 1] += -Jvf_r0_buf[i_in, 0, 1]
+                J_out[ry, 2 * us_idx]     += -Jvf_r0_buf[i_in, 1, 0]
+                J_out[ry, 2 * us_idx + 1] += -Jvf_r0_buf[i_in, 1, 1]
+            # center: J = Jv0_r0[i_out] - Jvf_rf[i_in]
+            c_idx = dv_center_var_idx[k]
+            if c_idx >= 0:
+                J_out[rx, 2 * c_idx]     += Jv0_r0_buf[i_out, 0, 0] - Jvf_rf_buf[i_in, 0, 0]
+                J_out[rx, 2 * c_idx + 1] += Jv0_r0_buf[i_out, 0, 1] - Jvf_rf_buf[i_in, 0, 1]
+                J_out[ry, 2 * c_idx]     += Jv0_r0_buf[i_out, 1, 0] - Jvf_rf_buf[i_in, 1, 0]
+                J_out[ry, 2 * c_idx + 1] += Jv0_r0_buf[i_out, 1, 1] - Jvf_rf_buf[i_in, 1, 1]
+            # downstream_end: J = Jv0_rf[i_out]
+            ds_kind = seg_end_kind[i_out]
+            if ds_kind == 0:
+                ds_idx = seg_end_var_idx[i_out]
+                J_out[rx, 2 * ds_idx]     += Jv0_rf_buf[i_out, 0, 0]
+                J_out[rx, 2 * ds_idx + 1] += Jv0_rf_buf[i_out, 0, 1]
+                J_out[ry, 2 * ds_idx]     += Jv0_rf_buf[i_out, 1, 0]
+                J_out[ry, 2 * ds_idx + 1] += Jv0_rf_buf[i_out, 1, 1]
+            # tof
+            J_out[rx, n_pos_vars] += Jv0_dt_buf[i_out, 0] - Jvf_dt_buf[i_in, 0]
+            J_out[ry, n_pos_vars] += Jv0_dt_buf[i_out, 1] - Jvf_dt_buf[i_in, 1]
+        elif t == 1:
+            # dv = v0[i_out] - shape_vel; shape r0 is fixed, so only downstream_end + tof.
+            ds_kind = seg_end_kind[i_out]
+            if ds_kind == 0:
+                ds_idx = seg_end_var_idx[i_out]
+                J_out[rx, 2 * ds_idx]     += Jv0_rf_buf[i_out, 0, 0]
+                J_out[rx, 2 * ds_idx + 1] += Jv0_rf_buf[i_out, 0, 1]
+                J_out[ry, 2 * ds_idx]     += Jv0_rf_buf[i_out, 1, 0]
+                J_out[ry, 2 * ds_idx + 1] += Jv0_rf_buf[i_out, 1, 1]
+            J_out[rx, n_pos_vars] += Jv0_dt_buf[i_out, 0]
+            J_out[ry, n_pos_vars] += Jv0_dt_buf[i_out, 1]
+        else:
+            # dv = shape_vel - vf[i_in]; shape rf is fixed, so only upstream_start + tof (negated).
+            us_kind = seg_start_kind[i_in]
+            if us_kind == 0:
+                us_idx = seg_start_var_idx[i_in]
+                J_out[rx, 2 * us_idx]     += -Jvf_r0_buf[i_in, 0, 0]
+                J_out[rx, 2 * us_idx + 1] += -Jvf_r0_buf[i_in, 0, 1]
+                J_out[ry, 2 * us_idx]     += -Jvf_r0_buf[i_in, 1, 0]
+                J_out[ry, 2 * us_idx + 1] += -Jvf_r0_buf[i_in, 1, 1]
+            J_out[rx, n_pos_vars] += -Jvf_dt_buf[i_in, 0]
+            J_out[ry, n_pos_vars] += -Jvf_dt_buf[i_in, 1]
+
+    return cost
+
+
 def _warmup():
     """Force JIT compilation on a known-good geometry."""
     r1 = np.array([1.0, 0.0])
@@ -881,6 +1072,8 @@ def _warmup():
     z_cache = np.zeros(1)
     grad_out = np.zeros(5)
     ok_out = np.zeros(1, dtype=np.int64)
+    r_out = np.zeros(0)
+    J_out = np.zeros((0, 5))
 
     # Warm two_body + conic:
     fun_and_grad_batch(
@@ -917,6 +1110,41 @@ def _warmup():
         Jv0_r0_buf, Jv0_rf_buf, Jv0_dt_buf,
         Jvf_r0_buf, Jvf_rf_buf, Jvf_dt_buf,
         z_cache, grad_out, ok_out,
+    )
+    # Warm LM evaluator. M=0 dv-nodes is fine; the per-segment solve still runs.
+    lm_eval_batch(
+        x_vec, 4,
+        seg_start_kind, seg_end_kind,
+        seg_start_var_idx, seg_end_var_idx,
+        seg_start_fixed, seg_end_fixed,
+        seg_mult,
+        shape_pos_tri, shape_pos_sq,
+        center, 1.0,
+        False, False, const_g, 1.0,
+        dv_type, dv_in_seg, dv_out_seg,
+        dv_center_var_idx, dv_shape_vel,
+        True, 1e-4,
+        v0_buf, vf_buf,
+        Jv0_r0_buf, Jv0_rf_buf, Jv0_dt_buf,
+        Jvf_r0_buf, Jvf_rf_buf, Jvf_dt_buf,
+        z_cache, ok_out, r_out, J_out,
+    )
+    lm_eval_batch(
+        x_vec, 4,
+        seg_start_kind, seg_end_kind,
+        seg_start_var_idx, seg_end_var_idx,
+        seg_start_fixed, seg_end_fixed,
+        seg_mult,
+        shape_pos_tri, shape_pos_sq,
+        center, 1.0,
+        True, True, const_g, 1.0,
+        dv_type, dv_in_seg, dv_out_seg,
+        dv_center_var_idx, dv_shape_vel,
+        False, 1e-4,
+        v0_buf, vf_buf,
+        Jv0_r0_buf, Jv0_rf_buf, Jv0_dt_buf,
+        Jvf_r0_buf, Jvf_rf_buf, Jvf_dt_buf,
+        z_cache, ok_out, r_out, J_out,
     )
 
 
