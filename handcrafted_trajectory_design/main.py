@@ -1,13 +1,25 @@
 import sys
 
 import math
+import time
+import types
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 from scipy.optimize import brentq, minimize as scipy_minimize
 
-from PyQt6.QtCore import Qt, QPointF, QRectF, QEvent
+from PyQt6.QtCore import Qt, QPointF, QRectF, QEvent, QObject, pyqtSignal
 from PyQt6.QtGui import QPainter, QBrush, QColor, QPen, QPolygonF
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QVBoxLayout, QHBoxLayout
+
+
+class _OptSignals(QObject):
+    """Helper QObject to marshal optimizer results from a worker thread back
+    to the Qt main thread. Cross-thread signal emission uses a queued
+    connection automatically, so the connected slot runs on the main thread."""
+
+    done = pyqtSignal(object)
+    progress = pyqtSignal(object)
 
 # Canonical units: 1 DU = 6371 km, 1 TU = sqrt(DU^3 / mu_km) ~ 806.4 s, mu = 1 DU^3/TU^2.
 GRAVITY_MAG = 1.0  # DU/TU^2 (~ 9.81e-3 km/s^2 in canonical units)
@@ -225,6 +237,123 @@ def _stumpff_sp(z):
     return (_stumpff_c(z) - 3.0 * _stumpff_s(z)) / (2.0 * z)
 
 
+def _stumpff_all(z):
+    """Return (C, S, Cp, Sp) computed together, sharing one sqrt + one
+    trig/hyperbolic call. Equivalent to calling the four scalar helpers
+    but ~3-4x faster on the hot Lambert path."""
+    if abs(z) < 1e-6:
+        z2 = z * z
+        C = 0.5 - z / 24.0 + z2 / 720.0
+        S = 1.0 / 6.0 - z / 120.0 + z2 / 5040.0
+        Cp = -1.0 / 24.0 + z / 360.0 - z2 / 13440.0
+        Sp = -1.0 / 120.0 + z / 2520.0 - z2 / 120960.0
+        return C, S, Cp, Sp
+    if z > 0:
+        sqz = math.sqrt(z)
+        c = math.cos(sqz)
+        s = math.sin(sqz)
+        C = (1.0 - c) / z
+        S = (sqz - s) / (sqz * z)  # = (sqz - s) / sqz^3
+    else:
+        sqz = math.sqrt(-z)
+        c = math.cosh(sqz)
+        s = math.sinh(sqz)
+        C = (c - 1.0) / (-z)
+        S = (s - sqz) / (-sqz * z)  # = (sinh - sqz) / sqz^3
+    inv_2z = 0.5 / z
+    Cp = (1.0 - z * S - 2.0 * C) * inv_2z
+    Sp = (C - 3.0 * S) * inv_2z
+    return C, S, Cp, Sp
+
+
+def _lambert_z_solve(r1, r2, A, dt, mu, z_init=0.0):
+    """Solve the universal-variable Lambert equation F(z; r1, r2, A, dt) = 0
+    via Newton iteration starting from z_init, falling back to brentq if Newton fails.
+    Returns (z, C, S, y) on success or None on failure.
+
+    F(z) = (y/C)^{3/2} S + A sqrt(y) - sqrt(mu) dt,
+    y(z) = r1 + r2 + A (z S - 1) / sqrt(C).
+    """
+    sqrtmu_dt = math.sqrt(mu) * dt
+    Z_HIGH = 4.0 * math.pi ** 2 - 0.5  # just below first singularity
+    Z_LOW = -200.0
+
+    def y_of(z, C, S):
+        return r1 + r2 + A * (z * S - 1.0) / math.sqrt(max(C, 1e-30))
+
+    # --- Newton from z_init ---
+    z = max(Z_LOW, min(Z_HIGH, float(z_init)))
+    for _ in range(30):
+        C, S, Cp, Sp = _stumpff_all(z)
+        if C <= 1e-30:
+            break
+        y = y_of(z, C, S)
+        if y < 0:
+            # y must be positive for sqrt(y); nudge toward positive region.
+            z += 0.5
+            continue
+        sqrtC = math.sqrt(C)
+        sqrty = math.sqrt(y)
+        yC = y / C
+        yC15 = yC * math.sqrt(yC)  # (y/C)^{3/2}
+        Fval = yC15 * S + A * sqrty - sqrtmu_dt
+        # dF/dz via chain rule on y(z), C(z), S(z).
+        dchi_dz = (S + z * Sp) / sqrtC - (z * S - 1.0) * Cp / (2.0 * C * sqrtC)
+        dy_dz = A * dchi_dz
+        dF_dy = 1.5 * S * sqrty / (C * sqrtC) + A / (2.0 * sqrty)
+        dF_dC = -1.5 * yC15 * S / C
+        dF_dS = yC15
+        dF_dz = dF_dy * dy_dz + dF_dC * Cp + dF_dS * Sp
+        if abs(dF_dz) < 1e-20:
+            break
+        dz = -Fval / dF_dz
+        z_new = z + dz
+        # Clamp to sensible range to avoid escaping into singular region.
+        if z_new < Z_LOW:
+            z_new = 0.5 * (z + Z_LOW)
+        elif z_new > Z_HIGH:
+            z_new = 0.5 * (z + Z_HIGH)
+        if abs(z_new - z) < 1e-12:
+            z = z_new
+            C, S, _, _ = _stumpff_all(z)
+            if C <= 1e-30:
+                break
+            y = y_of(z, C, S)
+            if y < 0:
+                break
+            return z, C, S, y
+        z = z_new
+
+    # --- brentq fallback ---
+    def F(z):
+        C, S, _, _ = _stumpff_all(z)
+        y = y_of(z, C, S)
+        if y < 0 or C <= 0:
+            return float('inf')
+        return (y / C) ** 1.5 * S + A * math.sqrt(y) - sqrtmu_dt
+
+    def y_only(z):
+        C, S, _, _ = _stumpff_all(z)
+        return y_of(z, C, S)
+
+    z_low = Z_LOW
+    while y_only(z_low) < 0 and z_low < Z_HIGH:
+        z_low += 1.0
+    try:
+        F_low = F(z_low)
+        F_high = F(Z_HIGH)
+        if not math.isfinite(F_low) or not math.isfinite(F_high) or F_low * F_high > 0:
+            return None
+        z = brentq(F, z_low, Z_HIGH, xtol=1e-12, maxiter=300)
+    except (ValueError, RuntimeError):
+        return None
+    C, S, _, _ = _stumpff_all(z)
+    y = y_of(z, C, S)
+    if y < 0 or C <= 0:
+        return None
+    return z, C, S, y
+
+
 def lambert_solve(r1_vec, r2_vec, dt, mu):
     """Solve Lambert's problem in 2D using universal variable z-iteration.
     r1_vec, r2_vec: numpy arrays, position vectors relative to gravity center.
@@ -254,40 +383,12 @@ def lambert_solve(r1_vec, r2_vec, dt, mu):
 
     A = sin_dtheta * math.sqrt(r1 * r2 / (1.0 - cos_dtheta))
 
-    def y_func(z):
-        C = _stumpff_c(z)
-        S = _stumpff_s(z)
-        return r1 + r2 + A * (z * S - 1.0) / math.sqrt(max(C, 1e-30))
-
-    def F(z):
-        C = _stumpff_c(z)
-        S = _stumpff_s(z)
-        y = y_func(z)
-        if y < 0:
-            return float('inf')
-        return (y / max(C, 1e-30)) ** 1.5 * S + A * math.sqrt(y) - math.sqrt(mu) * dt
-
-    # Find bracket for z (z=0 is parabolic, z>0 elliptic, z<0 hyperbolic)
-    z_low = -200.0
-    z_high = 4.0 * math.pi ** 2 - 0.5  # just below first singularity
-
-    # Ensure y > 0 at lower bound
-    while y_func(z_low) < 0 and z_low < z_high:
-        z_low += 1.0
-
-    try:
-        F_low = F(z_low)
-        F_high = F(z_high)
-        if not math.isfinite(F_low) or not math.isfinite(F_high) or F_low * F_high > 0:
-            raise ValueError
-        z = brentq(F, z_low, z_high, xtol=1e-10, maxiter=300)
-    except (ValueError, RuntimeError):
+    result = _lambert_z_solve(r1, r2, A, dt, mu)
+    if result is None:
         # Fallback to straight-line approximation
         v = (r2_vec - r1_vec) / dt
         return v, v
-
-    C = _stumpff_c(z)
-    y = y_func(z)
+    z, C, S, y = result
 
     f = 1.0 - y / r1
     g = A * math.sqrt(y / mu)
@@ -299,7 +400,7 @@ def lambert_solve(r1_vec, r2_vec, dt, mu):
     return v1, v2
 
 
-def lambert_solve_with_jac(r1_vec, r2_vec, dt, mu):
+def lambert_solve_with_jac(r1_vec, r2_vec, dt, mu, z_init=0.0):
     """Lambert solver that also returns analytic Jacobians of (v1, v2)
     w.r.t. (r1, r2, dt) via the implicit function theorem applied to the
     universal-variable equation F(z; r1, r2, dt) = 0.
@@ -310,6 +411,8 @@ def lambert_solve_with_jac(r1_vec, r2_vec, dt, mu):
         Jv1_dt : (2,) numpy array
         Jv2_r1, Jv2_r2 : (2,2) numpy arrays
         Jv2_dt : (2,) numpy array
+        z      : float, the converged universal-variable (for warm-starting
+                 subsequent calls with similar geometry)
 
     Falls back to a straight-line approximation (with matching analytic
     Jacobian) for degenerate geometries where the universal-variable
@@ -325,7 +428,7 @@ def lambert_solve_with_jac(r1_vec, r2_vec, dt, mu):
         Jv_r1 = -I2 / tof
         Jv_r2 = I2 / tof
         Jv_dt = -(r2_vec - r1_vec) / (tof * tof)
-        return v, v, Jv_r1, Jv_r2, Jv_dt, Jv_r1, Jv_r2, Jv_dt
+        return v, v, Jv_r1, Jv_r2, Jv_dt, Jv_r1, Jv_r2, Jv_dt, 0.0
 
     r1 = float(np.linalg.norm(r1_vec))
     r2 = float(np.linalg.norm(r2_vec))
@@ -345,40 +448,13 @@ def lambert_solve_with_jac(r1_vec, r2_vec, dt, mu):
 
     A = sin_dtheta * math.sqrt(r1 * r2 / (1.0 - cos_dtheta))
 
-    def y_func(z):
-        C = _stumpff_c(z)
-        S = _stumpff_s(z)
-        return r1 + r2 + A * (z * S - 1.0) / math.sqrt(max(C, 1e-30))
-
-    def F(z):
-        C = _stumpff_c(z)
-        S = _stumpff_s(z)
-        y = y_func(z)
-        if y < 0:
-            return float('inf')
-        return (y / max(C, 1e-30)) ** 1.5 * S + A * math.sqrt(y) - math.sqrt(mu) * dt
-
-    z_low = -200.0
-    z_high = 4.0 * math.pi ** 2 - 0.5
-    while y_func(z_low) < 0 and z_low < z_high:
-        z_low += 1.0
-
-    try:
-        F_low = F(z_low)
-        F_high = F(z_high)
-        if not math.isfinite(F_low) or not math.isfinite(F_high) or F_low * F_high > 0:
-            raise ValueError
-        z = brentq(F, z_low, z_high, xtol=1e-12, maxiter=300)
-    except (ValueError, RuntimeError):
+    result = _lambert_z_solve(r1, r2, A, dt, mu, z_init=z_init)
+    if result is None:
         return _straight_line()
-
-    C = _stumpff_c(z)
-    S = _stumpff_s(z)
-    Cp = _stumpff_cp(z)
-    Sp = _stumpff_sp(z)
-    y = y_func(z)
+    z, C, S, y = result
     if y <= 0 or C <= 0 or abs(A) < 1e-15:
         return _straight_line()
+    _, _, Cp, Sp = _stumpff_all(z)
 
     sqrtC = math.sqrt(C)
     sqrty = math.sqrt(y)
@@ -447,7 +523,42 @@ def lambert_solve_with_jac(r1_vec, r2_vec, dt, mu):
     Jv2_r2 = (np.outer(r2_vec, dgdot_dr2) + gdot * I2) / g_ - np.outer(v2, dg_dr2) / g_
     Jv2_dt = (dgdot_dt * r2_vec) / g_ - v2 * dg_dt / g_
 
-    return v1, v2, Jv1_r1, Jv1_r2, Jv1_dt, Jv2_r1, Jv2_r2, Jv2_dt
+    return v1, v2, Jv1_r1, Jv1_r2, Jv1_dt, Jv2_r1, Jv2_r2, Jv2_dt, z
+
+
+# --- Optional Numba acceleration -------------------------------------------
+# Replace the two public Lambert entry points with thin wrappers around the
+# njit kernels. On any failure flag (degenerate geometry, Newton non-
+# convergence), fall back to the pure-Python implementations above, which
+# include the brentq bracketed solver. Pure-Python versions are preserved
+# under the `_py` names so tests / debugging can compare.
+try:
+    import lambert_numba as _lnb  # triggers JIT warmup on import
+    _NUMBA_AVAILABLE = True
+    _lambert_solve_py = lambert_solve
+    _lambert_solve_with_jac_py = lambert_solve_with_jac
+
+    def lambert_solve(r1_vec, r2_vec, dt, mu):
+        r1_arr = np.ascontiguousarray(r1_vec, dtype=np.float64)
+        r2_arr = np.ascontiguousarray(r2_vec, dtype=np.float64)
+        ok, v1, v2 = _lnb.lambert_solve_nb(r1_arr, r2_arr, float(dt), float(mu))
+        if ok:
+            return v1, v2
+        return _lambert_solve_py(r1_vec, r2_vec, dt, mu)
+
+    def lambert_solve_with_jac(r1_vec, r2_vec, dt, mu, z_init=0.0):
+        r1_arr = np.ascontiguousarray(r1_vec, dtype=np.float64)
+        r2_arr = np.ascontiguousarray(r2_vec, dtype=np.float64)
+        out = _lnb.lambert_with_jac_nb(
+            r1_arr, r2_arr, float(dt), float(mu), float(z_init)
+        )
+        if out[0]:
+            # (v1, v2, Jv1_r1, Jv1_r2, Jv1_dt, Jv2_r1, Jv2_r2, Jv2_dt, z)
+            return out[1:]
+        return _lambert_solve_with_jac_py(r1_vec, r2_vec, dt, mu, z_init=z_init)
+except ImportError:
+    _NUMBA_AVAILABLE = False
+    pass
 
 
 def _kepler_deriv(state, mu):
@@ -547,6 +658,17 @@ class Canvas(QWidget):
         # When set, every drag release re-runs the optimizer.
         self.optimize_mode = None
 
+        # --- Off-thread optimizer plumbing -----------------------------------
+        # Solves triggered via _run_active_optimizer (drag-release) run on a
+        # background thread so dragging stays responsive during long solves.
+        # Button-click optimizers stay synchronous to give immediate feedback.
+        self._opt_executor = ThreadPoolExecutor(max_workers=1)
+        self._opt_signals = _OptSignals()
+        self._opt_signals.done.connect(self._on_opt_done)
+        self._opt_signals.progress.connect(self._on_opt_progress)
+        self._opt_running = False
+        self._opt_restart = False
+
         self.setStyleSheet("background-color: white;")
         self.zoom = 50.0  # pixels per DU
         self.pan_offset = QPointF(600, 450)
@@ -612,6 +734,24 @@ class Canvas(QWidget):
             return compute_parabolic_arc(p0, p1, center, time_of_flight, num_points)
         return compute_dynamic_arc(p0, p1, center, time_of_flight, num_points)
 
+    # ---------- Sundman-style time scaling ----------
+    # The shared optimizer decision variable is `tau` (stored in
+    # `self.render_tof`), not physical time. Per-segment physical TOF is
+    #     tof_seg = tau * s^alpha * mult
+    # with alpha = 1.5 (Sundman/Kepler exponent) and
+    #     s = (|r0 - earth_center| + |rf - earth_center|) / 2.
+    # This matches Kepler's period scaling (T ~ a^1.5) and gives the optimizer
+    # a more uniform parameterization across orbits at different scales.
+    def _seg_pos_mag_star(self, p0, p1):
+        cx = self.earth_center.x()
+        cy = self.earth_center.y()
+        return 0.5 * (math.hypot(p0.x() - cx, p0.y() - cy)
+                      + math.hypot(p1.x() - cx, p1.y() - cy))
+
+    def _seg_tof(self, p0, p1, mult):
+        s = self._seg_pos_mag_star(p0, p1)
+        return self.render_tof * s * math.sqrt(s) * mult  # tau * s^1.5 * mult
+
     def _compute_segment_velocities(self, p0, p1, center, time_of_flight):
         if self.env_mode == "constant_gravity":
             return compute_parabolic_arc_velocities(
@@ -659,12 +799,13 @@ class Canvas(QWidget):
 
     def _traj_node_times(self, traj):
         """Return {dot_index: cumulative_tof_from_first_node} by walking segments
-        in their list order, accumulating render_tof * mult."""
+        in their list order, accumulating each segment's Sundman-scaled time."""
         node_t = {}
+        dots = traj["dots"]
         for i_start, i_end, mult in traj["segments"]:
             if i_start not in node_t:
                 node_t[i_start] = 0.0
-            node_t[i_end] = node_t[i_start] + self.render_tof * mult
+            node_t[i_end] = node_t[i_start] + self._seg_tof(dots[i_start], dots[i_end], mult)
         return node_t
 
     def _square_time(self):
@@ -776,7 +917,7 @@ class Canvas(QWidget):
             for s_idx, (i_start, i_end, mult) in enumerate(traj["segments"]):
                 arc_pts = self._compute_segment_arc(
                     dots[i_start], dots[i_end], center,
-                    self.render_tof * mult, dense + 1,
+                    self._seg_tof(dots[i_start], dots[i_end], mult), dense + 1,
                 )
                 # Point-to-line-segment distance over consecutive samples.
                 d_min = float("inf")
@@ -828,7 +969,7 @@ class Canvas(QWidget):
                     continue
                 arc_pts = self._compute_segment_arc(
                     dots[i_start], dots[i_end], center,
-                    self.render_tof * mult, dense + 1,
+                    self._seg_tof(dots[i_start], dots[i_end], mult), dense + 1,
                 )
                 # Find sample closest in space; t in [0, N].
                 best_local = None
@@ -852,7 +993,7 @@ class Canvas(QWidget):
         # Place the new dot at the arc point at time = k * tof along segment.
         arc_pts = self._compute_segment_arc(
             traj["dots"][i_start], traj["dots"][i_end], center,
-            self.render_tof * mult, n_int + 1,
+            self._seg_tof(traj["dots"][i_start], traj["dots"][i_end], mult), n_int + 1,
         )
         new_pt = arc_pts[k]
         new_dot = QPointF(new_pt.x(), new_pt.y())
@@ -1344,7 +1485,7 @@ class Canvas(QWidget):
                 pen = QPen(QColor("black"), 2)
                 pen.setCosmetic(True)
                 painter.setPen(pen)
-                seg_tof = self.render_tof * mult
+                seg_tof = self._seg_tof(dots[i_start], dots[i_end], mult)
                 arc_points = self._compute_segment_arc(
                     dots[i_start], dots[i_end], center,
                     seg_tof, ARC_NUM_POINTS,
@@ -1380,11 +1521,11 @@ class Canvas(QWidget):
                 for i_start, i_end, mult in segments:
                     if i_end == k:
                         _, vf = self._compute_segment_velocities(
-                            dots[i_start], dots[i_end], center, self.render_tof * mult)
+                            dots[i_start], dots[i_end], center, self._seg_tof(dots[i_start], dots[i_end], mult))
                         incoming_vel = vf
                     elif i_start == k:
                         v0, _ = self._compute_segment_velocities(
-                            dots[i_start], dots[i_end], center, self.render_tof * mult)
+                            dots[i_start], dots[i_end], center, self._seg_tof(dots[i_start], dots[i_end], mult))
                         outgoing_vel = v0
                 if incoming_vel is not None and outgoing_vel is not None:
                     dv = outgoing_vel - incoming_vel
@@ -1413,7 +1554,7 @@ class Canvas(QWidget):
                 dots = traj["dots"]
                 node_t = self._traj_node_times(traj)
                 for i_start, i_end, mult in traj["segments"]:
-                    seg_tof = self.render_tof * mult
+                    seg_tof = self._seg_tof(dots[i_start], dots[i_end], mult)
                     if dots[i_start] is shape_center:
                         v0, _ = self._compute_segment_velocities(
                             dots[i_start], dots[i_end], center, seg_tof)
@@ -1516,10 +1657,21 @@ class Canvas(QWidget):
         self.shift_click_first = None
         self.update()
 
-    def _optimize_common(self, cost_mode):
-        """Shared optimizer logic. cost_mode='energy' uses sum(|dv|^2), 'fuel' uses sum(|dv|)."""
+    def _optimize_common(self, cost_mode, apply=True, progress_callback=None):
+        """Shared optimizer logic. cost_mode='energy' uses sum(|dv|^2), 'fuel' uses sum(|dv|).
+
+        If apply=False, the solve runs without mutating self; instead it
+        returns (new_x, n_pos_vars, movable_dots) which the caller passes to
+        `_optimize_common_apply` on the Qt main thread. This variant is safe
+        to call from a worker thread.
+
+        If progress_callback is provided, it is invoked as
+        `progress_callback(xk, n_pos_vars, movable_dots)` on every BFGS
+        iteration (scipy's own callback). Safe to call from a worker thread
+        if the callback only emits signals.
+        """
         # Collect all movable (black) dots that participate in at least one segment
-        center = np.array([self.earth_center.x(), self.earth_center.y()])
+        center_np = np.array([self.earth_center.x(), self.earth_center.y()])
         movable_dots = []  # list of QPointF references
         movable_set = set()  # ids to avoid duplicates
 
@@ -1563,272 +1715,387 @@ class Canvas(QWidget):
                 shape_pos = np.array([shape_center.x(), shape_center.y()])
                 shape_data.append((shape_center, shape_pos, shape_vel))
 
+        # Map dots to a fixed numpy address for fast lookup: movable dots come
+        # from decision vars; shape dots come from shape_data; any other
+        # (fixed) dot is rarely encountered but we still handle it.
+        shape_pos_by_id = {id(s[0]): s[1] for s in shape_data}
+
         def get_pos(dot, x_vec):
-            if id(dot) in dot_id_to_var_idx:
-                idx = dot_id_to_var_idx[id(dot)]
+            idx = dot_id_to_var_idx.get(id(dot))
+            if idx is not None:
                 return x_vec[2 * idx: 2 * idx + 2]
+            shp = shape_pos_by_id.get(id(dot))
+            if shp is not None:
+                return shp
             return np.array([dot.x(), dot.y()])
 
-        def arc_vels(r0, rf, tof):
-            p0 = QPointF(r0[0], r0[1])
-            p1 = QPointF(rf[0], rf[1])
-            return self._compute_segment_velocities(p0, p1, self.earth_center, tof)
+        # Precompute first-occurrence maps (identical for objective and grad).
+        # They depend only on segment ordering, not on x_vec.
+        node_outgoing_seg = {}
+        node_incoming_seg = {}
+        for i, (dot_s, dot_e, _m) in enumerate(all_segments):
+            s_id = id(dot_s)
+            e_id = id(dot_e)
+            if s_id not in node_outgoing_seg:
+                node_outgoing_seg[s_id] = i
+            if e_id not in node_incoming_seg:
+                node_incoming_seg[e_id] = i
 
         # Mass-leak smoothing so |dv| is differentiable at zero for gradient solvers.
         fuel_eps = 1e-4
+        energy_mode = (cost_mode == "energy")
 
-        def dv_cost(dv):
-            if cost_mode == "energy":
-                return np.dot(dv, dv)
-            else:
-                return math.sqrt(dv[0] * dv[0] + dv[1] * dv[1] + fuel_eps * fuel_eps)
-
-        def objective(x_vec):
-            tof = x_vec[n_pos_vars]
-            cost = 0.0
-            # Build per-node incoming/outgoing velocities
-            node_incoming = {}  # id(dot) -> vf
-            node_outgoing = {}  # id(dot) -> v0
-            for dot_s, dot_e, mult in all_segments:
-                r0 = get_pos(dot_s, x_vec)
-                rf = get_pos(dot_e, x_vec)
-                v0, vf = arc_vels(r0, rf, tof * mult)
-                # Outgoing at start node
-                if id(dot_s) not in node_outgoing:
-                    node_outgoing[id(dot_s)] = v0
-                # Incoming at end node
-                if id(dot_e) not in node_incoming:
-                    node_incoming[id(dot_e)] = vf
-
-            # Delta-v at black nodes with both incoming and outgoing
-            for dot in movable_dots:
-                d_id = id(dot)
-                if d_id in node_incoming and d_id in node_outgoing:
-                    dv = node_outgoing[d_id] - node_incoming[d_id]
-                    cost += dv_cost(dv)
-
-            # Delta-v at shape nodes
-            for shape_center, shape_pos, shape_vel in shape_data:
-                s_id = id(shape_center)
-                if s_id in node_outgoing:
-                    dv = node_outgoing[s_id] - shape_vel
-                    cost += dv_cost(dv)
-                if s_id in node_incoming:
-                    dv = shape_vel - node_incoming[s_id]
-                    cost += dv_cost(dv)
-
-            return cost
-
-        # Analytic gradient for the parabolic arc model.
+        # Mode selection
         cg_mode = self.env_mode == "constant_gravity"
+        use_parabola = cg_mode or self.arc_model_mode == "parabola"
         const_g_vec = self._constant_g_vec() if cg_mode else None
+        g_mag = GRAVITY_MAG
+        I2 = np.eye(2)
 
-        def parabola_gradient(x_vec):
+        # Warm-start cache for Lambert z, keyed by segment index.
+        z_cache = [0.0] * len(all_segments)
+
+        def seg_parabola(r0, rf, tof_seg, mult):
+            """Return (v0, vf, J_v0_r0, J_v0_rf, J_v0_tf*mult, J_vf_r0, J_vf_rf, J_vf_tf*mult)
+            for the parabolic segment. J_*_tf already multiplied by mult."""
+            if cg_mode:
+                g_vec = const_g_vec
+                inv_t = 1.0 / tof_seg
+                disp = rf - r0
+                mean_v = disp * inv_t
+                half_g_t = 0.5 * g_vec * tof_seg
+                v0 = mean_v - half_g_t
+                vf = mean_v + half_g_t
+                I_t = I2 * inv_t
+                J_v0_r0 = -I_t
+                J_v0_rf = I_t
+                J_v0_tf_seg = -disp * (inv_t * inv_t) - 0.5 * g_vec
+                J_vf_r0 = -I_t
+                J_vf_rf = I_t
+                J_vf_tf_seg = -disp * (inv_t * inv_t) + 0.5 * g_vec
+            else:
+                d = center_np - r0
+                dist = math.sqrt(d[0] * d[0] + d[1] * d[1])
+                inv_t = 1.0 / tof_seg
+                disp = rf - r0
+                mean_v = disp * inv_t
+                if dist < 1e-12:
+                    v0 = mean_v
+                    vf = mean_v
+                    I_t = I2 * inv_t
+                    J_v0_r0 = -I_t
+                    J_v0_rf = I_t
+                    J_v0_tf_seg = -disp * (inv_t * inv_t)
+                    J_vf_r0 = J_v0_r0
+                    J_vf_rf = J_v0_rf
+                    J_vf_tf_seg = J_v0_tf_seg
+                else:
+                    g_hat = d / dist
+                    g_vec = g_mag * g_hat
+                    half_g_t = 0.5 * g_vec * tof_seg
+                    v0 = mean_v - half_g_t
+                    vf = mean_v + half_g_t
+                    dgvec_dr0 = (g_mag / dist) * (-I2 + np.outer(g_hat, g_hat))
+                    I_t = I2 * inv_t
+                    J_v0_r0 = -I_t - 0.5 * tof_seg * dgvec_dr0
+                    J_v0_rf = I_t
+                    J_v0_tf_seg = -disp * (inv_t * inv_t) - 0.5 * g_vec
+                    J_vf_r0 = -I_t + 0.5 * tof_seg * dgvec_dr0
+                    J_vf_rf = I_t
+                    J_vf_tf_seg = -disp * (inv_t * inv_t) + 0.5 * g_vec
+            return (v0, vf, J_v0_r0, J_v0_rf, J_v0_tf_seg * mult,
+                    J_vf_r0, J_vf_rf, J_vf_tf_seg * mult)
+
+        def seg_lambert(r0, rf, tof_seg, mult, z_init):
+            """Direct numpy call, no QPointF. Returns same tuple as seg_parabola
+            plus the converged z for warm-starting."""
+            v0, vf, Jv0_r0, Jv0_rf, Jv0_dt, Jvf_r0, Jvf_rf, Jvf_dt, z_new = (
+                lambert_solve_with_jac(r0 - center_np, rf - center_np, tof_seg,
+                                       MU, z_init=z_init)
+            )
+            return (v0, vf, Jv0_r0, Jv0_rf, Jv0_dt * mult,
+                    Jvf_r0, Jvf_rf, Jvf_dt * mult, z_new)
+
+        def add_pos_grad(grad, dot, vec2):
+            idx = dot_id_to_var_idx.get(id(dot))
+            if idx is not None:
+                grad[2 * idx] += vec2[0]
+                grad[2 * idx + 1] += vec2[1]
+
+        def fun_and_grad(x_vec):
             tof = x_vec[n_pos_vars]
             grad = np.zeros(n_vars)
-            g = GRAVITY_MAG
-            I2 = np.eye(2)
+            cost = 0.0
 
-            # Per-segment velocities and Jacobians wrt (r0, rf, tf).
-            seg_data_local = []
-            for dot_s, dot_e, mult in all_segments:
+            # Per-segment velocities + Jacobians (one pass).
+            seg_data_local = [None] * len(all_segments)
+            for i, (dot_s, dot_e, mult) in enumerate(all_segments):
                 r0 = get_pos(dot_s, x_vec)
                 rf = get_pos(dot_e, x_vec)
-                tof_seg = tof * mult
-                if cg_mode:
-                    g_vec = const_g_vec
-                    v0 = (rf - r0) / tof_seg - 0.5 * g_vec * tof_seg
-                    vf = (rf - r0) / tof_seg + 0.5 * g_vec * tof_seg
-                    # dg_vec / d r0 = 0 in constant-gravity mode
-                    J_v0_r0 = -I2 / tof_seg
-                    J_v0_rf = I2 / tof_seg
-                    J_v0_tf = -(rf - r0) / (tof_seg * tof_seg) - 0.5 * g_vec
-                    J_vf_r0 = -I2 / tof_seg
-                    J_vf_rf = I2 / tof_seg
-                    J_vf_tf = -(rf - r0) / (tof_seg * tof_seg) + 0.5 * g_vec
+                # Sundman-style time scaling: tof_seg = tau * s^1.5 * mult.
+                d0 = r0 - center_np
+                df = rf - center_np
+                r0_mag = math.sqrt(d0[0] * d0[0] + d0[1] * d0[1])
+                rf_mag = math.sqrt(df[0] * df[0] + df[1] * df[1])
+                s = 0.5 * (r0_mag + rf_mag)
+                if s < 1e-12:
+                    s = 1e-12
+                sqrt_s = math.sqrt(s)
+                s_pow = s * sqrt_s
+                tof_seg = tof * s_pow * mult
+                if use_parabola:
+                    out = seg_parabola(r0, rf, tof_seg, mult)
                 else:
-                    d = center - r0
-                    dist = float(np.linalg.norm(d))
-                    if dist < 1e-12:
-                        v0 = (rf - r0) / tof_seg
-                        vf = v0.copy()
-                        J_v0_r0 = -I2 / tof_seg
-                        J_v0_rf = I2 / tof_seg
-                        J_v0_tf = -(rf - r0) / (tof_seg * tof_seg)
-                        J_vf_r0 = J_v0_r0
-                        J_vf_rf = J_v0_rf
-                        J_vf_tf = J_v0_tf
-                    else:
-                        g_hat = d / dist
-                        g_vec = g * g_hat
-                        v0 = (rf - r0) / tof_seg - 0.5 * g_vec * tof_seg
-                        vf = (rf - r0) / tof_seg + 0.5 * g_vec * tof_seg
-                        # d g_hat / d r0 = (1/dist) * (-I + g_hat g_hat^T)
-                        dgvec_dr0 = (g / dist) * (-I2 + np.outer(g_hat, g_hat))
-                        J_v0_r0 = -I2 / tof_seg - 0.5 * tof_seg * dgvec_dr0
-                        J_v0_rf = I2 / tof_seg
-                        J_v0_tf = -(rf - r0) / (tof_seg * tof_seg) - 0.5 * g_vec
-                        J_vf_r0 = -I2 / tof_seg + 0.5 * tof_seg * dgvec_dr0
-                        J_vf_rf = I2 / tof_seg
-                        J_vf_tf = -(rf - r0) / (tof_seg * tof_seg) + 0.5 * g_vec
-                # Chain rule: d/d tof_var = (d/d tof_seg) * mult
-                J_v0_tf = J_v0_tf * mult
-                J_vf_tf = J_vf_tf * mult
-                seg_data_local.append({
-                    "dot_s": dot_s, "dot_e": dot_e,
-                    "v0": v0, "vf": vf,
-                    "J_v0_r0": J_v0_r0, "J_v0_rf": J_v0_rf, "J_v0_tf": J_v0_tf,
-                    "J_vf_r0": J_vf_r0, "J_vf_rf": J_vf_rf, "J_vf_tf": J_vf_tf,
-                })
+                    out = seg_lambert(r0, rf, tof_seg, mult, z_cache[i])
+                    z_cache[i] = out[-1]
+                    out = out[:-1]
+                # out = (v0, vf, Jv0_r0, Jv0_rf, Jv0_dt, Jvf_r0, Jvf_rf, Jvf_dt)
+                v0_, vf_, Jv0_r0, Jv0_rf, Jv0_dt, Jvf_r0, Jvf_rf, Jvf_dt = out
+                # Apply Sundman chain-rule fixup (mirrors _apply_sundman_fixup in numba).
+                fac = 0.75 * tof * sqrt_s
+                if r0_mag > 1e-10:
+                    r0_hat = d0 / r0_mag
+                    Jv0_r0 = Jv0_r0 + fac * np.outer(Jv0_dt, r0_hat)
+                    Jvf_r0 = Jvf_r0 + fac * np.outer(Jvf_dt, r0_hat)
+                if rf_mag > 1e-10:
+                    rf_hat = df / rf_mag
+                    Jv0_rf = Jv0_rf + fac * np.outer(Jv0_dt, rf_hat)
+                    Jvf_rf = Jvf_rf + fac * np.outer(Jvf_dt, rf_hat)
+                Jv0_dt = Jv0_dt * s_pow
+                Jvf_dt = Jvf_dt * s_pow
+                seg_data_local[i] = (
+                    dot_s, dot_e, v0_, vf_,
+                    Jv0_r0, Jv0_rf, Jv0_dt,
+                    Jvf_r0, Jvf_rf, Jvf_dt,
+                )
 
-            # Same first-occurrence convention as objective.
-            node_outgoing_seg = {}
-            node_incoming_seg = {}
-            for i, sd in enumerate(seg_data_local):
-                s_id = id(sd["dot_s"])
-                e_id = id(sd["dot_e"])
-                if s_id not in node_outgoing_seg:
-                    node_outgoing_seg[s_id] = i
-                if e_id not in node_incoming_seg:
-                    node_incoming_seg[e_id] = i
-
-            def add_pos_grad(dot, vec2):
-                if id(dot) in dot_id_to_var_idx:
-                    idx = dot_id_to_var_idx[id(dot)]
-                    grad[2 * idx: 2 * idx + 2] += vec2
-
+            # Accumulate cost and gradient contributions.
             def accumulate(dv, contribs):
-                if cost_mode == "energy":
+                nonlocal cost
+                d2 = dv[0] * dv[0] + dv[1] * dv[1]
+                if energy_mode:
+                    cost += d2
                     factor = 2.0
                 else:
-                    factor = 1.0 / math.sqrt(dv[0] * dv[0] + dv[1] * dv[1] + fuel_eps * fuel_eps)
+                    mag = math.sqrt(d2 + fuel_eps * fuel_eps)
+                    cost += mag
+                    factor = 1.0 / mag
                 for kind, dot, J in contribs:
                     if kind == "pos":
-                        add_pos_grad(dot, factor * (dv @ J))
+                        add_pos_grad(grad, dot, factor * (dv @ J))
                     else:
                         grad[n_pos_vars] += factor * float(np.dot(dv, J))
 
             # Black movable midpoint nodes
             for dot in movable_dots:
                 d_id = id(dot)
-                if d_id in node_incoming_seg and d_id in node_outgoing_seg:
-                    sin = seg_data_local[node_incoming_seg[d_id]]
-                    sout = seg_data_local[node_outgoing_seg[d_id]]
-                    dv = sout["v0"] - sin["vf"]
-                    contribs = [
-                        ("pos", sin["dot_s"], -sin["J_vf_r0"]),
-                        ("pos", dot, sout["J_v0_r0"] - sin["J_vf_rf"]),
-                        ("pos", sout["dot_e"], sout["J_v0_rf"]),
-                        ("tof", None, sout["J_v0_tf"] - sin["J_vf_tf"]),
-                    ]
-                    accumulate(dv, contribs)
+                i_in = node_incoming_seg.get(d_id)
+                i_out = node_outgoing_seg.get(d_id)
+                if i_in is None or i_out is None:
+                    continue
+                sin_s = seg_data_local[i_in]
+                sout = seg_data_local[i_out]
+                # tuple layout: (dot_s, dot_e, v0, vf, Jv0_r0, Jv0_rf, Jv0_tf, Jvf_r0, Jvf_rf, Jvf_tf)
+                sin_vf = sin_s[3]
+                sout_v0 = sout[2]
+                dv = sout_v0 - sin_vf
+                contribs = [
+                    ("pos", sin_s[0], -sin_s[7]),  # -J_vf_r0 at upstream start
+                    ("pos", dot, sout[4] - sin_s[8]),  # J_v0_r0 (this seg's start) - J_vf_rf (prev seg's end)
+                    ("pos", sout[1], sout[5]),  # J_v0_rf at downstream end
+                    ("tof", None, sout[6] - sin_s[9]),
+                ]
+                accumulate(dv, contribs)
 
-            # Shape nodes (r_shape is fixed)
+            # Shape nodes
             for shape_center, shape_pos, shape_vel in shape_data:
                 s_id = id(shape_center)
-                if s_id in node_outgoing_seg:
-                    sout = seg_data_local[node_outgoing_seg[s_id]]
-                    dv = sout["v0"] - shape_vel
+                i_out = node_outgoing_seg.get(s_id)
+                if i_out is not None:
+                    sout = seg_data_local[i_out]
+                    dv = sout[2] - shape_vel
                     contribs = [
-                        ("pos", sout["dot_e"], sout["J_v0_rf"]),
-                        ("tof", None, sout["J_v0_tf"]),
+                        ("pos", sout[1], sout[5]),
+                        ("tof", None, sout[6]),
                     ]
                     accumulate(dv, contribs)
-                if s_id in node_incoming_seg:
-                    sin = seg_data_local[node_incoming_seg[s_id]]
-                    dv = shape_vel - sin["vf"]
+                i_in = node_incoming_seg.get(s_id)
+                if i_in is not None:
+                    sin_s = seg_data_local[i_in]
+                    dv = shape_vel - sin_s[3]
                     contribs = [
-                        ("pos", sin["dot_s"], -sin["J_vf_r0"]),
-                        ("tof", None, -sin["J_vf_tf"]),
+                        ("pos", sin_s[0], -sin_s[7]),
+                        ("tof", None, -sin_s[9]),
                     ]
                     accumulate(dv, contribs)
 
-            return grad
+            return cost, grad
 
-        def lambert_gradient(x_vec):
-            """Analytic gradient for the conic (Lambert) arc model in two-body env.
-            Mirrors parabola_gradient but uses lambert_solve_with_jac per segment.
-            """
-            tof = x_vec[n_pos_vars]
-            grad = np.zeros(n_vars)
+        # --- Batched numba path -----------------------------------------------
+        # When numba is available, build per-segment metadata arrays once,
+        # preallocate all work buffers, and replace `fun_and_grad` with a
+        # single njit call that does both velocity solve and dv-node
+        # accumulation. Falls back to the Python `fun_and_grad` above if any
+        # Lambert Newton iteration reports failure (rare; handled via
+        # ok_out).
+        fun_and_grad_active = fun_and_grad
+        if _NUMBA_AVAILABLE:
+            N = len(all_segments)
 
-            seg_data_local = []
-            for dot_s, dot_e, mult in all_segments:
-                r0 = get_pos(dot_s, x_vec)
-                rf = get_pos(dot_e, x_vec)
-                v0, vf, J_v0_r0, J_v0_rf, J_v0_tf, J_vf_r0, J_vf_rf, J_vf_tf = (
-                    lambert_solve_with_jac(r0, rf, tof * mult, MU)
-                )
-                # Chain rule: d/d tof_var = (d/d tof_seg) * mult
-                J_v0_tf = J_v0_tf * mult
-                J_vf_tf = J_vf_tf * mult
-                seg_data_local.append({
-                    "dot_s": dot_s, "dot_e": dot_e,
-                    "v0": v0, "vf": vf,
-                    "J_v0_r0": J_v0_r0, "J_v0_rf": J_v0_rf, "J_v0_tf": J_v0_tf,
-                    "J_vf_r0": J_vf_r0, "J_vf_rf": J_vf_rf, "J_vf_tf": J_vf_tf,
-                })
+            # Resolve segment start/end kinds and variable indices.
+            _KIND_MOV = 0
+            _KIND_TRI = 1
+            _KIND_SQ = 2
+            _KIND_FIX = 3
 
-            node_outgoing_seg = {}
-            node_incoming_seg = {}
-            for i, sd in enumerate(seg_data_local):
-                s_id = id(sd["dot_s"])
-                e_id = id(sd["dot_e"])
-                if s_id not in node_outgoing_seg:
-                    node_outgoing_seg[s_id] = i
-                if e_id not in node_incoming_seg:
-                    node_incoming_seg[e_id] = i
+            def _endpoint_meta(dot):
+                idx = dot_id_to_var_idx.get(id(dot))
+                if idx is not None:
+                    return _KIND_MOV, idx, 0.0, 0.0
+                if dot is self.tri_center:
+                    return _KIND_TRI, -1, 0.0, 0.0
+                if dot is self.sq_center:
+                    return _KIND_SQ, -1, 0.0, 0.0
+                return _KIND_FIX, -1, dot.x(), dot.y()
 
-            def add_pos_grad(dot, vec2):
-                if id(dot) in dot_id_to_var_idx:
-                    idx = dot_id_to_var_idx[id(dot)]
-                    grad[2 * idx: 2 * idx + 2] += vec2
+            seg_start_kind = np.empty(N, dtype=np.int64)
+            seg_end_kind = np.empty(N, dtype=np.int64)
+            seg_start_var_idx = np.empty(N, dtype=np.int64)
+            seg_end_var_idx = np.empty(N, dtype=np.int64)
+            seg_start_fixed = np.zeros((N, 2))
+            seg_end_fixed = np.zeros((N, 2))
+            seg_mult_arr = np.empty(N)
+            for i, (dot_s, dot_e, mult) in enumerate(all_segments):
+                ks, vs, fsx, fsy = _endpoint_meta(dot_s)
+                ke, ve, fex, fey = _endpoint_meta(dot_e)
+                seg_start_kind[i] = ks
+                seg_end_kind[i] = ke
+                seg_start_var_idx[i] = vs
+                seg_end_var_idx[i] = ve
+                seg_start_fixed[i, 0] = fsx
+                seg_start_fixed[i, 1] = fsy
+                seg_end_fixed[i, 0] = fex
+                seg_end_fixed[i, 1] = fey
+                seg_mult_arr[i] = mult
 
-            def accumulate(dv, contribs):
-                if cost_mode == "energy":
-                    factor = 2.0
-                else:
-                    factor = 1.0 / math.sqrt(dv[0] * dv[0] + dv[1] * dv[1] + fuel_eps * fuel_eps)
-                for kind, dot, J in contribs:
-                    if kind == "pos":
-                        add_pos_grad(dot, factor * (dv @ J))
-                    else:
-                        grad[n_pos_vars] += factor * float(np.dot(dv, J))
+            # Build dv-node metadata, mirroring the Python loops.
+            dv_type_list = []
+            dv_in_seg_list = []
+            dv_out_seg_list = []
+            dv_center_var_idx_list = []
+            dv_shape_vel_list = []
 
             for dot in movable_dots:
                 d_id = id(dot)
-                if d_id in node_incoming_seg and d_id in node_outgoing_seg:
-                    sin = seg_data_local[node_incoming_seg[d_id]]
-                    sout = seg_data_local[node_outgoing_seg[d_id]]
-                    dv = sout["v0"] - sin["vf"]
-                    contribs = [
-                        ("pos", sin["dot_s"], -sin["J_vf_r0"]),
-                        ("pos", dot, sout["J_v0_r0"] - sin["J_vf_rf"]),
-                        ("pos", sout["dot_e"], sout["J_v0_rf"]),
-                        ("tof", None, sout["J_v0_tf"] - sin["J_vf_tf"]),
-                    ]
-                    accumulate(dv, contribs)
+                i_in = node_incoming_seg.get(d_id)
+                i_out = node_outgoing_seg.get(d_id)
+                if i_in is None or i_out is None:
+                    continue
+                dv_type_list.append(0)
+                dv_in_seg_list.append(i_in)
+                dv_out_seg_list.append(i_out)
+                dv_center_var_idx_list.append(dot_id_to_var_idx[d_id])
+                dv_shape_vel_list.append((0.0, 0.0))
 
             for shape_center, shape_pos, shape_vel in shape_data:
                 s_id = id(shape_center)
-                if s_id in node_outgoing_seg:
-                    sout = seg_data_local[node_outgoing_seg[s_id]]
-                    dv = sout["v0"] - shape_vel
-                    contribs = [
-                        ("pos", sout["dot_e"], sout["J_v0_rf"]),
-                        ("tof", None, sout["J_v0_tf"]),
-                    ]
-                    accumulate(dv, contribs)
-                if s_id in node_incoming_seg:
-                    sin = seg_data_local[node_incoming_seg[s_id]]
-                    dv = shape_vel - sin["vf"]
-                    contribs = [
-                        ("pos", sin["dot_s"], -sin["J_vf_r0"]),
-                        ("tof", None, -sin["J_vf_tf"]),
-                    ]
-                    accumulate(dv, contribs)
+                i_out = node_outgoing_seg.get(s_id)
+                if i_out is not None:
+                    dv_type_list.append(1)
+                    dv_in_seg_list.append(-1)
+                    dv_out_seg_list.append(i_out)
+                    dv_center_var_idx_list.append(-1)
+                    dv_shape_vel_list.append((float(shape_vel[0]), float(shape_vel[1])))
+                i_in = node_incoming_seg.get(s_id)
+                if i_in is not None:
+                    dv_type_list.append(2)
+                    dv_in_seg_list.append(i_in)
+                    dv_out_seg_list.append(-1)
+                    dv_center_var_idx_list.append(-1)
+                    dv_shape_vel_list.append((float(shape_vel[0]), float(shape_vel[1])))
 
-            return grad
+            dv_type_arr = np.array(dv_type_list, dtype=np.int64)
+            dv_in_seg_arr = np.array(dv_in_seg_list, dtype=np.int64) if dv_in_seg_list else np.zeros(0, dtype=np.int64)
+            dv_out_seg_arr = np.array(dv_out_seg_list, dtype=np.int64) if dv_out_seg_list else np.zeros(0, dtype=np.int64)
+            dv_center_var_idx_arr = np.array(dv_center_var_idx_list, dtype=np.int64) if dv_center_var_idx_list else np.zeros(0, dtype=np.int64)
+            dv_shape_vel_arr = np.array(dv_shape_vel_list) if dv_shape_vel_list else np.zeros((0, 2))
+
+            shape_pos_tri = shape_pos_by_id.get(id(self.tri_center), np.array([self.tri_center.x(), self.tri_center.y()]))
+            shape_pos_sq = shape_pos_by_id.get(id(self.sq_center), np.array([self.sq_center.x(), self.sq_center.y()]))
+
+            const_g_vec_arr = const_g_vec if const_g_vec is not None else np.zeros(2)
+
+            # Preallocate work buffers (shared across all BFGS iterations).
+            v0_buf = np.empty((N, 2))
+            vf_buf = np.empty((N, 2))
+            Jv0_r0_buf = np.empty((N, 2, 2))
+            Jv0_rf_buf = np.empty((N, 2, 2))
+            Jv0_dt_buf = np.empty((N, 2))
+            Jvf_r0_buf = np.empty((N, 2, 2))
+            Jvf_rf_buf = np.empty((N, 2, 2))
+            Jvf_dt_buf = np.empty((N, 2))
+            z_cache_arr = np.zeros(N)
+            grad_out = np.empty(n_vars)
+            ok_out = np.empty(N, dtype=np.int64)
+
+            def fun_and_grad_numba(x_vec):
+                cost = _lnb.fun_and_grad_batch(
+                    x_vec, n_pos_vars,
+                    seg_start_kind, seg_end_kind,
+                    seg_start_var_idx, seg_end_var_idx,
+                    seg_start_fixed, seg_end_fixed,
+                    seg_mult_arr,
+                    shape_pos_tri, shape_pos_sq,
+                    center_np, MU,
+                    use_parabola, cg_mode, const_g_vec_arr, g_mag,
+                    dv_type_arr, dv_in_seg_arr, dv_out_seg_arr,
+                    dv_center_var_idx_arr, dv_shape_vel_arr,
+                    energy_mode, fuel_eps,
+                    v0_buf, vf_buf,
+                    Jv0_r0_buf, Jv0_rf_buf, Jv0_dt_buf,
+                    Jvf_r0_buf, Jvf_rf_buf, Jvf_dt_buf,
+                    z_cache_arr, grad_out, ok_out,
+                )
+                if not np.all(ok_out == 1):
+                    # Rare: Newton failed for at least one segment. Fall back to
+                    # the pure-Python evaluator (which uses brentq) for this call.
+                    return fun_and_grad(x_vec)
+                # Copy grad so scipy's finite-difference checks don't see our
+                # reused buffer mutate between iterations.
+                return float(cost), grad_out.copy()
+
+            fun_and_grad_active = fun_and_grad_numba
+
+            # ---- Levenberg-Marquardt setup ---------------------------------
+            # Count residual rows (2 per dv-node) for buffer sizing.
+            M_dv = int(dv_type_arr.shape[0])
+            r_buf = np.empty(2 * M_dv)
+            J_buf = np.empty((2 * M_dv, n_vars))
+
+            def lm_eval(x_vec):
+                """Returns (cost, residual r, Jacobian J). cost is the actual
+                BFGS cost (energy: sum |dv|^2; fuel: sum sqrt(|dv|^2 + eps^2)).
+                If any segment fails, returns (inf, None, None)."""
+                cost = _lnb.lm_eval_batch(
+                    x_vec, n_pos_vars,
+                    seg_start_kind, seg_end_kind,
+                    seg_start_var_idx, seg_end_var_idx,
+                    seg_start_fixed, seg_end_fixed,
+                    seg_mult_arr,
+                    shape_pos_tri, shape_pos_sq,
+                    center_np, MU,
+                    use_parabola, cg_mode, const_g_vec_arr, g_mag,
+                    dv_type_arr, dv_in_seg_arr, dv_out_seg_arr,
+                    dv_center_var_idx_arr, dv_shape_vel_arr,
+                    energy_mode, fuel_eps,
+                    v0_buf, vf_buf,
+                    Jv0_r0_buf, Jv0_rf_buf, Jv0_dt_buf,
+                    Jvf_r0_buf, Jvf_rf_buf, Jvf_dt_buf,
+                    z_cache_arr, ok_out, r_buf, J_buf,
+                )
+                if not np.all(ok_out == 1):
+                    return float("inf"), None, None
+                return float(cost), r_buf.copy(), J_buf.copy()
 
         # Initial guess: positions + shared TOF
         x0 = np.zeros(n_vars)
@@ -1837,12 +2104,43 @@ class Canvas(QWidget):
             x0[2 * i + 1] = dot.y()
         x0[n_pos_vars] = TIME_OF_FLIGHT
 
-        # BFGS is unconstrained; pick the analytic gradient that matches the model.
-        use_parabola = self.env_mode == "constant_gravity" or self.arc_model_mode == "parabola"
-        if use_parabola:
-            result = scipy_minimize(objective, x0, method="BFGS", jac=parabola_gradient)
-        else:
-            result = scipy_minimize(objective, x0, method="BFGS", jac=lambert_gradient)
+        # ---- Solver: prefer LM/IRLS when numba is available --------------
+        # LM/IRLS exploits the sum-of-squared-residuals structure: dv per
+        # node is a small residual, the Jacobian is structured, and
+        # H_GN = J^T W J converges super-linearly near the optimum. For
+        # smoothed-L1 (fuel) we use IRLS weights w_i = 1/sqrt(|dv_i|^2+eps^2).
+        # Falls back to BFGS on degeneracy.
+        used_lm = False
+        if _NUMBA_AVAILABLE and M_dv > 0:
+            try:
+                x_lm, lm_ok = self._lm_solve(
+                    x0, lm_eval, n_pos_vars, energy_mode, fuel_eps,
+                    progress_callback=progress_callback,
+                    movable_dots=movable_dots,
+                )
+                if lm_ok:
+                    used_lm = True
+                    result = types.SimpleNamespace(x=x_lm)
+            except Exception:
+                used_lm = False
+
+        if not used_lm:
+            if progress_callback is not None:
+                def scipy_cb(xk):
+                    progress_callback(xk, n_pos_vars, movable_dots)
+                result = scipy_minimize(
+                    fun_and_grad_active, x0, method="BFGS", jac=True,
+                    options={"gtol": 1e-6}, callback=scipy_cb,
+                )
+            else:
+                result = scipy_minimize(
+                    fun_and_grad_active, x0, method="BFGS", jac=True,
+                    options={"gtol": 1e-6},
+                )
+
+        if not apply:
+            # Return everything needed to apply later on the main thread.
+            return result.x.copy(), n_pos_vars, movable_dots
 
         # Apply result: update positions and rendering tof
         for i, dot in enumerate(movable_dots):
@@ -1856,6 +2154,118 @@ class Canvas(QWidget):
         if self.sq_orbit_mode:
             self._compute_orbit_for_shape("square")
         self.update()
+
+    def _optimize_common_apply(self, new_x, n_pos_vars, movable_dots):
+        """Apply an off-thread solve result on the main thread."""
+        for i, dot in enumerate(movable_dots):
+            dot.setX(float(new_x[2 * i]))
+            dot.setY(float(new_x[2 * i + 1]))
+        self.render_tof = float(new_x[n_pos_vars])
+        if self.tri_orbit_mode:
+            self._compute_orbit_for_shape("triangle")
+        if self.sq_orbit_mode:
+            self._compute_orbit_for_shape("square")
+        self.update()
+
+    def _lm_solve(
+        self, x0, lm_eval, n_pos_vars, energy_mode, fuel_eps,
+        progress_callback=None, movable_dots=None,
+        max_iter=30, tol_grad=1e-7, tol_step=1e-9,
+        lam_init=1e-3, lam_up=10.0, lam_down=0.4,
+    ):
+        """Levenberg-Marquardt / IRLS solver.
+
+        Decision variables x: positions + shared TOF.
+        Residual r = stacked dv vectors (per dv-node, 2 components each).
+        Cost f(x) = sum_i phi(|dv_i|) where phi(u)=u^2 (energy) or
+        phi(u)=sqrt(u^2 + eps^2) (fuel, smoothed-L1).
+
+        Reduced normal equations:
+          (J^T W J + lam D) p = -J^T W r
+        where W = diag(w_k) with w_k = 1 (energy) or w_k = 1/sqrt(|dv_k|^2+eps^2)
+        (IRLS); D = diag(diag(J^T W J)) (Marquardt scaling).
+
+        Returns (x_new, ok). ok=False if no descent could be made; caller
+        should fall back to BFGS.
+        """
+        x = x0.copy()
+        cost, r, J = lm_eval(x)
+        if r is None:
+            return x, False
+
+        n_vars = x.size
+        M = r.size // 2
+
+        def weights_from_r(r_vec):
+            """IRLS weights per residual row. For energy: phi(u)=u^2 → derivative
+            and Hessian both linear in r → effective weight=1. For fuel:
+            phi(u)=sqrt(u^2+eps^2) → Gauss-Newton weight is 1/sqrt(...) per node."""
+            if energy_mode:
+                return np.ones(2 * M)
+            w = np.empty(2 * M)
+            for k in range(M):
+                dvx = r_vec[2 * k]
+                dvy = r_vec[2 * k + 1]
+                wk = 1.0 / math.sqrt(dvx * dvx + dvy * dvy + fuel_eps * fuel_eps)
+                w[2 * k] = wk
+                w[2 * k + 1] = wk
+            return w
+
+        lam = lam_init
+        for _it in range(max_iter):
+            w = weights_from_r(r)
+            # Build Gauss-Newton system: H = J^T W J, g = J^T W r
+            JW = J * w[:, None]
+            H = JW.T @ J
+            g = JW.T @ r  # this is the gradient of f for energy (factor 2 absorbed only matters for scale; fine for LM)
+
+            # Convergence check on gradient.
+            if np.linalg.norm(g, ord=np.inf) < tol_grad:
+                break
+
+            diag_H = np.maximum(np.diag(H), 1e-12)
+
+            # Try LM step; on failure, increase lam and retry.
+            accepted = False
+            for _inner in range(10):
+                A = H + lam * np.diag(diag_H)
+                try:
+                    L = np.linalg.cholesky(A)
+                    p = np.linalg.solve(L.T, np.linalg.solve(L, -g))
+                except np.linalg.LinAlgError:
+                    lam *= lam_up
+                    continue
+
+                x_new = x + p
+                cost_new, r_new, J_new = lm_eval(x_new)
+                if r_new is None or not np.isfinite(cost_new):
+                    lam *= lam_up
+                    continue
+
+                if cost_new < cost:
+                    # Accept.
+                    step_norm = float(np.linalg.norm(p))
+                    x = x_new
+                    cost = cost_new
+                    r = r_new
+                    J = J_new
+                    lam = max(lam * lam_down, 1e-12)
+                    accepted = True
+
+                    if progress_callback is not None and movable_dots is not None:
+                        progress_callback(x, n_pos_vars, movable_dots)
+
+                    if step_norm < tol_step * (1.0 + np.linalg.norm(x)):
+                        return x, True
+                    break
+                else:
+                    lam *= lam_up
+
+            if not accepted:
+                # No step found in 10 inner tries; bail to BFGS.
+                return x, False
+
+        return x, True
 
     def optimize_energy(self):
         self._optimize_common("energy")
@@ -1872,14 +2282,70 @@ class Canvas(QWidget):
             self._optimize_common(mode)
 
     def _run_active_optimizer(self):
-        if self.optimize_mode is not None:
-            self._optimize_common(self.optimize_mode)
+        """Kick off the active optimizer asynchronously. If a solve is already
+        in flight, mark that it should be restarted when it finishes so its
+        (now-stale) result is discarded."""
+        if self.optimize_mode is None:
+            return
+        if self._opt_running:
+            self._opt_restart = True
+            return
+        self._opt_running = True
+        self._opt_executor.submit(self._opt_worker, self.optimize_mode)
+
+    def _opt_worker(self, cost_mode):
+        """Worker-thread entry point. Runs the solve without mutating self
+        and emits the result via a queued signal to the main thread. A
+        throttled progress callback streams intermediate BFGS iterates so
+        the UI can animate the trajectory morphing toward the optimum."""
+        last_emit = [0.0]
+        min_dt = 0.04  # ~25 fps cap for progress frames
+
+        def cb(xk, n_pos_vars, movable_dots):
+            if self._opt_restart:
+                # User moved something else; skip stale progress frames.
+                return
+            now = time.perf_counter()
+            if now - last_emit[0] < min_dt:
+                return
+            last_emit[0] = now
+            self._opt_signals.progress.emit((xk.copy(), n_pos_vars, movable_dots))
+
+        try:
+            result = self._optimize_common(cost_mode, apply=False, progress_callback=cb)
+        except Exception as e:  # noqa: BLE001 - surface any failure to main thread
+            result = ("__err__", repr(e))
+        self._opt_signals.done.emit(result)
+
+    def _on_opt_progress(self, payload):
+        """Main-thread slot: apply an intermediate BFGS iterate so the user
+        sees a smooth morph into the optimum. Skip if a restart is queued."""
+        if self._opt_restart:
+            return
+        new_x, n_pos_vars, movable_dots = payload
+        self._optimize_common_apply(new_x, n_pos_vars, movable_dots)
+
+    def _on_opt_done(self, result):
+        """Main-thread handler for worker-thread results. Discards stale
+        results if a restart was requested during the solve."""
+        self._opt_running = False
+        if self._opt_restart:
+            self._opt_restart = False
+            self._run_active_optimizer()
+            return
+        if result is None:
+            return
+        if isinstance(result, tuple) and len(result) == 2 and result[0] == "__err__":
+            print(f"optimize error: {result[1]}")
+            return
+        new_x, n_pos_vars, movable_dots = result
+        self._optimize_common_apply(new_x, n_pos_vars, movable_dots)
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Trajectory Builder")
+        self.setWindowTitle("Hand-Crafted Trajectory Design")
         self.setMinimumSize(1200, 900)
 
         canvas = Canvas()
