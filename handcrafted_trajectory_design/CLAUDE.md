@@ -57,11 +57,10 @@ A scene is a list of `trajectories`. Each trajectory is:
 
 Toggled via top-bar buttons; setters re-run the active optimizer and repaint.
 
-- `env_mode`: `"two_body"` (central gravity, earth drawn) vs
-  `"constant_gravity"` (uniform `g` pointing -y; earth hidden; Kepler orbits
-  suppressed).
-- `arc_model_mode`: `"conic"` (Lambert) vs `"parabola"`. In constant-gravity
-  env, segments are always parabolic regardless of this toggle.
+- `env_mode`: `"two_body"` (central gravity, earth drawn, Lambert/conic
+  segments) vs `"constant_gravity"` (uniform `g` pointing -y; earth hidden;
+  Kepler orbits suppressed; parabolic segments). The env alone selects the
+  arc model.
 - `frame_mode`: `"inertial"` vs `"rotating"`. Rotating view rotates world
   points about `earth_center` by `R(-ω t)` at each point's anchor time, and
   maps velocities via `v_rot = R(-ω t)(v_inertial - ω × r)`.
@@ -81,13 +80,16 @@ Toggled via top-bar buttons; setters re-run the active optimizer and repaint.
 - Straight-line fallback is used for degenerate geometries; both the values
   and the returned Jacobians are consistent for that fallback.
 
-## Sundman-style time scaling
+## Sundman-style time scaling (two-body env only)
 
-The shared time decision variable is `tau` (stored in `self.render_tof`).
-Per-segment physical time is computed as
+In two-body env the shared time decision variable is `tau` (stored in
+`self.render_tof`). Per-segment physical time is computed as
 
     tof_seg = tau * s^alpha * mult,    alpha = 1.5
     s = (|r0 - earth_center| + |rf - earth_center|) / 2
+
+In constant-gravity env the scaling is disabled and `tof_seg = tau * mult`
+(tau is then physical time per unit `mult`).
 
 This matches Kepler's period scaling (T ~ a^1.5) so the same `tau` produces
 appropriately longer physical TOFs at larger orbital radii. It also avoids

@@ -766,18 +766,26 @@ def fun_and_grad_batch(
 
         # Sundman-style time scaling: tof_seg = tau * s^1.5 * mult,
         # s = (|r0-c| + |rf-c|) / 2 (distance from earth_center).
-        dx0 = r0x - center_np[0]
-        dy0 = r0y - center_np[1]
-        dxf = rfx - center_np[0]
-        dyf = rfy - center_np[1]
-        r0_mag = math.sqrt(dx0 * dx0 + dy0 * dy0)
-        rf_mag = math.sqrt(dxf * dxf + dyf * dyf)
-        s = 0.5 * (r0_mag + rf_mag)
-        if s < 1e-12:
-            s = 1e-12
-        sqrt_s = math.sqrt(s)
-        s_pow = s * sqrt_s
-        tof_seg = tof * s_pow * mult
+        # Disabled in CG mode (uniform g) where there's no orbital scale.
+        if cg_mode:
+            r0_mag = 0.0
+            rf_mag = 0.0
+            sqrt_s = 1.0
+            s_pow = 1.0
+            tof_seg = tof * mult
+        else:
+            dx0 = r0x - center_np[0]
+            dy0 = r0y - center_np[1]
+            dxf = rfx - center_np[0]
+            dyf = rfy - center_np[1]
+            r0_mag = math.sqrt(dx0 * dx0 + dy0 * dy0)
+            rf_mag = math.sqrt(dxf * dxf + dyf * dyf)
+            s = 0.5 * (r0_mag + rf_mag)
+            if s < 1e-12:
+                s = 1e-12
+            sqrt_s = math.sqrt(s)
+            s_pow = s * sqrt_s
+            tof_seg = tof * s_pow * mult
 
         ok, z_new = _solve_segment(
             r0, rf, tof_seg, mult, z_cache[i],
@@ -789,7 +797,7 @@ def fun_and_grad_batch(
         ok_out[i] = ok
         if ok == 1 and not use_parabola:
             z_cache[i] = z_new
-        if ok == 1:
+        if ok == 1 and not cg_mode:
             _apply_sundman_fixup(
                 r0, rf, center_np, tof,
                 r0_mag, rf_mag, sqrt_s, s_pow,
@@ -994,19 +1002,26 @@ def lm_eval_batch(
         rf[0] = rfx
         rf[1] = rfy
 
-        # Sundman-style time scaling.
-        dx0 = r0x - center_np[0]
-        dy0 = r0y - center_np[1]
-        dxf = rfx - center_np[0]
-        dyf = rfy - center_np[1]
-        r0_mag = math.sqrt(dx0 * dx0 + dy0 * dy0)
-        rf_mag = math.sqrt(dxf * dxf + dyf * dyf)
-        s = 0.5 * (r0_mag + rf_mag)
-        if s < 1e-12:
-            s = 1e-12
-        sqrt_s = math.sqrt(s)
-        s_pow = s * sqrt_s
-        tof_seg = tof * s_pow * mult
+        # Sundman-style time scaling. Disabled in CG mode.
+        if cg_mode:
+            r0_mag = 0.0
+            rf_mag = 0.0
+            sqrt_s = 1.0
+            s_pow = 1.0
+            tof_seg = tof * mult
+        else:
+            dx0 = r0x - center_np[0]
+            dy0 = r0y - center_np[1]
+            dxf = rfx - center_np[0]
+            dyf = rfy - center_np[1]
+            r0_mag = math.sqrt(dx0 * dx0 + dy0 * dy0)
+            rf_mag = math.sqrt(dxf * dxf + dyf * dyf)
+            s = 0.5 * (r0_mag + rf_mag)
+            if s < 1e-12:
+                s = 1e-12
+            sqrt_s = math.sqrt(s)
+            s_pow = s * sqrt_s
+            tof_seg = tof * s_pow * mult
 
         ok, z_new = _solve_segment(
             r0, rf, tof_seg, mult, z_cache[i],
@@ -1018,7 +1033,7 @@ def lm_eval_batch(
         ok_out[i] = ok
         if ok == 1 and not use_parabola:
             z_cache[i] = z_new
-        if ok == 1:
+        if ok == 1 and not cg_mode:
             _apply_sundman_fixup(
                 r0, rf, center_np, tof,
                 r0_mag, rf_mag, sqrt_s, s_pow,

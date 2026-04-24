@@ -10,7 +10,7 @@ from scipy.optimize import brentq, minimize as scipy_minimize
 
 from PyQt6.QtCore import Qt, QPointF, QRectF, QEvent, QObject, pyqtSignal
 from PyQt6.QtGui import QPainter, QBrush, QColor, QPen, QPolygonF
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QVBoxLayout, QHBoxLayout
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QSlider, QLabel
 
 
 class _OptSignals(QObject):
@@ -24,10 +24,24 @@ class _OptSignals(QObject):
 # Canonical units: 1 DU = 6371 km, 1 TU = sqrt(DU^3 / mu_km) ~ 806.4 s, mu = 1 DU^3/TU^2.
 GRAVITY_MAG = 1.0  # DU/TU^2 (~ 9.81e-3 km/s^2 in canonical units)
 TIME_OF_FLIGHT = 1.5  # TU (~ 1200 s)
+# Initial guess for the shared time decision variable, by env mode.
+# In two-body env this is `tau` (Sundman-scaled); in constant-gravity env
+# this is physical TOF per unit mult.
+TAU_INIT_TWO_BODY = 30.0 * math.pi / 180.0
+TOF_INIT_CONSTANT_G = 0.5
+# Slider ranges for the time-variable slider, by env mode.
+TAU_SLIDER_MAX = math.pi  # two-body: 0..180 deg
+TOF_SLIDER_MAX = 2.0      # constant-gravity: 0..2 TU
 ARC_NUM_POINTS = 50  # number of points to draw the parabolic arc
 ORBIT_NUM_POINTS = 200  # number of points to draw a Kepler orbit
 MU = 1.0  # canonical gravitational parameter
 VEL_SCALE = 2.0  # display scale: velocity_end = center + vel * VEL_SCALE
+# Display scales for dv arrows (DU on screen per DU/TU of dv). Picked larger
+# than VEL_SCALE since |dv| << |v| in typical impulsive transfers, and
+# tuned per optimizer mode since fuel-optimal solutions concentrate dv into
+# fewer (larger) burns while energy-optimal spreads it more evenly.
+DV_SCALE_DEFAULTS = {"energy": 30.0, "fuel": 10.0, None: 10.0}
+DV_SCALE_MAX = 30.0 * VEL_SCALE  # slider upper bound (== 60.0)
 # Rotating frame: 1 revolution per 24 hours. With 1 TU ~ 806.4 s, 24 h ~ 107.14 TU.
 ROT_PERIOD_TU = 24.0 * 3600.0 / 806.4
 OMEGA_ROT = 2.0 * math.pi / ROT_PERIOD_TU  # rad / TU, +z (CCW in y-up world)
@@ -649,14 +663,21 @@ class Canvas(QWidget):
         self.sq_orbit = []  # list of QPointF for square Kepler orbit
         self.tri_orbit_mode = True
         self.sq_orbit_mode = True
-        self.arc_model_mode = "conic"  # "conic" (Lambert) or "parabola"
         self.env_mode = "two_body"  # "two_body" or "constant_gravity"
         self.frame_mode = "inertial"  # "inertial" or "rotating"
         # Per-segment time of flight used for rendering. Optimizers may overwrite.
-        self.render_tof = TIME_OF_FLIGHT
+        # In two-body env this is `tau` (Sundman); in CG env it's physical TOF.
+        self.render_tof = TAU_INIT_TWO_BODY
         # Active continuous-optimization mode: None | "energy" | "fuel".
         # When set, every drag release re-runs the optimizer.
         self.optimize_mode = None
+        # Per-mode dv display scales (DU on screen per DU/TU). Adjustable via
+        # the maneuver-length slider; on_dv_scale_changed lets the UI track
+        # mode toggles.
+        self.dv_scale_by_mode = dict(DV_SCALE_DEFAULTS)
+        self.on_dv_scale_changed = None
+        # Slider sync hook for the shared time variable (tau / tof).
+        self.on_render_tof_changed = None
 
         # --- Off-thread optimizer plumbing -----------------------------------
         # Solves triggered via _run_active_optimizer (drag-release) run on a
@@ -677,19 +698,6 @@ class Canvas(QWidget):
         self._compute_orbit_for_shape("triangle")
         self._compute_orbit_for_shape("square")
 
-    def get_arc_model_button_text(self):
-        if self.arc_model_mode == "conic":
-            return "Arc Model: Conic"
-        return "Arc Model: Parabola"
-
-    def toggle_arc_model_mode(self):
-        if self.arc_model_mode == "conic":
-            self.arc_model_mode = "parabola"
-        else:
-            self.arc_model_mode = "conic"
-        self._run_active_optimizer()
-        self.update()
-
     def get_env_button_text(self):
         if self.env_mode == "two_body":
             return "Env: Two-Body"
@@ -698,8 +706,12 @@ class Canvas(QWidget):
     def toggle_env_mode(self):
         if self.env_mode == "two_body":
             self.env_mode = "constant_gravity"
+            self.render_tof = TOF_INIT_CONSTANT_G
         else:
             self.env_mode = "two_body"
+            self.render_tof = TAU_INIT_TWO_BODY
+        if self.on_render_tof_changed is not None:
+            self.on_render_tof_changed(self.render_tof, self.env_mode)
         # Recompute orbits (will be ignored visually in CG mode)
         if self.tri_orbit_mode:
             self._compute_orbit_for_shape("triangle")
@@ -730,18 +742,17 @@ class Canvas(QWidget):
                 p0, p1, center, time_of_flight, num_points,
                 g_vec=self._constant_g_vec(),
             )
-        if self.arc_model_mode == "parabola":
-            return compute_parabolic_arc(p0, p1, center, time_of_flight, num_points)
         return compute_dynamic_arc(p0, p1, center, time_of_flight, num_points)
 
     # ---------- Sundman-style time scaling ----------
-    # The shared optimizer decision variable is `tau` (stored in
-    # `self.render_tof`), not physical time. Per-segment physical TOF is
+    # In two-body env the shared optimizer decision variable is `tau` (stored
+    # in `self.render_tof`), not physical time. Per-segment physical TOF is
     #     tof_seg = tau * s^alpha * mult
     # with alpha = 1.5 (Sundman/Kepler exponent) and
     #     s = (|r0 - earth_center| + |rf - earth_center|) / 2.
     # This matches Kepler's period scaling (T ~ a^1.5) and gives the optimizer
     # a more uniform parameterization across orbits at different scales.
+    # In constant-gravity env, no scaling is applied: tof_seg = tau * mult.
     def _seg_pos_mag_star(self, p0, p1):
         cx = self.earth_center.x()
         cy = self.earth_center.y()
@@ -749,6 +760,8 @@ class Canvas(QWidget):
                       + math.hypot(p1.x() - cx, p1.y() - cy))
 
     def _seg_tof(self, p0, p1, mult):
+        if self.env_mode == "constant_gravity":
+            return self.render_tof * mult
         s = self._seg_pos_mag_star(p0, p1)
         return self.render_tof * s * math.sqrt(s) * mult  # tau * s^1.5 * mult
 
@@ -757,8 +770,6 @@ class Canvas(QWidget):
             return compute_parabolic_arc_velocities(
                 p0, p1, center, time_of_flight, g_vec=self._constant_g_vec(),
             )
-        if self.arc_model_mode == "parabola":
-            return compute_parabolic_arc_velocities(p0, p1, center, time_of_flight)
         return compute_arc_velocities(p0, p1, center, time_of_flight)
 
     # ---------- Rotating-frame rendering helpers ----------
@@ -1151,6 +1162,12 @@ class Canvas(QWidget):
                     ("square", self.sq_center, self.sq_velocity_end),
                 ]:
                     if vel_end is not None:
+                        # Don't grab the velocity arrow inside the shape body —
+                        # those clicks should translate the shape instead.
+                        if shape == "triangle" and self._hit_triangle(pos):
+                            continue
+                        if shape == "square" and self._hit_square(pos):
+                            continue
                         # Closest point on line segment center->vel_end to pos
                         lx = vel_end.x() - center.x()
                         ly = vel_end.y() - center.y()
@@ -1441,7 +1458,7 @@ class Canvas(QWidget):
                     painter.drawLine(rot_pts[k], rot_pts[k + 1])
 
         # Draw velocity lines from triangle/square (triangle at t=0, square at t=tf)
-        pen = QPen(QColor("green"), 2)
+        pen = QPen(QColor("green"), 8)
         pen.setCosmetic(True)
         painter.setPen(pen)
         if self.tri_velocity_end is not None:
@@ -1504,10 +1521,12 @@ class Canvas(QWidget):
                 for j in range(len(rot_pts) - 1):
                     painter.drawLine(rot_pts[j], rot_pts[j + 1])
 
-        # Draw delta-velocity vectors at nodes with exactly 2 neighboring segments
-        pen = QPen(QColor("black"), 2)
-        pen.setCosmetic(True)
-        painter.setPen(pen)
+        # Draw delta-velocity vectors at nodes with exactly 2 neighboring
+        # segments, plus shape-attached dvs at the triangle/square. Collected
+        # in two passes so we can scale the largest |dv| to the Earth radius
+        # (dvs are typically much smaller than orbital velocities — using the
+        # same VEL_SCALE as the green vectors makes them invisible).
+        dv_arrows = []  # list of (anchor_QPointF, dv_disp_xy_array)
         for traj in self.trajectories:
             dots = traj["dots"]
             segments = traj["segments"]
@@ -1532,14 +1551,9 @@ class Canvas(QWidget):
                     t_node = node_t.get(k, 0.0)
                     dv_disp = self._rotate_vec(dv, t_node)
                     anchor = self._rotate_point_about_earth(dot, t_node)
-                    painter.drawLine(
-                        anchor,
-                        QPointF(anchor.x() + dv_disp[0] * VEL_SCALE,
-                                anchor.y() + dv_disp[1] * VEL_SCALE),
-                    )
+                    dv_arrows.append((anchor, dv_disp))
 
-        # Draw delta-velocity vectors at triangle/square when they have
-        # both a velocity vector and an attached segment
+        # Shape-attached dvs (triangle/square endpoints).
         for shape_center, vel_end in [
             (self.tri_center, self.tri_velocity_end),
             (self.sq_center, self.sq_velocity_end),
@@ -1560,25 +1574,28 @@ class Canvas(QWidget):
                             dots[i_start], dots[i_end], center, seg_tof)
                         dv = v0 - shape_vel
                         t_anchor = node_t.get(i_start, 0.0)
-                        anchor = self._rotate_point_about_earth(shape_center, t_anchor)
-                        dv_disp = self._rotate_vec(dv, t_anchor)
-                        painter.drawLine(
-                            anchor,
-                            QPointF(anchor.x() + dv_disp[0] * VEL_SCALE,
-                                    anchor.y() + dv_disp[1] * VEL_SCALE),
-                        )
                     elif dots[i_end] is shape_center:
                         _, vf = self._compute_segment_velocities(
                             dots[i_start], dots[i_end], center, seg_tof)
                         dv = shape_vel - vf
                         t_anchor = node_t.get(i_end, 0.0)
-                        anchor = self._rotate_point_about_earth(shape_center, t_anchor)
-                        dv_disp = self._rotate_vec(dv, t_anchor)
-                        painter.drawLine(
-                            anchor,
-                            QPointF(anchor.x() + dv_disp[0] * VEL_SCALE,
-                                    anchor.y() + dv_disp[1] * VEL_SCALE),
-                        )
+                    else:
+                        continue
+                    anchor = self._rotate_point_about_earth(shape_center, t_anchor)
+                    dv_disp = self._rotate_vec(dv, t_anchor)
+                    dv_arrows.append((anchor, dv_disp))
+
+        if dv_arrows:
+            dv_scale = self.current_dv_scale()
+            pen = QPen(QColor("black"), 2)
+            pen.setCosmetic(True)
+            painter.setPen(pen)
+            for anchor, dv_disp in dv_arrows:
+                painter.drawLine(
+                    anchor,
+                    QPointF(anchor.x() + dv_disp[0] * dv_scale,
+                            anchor.y() + dv_disp[1] * dv_scale),
+                )
 
         # Draw green triangle and square (square at t=tf in rotating frame)
         painter.setBrush(QBrush(QColor("green")))
@@ -1747,7 +1764,7 @@ class Canvas(QWidget):
 
         # Mode selection
         cg_mode = self.env_mode == "constant_gravity"
-        use_parabola = cg_mode or self.arc_model_mode == "parabola"
+        use_parabola = cg_mode
         const_g_vec = self._constant_g_vec() if cg_mode else None
         g_mag = GRAVITY_MAG
         I2 = np.eye(2)
@@ -1832,17 +1849,20 @@ class Canvas(QWidget):
             for i, (dot_s, dot_e, mult) in enumerate(all_segments):
                 r0 = get_pos(dot_s, x_vec)
                 rf = get_pos(dot_e, x_vec)
-                # Sundman-style time scaling: tof_seg = tau * s^1.5 * mult.
-                d0 = r0 - center_np
-                df = rf - center_np
-                r0_mag = math.sqrt(d0[0] * d0[0] + d0[1] * d0[1])
-                rf_mag = math.sqrt(df[0] * df[0] + df[1] * df[1])
-                s = 0.5 * (r0_mag + rf_mag)
-                if s < 1e-12:
-                    s = 1e-12
-                sqrt_s = math.sqrt(s)
-                s_pow = s * sqrt_s
-                tof_seg = tof * s_pow * mult
+                # Sundman-style time scaling (two-body only; off in CG).
+                if cg_mode:
+                    tof_seg = tof * mult
+                else:
+                    d0 = r0 - center_np
+                    df = rf - center_np
+                    r0_mag = math.sqrt(d0[0] * d0[0] + d0[1] * d0[1])
+                    rf_mag = math.sqrt(df[0] * df[0] + df[1] * df[1])
+                    s = 0.5 * (r0_mag + rf_mag)
+                    if s < 1e-12:
+                        s = 1e-12
+                    sqrt_s = math.sqrt(s)
+                    s_pow = s * sqrt_s
+                    tof_seg = tof * s_pow * mult
                 if use_parabola:
                     out = seg_parabola(r0, rf, tof_seg, mult)
                 else:
@@ -1851,18 +1871,19 @@ class Canvas(QWidget):
                     out = out[:-1]
                 # out = (v0, vf, Jv0_r0, Jv0_rf, Jv0_dt, Jvf_r0, Jvf_rf, Jvf_dt)
                 v0_, vf_, Jv0_r0, Jv0_rf, Jv0_dt, Jvf_r0, Jvf_rf, Jvf_dt = out
-                # Apply Sundman chain-rule fixup (mirrors _apply_sundman_fixup in numba).
-                fac = 0.75 * tof * sqrt_s
-                if r0_mag > 1e-10:
-                    r0_hat = d0 / r0_mag
-                    Jv0_r0 = Jv0_r0 + fac * np.outer(Jv0_dt, r0_hat)
-                    Jvf_r0 = Jvf_r0 + fac * np.outer(Jvf_dt, r0_hat)
-                if rf_mag > 1e-10:
-                    rf_hat = df / rf_mag
-                    Jv0_rf = Jv0_rf + fac * np.outer(Jv0_dt, rf_hat)
-                    Jvf_rf = Jvf_rf + fac * np.outer(Jvf_dt, rf_hat)
-                Jv0_dt = Jv0_dt * s_pow
-                Jvf_dt = Jvf_dt * s_pow
+                if not cg_mode:
+                    # Apply Sundman chain-rule fixup (mirrors _apply_sundman_fixup in numba).
+                    fac = 0.75 * tof * sqrt_s
+                    if r0_mag > 1e-10:
+                        r0_hat = d0 / r0_mag
+                        Jv0_r0 = Jv0_r0 + fac * np.outer(Jv0_dt, r0_hat)
+                        Jvf_r0 = Jvf_r0 + fac * np.outer(Jvf_dt, r0_hat)
+                    if rf_mag > 1e-10:
+                        rf_hat = df / rf_mag
+                        Jv0_rf = Jv0_rf + fac * np.outer(Jv0_dt, rf_hat)
+                        Jvf_rf = Jvf_rf + fac * np.outer(Jvf_dt, rf_hat)
+                    Jv0_dt = Jv0_dt * s_pow
+                    Jvf_dt = Jvf_dt * s_pow
                 seg_data_local[i] = (
                     dot_s, dot_e, v0_, vf_,
                     Jv0_r0, Jv0_rf, Jv0_dt,
@@ -2102,7 +2123,7 @@ class Canvas(QWidget):
         for i, dot in enumerate(movable_dots):
             x0[2 * i] = dot.x()
             x0[2 * i + 1] = dot.y()
-        x0[n_pos_vars] = TIME_OF_FLIGHT
+        x0[n_pos_vars] = TAU_INIT_TWO_BODY if self.env_mode == "two_body" else TOF_INIT_CONSTANT_G
 
         # ---- Solver: prefer LM/IRLS when numba is available --------------
         # LM/IRLS exploits the sum-of-squared-residuals structure: dv per
@@ -2165,6 +2186,8 @@ class Canvas(QWidget):
             self._compute_orbit_for_shape("triangle")
         if self.sq_orbit_mode:
             self._compute_orbit_for_shape("square")
+        if self.on_render_tof_changed is not None:
+            self.on_render_tof_changed(self.render_tof, self.env_mode)
         self.update()
 
     def _lm_solve(
@@ -2278,8 +2301,31 @@ class Canvas(QWidget):
         and then on every subsequent drag release."""
         assert mode in (None, "energy", "fuel")
         self.optimize_mode = mode
+        if self.on_dv_scale_changed is not None:
+            self.on_dv_scale_changed(self.current_dv_scale())
         if mode is not None:
             self._optimize_common(mode)
+
+    def current_dv_scale(self):
+        return self.dv_scale_by_mode[self.optimize_mode]
+
+    def set_dv_scale(self, value):
+        self.dv_scale_by_mode[self.optimize_mode] = float(value)
+        self.update()
+
+    def set_render_tof(self, value, run_optimizer=True):
+        """Manual override of the shared time variable from a UI slider.
+        When run_optimizer is True, re-runs the active optimizer (which uses
+        self.render_tof as its starting guess) so dot positions follow the
+        new time. Pass False during a continuous drag and re-run on release."""
+        self.render_tof = float(value)
+        if self.tri_orbit_mode:
+            self._compute_orbit_for_shape("triangle")
+        if self.sq_orbit_mode:
+            self._compute_orbit_for_shape("square")
+        if run_optimizer:
+            self._run_active_optimizer()
+        self.update()
 
     def _run_active_optimizer(self):
         """Kick off the active optimizer asynchronously. If a solve is already
@@ -2389,15 +2435,6 @@ class MainWindow(QMainWindow):
         optimize_energy_btn.toggled.connect(on_energy_toggled)
         optimize_fuel_btn.toggled.connect(on_fuel_toggled)
 
-        arc_model_btn = QPushButton(canvas.get_arc_model_button_text())
-        arc_model_btn.setFixedSize(155, 25)
-
-        def toggle_arc_model_button():
-            canvas.toggle_arc_model_mode()
-            arc_model_btn.setText(canvas.get_arc_model_button_text())
-
-        arc_model_btn.clicked.connect(toggle_arc_model_button)
-
         env_btn = QPushButton(canvas.get_env_button_text())
         env_btn.setFixedSize(180, 25)
 
@@ -2419,8 +2456,6 @@ class MainWindow(QMainWindow):
         top_layout = QHBoxLayout()
         top_layout.addSpacing(10)
         top_layout.addWidget(env_btn)
-        top_layout.addSpacing(10)
-        top_layout.addWidget(arc_model_btn)
         top_layout.addSpacing(10)
         top_layout.addWidget(frame_btn)
         top_layout.addStretch()
@@ -2445,11 +2480,94 @@ class MainWindow(QMainWindow):
         zoom_layout.addWidget(zoom_in_btn)
         zoom_layout.addSpacing(10)
 
+        # Vertical slider on the right of the canvas: dv display scale.
+        # Range [0, 30 * VEL_SCALE]; integer slider uses 0.1-unit resolution.
+        SLIDER_RES = 10
+        dv_slider = QSlider(Qt.Orientation.Vertical)
+        dv_slider.setRange(0, int(DV_SCALE_MAX * SLIDER_RES))
+        dv_slider.setValue(int(canvas.current_dv_scale() * SLIDER_RES))
+        dv_slider.setFixedWidth(20)
+        dv_label = QLabel("Maneuver\nlength")
+        dv_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+
+        def on_slider_changed(v):
+            canvas.set_dv_scale(v / SLIDER_RES)
+
+        dv_slider.valueChanged.connect(on_slider_changed)
+
+        # When optimize mode toggles, snap the slider to that mode's stored value.
+        def on_dv_scale_changed(value):
+            dv_slider.blockSignals(True)
+            dv_slider.setValue(int(value * SLIDER_RES))
+            dv_slider.blockSignals(False)
+
+        canvas.on_dv_scale_changed = on_dv_scale_changed
+
+        # Second slider: shared time variable (tau in two-body, tof in CG).
+        TAU_SLIDER_RES = 1000
+        tau_slider = QSlider(Qt.Orientation.Vertical)
+
+        def _tau_slider_max():
+            return TAU_SLIDER_MAX if canvas.env_mode == "two_body" else TOF_SLIDER_MAX
+
+        tau_slider.setRange(0, int(_tau_slider_max() * TAU_SLIDER_RES))
+        tau_slider.setValue(int(canvas.render_tof * TAU_SLIDER_RES))
+        tau_slider.setFixedWidth(20)
+        tau_label = QLabel("")
+        tau_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+
+        def _update_tau_label():
+            if canvas.env_mode == "two_body":
+                tau_label.setText("\u0394\u03c4")  # Δτ
+            else:
+                tau_label.setText("\u0394t")  # Δt
+
+        _update_tau_label()
+
+        def on_tau_slider_changed(v):
+            # While the user is actively dragging, do not re-run the optimizer
+            # on every tick — let tau vary freely. Re-optimize once on release.
+            canvas.set_render_tof(v / TAU_SLIDER_RES,
+                                  run_optimizer=not tau_slider.isSliderDown())
+
+        tau_slider.valueChanged.connect(on_tau_slider_changed)
+
+        def on_tau_slider_released():
+            canvas.set_render_tof(tau_slider.value() / TAU_SLIDER_RES,
+                                  run_optimizer=True)
+
+        tau_slider.sliderReleased.connect(on_tau_slider_released)
+
+        def on_render_tof_changed(value, env_mode):
+            tau_slider.blockSignals(True)
+            tau_slider.setRange(0, int(_tau_slider_max() * TAU_SLIDER_RES))
+            tau_slider.setValue(int(max(0.0, min(_tau_slider_max(), value)) * TAU_SLIDER_RES))
+            tau_slider.blockSignals(False)
+            _update_tau_label()
+
+        canvas.on_render_tof_changed = on_render_tof_changed
+
+        slider_col = QVBoxLayout()
+        slider_col.setContentsMargins(4, 4, 8, 4)
+        slider_col.addStretch(1)
+        slider_col.addWidget(dv_label)
+        slider_col.addWidget(dv_slider, 2, alignment=Qt.AlignmentFlag.AlignHCenter)
+        slider_col.addSpacing(20)
+        slider_col.addWidget(tau_label)
+        slider_col.addWidget(tau_slider, 2, alignment=Qt.AlignmentFlag.AlignHCenter)
+        slider_col.addStretch(1)
+
+        canvas_row = QHBoxLayout()
+        canvas_row.setContentsMargins(0, 0, 0, 0)
+        canvas_row.setSpacing(0)
+        canvas_row.addWidget(canvas, 1)
+        canvas_row.addLayout(slider_col)
+
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addLayout(top_layout)
-        layout.addWidget(canvas)
+        layout.addLayout(canvas_row)
         layout.addLayout(zoom_layout)
 
         container = QWidget()
