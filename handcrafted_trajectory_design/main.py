@@ -662,6 +662,23 @@ class Canvas(QWidget):
         sq_vy = self.sq_center.x() / sq_r * sq_v_circ
         self.sq_velocity_end = QPointF(self.sq_center.x() + sq_vx * VEL_SCALE, self.sq_center.y() + sq_vy * VEL_SCALE)
 
+        # Moon: massless body for now, just a visual node. Starts on the +x
+        # axis at a distance scaled to Earth's radius and given a circular
+        # prograde velocity for future propagation.
+        self.moon_radius = 0.27  # DU (display only; ~1737 km / 6371 km)
+        self.moon_center = QPointF(60.0 * self.earth_radius, 0.0)
+        moon_r = math.hypot(self.moon_center.x(), self.moon_center.y())
+        moon_v_circ = math.sqrt(MU / moon_r)
+        moon_vx = -self.moon_center.y() / moon_r * moon_v_circ
+        moon_vy = self.moon_center.x() / moon_r * moon_v_circ
+        self.moon_velocity_end = QPointF(
+            self.moon_center.x() + moon_vx * VEL_SCALE,
+            self.moon_center.y() + moon_vy * VEL_SCALE,
+        )
+        self.moon_orbit_elements = self._orbit_elements_at(
+            self.moon_center, np.array([moon_vx, moon_vy]),
+        )
+
         self.tri_orbit = []  # list of QPointF for triangle Kepler orbit
         self.sq_orbit = []  # list of QPointF for square Kepler orbit
         self.tri_orbit_mode = True
@@ -1930,6 +1947,27 @@ class Canvas(QWidget):
             pen.setCosmetic(True)
             painter.setPen(pen)
             painter.drawEllipse(self.earth_center, self.earth_radius, self.earth_radius)
+            # Moon: massless visual node, propagated along its circular
+            # orbit by tf = sum of every segment's flight time (same clock
+            # the ghost square uses).
+            tf_moon = 0.0
+            for traj in self.trajectories:
+                dots = traj["dots"]
+                for i_start, i_end, mult in traj["segments"]:
+                    tf_moon += self._seg_tof(dots[i_start], dots[i_end], mult)
+            if tf_moon > 0.0 and self.moon_orbit_elements is not None:
+                nu_m = self._orbit_nu_after_dt(self.moon_orbit_elements, tf_moon)
+                r_m, _ = self._orbit_pos_vel(self.moon_orbit_elements, nu_m)
+                moon_pt = self._rotate_point_about_earth(
+                    QPointF(float(r_m[0]), float(r_m[1])), tf_moon,
+                )
+            else:
+                moon_pt = self.moon_center
+            painter.setBrush(QBrush(QColor(160, 160, 160)))
+            pen = QPen(QColor(160, 160, 160), 2)
+            pen.setCosmetic(True)
+            painter.setPen(pen)
+            painter.drawEllipse(moon_pt, self.moon_radius, self.moon_radius)
 
         # Draw trajectories
         center = self.earth_center
