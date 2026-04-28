@@ -640,6 +640,7 @@ class Canvas(QWidget):
         self.dragging_vel_end = None  # "triangle" or "square" when dragging a velocity line
         self.dragging_vel_t = 1.0  # parameter along line where grab occurred (0=center, 1=tip)
         self.x_held = False  # X key held: click black node to delete + merge segments
+        self.s_held = False  # S key held: shape drag slides along its Kepler orbit
         # Shape positions (center points) — placed in orbit around earth (DU)
         self.earth_center = QPointF(0, 0)
         self.earth_radius = 1.0  # DU
@@ -665,6 +666,16 @@ class Canvas(QWidget):
         self.sq_orbit = []  # list of QPointF for square Kepler orbit
         self.tri_orbit_mode = True
         self.sq_orbit_mode = True
+        # Orbit-rendezvous mode: when X+deleted, the green shape disappears
+        # and the boundary endpoint is free to slide along the orbit.
+        # Optimizer treats true anomaly nu as a decision variable and the
+        # boundary velocity is the orbital velocity at nu.
+        self.tri_deleted = False
+        self.sq_deleted = False
+        self.tri_nu = 0.0
+        self.sq_nu = 0.0
+        self.tri_orbit_elements = None  # set on delete: dict(h_z, e, omega, sgn)
+        self.sq_orbit_elements = None
         self.env_mode = "two_body"  # "two_body" or "constant_gravity"
         self.frame_mode = "inertial"  # "inertial" or "rotating"
         # Per-segment time of flight used for rendering. Optimizers may overwrite.
@@ -837,10 +848,14 @@ class Canvas(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_X:
             self.x_held = True
+        elif event.key() == Qt.Key.Key_S:
+            self.s_held = True
 
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key.Key_X:
             self.x_held = False
+        elif event.key() == Qt.Key.Key_S:
+            self.s_held = False
 
     def _screen_to_world(self, screen_pos):
         wx = (screen_pos.x() - self.pan_offset.x()) / self.zoom
@@ -857,9 +872,13 @@ class Canvas(QWidget):
         ])
 
     def _hit_triangle(self, pos):
+        if self.tri_deleted:
+            return False
         return self._triangle_polygon().containsPoint(pos, Qt.FillRule.WindingFill)
 
     def _hit_square(self, pos):
+        if self.sq_deleted:
+            return False
         x, y = self.sq_center.x(), self.sq_center.y()
         s = self.sq_size
         return abs(pos.x() - x) <= s / 2 and abs(pos.y() - y) <= s / 2
@@ -1095,6 +1114,174 @@ class Canvas(QWidget):
                 self.sq_center, vel, self.earth_center, MU, ORBIT_NUM_POINTS,
             )
 
+    def _orbit_elements_at(self, center_qpt, vel_xy):
+        """Return dict(h_z, e, omega, sgn, nu0) for the 2D Kepler orbit through\n        (center, vel), or None for degenerate cases."""
+        ec = np.array([self.earth_center.x(), self.earth_center.y()])
+        r = np.array([center_qpt.x() - ec[0], center_qpt.y() - ec[1]])
+        v = np.asarray(vel_xy, dtype=float)
+        r_mag = float(np.linalg.norm(r))
+        if r_mag < 1e-12:
+            return None
+        h_z = float(r[0] * v[1] - r[1] * v[0])
+        if abs(h_z) < 1e-12:
+            return None
+        e_vec = np.array([v[1] * h_z, -v[0] * h_z]) / MU - r / r_mag
+        e = float(np.linalg.norm(e_vec))
+        if e > 1e-9:
+            omega = math.atan2(e_vec[1], e_vec[0])
+        else:
+            omega = math.atan2(r[1], r[0])
+        sgn = 1.0 if h_z > 0 else -1.0
+        theta = math.atan2(r[1], r[0])
+        # theta = omega + sgn * nu  =>  nu = (theta - omega) * sgn
+        nu = (theta - omega) * sgn
+        nu = (nu + math.pi) % (2.0 * math.pi) - math.pi
+        return {"h_z": h_z, "e": e, "omega": omega, "sgn": sgn, "nu0": nu}
+
+    def _orbit_pos_vel(self, elements, nu):
+        """Return (r_world_xy, v_xy) at true anomaly nu on the cached orbit."""
+        h_z = elements["h_z"]
+        e = elements["e"]
+        omega = elements["omega"]
+        sgn = elements["sgn"]
+        p = h_z * h_z / MU
+        cos_nu = math.cos(nu)
+        sin_nu = math.sin(nu)
+        denom = 1.0 + e * cos_nu
+        if denom < 1e-12:
+            denom = 1e-12
+        r_mag = p / denom
+        theta = omega + sgn * nu
+        cos_th = math.cos(theta)
+        sin_th = math.sin(theta)
+        r_xy = np.array([r_mag * cos_th, r_mag * sin_th])
+        # Radial speed and angular rate (signed by h_z).
+        rdot = e * sin_nu * abs(h_z) / p if p > 1e-12 else 0.0
+        th_dot = h_z / (r_mag * r_mag)
+        v_xy = np.array([rdot * cos_th - r_mag * sin_th * th_dot,
+                         rdot * sin_th + r_mag * cos_th * th_dot])
+        ec = np.array([self.earth_center.x(), self.earth_center.y()])
+        return r_xy + ec, v_xy
+
+    def _delete_shape(self, shape):
+        """X+click on triangle/square: hide it but keep the orbit as a\n        rendezvous constraint. Optimizer becomes free to slide the boundary\n        along the orbit (true anomaly nu becomes a decision variable)."""
+        if self.env_mode != "two_body":
+            return False
+        if shape == "triangle":
+            if self.tri_deleted or self.tri_velocity_end is None:
+                return False
+            vel = np.array([
+                self.tri_velocity_end.x() - self.tri_center.x(),
+                self.tri_velocity_end.y() - self.tri_center.y(),
+            ]) / VEL_SCALE
+            elements = self._orbit_elements_at(self.tri_center, vel)
+            if elements is None:
+                return False
+            self.tri_orbit_elements = elements
+            self.tri_nu = elements["nu0"]
+            self.tri_deleted = True
+        else:
+            if self.sq_deleted or self.sq_velocity_end is None:
+                return False
+            vel = np.array([
+                self.sq_velocity_end.x() - self.sq_center.x(),
+                self.sq_velocity_end.y() - self.sq_center.y(),
+            ]) / VEL_SCALE
+            elements = self._orbit_elements_at(self.sq_center, vel)
+            if elements is None:
+                return False
+            self.sq_orbit_elements = elements
+            self.sq_nu = elements["nu0"]
+            self.sq_deleted = True
+        return True
+
+    def _restore_shape(self, shape):
+        """Cmd+click on a deleted triangle/square's ν marker: bring the
+        shape back at its current orbit position. The shape's center and
+        velocity_end already reflect the latest optimizer ν, so we just
+        clear the deleted flag."""
+        if shape == "triangle":
+            if not self.tri_deleted:
+                return False
+            self.tri_deleted = False
+        else:
+            if not self.sq_deleted:
+                return False
+            self.sq_deleted = False
+        return True
+
+    def _slide_shape_to(self, shape, world_pos):
+        """Snap shape center to the nearest point on its Kepler orbit and
+        update the velocity from conserved orbital elements (h, e, a) so the
+        orbit shape is preserved. No-op (returns False) when there is no
+        usable orbit (constant-gravity env, missing velocity, degenerate)."""
+        if self.env_mode != "two_body":
+            return False
+        if shape == "triangle":
+            center = self.tri_center
+            vel_end = self.tri_velocity_end
+            orbit = self.tri_orbit
+        else:
+            center = self.sq_center
+            vel_end = self.sq_velocity_end
+            orbit = self.sq_orbit
+        if vel_end is None or not orbit:
+            return False
+        ec = self.earth_center
+        r0 = np.array([center.x() - ec.x(), center.y() - ec.y()])
+        v0 = np.array([vel_end.x() - center.x(), vel_end.y() - center.y()]) / VEL_SCALE
+        h_z = r0[0] * v0[1] - r0[1] * v0[0]  # specific angular momentum (z)
+        if abs(h_z) < 1e-12:
+            return False
+        r0_mag = float(np.linalg.norm(r0))
+        if r0_mag < 1e-12:
+            return False
+        # Eccentricity vector: e = (v × h)/mu - r̂ ; in 2D with h = h_z·ẑ:
+        # v × (h_z ẑ) = (v_y·h_z, -v_x·h_z)
+        e_vec = np.array([v0[1] * h_z, -v0[0] * h_z]) / MU - r0 / r0_mag
+        inv_a = 2.0 / r0_mag - float(v0 @ v0) / MU
+        # Find the closest orbit-polyline sample to the cursor (world coords).
+        pts = np.array([[p.x() - ec.x(), p.y() - ec.y()] for p in orbit])
+        target = np.array([world_pos.x() - ec.x(), world_pos.y() - ec.y()])
+        d2 = (pts[:, 0] - target[0]) ** 2 + (pts[:, 1] - target[1]) ** 2
+        idx = int(np.argmin(d2))
+        r_new = pts[idx]
+        r_new_mag = float(np.linalg.norm(r_new))
+        if r_new_mag < 1e-12:
+            return False
+        r_hat = r_new / r_new_mag
+        # Tangential velocity from h_z (signed): v · t̂ = h_z / |r|, with
+        # t̂ = ẑ × r̂ = (-r̂_y, r̂_x); so v_t_vec = (h_z/|r|) * t̂.
+        t_hat = np.array([-r_hat[1], r_hat[0]])
+        v_t = h_z / r_new_mag
+        # Radial velocity: v_r = (mu/h_z) * e · sin(ν), with
+        # e·sin(ν) = (e_x·r̂_y - e_y·r̂_x).
+        v_r = (MU / h_z) * (e_vec[0] * r_hat[1] - e_vec[1] * r_hat[0])
+        # Sanity: vis-viva for elliptic orbits.
+        if inv_a > 0:
+            v_mag2 = v_r * v_r + v_t * v_t
+            target_v_mag2 = MU * (2.0 / r_new_mag - inv_a)
+            if not (0.5 * target_v_mag2 < v_mag2 < 2.0 * target_v_mag2):
+                return False
+        v_new = v_r * r_hat + v_t * t_hat
+        new_cx = r_new[0] + ec.x()
+        new_cy = r_new[1] + ec.y()
+        if shape == "triangle":
+            self.tri_center.setX(new_cx)
+            self.tri_center.setY(new_cy)
+            self.tri_velocity_end = QPointF(
+                new_cx + v_new[0] * VEL_SCALE,
+                new_cy + v_new[1] * VEL_SCALE,
+            )
+        else:
+            self.sq_center.setX(new_cx)
+            self.sq_center.setY(new_cy)
+            self.sq_velocity_end = QPointF(
+                new_cx + v_new[0] * VEL_SCALE,
+                new_cy + v_new[1] * VEL_SCALE,
+            )
+        return True
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             pos = self._screen_to_world(QPointF(event.pos()))
@@ -1103,6 +1290,18 @@ class Canvas(QWidget):
             # X + click on a segment (within 1 px of arc, >5 px from each
             # endpoint) to delete that segment.
             if self.x_held:
+                # Try shape delete first (X+click inside triangle/square
+                # converts the boundary into an orbit-rendezvous endpoint).
+                if self._hit_triangle(pos):
+                    if self._delete_shape("triangle"):
+                        self._run_active_optimizer()
+                        self.update()
+                    return
+                if self._hit_square(pos):
+                    if self._delete_shape("square"):
+                        self._run_active_optimizer()
+                        self.update()
+                    return
                 # Try segment delete first (requires click >5 px from each
                 # endpoint), so a click on a line near a node doesn't take
                 # the node with it.
@@ -1193,6 +1392,19 @@ class Canvas(QWidget):
             # Trajectory drawing requires Cmd
             if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
                 start_pos = self._screen_to_world(QPointF(event.pos()))
+                # Cmd+click on a deleted shape's nu marker: restore it.
+                r_restore = 30.0 / self.zoom
+                for shape, deleted, ctr in [
+                    ("triangle", self.tri_deleted, self.tri_center),
+                    ("square", self.sq_deleted, self.sq_center),
+                ]:
+                    if not deleted:
+                        continue
+                    if math.hypot(start_pos.x() - ctr.x(), start_pos.y() - ctr.y()) <= r_restore:
+                        if self._restore_shape(shape):
+                            self._run_active_optimizer()
+                            self.update()
+                            return
                 # If close to an existing arc, insert a node there instead of
                 # starting a new trajectory.
                 if self._insert_node_on_segment(start_pos, max_dist=25.0 / self.zoom):
@@ -1240,6 +1452,10 @@ class Canvas(QWidget):
             return
         # Handle shape dragging
         if self.dragging_shape == "triangle":
+            if self.s_held and self._slide_shape_to("triangle", pos):
+                self._run_active_optimizer()
+                self.update()
+                return
             new_center = pos + self.drag_offset
             delta = new_center - self.tri_center
             self.tri_center.setX(new_center.x())
@@ -1252,6 +1468,10 @@ class Canvas(QWidget):
             self.update()
             return
         if self.dragging_shape == "square":
+            if self.s_held and self._slide_shape_to("square", pos):
+                self._run_active_optimizer()
+                self.update()
+                return
             new_center = pos + self.drag_offset
             delta = new_center - self.sq_center
             self.sq_center.setX(new_center.x())
@@ -1463,7 +1683,7 @@ class Canvas(QWidget):
         pen = QPen(QColor("green"), 8)
         pen.setCosmetic(True)
         painter.setPen(pen)
-        if self.tri_velocity_end is not None:
+        if self.tri_velocity_end is not None and not self.tri_deleted:
             v_in = np.array([self.tri_velocity_end.x() - self.tri_center.x(),
                              self.tri_velocity_end.y() - self.tri_center.y()]) / VEL_SCALE
             v_disp = self._rotating_velocity(v_in, self.tri_center, 0.0)
@@ -1472,7 +1692,7 @@ class Canvas(QWidget):
                 QPointF(self.tri_center.x() + v_disp[0] * VEL_SCALE,
                         self.tri_center.y() + v_disp[1] * VEL_SCALE),
             )
-        if self.sq_velocity_end is not None:
+        if self.sq_velocity_end is not None and not self.sq_deleted:
             v_in = np.array([self.sq_velocity_end.x() - self.sq_center.x(),
                              self.sq_velocity_end.y() - self.sq_center.y()]) / VEL_SCALE
             t_sq = self._square_time()
@@ -1602,11 +1822,36 @@ class Canvas(QWidget):
         # Draw green triangle and square (square at t=tf in rotating frame)
         painter.setBrush(QBrush(QColor("green")))
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawPolygon(self._triangle_polygon())
-        sq_anchor = self._rotate_point_about_earth(self.sq_center, self._square_time())
-        sq_x = sq_anchor.x() - self.sq_size / 2
-        sq_y = sq_anchor.y() - self.sq_size / 2
-        painter.drawRect(QRectF(sq_x, sq_y, self.sq_size, self.sq_size))
+        if not self.tri_deleted:
+            painter.drawPolygon(self._triangle_polygon())
+        if not self.sq_deleted:
+            sq_anchor = self._rotate_point_about_earth(self.sq_center, self._square_time())
+            sq_x = sq_anchor.x() - self.sq_size / 2
+            sq_y = sq_anchor.y() - self.sq_size / 2
+            painter.drawRect(QRectF(sq_x, sq_y, self.sq_size, self.sq_size))
+        # Hollow markers at the current nu for deleted shapes (orbit rendezvous).
+        if self.tri_deleted and self.tri_orbit_elements is not None:
+            r_xy, _ = self._orbit_pos_vel(self.tri_orbit_elements, self.tri_nu)
+            anchor = self._rotate_point_about_earth(QPointF(r_xy[0], r_xy[1]), 0.0)
+            pen = QPen(QColor("green"), 2)
+            pen.setCosmetic(True)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            s = self.tri_size
+            painter.drawPolygon(QPolygonF([
+                QPointF(anchor.x() - s / 2, anchor.y() - s / 2),
+                QPointF(anchor.x() + s / 2, anchor.y()),
+                QPointF(anchor.x() - s / 2, anchor.y() + s / 2),
+            ]))
+        if self.sq_deleted and self.sq_orbit_elements is not None:
+            r_xy, _ = self._orbit_pos_vel(self.sq_orbit_elements, self.sq_nu)
+            anchor = self._rotate_point_about_earth(QPointF(r_xy[0], r_xy[1]), self._square_time())
+            pen = QPen(QColor("green"), 2)
+            pen.setCosmetic(True)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            half = self.sq_size * 0.5
+            painter.drawRect(QRectF(anchor.x() - half, anchor.y() - half, 2 * half, 2 * half))
 
         # Draw all black dots on top of everything (including shapes)
         painter.setBrush(QBrush(QColor("black")))
@@ -1718,9 +1963,11 @@ class Canvas(QWidget):
             for i_start, i_end, mult in traj["segments"]:
                 all_segments.append((dots[i_start], dots[i_end], mult))
 
-        n_vars = n_pos_vars + 1  # positions + single shared TOF
+        n_vars_orig = n_pos_vars + 1  # positions + single shared TOF (no nu yet)
 
-        # Fixed shape data
+        # Fixed shape data. Items are mutable lists so that orbit-rendezvous
+        # mode can override shape_pos / shape_vel in place between solver
+        # iterations (free shapes only).
         shape_data = []
         for shape_center, vel_end in [
             (self.tri_center, self.tri_velocity_end),
@@ -1732,7 +1979,7 @@ class Canvas(QWidget):
                     vel_end.y() - shape_center.y(),
                 ]) / VEL_SCALE
                 shape_pos = np.array([shape_center.x(), shape_center.y()])
-                shape_data.append((shape_center, shape_pos, shape_vel))
+                shape_data.append([shape_center, shape_pos, shape_vel])
 
         # Map dots to a fixed numpy address for fast lookup: movable dots come
         # from decision vars; shape dots come from shape_data; any other
@@ -1759,6 +2006,42 @@ class Canvas(QWidget):
                 node_outgoing_seg[s_id] = i
             if e_id not in node_incoming_seg:
                 node_incoming_seg[e_id] = i
+
+        # Orbit-rendezvous "free shapes": deleted shapes that participate in
+        # at least one segment. Their boundary position+velocity become a
+        # function of a single decision variable (true anomaly nu) on the
+        # cached orbit.
+        free_shapes = []
+        for shape_name, deleted, elements, nu_init, shape_center in [
+            ("triangle", self.tri_deleted, self.tri_orbit_elements, self.tri_nu, self.tri_center),
+            ("square", self.sq_deleted, self.sq_orbit_elements, self.sq_nu, self.sq_center),
+        ]:
+            if not deleted or elements is None:
+                continue
+            s_id = id(shape_center)
+            if s_id not in node_outgoing_seg and s_id not in node_incoming_seg:
+                continue
+            sd_idx = None
+            for k, sd in enumerate(shape_data):
+                if sd[0] is shape_center:
+                    sd_idx = k
+                    break
+            if sd_idx is None:
+                continue
+            free_shapes.append({
+                "shape": shape_name,
+                "shape_center": shape_center,
+                "elements": elements,
+                "nu_init": float(nu_init),
+                "sd_idx": sd_idx,
+                "dv_vel_rows": [],  # populated when numba arrays are built
+                "nu_idx": None,     # filled in below
+            })
+
+        n_free = len(free_shapes)
+        for i, fs in enumerate(free_shapes):
+            fs["nu_idx"] = n_vars_orig + i
+        n_vars = n_vars_orig + n_free  # positions + tof + one nu per free shape
 
         # Mass-leak smoothing so |dv| is differentiable at zero for gradient solvers.
         fuel_eps = 1e-4
@@ -2007,6 +2290,7 @@ class Canvas(QWidget):
             dv_out_seg_list = []
             dv_center_var_idx_list = []
             dv_shape_vel_list = []
+            shape_dv_rows = {}  # id(shape_center) -> [row_idx, ...]
 
             for dot in movable_dots:
                 d_id = id(dot)
@@ -2024,6 +2308,7 @@ class Canvas(QWidget):
                 s_id = id(shape_center)
                 i_out = node_outgoing_seg.get(s_id)
                 if i_out is not None:
+                    shape_dv_rows.setdefault(s_id, []).append(len(dv_type_list))
                     dv_type_list.append(1)
                     dv_in_seg_list.append(-1)
                     dv_out_seg_list.append(i_out)
@@ -2031,6 +2316,7 @@ class Canvas(QWidget):
                     dv_shape_vel_list.append((float(shape_vel[0]), float(shape_vel[1])))
                 i_in = node_incoming_seg.get(s_id)
                 if i_in is not None:
+                    shape_dv_rows.setdefault(s_id, []).append(len(dv_type_list))
                     dv_type_list.append(2)
                     dv_in_seg_list.append(i_in)
                     dv_out_seg_list.append(-1)
@@ -2120,21 +2406,73 @@ class Canvas(QWidget):
                     return float("inf"), None, None
                 return float(cost), r_buf.copy(), J_buf.copy()
 
-        # Initial guess: positions + shared TOF
+        # Initial guess: positions + shared TOF (+ nu per free shape).
         x0 = np.zeros(n_vars)
         for i, dot in enumerate(movable_dots):
             x0[2 * i] = dot.x()
             x0[2 * i + 1] = dot.y()
         x0[n_pos_vars] = TAU_INIT_TWO_BODY if self.env_mode == "two_body" else TOF_INIT_CONSTANT_G
+        for fs in free_shapes:
+            x0[fs["nu_idx"]] = fs["nu_init"]
+
+        # Orbit-rendezvous wrapper: at each cost evaluation, decode each
+        # free shape's nu into (r, v) on its cached orbit and write into
+        # shape_data + numba arrays in place. Compute the position+tof
+        # gradient via the existing inner; compute nu gradient via forward
+        # finite difference. Free shapes' position contributions are not
+        # plumbed through the inner gradient (shape is fixed in inner's
+        # view), so FD is the simplest correct path.
+        if free_shapes:
+            inner = fun_and_grad_active
+            # dv_shape_vel_arr is built earlier inside the numba branch when
+            # _NUMBA_AVAILABLE is True; otherwise the Python fun_and_grad
+            # reads shape_vel directly from shape_data.
+            _dv_vel_arr = dv_shape_vel_arr if _NUMBA_AVAILABLE else None
+
+            def _set_free_shape_state(x_vec):
+                for fs in free_shapes:
+                    nu = float(x_vec[fs["nu_idx"]])
+                    r_xy, v_xy = self._orbit_pos_vel(fs["elements"], nu)
+                    sd = shape_data[fs["sd_idx"]]
+                    sd[1][0] = r_xy[0]; sd[1][1] = r_xy[1]
+                    sd[2][0] = v_xy[0]; sd[2][1] = v_xy[1]
+                    if _dv_vel_arr is not None:
+                        for row in fs["dv_vel_rows"]:
+                            _dv_vel_arr[row, 0] = v_xy[0]
+                            _dv_vel_arr[row, 1] = v_xy[1]
+
+            # Attach numba dv-row metadata (built earlier in numba block).
+            if _NUMBA_AVAILABLE:
+                for fs in free_shapes:
+                    fs["dv_vel_rows"] = list(shape_dv_rows.get(id(fs["shape_center"]), []))
+
+            fd_h = 1e-6
+
+            def fun_and_grad_with_nu(x_vec):
+                _set_free_shape_state(x_vec)
+                cost0, grad_inner = inner(x_vec)
+                grad = grad_inner.copy()
+                for fs in free_shapes:
+                    x_pert = x_vec.copy()
+                    x_pert[fs["nu_idx"]] += fd_h
+                    _set_free_shape_state(x_pert)
+                    cost_p, _ = inner(x_pert)
+                    grad[fs["nu_idx"]] = (cost_p - cost0) / fd_h
+                _set_free_shape_state(x_vec)
+                return cost0, grad
+
+            fun_and_grad_active = fun_and_grad_with_nu
 
         # ---- Solver: prefer LM/IRLS when numba is available --------------
         # LM/IRLS exploits the sum-of-squared-residuals structure: dv per
         # node is a small residual, the Jacobian is structured, and
         # H_GN = J^T W J converges super-linearly near the optimum. For
         # smoothed-L1 (fuel) we use IRLS weights w_i = 1/sqrt(|dv_i|^2+eps^2).
-        # Falls back to BFGS on degeneracy.
+        # Falls back to BFGS on degeneracy. LM does not yet support free
+        # shapes (nu decision variables); BFGS handles those via the
+        # FD-wrapped fun_and_grad above.
         used_lm = False
-        if _NUMBA_AVAILABLE and M_dv > 0:
+        if _NUMBA_AVAILABLE and M_dv > 0 and not free_shapes:
             try:
                 x_lm, lm_ok = self._lm_solve(
                     x0, lm_eval, n_pos_vars, energy_mode, fuel_eps,
@@ -2149,8 +2487,12 @@ class Canvas(QWidget):
 
         if not used_lm:
             if progress_callback is not None:
+                _free_meta_for_cb = [
+                    {"shape": fs["shape"], "nu_idx": fs["nu_idx"], "elements": fs["elements"]}
+                    for fs in free_shapes
+                ]
                 def scipy_cb(xk):
-                    progress_callback(xk, n_pos_vars, movable_dots)
+                    progress_callback(xk, n_pos_vars, movable_dots, _free_meta_for_cb)
                 result = scipy_minimize(
                     fun_and_grad_active, x0, method="BFGS", jac=True,
                     options={"gtol": 1e-6}, callback=scipy_cb,
@@ -2163,13 +2505,37 @@ class Canvas(QWidget):
 
         if not apply:
             # Return everything needed to apply later on the main thread.
-            return result.x.copy(), n_pos_vars, movable_dots
+            # free_shape_meta: serializable list (shape, nu_idx, elements ref)
+            free_shape_meta = [
+                {"shape": fs["shape"], "nu_idx": fs["nu_idx"], "elements": fs["elements"]}
+                for fs in free_shapes
+            ]
+            return result.x.copy(), n_pos_vars, movable_dots, free_shape_meta
 
         # Apply result: update positions and rendering tof
         for i, dot in enumerate(movable_dots):
             dot.setX(result.x[2 * i])
             dot.setY(result.x[2 * i + 1])
         self.render_tof = float(result.x[n_pos_vars])
+        # Free shapes: write back nu and recompute shape pos+vel.
+        for fs in free_shapes:
+            nu = float(result.x[fs["nu_idx"]])
+            r_xy, v_xy = self._orbit_pos_vel(fs["elements"], nu)
+            shape = fs["shape"]
+            if shape == "triangle":
+                self.tri_nu = nu
+                self.tri_center.setX(float(r_xy[0])); self.tri_center.setY(float(r_xy[1]))
+                self.tri_velocity_end = QPointF(
+                    float(r_xy[0] + v_xy[0] * VEL_SCALE),
+                    float(r_xy[1] + v_xy[1] * VEL_SCALE),
+                )
+            else:
+                self.sq_nu = nu
+                self.sq_center.setX(float(r_xy[0])); self.sq_center.setY(float(r_xy[1]))
+                self.sq_velocity_end = QPointF(
+                    float(r_xy[0] + v_xy[0] * VEL_SCALE),
+                    float(r_xy[1] + v_xy[1] * VEL_SCALE),
+                )
 
         # Recompute orbits if active
         if self.tri_orbit_mode:
@@ -2178,12 +2544,32 @@ class Canvas(QWidget):
             self._compute_orbit_for_shape("square")
         self.update()
 
-    def _optimize_common_apply(self, new_x, n_pos_vars, movable_dots):
+    def _optimize_common_apply(self, new_x, n_pos_vars, movable_dots, free_shape_meta=None):
         """Apply an off-thread solve result on the main thread."""
         for i, dot in enumerate(movable_dots):
             dot.setX(float(new_x[2 * i]))
             dot.setY(float(new_x[2 * i + 1]))
         self.render_tof = float(new_x[n_pos_vars])
+        # Free-shape (orbit-rendezvous) writeback: decode each nu into
+        # (r, v) on the cached orbit and update shape center + velocity end.
+        for fs in (free_shape_meta or []):
+            nu = float(new_x[fs["nu_idx"]])
+            r_xy, v_xy = self._orbit_pos_vel(fs["elements"], nu)
+            shape = fs["shape"]
+            if shape == "triangle":
+                self.tri_nu = nu
+                self.tri_center.setX(float(r_xy[0])); self.tri_center.setY(float(r_xy[1]))
+                self.tri_velocity_end = QPointF(
+                    float(r_xy[0] + v_xy[0] * VEL_SCALE),
+                    float(r_xy[1] + v_xy[1] * VEL_SCALE),
+                )
+            else:
+                self.sq_nu = nu
+                self.sq_center.setX(float(r_xy[0])); self.sq_center.setY(float(r_xy[1]))
+                self.sq_velocity_end = QPointF(
+                    float(r_xy[0] + v_xy[0] * VEL_SCALE),
+                    float(r_xy[1] + v_xy[1] * VEL_SCALE),
+                )
         if self.tri_orbit_mode:
             self._compute_orbit_for_shape("triangle")
         if self.sq_orbit_mode:
@@ -2397,7 +2783,7 @@ class Canvas(QWidget):
         last_emit = [0.0]
         min_dt = 0.04  # ~25 fps cap for progress frames
 
-        def cb(xk, n_pos_vars, movable_dots):
+        def cb(xk, n_pos_vars, movable_dots, free_shape_meta=None):
             if self._opt_restart:
                 # User moved something else; skip stale progress frames.
                 return
@@ -2405,7 +2791,7 @@ class Canvas(QWidget):
             if now - last_emit[0] < min_dt:
                 return
             last_emit[0] = now
-            self._opt_signals.progress.emit((xk.copy(), n_pos_vars, movable_dots))
+            self._opt_signals.progress.emit((xk.copy(), n_pos_vars, movable_dots, free_shape_meta or []))
 
         try:
             result = self._optimize_common(cost_mode, apply=False, progress_callback=cb)
@@ -2418,8 +2804,8 @@ class Canvas(QWidget):
         sees a smooth morph into the optimum. Skip if a restart is queued."""
         if self._opt_restart:
             return
-        new_x, n_pos_vars, movable_dots = payload
-        self._optimize_common_apply(new_x, n_pos_vars, movable_dots)
+        new_x, n_pos_vars, movable_dots, free_shape_meta = payload
+        self._optimize_common_apply(new_x, n_pos_vars, movable_dots, free_shape_meta)
 
     def _on_opt_done(self, result):
         """Main-thread handler for worker-thread results. Discards stale
@@ -2434,8 +2820,8 @@ class Canvas(QWidget):
         if isinstance(result, tuple) and len(result) == 2 and result[0] == "__err__":
             print(f"optimize error: {result[1]}")
             return
-        new_x, n_pos_vars, movable_dots = result
-        self._optimize_common_apply(new_x, n_pos_vars, movable_dots)
+        new_x, n_pos_vars, movable_dots, free_shape_meta = result
+        self._optimize_common_apply(new_x, n_pos_vars, movable_dots, free_shape_meta)
 
 
 class MainWindow(QMainWindow):
