@@ -38,7 +38,7 @@ Coordinates are y-up world-space. The `QPainter` transform applies
 A scene is a list of `trajectories`. Each trajectory is:
 
 ```python
-{"dots": [QPointF, ...], "segments": [(i_start, i_end, mult), ...]}
+{"dots": [QPointF, ...], "segments": [(i_start, i_end, mult, side), ...]}
 ```
 
 - `dots` may include shared references to `canvas.tri_center` and
@@ -47,6 +47,15 @@ A scene is a list of `trajectories`. Each trajectory is:
 - `segments` reference indices into `dots`. `mult` is a positive float; segment
   TOF = `render_tof * mult`. An inserted midpoint splits `mult` into `k` and
   `N-k` with integer `k` so cumulative time along a trajectory stays consistent.
+- `side ∈ {-1.0, 0.0, +1.0}` is the Lambert branch hint used inside the
+  antipodal-degenerate band (`|sin Δθ| < SIDE_EPS = 1e-3`, i.e. dθ in
+  ~(179.94°, 180.06°)). Outside the band it is ignored. `+1` = short-way /
+  CCW (h_z > 0); `-1` = long-way / CW (h_z < 0); `0` = auto (kernel falls
+  back to `sign(cross_z)`, which flips at exactly 180°). Seeded at creation
+  via `Canvas._seed_side(p0, p1)` (sign of `(p0 - c) × (p1 - c)`); inherited
+  on insert/split/merge. This gives continuity through the 180° singularity
+  during dragging — without it, Hohmann-like transfers flicker between
+  branches at the antipode.
 - Node time along a trajectory is computed by `_traj_node_times` walking
   segments in list order and accumulating `render_tof * mult` from `i_start`
   to `i_end`. This assumes segments appear in traversal order.

@@ -35,6 +35,9 @@ TOF_SLIDER_MAX = 2.0      # constant-gravity: 0..2 TU
 ARC_NUM_POINTS = 50  # number of points to draw the parabolic arc
 ORBIT_NUM_POINTS = 200  # number of points to draw a Kepler orbit
 MU = 1.0  # canonical gravitational parameter
+# Half-width (radians) of the antipodal-degenerate band where Lambert needs a
+# `side` hint to disambiguate short-way vs long-way at dtheta ~ pi.
+_SIDE_EPS = 1.0e-3
 VEL_SCALE = 2.0  # display scale: velocity_end = center + vel * VEL_SCALE
 # Display scales for dv arrows (DU on screen per DU/TU of dv). Picked larger
 # than VEL_SCALE since |dv| << |v| in typical impulsive transfers, and
@@ -370,11 +373,13 @@ def _lambert_z_solve(r1, r2, A, dt, mu, z_init=0.0):
     return z, C, S, y
 
 
-def lambert_solve(r1_vec, r2_vec, dt, mu):
+def lambert_solve(r1_vec, r2_vec, dt, mu, side=0.0):
     """Solve Lambert's problem in 2D using universal variable z-iteration.
     r1_vec, r2_vec: numpy arrays, position vectors relative to gravity center.
     dt: time of flight (seconds).
     mu: gravitational parameter.
+    side: ±1 hint for the antipodal-degenerate band (see lambert_numba.SIDE_EPS);
+          0 means "auto".
     Returns (v1, v2) numpy arrays (velocity at r1 and r2)."""
     r1 = np.linalg.norm(r1_vec)
     r2 = np.linalg.norm(r2_vec)
@@ -393,9 +398,14 @@ def lambert_solve(r1_vec, r2_vec, dt, mu):
         dtheta = 2 * math.pi - dtheta
 
     sin_dtheta = math.sin(dtheta)
-    if abs(sin_dtheta) < 1e-14 or abs(1 - cos_dtheta) < 1e-14:
+    if abs(1 - cos_dtheta) < 1e-14:
         v = (r2_vec - r1_vec) / dt
         return v, v
+    if abs(sin_dtheta) < _SIDE_EPS:
+        side_eff = side if side != 0.0 else (1.0 if cross_z >= 0.0 else -1.0)
+        dtheta = math.pi - math.copysign(_SIDE_EPS, side_eff)
+        sin_dtheta = math.sin(dtheta)
+        cos_dtheta = math.cos(dtheta)
 
     A = sin_dtheta * math.sqrt(r1 * r2 / (1.0 - cos_dtheta))
 
@@ -459,8 +469,13 @@ def lambert_solve_with_jac(r1_vec, r2_vec, dt, mu, z_init=0.0):
         dtheta = 2.0 * math.pi - dtheta
 
     sin_dtheta = math.sin(dtheta)
-    if abs(sin_dtheta) < 1e-14 or abs(1.0 - cos_dtheta) < 1e-14:
+    if abs(1.0 - cos_dtheta) < 1e-14:
         return _straight_line()
+    if abs(sin_dtheta) < _SIDE_EPS:
+        side_eff = side if side != 0.0 else (1.0 if cross_z >= 0.0 else -1.0)
+        dtheta = math.pi - math.copysign(_SIDE_EPS, side_eff)
+        sin_dtheta = math.sin(dtheta)
+        cos_dtheta = math.cos(dtheta)
 
     A = sin_dtheta * math.sqrt(r1 * r2 / (1.0 - cos_dtheta))
 
@@ -554,24 +569,24 @@ try:
     _lambert_solve_py = lambert_solve
     _lambert_solve_with_jac_py = lambert_solve_with_jac
 
-    def lambert_solve(r1_vec, r2_vec, dt, mu):
+    def lambert_solve(r1_vec, r2_vec, dt, mu, side=0.0):
         r1_arr = np.ascontiguousarray(r1_vec, dtype=np.float64)
         r2_arr = np.ascontiguousarray(r2_vec, dtype=np.float64)
-        ok, v1, v2 = _lnb.lambert_solve_nb(r1_arr, r2_arr, float(dt), float(mu))
+        ok, v1, v2 = _lnb.lambert_solve_nb(r1_arr, r2_arr, float(dt), float(mu), float(side))
         if ok:
             return v1, v2
-        return _lambert_solve_py(r1_vec, r2_vec, dt, mu)
+        return _lambert_solve_py(r1_vec, r2_vec, dt, mu, side=side)
 
-    def lambert_solve_with_jac(r1_vec, r2_vec, dt, mu, z_init=0.0):
+    def lambert_solve_with_jac(r1_vec, r2_vec, dt, mu, z_init=0.0, side=0.0):
         r1_arr = np.ascontiguousarray(r1_vec, dtype=np.float64)
         r2_arr = np.ascontiguousarray(r2_vec, dtype=np.float64)
         out = _lnb.lambert_with_jac_nb(
-            r1_arr, r2_arr, float(dt), float(mu), float(z_init)
+            r1_arr, r2_arr, float(dt), float(mu), float(z_init), float(side)
         )
         if out[0]:
             # (v1, v2, Jv1_r1, Jv1_r2, Jv1_dt, Jv2_r1, Jv2_r2, Jv2_dt, z)
             return out[1:]
-        return _lambert_solve_with_jac_py(r1_vec, r2_vec, dt, mu, z_init=z_init)
+        return _lambert_solve_with_jac_py(r1_vec, r2_vec, dt, mu, z_init=z_init, side=side)
 except ImportError:
     _NUMBA_AVAILABLE = False
     pass
@@ -586,7 +601,7 @@ def _kepler_deriv(state, mu):
     return np.array([state[2], state[3], f * state[0], f * state[1]])
 
 
-def compute_dynamic_arc(p0, p1, center, time_of_flight, num_points):
+def compute_dynamic_arc(p0, p1, center, time_of_flight, num_points, side=0.0):
     """Compute Keplerian arc points between p0 and p1 using Lambert solver + RK4."""
     r1_vec = np.array([p0.x() - center.x(), p0.y() - center.y()])
     r2_vec = np.array([p1.x() - center.x(), p1.y() - center.y()])
@@ -594,7 +609,7 @@ def compute_dynamic_arc(p0, p1, center, time_of_flight, num_points):
     if np.linalg.norm(r1_vec) < 1e-10 or np.linalg.norm(r2_vec) < 1e-10:
         return [p0, p1]
 
-    v1, _ = lambert_solve(r1_vec, r2_vec, time_of_flight, MU)
+    v1, _ = lambert_solve(r1_vec, r2_vec, time_of_flight, MU, side=side)
 
     cx, cy = center.x(), center.y()
     state = np.array([r1_vec[0], r1_vec[1], v1[0], v1[1]])
@@ -612,7 +627,7 @@ def compute_dynamic_arc(p0, p1, center, time_of_flight, num_points):
     return points
 
 
-def compute_arc_velocities(p0, p1, center, time_of_flight):
+def compute_arc_velocities(p0, p1, center, time_of_flight, side=0.0):
     """Return (v0, vf) numpy arrays for the Lambert arc from p0 to p1."""
     r1_vec = np.array([p0.x() - center.x(), p0.y() - center.y()])
     r2_vec = np.array([p1.x() - center.x(), p1.y() - center.y()])
@@ -622,7 +637,7 @@ def compute_arc_velocities(p0, p1, center, time_of_flight):
         v = disp / time_of_flight
         return v, v
 
-    return lambert_solve(r1_vec, r2_vec, time_of_flight, MU)
+    return lambert_solve(r1_vec, r2_vec, time_of_flight, MU, side=side)
 
 
 class Canvas(QWidget):
@@ -779,13 +794,13 @@ class Canvas(QWidget):
         # Down in y-up world coordinates
         return np.array([0.0, -GRAVITY_MAG])
 
-    def _compute_segment_arc(self, p0, p1, center, time_of_flight, num_points):
+    def _compute_segment_arc(self, p0, p1, center, time_of_flight, num_points, side=0.0):
         if self.env_mode == "constant_gravity":
             return compute_parabolic_arc(
                 p0, p1, center, time_of_flight, num_points,
                 g_vec=self._constant_g_vec(),
             )
-        return compute_dynamic_arc(p0, p1, center, time_of_flight, num_points)
+        return compute_dynamic_arc(p0, p1, center, time_of_flight, num_points, side=side)
 
     # ---------- Sundman-style time scaling ----------
     # In two-body env the shared optimizer decision variable is `tau` (stored
@@ -808,12 +823,26 @@ class Canvas(QWidget):
         s = self._seg_pos_mag_star(p0, p1)
         return self.render_tof * s * math.sqrt(s) * mult  # tau * s^1.5 * mult
 
-    def _compute_segment_velocities(self, p0, p1, center, time_of_flight):
+    def _compute_segment_velocities(self, p0, p1, center, time_of_flight, side=0.0):
         if self.env_mode == "constant_gravity":
             return compute_parabolic_arc_velocities(
                 p0, p1, center, time_of_flight, g_vec=self._constant_g_vec(),
             )
-        return compute_arc_velocities(p0, p1, center, time_of_flight)
+        return compute_arc_velocities(p0, p1, center, time_of_flight, side=side)
+
+    def _seed_side(self, p0, p1):
+        """Initial side hint for a new segment: sign(cross_z) of (p0-c, p1-c)
+        relative to earth_center. Returns 0.0 for exactly antipodal geometry
+        (caller will rely on auto-pick at first solve)."""
+        cx, cy = self.earth_center.x(), self.earth_center.y()
+        rx0, ry0 = p0.x() - cx, p0.y() - cy
+        rx1, ry1 = p1.x() - cx, p1.y() - cy
+        cz = rx0 * ry1 - ry0 * rx1
+        if cz > 0:
+            return 1.0
+        if cz < 0:
+            return -1.0
+        return 0.0
 
     # ---------- Rotating-frame rendering helpers ----------
     def _rot_angle(self, t):
@@ -856,7 +885,7 @@ class Canvas(QWidget):
         in their list order, accumulating each segment's Sundman-scaled time."""
         node_t = {}
         dots = traj["dots"]
-        for i_start, i_end, mult in traj["segments"]:
+        for i_start, i_end, mult, _side in traj["segments"]:
             if i_start not in node_t:
                 node_t[i_start] = 0.0
             node_t[i_end] = node_t[i_start] + self._seg_tof(dots[i_start], dots[i_end], mult)
@@ -1090,10 +1119,11 @@ class Canvas(QWidget):
         dense = 200
         for traj in self.trajectories:
             dots = traj["dots"]
-            for s_idx, (i_start, i_end, mult) in enumerate(traj["segments"]):
+            for s_idx, (i_start, i_end, mult, _side) in enumerate(traj["segments"]):
                 arc_pts = self._compute_segment_arc(
                     dots[i_start], dots[i_end], center,
                     self._seg_tof(dots[i_start], dots[i_end], mult), dense + 1,
+                    side=_side,
                 )
                 d_min = float("inf")
                 for j in range(len(arc_pts) - 1):
@@ -1114,7 +1144,7 @@ class Canvas(QWidget):
         if best is None or best[0] > arc_max_dist:
             return None
         _, traj, s_idx = best
-        i_start, i_end, _ = traj["segments"][s_idx]
+        i_start, i_end, _, _ = traj["segments"][s_idx]
         d_s = math.hypot(click[0] - traj["dots"][i_start].x(),
                          click[1] - traj["dots"][i_start].y())
         d_e = math.hypot(click[0] - traj["dots"][i_end].x(),
@@ -1127,7 +1157,7 @@ class Canvas(QWidget):
         """Check if a segment already exists between two points."""
         for traj in self.trajectories:
             dots = traj["dots"]
-            for i_start, i_end, _ in traj["segments"]:
+            for i_start, i_end, _, _ in traj["segments"]:
                 if (dots[i_start] is p0 and dots[i_end] is p1) or (dots[i_start] is p1 and dots[i_end] is p0):
                     return True
         return False
@@ -1144,10 +1174,11 @@ class Canvas(QWidget):
         dense = 200
         for traj in self.trajectories:
             dots = traj["dots"]
-            for s_idx, (i_start, i_end, mult) in enumerate(traj["segments"]):
+            for s_idx, (i_start, i_end, mult, _side) in enumerate(traj["segments"]):
                 arc_pts = self._compute_segment_arc(
                     dots[i_start], dots[i_end], center,
                     self._seg_tof(dots[i_start], dots[i_end], mult), dense + 1,
+                    side=_side,
                 )
                 # Point-to-line-segment distance over consecutive samples.
                 d_min = float("inf")
@@ -1169,7 +1200,7 @@ class Canvas(QWidget):
         if best is None or best[0] > arc_max_dist:
             return False
         _, traj, s_idx = best
-        i_start, i_end, _ = traj["segments"][s_idx]
+        i_start, i_end, _, _ = traj["segments"][s_idx]
         d_s = math.hypot(click[0] - traj["dots"][i_start].x(),
                          click[1] - traj["dots"][i_start].y())
         d_e = math.hypot(click[0] - traj["dots"][i_end].x(),
@@ -1193,13 +1224,14 @@ class Canvas(QWidget):
         dense = 200  # samples per segment for continuous projection
         for traj in self.trajectories:
             dots = traj["dots"]
-            for s_idx, (i_start, i_end, mult) in enumerate(traj["segments"]):
+            for s_idx, (i_start, i_end, mult, _side) in enumerate(traj["segments"]):
                 n_int = int(round(mult))
                 if n_int < 2:
                     continue
                 arc_pts = self._compute_segment_arc(
                     dots[i_start], dots[i_end], center,
                     self._seg_tof(dots[i_start], dots[i_end], mult), dense + 1,
+                    side=_side,
                 )
                 # Find sample closest in space; t in [0, N].
                 best_local = None
@@ -1219,18 +1251,19 @@ class Canvas(QWidget):
         k = int(round(t_star))
         if k <= 0 or k >= n_int:
             return False
-        i_start, i_end, mult = traj["segments"][s_idx]
+        i_start, i_end, mult, _side_existing = traj["segments"][s_idx]
         # Place the new dot at the arc point at time = k * tof along segment.
         arc_pts = self._compute_segment_arc(
             traj["dots"][i_start], traj["dots"][i_end], center,
             self._seg_tof(traj["dots"][i_start], traj["dots"][i_end], mult), n_int + 1,
+            side=_side_existing,
         )
         new_pt = arc_pts[k]
         new_dot = QPointF(new_pt.x(), new_pt.y())
         traj["dots"].append(new_dot)
         new_idx = len(traj["dots"]) - 1
-        traj["segments"][s_idx] = (i_start, new_idx, float(k))
-        traj["segments"].insert(s_idx + 1, (new_idx, i_end, float(n_int - k)))
+        traj["segments"][s_idx] = (i_start, new_idx, float(k), _side_existing)
+        traj["segments"].insert(s_idx + 1, (new_idx, i_end, float(n_int - k), _side_existing))
         return True
 
     def _delete_black_node(self, dot):
@@ -1249,7 +1282,7 @@ class Canvas(QWidget):
             k = dots.index(dot)
             in_seg_idx = None
             out_seg_idx = None
-            for s_idx, (i_start, i_end, _m) in enumerate(traj["segments"]):
+            for s_idx, (i_start, i_end, _m, _s) in enumerate(traj["segments"]):
                 if i_end == k:
                     if in_seg_idx is not None:
                         return False
@@ -1262,33 +1295,33 @@ class Canvas(QWidget):
             if in_seg_idx is None and out_seg_idx is None:
                 del dots[k]
                 renumbered = []
-                for i_s, i_e, m in traj["segments"]:
+                for i_s, i_e, m, _s in traj["segments"]:
                     if i_s > k:
                         i_s -= 1
                     if i_e > k:
                         i_e -= 1
-                    renumbered.append((i_s, i_e, m))
+                    renumbered.append((i_s, i_e, m, _s))
                 traj["segments"] = renumbered
                 if not traj["dots"]:
                     self.trajectories.remove(traj)
                 return True
             if in_seg_idx is None or out_seg_idx is None:
                 return False
-            i_prev, _, m_in = traj["segments"][in_seg_idx]
-            _, i_next, m_out = traj["segments"][out_seg_idx]
+            i_prev, _, m_in, side_in = traj["segments"][in_seg_idx]
+            _, i_next, m_out, _side_out = traj["segments"][out_seg_idx]
             # Build merged segment list, drop the two old segments.
             new_segments = [s for s_idx, s in enumerate(traj["segments"])
                             if s_idx not in (in_seg_idx, out_seg_idx)]
-            new_segments.append((i_prev, i_next, m_in + m_out))
+            new_segments.append((i_prev, i_next, m_in + m_out, side_in))
             # Remove the dot and renumber indices in segments above k.
             del dots[k]
             renumbered = []
-            for i_s, i_e, m in new_segments:
+            for i_s, i_e, m, _s in new_segments:
                 if i_s > k:
                     i_s -= 1
                 if i_e > k:
                     i_e -= 1
-                renumbered.append((i_s, i_e, m))
+                renumbered.append((i_s, i_e, m, _s))
             traj["segments"] = renumbered
             return True
         return False
@@ -1305,7 +1338,7 @@ class Canvas(QWidget):
                     new_dots.append(d)
                 else:
                     new_dots.append(QPointF(d.x(), d.y()))
-            new_segs = [(i, j, m) for (i, j, m) in traj["segments"]]
+            new_segs = [(i, j, m, sd) for (i, j, m, sd) in traj["segments"]]
             trajs.append({"dots": new_dots, "segments": new_segs})
         return {
             "trajectories": trajs,
@@ -1630,7 +1663,7 @@ class Canvas(QWidget):
                             target_traj = first_traj or traj
                             if target_traj is None:
                                 # Both are shape nodes, create a new trajectory
-                                target_traj = {"dots": [first_dot, dot], "segments": [(0, 1, 1.0)]}
+                                target_traj = {"dots": [first_dot, dot], "segments": [(0, 1, 1.0, self._seed_side(first_dot, dot))]}
                                 self.trajectories.append(target_traj)
                             else:
                                 # Add dots if not already present, then add segment
@@ -1640,7 +1673,7 @@ class Canvas(QWidget):
                                     target_traj["dots"].append(dot)
                                 i0 = target_traj["dots"].index(first_dot)
                                 i1 = target_traj["dots"].index(dot)
-                                target_traj["segments"].append((i0, i1, 1.0))
+                                target_traj["segments"].append((i0, i1, 1.0, self._seed_side(first_dot, dot)))
                             self.update()
                         self.shift_click_first = None
                 return
@@ -1746,7 +1779,7 @@ class Canvas(QWidget):
                 if snap_mode == 'inner':
                     self.trajectories.append({"dots": [snap_node], "segments": []})
                 elif snap_mode == 'outer':
-                    self.trajectories.append({"dots": [snap_node, start_pos], "segments": [(0, 1, 1.0)]})
+                    self.trajectories.append({"dots": [snap_node, start_pos], "segments": [(0, 1, 1.0, self._seed_side(snap_node, start_pos))]})
                 else:
                     self.trajectories.append({"dots": [start_pos], "segments": []})
                 self.update()
@@ -1871,7 +1904,8 @@ class Canvas(QWidget):
                     self.trajectories[-1]["segments"].append(
                         (len(self.trajectories[-1]["dots"]) - 1,
                          len(self.trajectories[-1]["dots"]),
-                         1.0)
+                         1.0,
+                         0.0)
                     )
                     self.trajectories[-1]["dots"].append(interp)
                 self.update()
@@ -1892,7 +1926,8 @@ class Canvas(QWidget):
                 self.trajectories[-1]["segments"].append(
                     (len(self.trajectories[-1]["dots"]) - 1,
                      len(self.trajectories[-1]["dots"]),
-                     1.0)
+                     1.0,
+                     0.0)
                 )
                 self.trajectories[-1]["dots"].append(interp)
             self.update()
@@ -1933,13 +1968,13 @@ class Canvas(QWidget):
                                 if snap_node in traj["dots"]:
                                     i_snap = traj["dots"].index(snap_node)
                                     new_segs = []
-                                    for (i_s, i_e, m) in traj["segments"]:
+                                    for (i_s, i_e, m, _s) in traj["segments"]:
                                         if i_s == i_last:
                                             i_s = i_snap
                                         if i_e == i_last:
                                             i_e = i_snap
                                         if i_s != i_e:
-                                            new_segs.append((i_s, i_e, m))
+                                            new_segs.append((i_s, i_e, m, _s))
                                     traj["segments"] = new_segs
                                     del traj["dots"][i_last]
                                 else:
@@ -1952,7 +1987,7 @@ class Canvas(QWidget):
                                     traj["dots"].append(snap_node)
                                     i_snap = len(traj["dots"]) - 1
                                 if not self._segment_exists(last, snap_node):
-                                    traj["segments"].append((i_last, i_snap, 1.0))
+                                    traj["segments"].append((i_last, i_snap, 1.0, self._seed_side(last, snap_node)))
                                     geometry_changed = True
                             self.update()
             if geometry_changed:
@@ -2141,7 +2176,7 @@ class Canvas(QWidget):
             tf_moon = 0.0
             for traj in self.trajectories:
                 dots = traj["dots"]
-                for i_start, i_end, mult in traj["segments"]:
+                for i_start, i_end, mult, _side in traj["segments"]:
                     tf_moon += self._seg_tof(dots[i_start], dots[i_end], mult)
             if tf_moon > 0.0 and self.moon_orbit_elements is not None:
                 nu_m = self._orbit_nu_after_dt(self.moon_orbit_elements, tf_moon)
@@ -2165,7 +2200,7 @@ class Canvas(QWidget):
             node_t = self._traj_node_times(traj)
 
             # Draw segments
-            for i_start, i_end, mult in segments:
+            for i_start, i_end, mult, _side in segments:
                 pen = QPen(QColor("black"), 2)
                 pen.setCosmetic(True)
                 painter.setPen(pen)
@@ -2173,6 +2208,7 @@ class Canvas(QWidget):
                 arc_points = self._compute_segment_arc(
                     dots[i_start], dots[i_end], center,
                     seg_tof, ARC_NUM_POINTS,
+                    side=_side,
                 )
                 t_start = node_t.get(i_start, 0.0)
                 if self.frame_mode == "rotating" and len(arc_points) > 1:
@@ -2204,7 +2240,7 @@ class Canvas(QWidget):
                 # Find segments where this node is an endpoint
                 incoming_vel = None  # arrival velocity at node
                 outgoing_vel = None  # departure velocity from node
-                for i_start, i_end, mult in segments:
+                for i_start, i_end, mult, _side in segments:
                     if i_end == k:
                         _, vf = self._compute_segment_velocities(
                             dots[i_start], dots[i_end], center, self._seg_tof(dots[i_start], dots[i_end], mult))
@@ -2234,7 +2270,7 @@ class Canvas(QWidget):
             for traj in self.trajectories:
                 dots = traj["dots"]
                 node_t = self._traj_node_times(traj)
-                for i_start, i_end, mult in traj["segments"]:
+                for i_start, i_end, mult, _side in traj["segments"]:
                     seg_tof = self._seg_tof(dots[i_start], dots[i_end], mult)
                     if dots[i_start] is shape_center:
                         v0, _ = self._compute_segment_velocities(
@@ -2307,7 +2343,7 @@ class Canvas(QWidget):
             tf = 0.0
             for traj in self.trajectories:
                 dots = traj["dots"]
-                for i_start, i_end, mult in traj["segments"]:
+                for i_start, i_end, mult, _side in traj["segments"]:
                     tf += self._seg_tof(dots[i_start], dots[i_end], mult)
             elements = None
             if self.sq_deleted and self.sq_orbit_elements is not None:
@@ -2368,12 +2404,13 @@ class Canvas(QWidget):
                 _, traj, s_idx = self.x_hover
                 segs = traj["segments"]
                 if 0 <= s_idx < len(segs):
-                    i_start, i_end, mult = segs[s_idx]
+                    i_start, i_end, mult, _side = segs[s_idx]
                     dots = traj["dots"]
                     seg_tof = self._seg_tof(dots[i_start], dots[i_end], mult)
                     arc_points = self._compute_segment_arc(
                         dots[i_start], dots[i_end], self.earth_center,
                         seg_tof, ARC_NUM_POINTS,
+                        side=_side,
                     )
                     node_t = self._traj_node_times(traj)
                     t_start = node_t.get(i_start, 0.0)
@@ -2486,7 +2523,7 @@ class Canvas(QWidget):
 
         for traj in self.trajectories:
             dots = traj["dots"]
-            for i_start, i_end, _mult in traj["segments"]:
+            for i_start, i_end, _mult, _side in traj["segments"]:
                 for idx in (i_start, i_end):
                     dot = dots[idx]
                     if dot is not self.tri_center and dot is not self.sq_center:
@@ -2505,8 +2542,8 @@ class Canvas(QWidget):
         all_segments = []
         for traj in self.trajectories:
             dots = traj["dots"]
-            for i_start, i_end, mult in traj["segments"]:
-                all_segments.append((dots[i_start], dots[i_end], mult))
+            for i_start, i_end, mult, _side in traj["segments"]:
+                all_segments.append((dots[i_start], dots[i_end], mult, _side))
 
         n_vars_orig = n_pos_vars + 1  # positions + single shared TOF (no nu yet)
 
@@ -2544,7 +2581,7 @@ class Canvas(QWidget):
         # They depend only on segment ordering, not on x_vec.
         node_outgoing_seg = {}
         node_incoming_seg = {}
-        for i, (dot_s, dot_e, _m) in enumerate(all_segments):
+        for i, (dot_s, dot_e, _m, _side) in enumerate(all_segments):
             s_id = id(dot_s)
             e_id = id(dot_e)
             if s_id not in node_outgoing_seg:
@@ -2653,12 +2690,12 @@ class Canvas(QWidget):
             return (v0, vf, J_v0_r0, J_v0_rf, J_v0_tf_seg * mult,
                     J_vf_r0, J_vf_rf, J_vf_tf_seg * mult)
 
-        def seg_lambert(r0, rf, tof_seg, mult, z_init):
+        def seg_lambert(r0, rf, tof_seg, mult, z_init, side):
             """Direct numpy call, no QPointF. Returns same tuple as seg_parabola
             plus the converged z for warm-starting."""
             v0, vf, Jv0_r0, Jv0_rf, Jv0_dt, Jvf_r0, Jvf_rf, Jvf_dt, z_new = (
                 lambert_solve_with_jac(r0 - center_np, rf - center_np, tof_seg,
-                                       MU, z_init=z_init)
+                                       MU, z_init=z_init, side=side)
             )
             return (v0, vf, Jv0_r0, Jv0_rf, Jv0_dt * mult,
                     Jvf_r0, Jvf_rf, Jvf_dt * mult, z_new)
@@ -2676,7 +2713,7 @@ class Canvas(QWidget):
 
             # Per-segment velocities + Jacobians (one pass).
             seg_data_local = [None] * len(all_segments)
-            for i, (dot_s, dot_e, mult) in enumerate(all_segments):
+            for i, (dot_s, dot_e, mult, side) in enumerate(all_segments):
                 r0 = get_pos(dot_s, x_vec)
                 rf = get_pos(dot_e, x_vec)
                 # Sundman-style time scaling (two-body only; off in CG).
@@ -2696,7 +2733,7 @@ class Canvas(QWidget):
                 if use_parabola:
                     out = seg_parabola(r0, rf, tof_seg, mult)
                 else:
-                    out = seg_lambert(r0, rf, tof_seg, mult, z_cache[i])
+                    out = seg_lambert(r0, rf, tof_seg, mult, z_cache[i], side)
                     z_cache[i] = out[-1]
                     out = out[:-1]
                 # out = (v0, vf, Jv0_r0, Jv0_rf, Jv0_dt, Jvf_r0, Jvf_rf, Jvf_dt)
@@ -2816,7 +2853,8 @@ class Canvas(QWidget):
             seg_start_fixed = np.zeros((N, 2))
             seg_end_fixed = np.zeros((N, 2))
             seg_mult_arr = np.empty(N)
-            for i, (dot_s, dot_e, mult) in enumerate(all_segments):
+            seg_side_arr = np.empty(N)
+            for i, (dot_s, dot_e, mult, side) in enumerate(all_segments):
                 ks, vs, fsx, fsy = _endpoint_meta(dot_s)
                 ke, ve, fex, fey = _endpoint_meta(dot_e)
                 seg_start_kind[i] = ks
@@ -2828,6 +2866,7 @@ class Canvas(QWidget):
                 seg_end_fixed[i, 0] = fex
                 seg_end_fixed[i, 1] = fey
                 seg_mult_arr[i] = mult
+                seg_side_arr[i] = side
 
             # Build dv-node metadata, mirroring the Python loops.
             dv_type_list = []
@@ -2898,7 +2937,7 @@ class Canvas(QWidget):
                     seg_start_kind, seg_end_kind,
                     seg_start_var_idx, seg_end_var_idx,
                     seg_start_fixed, seg_end_fixed,
-                    seg_mult_arr,
+                    seg_mult_arr, seg_side_arr,
                     shape_pos_tri, shape_pos_sq,
                     center_np, MU,
                     use_parabola, cg_mode, const_g_vec_arr, g_mag,
@@ -2935,7 +2974,7 @@ class Canvas(QWidget):
                     seg_start_kind, seg_end_kind,
                     seg_start_var_idx, seg_end_var_idx,
                     seg_start_fixed, seg_end_fixed,
-                    seg_mult_arr,
+                    seg_mult_arr, seg_side_arr,
                     shape_pos_tri, shape_pos_sq,
                     center_np, MU,
                     use_parabola, cg_mode, const_g_vec_arr, g_mag,
@@ -3237,23 +3276,24 @@ class Canvas(QWidget):
         any_split = False
         for traj in self.trajectories:
             new_segments = []
-            for i_start, i_end, mult in traj["segments"]:
+            for i_start, i_end, mult, _side in traj["segments"]:
                 n_int = int(round(mult))
                 if n_int < 2:
-                    new_segments.append((i_start, i_end, mult))
+                    new_segments.append((i_start, i_end, mult, _side))
                     continue
                 k = n_int // 2
                 arc_pts = self._compute_segment_arc(
                     traj["dots"][i_start], traj["dots"][i_end], center,
                     self._seg_tof(traj["dots"][i_start], traj["dots"][i_end], mult),
                     n_int + 1,
+                    side=_side,
                 )
                 new_pt = arc_pts[k]
                 new_dot = QPointF(new_pt.x(), new_pt.y())
                 traj["dots"].append(new_dot)
                 new_idx = len(traj["dots"]) - 1
-                new_segments.append((i_start, new_idx, float(k)))
-                new_segments.append((new_idx, i_end, float(n_int - k)))
+                new_segments.append((i_start, new_idx, float(k), _side))
+                new_segments.append((new_idx, i_end, float(n_int - k), _side))
                 any_split = True
             traj["segments"] = new_segments
         if any_split and self.optimize_mode is not None:
@@ -3279,7 +3319,7 @@ class Canvas(QWidget):
                         continue
                     in_v = out_v = None
                     in_count = out_count = 0
-                    for i_start, i_end, mult in segments:
+                    for i_start, i_end, mult, _side in segments:
                         seg_tof = self._seg_tof(
                             dots[i_start], dots[i_end], mult)
                         if i_end == k:
