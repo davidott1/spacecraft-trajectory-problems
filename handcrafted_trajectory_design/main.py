@@ -871,17 +871,113 @@ class Canvas(QWidget):
             QPointF(x - s / 2, y + s / 2),
         ])
 
+    def _deleted_shape_pos_vel(self, shape):
+        """Inertial (r_xy, v_xy) of a deleted shape at its current nu, or
+        (None, None) if the shape isn't in the deleted-with-orbit state."""
+        if shape == "triangle":
+            if not self.tri_deleted or self.tri_orbit_elements is None:
+                return None, None
+            return self._orbit_pos_vel(self.tri_orbit_elements, self.tri_nu)
+        if not self.sq_deleted or self.sq_orbit_elements is None:
+            return None, None
+        return self._orbit_pos_vel(self.sq_orbit_elements, self.sq_nu)
+
     def _hit_triangle(self, pos):
         if self.tri_deleted:
-            return False
+            r_xy, _ = self._deleted_shape_pos_vel("triangle")
+            if r_xy is None:
+                return False
+            s = self.tri_size
+            poly = QPolygonF([
+                QPointF(r_xy[0] - s / 2, r_xy[1] - s / 2),
+                QPointF(r_xy[0] + s / 2, r_xy[1]),
+                QPointF(r_xy[0] - s / 2, r_xy[1] + s / 2),
+            ])
+            return poly.containsPoint(pos, Qt.FillRule.WindingFill)
         return self._triangle_polygon().containsPoint(pos, Qt.FillRule.WindingFill)
 
     def _hit_square(self, pos):
         if self.sq_deleted:
-            return False
+            r_xy, _ = self._deleted_shape_pos_vel("square")
+            if r_xy is None:
+                return False
+            s = self.sq_size
+            return abs(pos.x() - r_xy[0]) <= s / 2 and abs(pos.y() - r_xy[1]) <= s / 2
         x, y = self.sq_center.x(), self.sq_center.y()
         s = self.sq_size
         return abs(pos.x() - x) <= s / 2 and abs(pos.y() - y) <= s / 2
+
+    def _slide_deleted_to(self, shape, world_pos):
+        """Set the deleted shape's nu to the orbit point closest to world_pos."""
+        elements = (self.tri_orbit_elements if shape == "triangle"
+                    else self.sq_orbit_elements)
+        if elements is None:
+            return False
+        nus = np.linspace(0.0, 2.0 * math.pi, 720, endpoint=False)
+        pts = np.empty((len(nus), 2))
+        for i, n in enumerate(nus):
+            pts[i] = self._orbit_pos_vel(elements, float(n))[0]
+        target = np.array([world_pos.x(), world_pos.y()])
+        d2 = (pts[:, 0] - target[0]) ** 2 + (pts[:, 1] - target[1]) ** 2
+        idx = int(np.argmin(d2))
+        if shape == "triangle":
+            self.tri_nu = float(nus[idx])
+        else:
+            self.sq_nu = float(nus[idx])
+        return True
+
+    def _rebase_deleted_to_rendered(self, shape):
+        """Move the (center, vel_end) anchor of a deleted shape to its current
+        rendered (orbit, nu) state, with nu reset to 0. Lets a deleted shape
+        be dragged using the same code paths as a live shape."""
+        r_xy, v_xy = self._deleted_shape_pos_vel(shape)
+        if r_xy is None:
+            return
+        new_c = QPointF(float(r_xy[0]), float(r_xy[1]))
+        new_ve = QPointF(float(r_xy[0] + v_xy[0] * VEL_SCALE),
+                         float(r_xy[1] + v_xy[1] * VEL_SCALE))
+        if shape == "triangle":
+            self.tri_center.setX(new_c.x())
+            self.tri_center.setY(new_c.y())
+            self.tri_velocity_end = new_ve
+            elements = self._orbit_elements_at(self.tri_center, np.array([v_xy[0], v_xy[1]]))
+            if elements is not None:
+                self.tri_orbit_elements = elements
+                self.tri_nu = elements["nu0"]
+        else:
+            self.sq_center.setX(new_c.x())
+            self.sq_center.setY(new_c.y())
+            self.sq_velocity_end = new_ve
+            elements = self._orbit_elements_at(self.sq_center, np.array([v_xy[0], v_xy[1]]))
+            if elements is not None:
+                self.sq_orbit_elements = elements
+                self.sq_nu = elements["nu0"]
+
+    def _refresh_deleted_orbit(self, shape):
+        """Rebuild orbit_elements from the current (center, vel_end) anchor and
+        reset nu to 0. Call after a free drag of a deleted shape."""
+        if shape == "triangle":
+            if self.tri_velocity_end is None:
+                return
+            v = np.array([
+                self.tri_velocity_end.x() - self.tri_center.x(),
+                self.tri_velocity_end.y() - self.tri_center.y(),
+            ]) / VEL_SCALE
+            elements = self._orbit_elements_at(self.tri_center, v)
+            if elements is not None:
+                self.tri_orbit_elements = elements
+                self.tri_nu = elements["nu0"]
+        else:
+            if self.sq_velocity_end is None:
+                return
+            v = np.array([
+                self.sq_velocity_end.x() - self.sq_center.x(),
+                self.sq_velocity_end.y() - self.sq_center.y(),
+            ]) / VEL_SCALE
+            elements = self._orbit_elements_at(self.sq_center, v)
+            if elements is not None:
+                self.sq_orbit_elements = elements
+                self.sq_nu = elements["nu0"]
 
     def _snap_target_for(self, pos, r_inner, r_outer):
         """Pick the closer of triangle/square if within r_outer of pos.
@@ -1349,19 +1445,39 @@ class Canvas(QWidget):
             # velocity arrows while Cmd is held.
             cmd_held = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
             if not cmd_held and self._hit_triangle(pos):
+                if self.tri_deleted:
+                    self._rebase_deleted_to_rendered("triangle")
                 self.dragging_shape = "triangle"
                 self.drag_offset = self.tri_center - pos
                 return
             if not cmd_held and self._hit_square(pos):
+                if self.sq_deleted:
+                    self._rebase_deleted_to_rendered("square")
                 self.dragging_shape = "square"
                 self.drag_offset = self.sq_center - pos
                 return
             # Check for dragging anywhere on a velocity line
             if not event.modifiers():
-                for shape, center, vel_end in [
-                    ("triangle", self.tri_center, self.tri_velocity_end),
-                    ("square", self.sq_center, self.sq_velocity_end),
-                ]:
+                # Build (shape, center, vel_end) list including deleted shapes
+                # (whose center/vel are computed from orbit at current nu).
+                vel_targets = []
+                if not self.tri_deleted:
+                    vel_targets.append(("triangle", self.tri_center, self.tri_velocity_end))
+                else:
+                    r_xy, v_xy = self._deleted_shape_pos_vel("triangle")
+                    if r_xy is not None:
+                        c = QPointF(float(r_xy[0]), float(r_xy[1]))
+                        ve = QPointF(c.x() + v_xy[0] * VEL_SCALE, c.y() + v_xy[1] * VEL_SCALE)
+                        vel_targets.append(("triangle", c, ve))
+                if not self.sq_deleted:
+                    vel_targets.append(("square", self.sq_center, self.sq_velocity_end))
+                else:
+                    r_xy, v_xy = self._deleted_shape_pos_vel("square")
+                    if r_xy is not None:
+                        c = QPointF(float(r_xy[0]), float(r_xy[1]))
+                        ve = QPointF(c.x() + v_xy[0] * VEL_SCALE, c.y() + v_xy[1] * VEL_SCALE)
+                        vel_targets.append(("square", c, ve))
+                for shape, center, vel_end in vel_targets:
                     if vel_end is not None:
                         # Don't grab the velocity arrow inside the shape body —
                         # those clicks should translate the shape instead.
@@ -1380,6 +1496,10 @@ class Canvas(QWidget):
                             proj_y = center.y() + t * ly
                             d = math.hypot(pos.x() - proj_x, pos.y() - proj_y)
                             if d < 0.30:
+                                if shape == "triangle" and self.tri_deleted:
+                                    self._rebase_deleted_to_rendered("triangle")
+                                elif shape == "square" and self.sq_deleted:
+                                    self._rebase_deleted_to_rendered("square")
                                 self.dragging_vel_end = shape
                                 self.dragging_vel_t = t
                                 return
@@ -1441,10 +1561,14 @@ class Canvas(QWidget):
             new_end = QPointF(center.x() + dx / t, center.y() + dy / t)
             if self.dragging_vel_end == "triangle":
                 self.tri_velocity_end = new_end
+                if self.tri_deleted:
+                    self._refresh_deleted_orbit("triangle")
                 if self.tri_orbit_mode:
                     self._compute_orbit_for_shape("triangle")
             else:
                 self.sq_velocity_end = new_end
+                if self.sq_deleted:
+                    self._refresh_deleted_orbit("square")
                 if self.sq_orbit_mode:
                     self._compute_orbit_for_shape("square")
             self._run_active_optimizer()
@@ -1452,7 +1576,12 @@ class Canvas(QWidget):
             return
         # Handle shape dragging
         if self.dragging_shape == "triangle":
-            if self.s_held and self._slide_shape_to("triangle", pos):
+            if self.tri_deleted:
+                if self.s_held and self._slide_deleted_to("triangle", pos):
+                    self._run_active_optimizer()
+                    self.update()
+                    return
+            elif self.s_held and self._slide_shape_to("triangle", pos):
                 self._run_active_optimizer()
                 self.update()
                 return
@@ -1462,13 +1591,20 @@ class Canvas(QWidget):
             self.tri_center.setY(new_center.y())
             if self.tri_velocity_end is not None:
                 self.tri_velocity_end = self.tri_velocity_end + delta
+            if self.tri_deleted:
+                self._refresh_deleted_orbit("triangle")
             if self.tri_orbit_mode:
                 self._compute_orbit_for_shape("triangle")
             self._run_active_optimizer()
             self.update()
             return
         if self.dragging_shape == "square":
-            if self.s_held and self._slide_shape_to("square", pos):
+            if self.sq_deleted:
+                if self.s_held and self._slide_deleted_to("square", pos):
+                    self._run_active_optimizer()
+                    self.update()
+                    return
+            elif self.s_held and self._slide_shape_to("square", pos):
                 self._run_active_optimizer()
                 self.update()
                 return
@@ -1478,6 +1614,8 @@ class Canvas(QWidget):
             self.sq_center.setY(new_center.y())
             if self.sq_velocity_end is not None:
                 self.sq_velocity_end = self.sq_velocity_end + delta
+            if self.sq_deleted:
+                self._refresh_deleted_orbit("square")
             if self.sq_orbit_mode:
                 self._compute_orbit_for_shape("square")
             self._run_active_optimizer()
@@ -1679,30 +1817,63 @@ class Canvas(QWidget):
                 for k in range(len(rot_pts) - 1):
                     painter.drawLine(rot_pts[k], rot_pts[k + 1])
 
-        # Draw velocity lines from triangle/square (triangle at t=0, square at t=tf)
-        pen = QPen(QColor("green"), 8)
-        pen.setCosmetic(True)
-        painter.setPen(pen)
+        # Draw velocity lines from triangle/square (triangle at t=0, square at t=tf).
+        # Solid thick line for live shapes; hollow rectangle outline (matching
+        # the hollow shape markers) for deleted shapes at their current nu.
+        def _draw_shape_velocity(anchor_pt, v_disp, hollow):
+            tip = QPointF(anchor_pt.x() + v_disp[0] * VEL_SCALE,
+                          anchor_pt.y() + v_disp[1] * VEL_SCALE)
+            if not hollow:
+                pen_l = QPen(QColor("green"), 8)
+                pen_l.setCosmetic(True)
+                painter.setPen(pen_l)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawLine(anchor_pt, tip)
+                return
+            dx = tip.x() - anchor_pt.x()
+            dy = tip.y() - anchor_pt.y()
+            L = math.hypot(dx, dy)
+            if L < 1e-9:
+                return
+            # Perpendicular offset = half of the would-be 8 px stroke,
+            # converted from screen pixels to world units.
+            half_w = 4.0 / self.zoom
+            px, py = -dy / L * half_w, dx / L * half_w
+            poly = QPolygonF([
+                QPointF(anchor_pt.x() + px, anchor_pt.y() + py),
+                QPointF(tip.x() + px, tip.y() + py),
+                QPointF(tip.x() - px, tip.y() - py),
+                QPointF(anchor_pt.x() - px, anchor_pt.y() - py),
+            ])
+            pen_l = QPen(QColor("green"), 2)
+            pen_l.setCosmetic(True)
+            painter.setPen(pen_l)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawPolygon(poly)
+
         if self.tri_velocity_end is not None and not self.tri_deleted:
             v_in = np.array([self.tri_velocity_end.x() - self.tri_center.x(),
                              self.tri_velocity_end.y() - self.tri_center.y()]) / VEL_SCALE
             v_disp = self._rotating_velocity(v_in, self.tri_center, 0.0)
-            painter.drawLine(
-                self.tri_center,
-                QPointF(self.tri_center.x() + v_disp[0] * VEL_SCALE,
-                        self.tri_center.y() + v_disp[1] * VEL_SCALE),
-            )
+            _draw_shape_velocity(self.tri_center, v_disp, hollow=False)
+        elif self.tri_deleted and self.tri_orbit_elements is not None:
+            r_xy, v_xy = self._orbit_pos_vel(self.tri_orbit_elements, self.tri_nu)
+            anchor_pt = self._rotate_point_about_earth(QPointF(r_xy[0], r_xy[1]), 0.0)
+            v_disp = self._rotating_velocity(v_xy, QPointF(r_xy[0], r_xy[1]), 0.0)
+            _draw_shape_velocity(anchor_pt, v_disp, hollow=True)
         if self.sq_velocity_end is not None and not self.sq_deleted:
             v_in = np.array([self.sq_velocity_end.x() - self.sq_center.x(),
                              self.sq_velocity_end.y() - self.sq_center.y()]) / VEL_SCALE
             t_sq = self._square_time()
             v_disp = self._rotating_velocity(v_in, self.sq_center, t_sq)
             anchor = self._rotate_point_about_earth(self.sq_center, t_sq)
-            painter.drawLine(
-                anchor,
-                QPointF(anchor.x() + v_disp[0] * VEL_SCALE,
-                        anchor.y() + v_disp[1] * VEL_SCALE),
-            )
+            _draw_shape_velocity(anchor, v_disp, hollow=False)
+        elif self.sq_deleted and self.sq_orbit_elements is not None:
+            t_sq = self._square_time()
+            r_xy, v_xy = self._orbit_pos_vel(self.sq_orbit_elements, self.sq_nu)
+            anchor_pt = self._rotate_point_about_earth(QPointF(r_xy[0], r_xy[1]), t_sq)
+            v_disp = self._rotating_velocity(v_xy, QPointF(r_xy[0], r_xy[1]), t_sq)
+            _draw_shape_velocity(anchor_pt, v_disp, hollow=True)
 
         # Draw blue circle (Earth) only in two-body env
         if self.env_mode == "two_body":
@@ -2684,6 +2855,37 @@ class Canvas(QWidget):
     def optimize_fuel(self):
         self._optimize_common("fuel")
 
+    def add_nodes(self):
+        """Single pass: split every segment with mult >= 2 at its midpoint
+        (k = mult // 2). Inverse of `prune_small_dvs` — each click adds one
+        layer of refinement. Re-runs the active optimizer afterward."""
+        center = self.earth_center
+        any_split = False
+        for traj in self.trajectories:
+            new_segments = []
+            for i_start, i_end, mult in traj["segments"]:
+                n_int = int(round(mult))
+                if n_int < 2:
+                    new_segments.append((i_start, i_end, mult))
+                    continue
+                k = n_int // 2
+                arc_pts = self._compute_segment_arc(
+                    traj["dots"][i_start], traj["dots"][i_end], center,
+                    self._seg_tof(traj["dots"][i_start], traj["dots"][i_end], mult),
+                    n_int + 1,
+                )
+                new_pt = arc_pts[k]
+                new_dot = QPointF(new_pt.x(), new_pt.y())
+                traj["dots"].append(new_dot)
+                new_idx = len(traj["dots"]) - 1
+                new_segments.append((i_start, new_idx, float(k)))
+                new_segments.append((new_idx, i_end, float(n_int - k)))
+                any_split = True
+            traj["segments"] = new_segments
+        if any_split and self.optimize_mode is not None:
+            self._optimize_common(self.optimize_mode)
+        self.update()
+
     def prune_small_dvs(self, threshold=SMALL_DV_THRESHOLD):
         """Iteratively remove interior black nodes whose |dv| is below
         threshold. Removes one node at a time (smallest dv first) and
@@ -2910,12 +3112,17 @@ class MainWindow(QMainWindow):
         zoom_out_btn.setFixedSize(30, 30)
         zoom_out_btn.clicked.connect(canvas.zoom_out)
 
-        prune_btn = QPushButton("Remove small \u0394v")
+        prune_btn = QPushButton("Remove nodes")
         prune_btn.setFixedSize(160, 25)
         prune_btn.clicked.connect(lambda: canvas.prune_small_dvs())
 
+        add_btn = QPushButton("Add nodes")
+        add_btn.setFixedSize(160, 25)
+        add_btn.clicked.connect(lambda: canvas.add_nodes())
+
         zoom_layout = QHBoxLayout()
         zoom_layout.addSpacing(10)
+        zoom_layout.addWidget(add_btn)
         zoom_layout.addWidget(prune_btn)
         zoom_layout.addStretch()
         zoom_layout.addWidget(zoom_out_btn)
