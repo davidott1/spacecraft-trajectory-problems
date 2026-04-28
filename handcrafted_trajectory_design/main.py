@@ -1259,6 +1259,41 @@ class Canvas(QWidget):
         ec = np.array([self.earth_center.x(), self.earth_center.y()])
         return r_xy + ec, v_xy
 
+    def _orbit_nu_after_dt(self, elements, dt):
+        """Propagate elliptic Kepler elements: return ν at time elements['nu0']+dt.
+        Returns nu0 unchanged for non-elliptic / degenerate orbits."""
+        e = float(elements["e"])
+        if e >= 1.0:
+            return float(elements["nu0"])
+        h_z = float(elements["h_z"])
+        sgn = float(elements["sgn"])
+        nu0 = float(elements["nu0"])
+        p = h_z * h_z / MU
+        denom = 1.0 - e * e
+        if denom < 1e-12:
+            return nu0
+        a = p / denom
+        if a <= 0.0:
+            return nu0
+        n = math.sqrt(MU / (a * a * a))
+        sqrt1m = math.sqrt(max(1.0 - e, 0.0))
+        sqrt1p = math.sqrt(max(1.0 + e, 0.0))
+        E0 = 2.0 * math.atan2(sqrt1m * math.sin(nu0 / 2.0),
+                              sqrt1p * math.cos(nu0 / 2.0))
+        M0 = E0 - e * math.sin(E0)
+        M = M0 + sgn * n * float(dt)
+        E = M if e < 0.8 else math.pi
+        for _ in range(50):
+            f = E - e * math.sin(E) - M
+            fp = 1.0 - e * math.cos(E)
+            dE = -f / fp if fp != 0.0 else 0.0
+            E += dE
+            if abs(dE) < 1e-12:
+                break
+        nu = 2.0 * math.atan2(sqrt1p * math.sin(E / 2.0),
+                              sqrt1m * math.cos(E / 2.0))
+        return nu
+
     def _delete_shape(self, shape):
         """X+click on triangle/square: hide it but keep the orbit as a\n        rendezvous constraint. Optimizer becomes free to slide the boundary\n        along the orbit (true anomaly nu becomes a decision variable)."""
         if self.env_mode != "two_body":
@@ -2036,6 +2071,41 @@ class Canvas(QWidget):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             half = self.sq_size * 0.5
             painter.drawRect(QRectF(anchor.x() - half, anchor.y() - half, 2 * half, 2 * half))
+
+        # Ghost square: forward-propagate the square's current state along
+        # its Kepler orbit by tf = sum of every segment's flight time across
+        # all trajectories (not just those terminating at the square), so the
+        # ghost advances every time a new segment is added. Drawn as a hollow
+        # grey square 2x the live square's size.
+        if self.env_mode == "two_body":
+            tf = 0.0
+            for traj in self.trajectories:
+                dots = traj["dots"]
+                for i_start, i_end, mult in traj["segments"]:
+                    tf += self._seg_tof(dots[i_start], dots[i_end], mult)
+            elements = None
+            if self.sq_deleted and self.sq_orbit_elements is not None:
+                elements = self.sq_orbit_elements
+            elif (not self.sq_deleted) and self.sq_velocity_end is not None:
+                v_xy = np.array([
+                    self.sq_velocity_end.x() - self.sq_center.x(),
+                    self.sq_velocity_end.y() - self.sq_center.y(),
+                ]) / VEL_SCALE
+                elements = self._orbit_elements_at(self.sq_center, v_xy)
+            if elements is not None and tf > 0.0:
+                nu_g = self._orbit_nu_after_dt(elements, tf)
+                r_g, _ = self._orbit_pos_vel(elements, nu_g)
+                anchor_g = self._rotate_point_about_earth(
+                    QPointF(float(r_g[0]), float(r_g[1])), tf,
+                )
+                pen = QPen(QColor(160, 160, 160), 2)
+                pen.setCosmetic(True)
+                painter.setPen(pen)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                half = self.sq_size  # 2x the live square's half-extent
+                painter.drawRect(QRectF(
+                    anchor_g.x() - half, anchor_g.y() - half, 2 * half, 2 * half,
+                ))
 
         # Draw all black dots on top of everything (including shapes)
         painter.setBrush(QBrush(QColor("black")))
