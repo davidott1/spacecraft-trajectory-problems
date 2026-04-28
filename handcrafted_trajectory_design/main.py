@@ -1309,10 +1309,16 @@ class Canvas(QWidget):
                 return False
             i_prev, _, m_in, side_in = traj["segments"][in_seg_idx]
             _, i_next, m_out, _side_out = traj["segments"][out_seg_idx]
-            # Build merged segment list, drop the two old segments.
-            new_segments = [s for s_idx, s in enumerate(traj["segments"])
-                            if s_idx not in (in_seg_idx, out_seg_idx)]
-            new_segments.append((i_prev, i_next, m_in + m_out, side_in))
+            # Build merged segment list, drop the two old segments. Insert
+            # the merged segment at the earlier of the two removed slots so
+            # traversal order is preserved (required by _traj_node_times
+            # and the optimizer's first-occurrence convention).
+            insert_at = min(in_seg_idx, out_seg_idx)
+            kept = [s for s_idx, s in enumerate(traj["segments"])
+                    if s_idx not in (in_seg_idx, out_seg_idx)]
+            new_segments = (kept[:insert_at]
+                            + [(i_prev, i_next, m_in + m_out, side_in)]
+                            + kept[insert_at:])
             # Remove the dot and renumber indices in segments above k.
             del dots[k]
             renumbered = []
