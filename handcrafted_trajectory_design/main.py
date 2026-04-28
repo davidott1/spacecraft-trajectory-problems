@@ -1788,13 +1788,26 @@ class Canvas(QWidget):
         if self.env_mode == "two_body" and self.frame_mode == "rotating":
             t_sq2 = self._square_time()
             specs = []
-            if self.tri_velocity_end is not None:
+            # Triangle: use rendered (nu) state for deleted shapes so the
+            # rotating-frame trace lines up with the drawn triangle and the
+            # transfer arc's t=0 endpoint.
+            if self.tri_deleted and self.tri_orbit_elements is not None:
+                r_xy, v_xy = self._deleted_shape_pos_vel("triangle")
+                if r_xy is not None:
+                    specs.append((QPointF(float(r_xy[0]), float(r_xy[1])),
+                                  np.array([v_xy[0], v_xy[1]]), 0.0))
+            elif self.tri_velocity_end is not None:
                 tri_vel = np.array([
                     self.tri_velocity_end.x() - self.tri_center.x(),
                     self.tri_velocity_end.y() - self.tri_center.y(),
                 ]) / VEL_SCALE
                 specs.append((self.tri_center, tri_vel, 0.0))
-            if self.sq_velocity_end is not None:
+            if self.sq_deleted and self.sq_orbit_elements is not None:
+                r_xy, v_xy = self._deleted_shape_pos_vel("square")
+                if r_xy is not None:
+                    specs.append((QPointF(float(r_xy[0]), float(r_xy[1])),
+                                  np.array([v_xy[0], v_xy[1]]), t_sq2))
+            elif self.sq_velocity_end is not None:
                 sq_vel = np.array([
                     self.sq_velocity_end.x() - self.sq_center.x(),
                     self.sq_velocity_end.y() - self.sq_center.y(),
