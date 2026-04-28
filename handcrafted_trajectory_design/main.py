@@ -629,9 +629,11 @@ class Canvas(QWidget):
     def __init__(self):
         super().__init__()
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setMouseTracking(True)
         self.trajectories = []  # list of {"dots": [QPointF], "segments": [(i, j, mult)]}
         self.dot_radius = 0.10  # DU
-        self.trace_spacing = 1.0  # DU
+        self.trace_spacing = 1.0  # DU (used as fallback near Earth center)
+        self.trace_angle = math.radians(30.0)  # rad of true-anomaly travel about Earth
         self.dragging = False
         self.dragging_shape = None  # "triangle" or "square" when dragging a shape
         self.drag_offset = QPointF(0, 0)
@@ -640,6 +642,17 @@ class Canvas(QWidget):
         self.dragging_vel_end = None  # "triangle" or "square" when dragging a velocity line
         self.dragging_vel_t = 1.0  # parameter along line where grab occurred (0=center, 1=tip)
         self.x_held = False  # X key held: click black node to delete + merge segments
+        # Hover-highlight target while X is held so the user can see what an
+        # X-click would delete. One of:
+        #   ("triangle",) | ("square",)
+        #   ("segment", traj, seg_idx) | ("node", traj, dot)
+        # or None if nothing is hovered.
+        self.x_hover = None
+        self._last_mouse_world = None  # last cursor pos in world coords
+        # Bounded undo stack of snapshots taken just before each X-deletion.
+        # Each entry is the tuple returned by `_snapshot_for_undo()`.
+        self.delete_history = []
+        self.delete_history_max = 100
         self.s_held = False  # S key held: shape drag slides along its Kepler orbit
         # Shape positions (center points) — placed in orbit around earth (DU)
         self.earth_center = QPointF(0, 0)
@@ -865,12 +878,17 @@ class Canvas(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_X:
             self.x_held = True
+            if self._last_mouse_world is not None:
+                self._update_x_hover(self._last_mouse_world)
         elif event.key() == Qt.Key.Key_S:
             self.s_held = True
 
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key.Key_X:
             self.x_held = False
+            if self.x_hover is not None:
+                self.x_hover = None
+                self.update()
         elif event.key() == Qt.Key.Key_S:
             self.s_held = False
 
@@ -1037,6 +1055,73 @@ class Canvas(QWidget):
             best_dot = self.sq_center
             best_traj = None
         return best_dot, best_traj
+
+    def _update_x_hover(self, pos):
+        """Recompute self.x_hover given current cursor world-pos. Mirrors the
+        same hit checks (in the same order) as the X+click delete path so the
+        highlight matches what an X-click would actually delete."""
+        new_hover = None
+        if self._hit_triangle(pos):
+            new_hover = ("triangle",)
+        elif self._hit_square(pos):
+            new_hover = ("square",)
+        else:
+            seg = self._find_segment_near(
+                pos, arc_max_dist=8.0 / self.zoom,
+                endpoint_min_dist=10.0 / self.zoom,
+            )
+            if seg is not None:
+                new_hover = ("segment", seg[0], seg[1])
+            else:
+                dot, traj = self._find_nearest_dot(pos, max_dist=12.0 / self.zoom)
+                if dot is not None and dot is not self.tri_center and dot is not self.sq_center:
+                    new_hover = ("node", traj, dot)
+        if new_hover != self.x_hover:
+            self.x_hover = new_hover
+            self.update()
+
+    def _find_segment_near(self, pos, arc_max_dist, endpoint_min_dist):
+        """Locate the segment whose arc passes nearest pos. Returns
+        (traj, seg_idx) or None. Same geometry as _delete_segment_at but
+        without mutating anything."""
+        click = np.array([pos.x(), pos.y()])
+        center = self.earth_center
+        best = None
+        dense = 200
+        for traj in self.trajectories:
+            dots = traj["dots"]
+            for s_idx, (i_start, i_end, mult) in enumerate(traj["segments"]):
+                arc_pts = self._compute_segment_arc(
+                    dots[i_start], dots[i_end], center,
+                    self._seg_tof(dots[i_start], dots[i_end], mult), dense + 1,
+                )
+                d_min = float("inf")
+                for j in range(len(arc_pts) - 1):
+                    a = np.array([arc_pts[j].x(), arc_pts[j].y()])
+                    b = np.array([arc_pts[j + 1].x(), arc_pts[j + 1].y()])
+                    ab = b - a
+                    L2 = float(ab @ ab)
+                    if L2 < 1e-30:
+                        d = float(np.linalg.norm(click - a))
+                    else:
+                        t = max(0.0, min(1.0, float((click - a) @ ab) / L2))
+                        proj = a + t * ab
+                        d = float(np.linalg.norm(click - proj))
+                    if d < d_min:
+                        d_min = d
+                if best is None or d_min < best[0]:
+                    best = (d_min, traj, s_idx)
+        if best is None or best[0] > arc_max_dist:
+            return None
+        _, traj, s_idx = best
+        i_start, i_end, _ = traj["segments"][s_idx]
+        d_s = math.hypot(click[0] - traj["dots"][i_start].x(),
+                         click[1] - traj["dots"][i_start].y())
+        d_e = math.hypot(click[0] - traj["dots"][i_end].x(),
+                         click[1] - traj["dots"][i_end].y())
+        if d_s < endpoint_min_dist or d_e < endpoint_min_dist:
+            return None
+        return traj, s_idx
 
     def _segment_exists(self, p0, p1):
         """Check if a segment already exists between two points."""
@@ -1207,6 +1292,63 @@ class Canvas(QWidget):
             traj["segments"] = renumbered
             return True
         return False
+
+    def _snapshot_for_undo(self):
+        """Capture the state mutated by any X-deletion path. Trajectories
+        are deep-copied with shape-center QPointF identity preserved (many
+        code paths use `dot is self.tri_center`)."""
+        trajs = []
+        for traj in self.trajectories:
+            new_dots = []
+            for d in traj["dots"]:
+                if d is self.tri_center or d is self.sq_center:
+                    new_dots.append(d)
+                else:
+                    new_dots.append(QPointF(d.x(), d.y()))
+            new_segs = [(i, j, m) for (i, j, m) in traj["segments"]]
+            trajs.append({"dots": new_dots, "segments": new_segs})
+        return {
+            "trajectories": trajs,
+            "tri_deleted": self.tri_deleted,
+            "tri_nu": self.tri_nu,
+            "tri_orbit_elements": (None if self.tri_orbit_elements is None
+                                   else dict(self.tri_orbit_elements)),
+            "sq_deleted": self.sq_deleted,
+            "sq_nu": self.sq_nu,
+            "sq_orbit_elements": (None if self.sq_orbit_elements is None
+                                  else dict(self.sq_orbit_elements)),
+        }
+
+    def _push_delete_undo(self):
+        self.delete_history.append(self._snapshot_for_undo())
+        if len(self.delete_history) > self.delete_history_max:
+            self.delete_history.pop(0)
+
+    def _pop_delete_undo(self):
+        """Discard the most recent snapshot without restoring (used when a
+        speculative push didn't actually result in a deletion)."""
+        if self.delete_history:
+            self.delete_history.pop()
+
+    def undo_delete(self):
+        """Restore the state from the most recent X-deletion snapshot."""
+        if not self.delete_history:
+            return
+        snap = self.delete_history.pop()
+        self.trajectories = snap["trajectories"]
+        self.tri_deleted = snap["tri_deleted"]
+        self.tri_nu = snap["tri_nu"]
+        self.tri_orbit_elements = snap["tri_orbit_elements"]
+        self.sq_deleted = snap["sq_deleted"]
+        self.sq_nu = snap["sq_nu"]
+        self.sq_orbit_elements = snap["sq_orbit_elements"]
+        # Refresh derived display state for shapes (orbit traces).
+        if self.tri_orbit_mode:
+            self._compute_orbit_for_shape("triangle")
+        if self.sq_orbit_mode:
+            self._compute_orbit_for_shape("square")
+        self._run_active_optimizer()
+        self.update()
 
     def _compute_orbit_for_shape(self, shape):
         """Compute Kepler orbit for triangle or square if it has a velocity vector."""
@@ -1441,27 +1583,37 @@ class Canvas(QWidget):
                 # Try shape delete first (X+click inside triangle/square
                 # converts the boundary into an orbit-rendezvous endpoint).
                 if self._hit_triangle(pos):
+                    self._push_delete_undo()
                     if self._delete_shape("triangle"):
                         self._run_active_optimizer()
                         self.update()
+                    else:
+                        self._pop_delete_undo()
                     return
                 if self._hit_square(pos):
+                    self._push_delete_undo()
                     if self._delete_shape("square"):
                         self._run_active_optimizer()
                         self.update()
+                    else:
+                        self._pop_delete_undo()
                     return
                 # Try segment delete first (requires click >5 px from each
                 # endpoint), so a click on a line near a node doesn't take
                 # the node with it.
-                if self._delete_segment_at(pos, arc_max_dist=2.0 / self.zoom,
-                                           endpoint_min_dist=5.0 / self.zoom):
+                self._push_delete_undo()
+                if self._delete_segment_at(pos, arc_max_dist=8.0 / self.zoom,
+                                           endpoint_min_dist=10.0 / self.zoom):
                     self._run_active_optimizer()
                     self.update()
                     return
-                dot, _traj = self._find_nearest_dot(pos, max_dist=5.0 / self.zoom)
+                dot, _traj = self._find_nearest_dot(pos, max_dist=12.0 / self.zoom)
                 if dot is not None and self._delete_black_node(dot):
                     self._run_active_optimizer()
                     self.update()
+                    return
+                # Nothing was deleted — drop the speculative snapshot.
+                self._pop_delete_undo()
                 return
             # V + click on triangle/square to draw velocity line
             # O + click on triangle/square to compute Kepler orbit
@@ -1601,6 +1753,13 @@ class Canvas(QWidget):
 
     def mouseMoveEvent(self, event):
         pos = self._screen_to_world(QPointF(event.pos()))
+        self._last_mouse_world = pos
+        # While X is held with no active drag, highlight whatever an X-click
+        # at the current cursor position would delete.
+        if (self.x_held and self.dragging_vel_end is None and
+                self.dragging_dot is None and self.dragging_shape is None and
+                not self.dragging):
+            self._update_x_hover(pos)
         # Handle velocity line dragging (grab anywhere, scale by 1/t)
         if self.dragging_vel_end is not None:
             if self.dragging_vel_end == "triangle":
@@ -1688,6 +1847,35 @@ class Canvas(QWidget):
         traj = self.trajectories[-1]
         last = traj["dots"][-1]
         pos = self._screen_to_world(QPointF(event.pos()))
+        # Drop a new node every `trace_angle` radians of angular travel about
+        # Earth. Radius interpolates linearly between the last node and the
+        # cursor; if either endpoint is essentially at Earth's center, fall
+        # back to fixed linear spacing so we still lay down dots.
+        ex, ey = self.earth_center.x(), self.earth_center.y()
+        rx0, ry0 = last.x() - ex, last.y() - ey
+        rx1, ry1 = pos.x() - ex, pos.y() - ey
+        r0 = math.hypot(rx0, ry0)
+        r1 = math.hypot(rx1, ry1)
+        if r0 > 1e-6 and r1 > 1e-6:
+            a0 = math.atan2(ry0, rx0)
+            a1 = math.atan2(ry1, rx1)
+            da = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi
+            step = self.trace_angle
+            if abs(da) >= step:
+                num_dots = int(abs(da) // step)
+                sgn = 1.0 if da >= 0 else -1.0
+                for k in range(1, num_dots + 1):
+                    a = a0 + sgn * step * k
+                    r = r0 + (r1 - r0) * (k / max(num_dots, 1))
+                    interp = QPointF(ex + r * math.cos(a), ey + r * math.sin(a))
+                    self.trajectories[-1]["segments"].append(
+                        (len(self.trajectories[-1]["dots"]) - 1,
+                         len(self.trajectories[-1]["dots"]),
+                         1.0)
+                    )
+                    self.trajectories[-1]["dots"].append(interp)
+                self.update()
+            return
         dx = pos.x() - last.x()
         dy = pos.y() - last.y()
         dist = math.hypot(dx, dy)
@@ -2155,6 +2343,71 @@ class Canvas(QWidget):
                     continue
                 p = self._rotate_point_about_earth(dot, node_t.get(k, 0.0))
                 painter.drawEllipse(p, self.dot_radius, self.dot_radius)
+
+        # X-hover highlight: show what an X-click would delete.
+        if self.x_held and self.x_hover is not None:
+            hi_color = QColor(255, 220, 60)
+            kind = self.x_hover[0]
+            if kind == "triangle":
+                pen = QPen(hi_color, 3)
+                pen.setCosmetic(True)
+                painter.setPen(pen)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawPolygon(self._triangle_polygon())
+            elif kind == "square":
+                pen = QPen(hi_color, 3)
+                pen.setCosmetic(True)
+                painter.setPen(pen)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                half = self.sq_size * 0.5
+                painter.drawRect(QRectF(
+                    self.sq_center.x() - half, self.sq_center.y() - half,
+                    2 * half, 2 * half,
+                ))
+            elif kind == "segment":
+                _, traj, s_idx = self.x_hover
+                segs = traj["segments"]
+                if 0 <= s_idx < len(segs):
+                    i_start, i_end, mult = segs[s_idx]
+                    dots = traj["dots"]
+                    seg_tof = self._seg_tof(dots[i_start], dots[i_end], mult)
+                    arc_points = self._compute_segment_arc(
+                        dots[i_start], dots[i_end], self.earth_center,
+                        seg_tof, ARC_NUM_POINTS,
+                    )
+                    node_t = self._traj_node_times(traj)
+                    t_start = node_t.get(i_start, 0.0)
+                    if self.frame_mode == "rotating" and len(arc_points) > 1:
+                        n = len(arc_points)
+                        rot_pts = [
+                            self._rotate_point_about_earth(
+                                arc_points[j], t_start + (j / (n - 1)) * seg_tof
+                            )
+                            for j in range(n)
+                        ]
+                    else:
+                        rot_pts = arc_points
+                    pen = QPen(hi_color, 4)
+                    pen.setCosmetic(True)
+                    painter.setPen(pen)
+                    for j in range(len(rot_pts) - 1):
+                        painter.drawLine(rot_pts[j], rot_pts[j + 1])
+            elif kind == "node":
+                _, traj, dot = self.x_hover
+                t_node = 0.0
+                if traj is not None:
+                    node_t = self._traj_node_times(traj)
+                    for k, d in enumerate(traj["dots"]):
+                        if d is dot:
+                            t_node = node_t.get(k, 0.0)
+                            break
+                p = self._rotate_point_about_earth(dot, t_node)
+                pen = QPen(hi_color, 3)
+                pen.setCosmetic(True)
+                painter.setPen(pen)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                r = self.dot_radius * 2.5
+                painter.drawEllipse(p, r, r)
 
         # Bottom-left axes overlay: inertial (t=0) vs rotating-frame at t=tf.
         # Drawn in screen pixels so zoom/pan don't affect it. The frame the
@@ -3241,10 +3494,15 @@ class MainWindow(QMainWindow):
         add_btn.setFixedSize(160, 25)
         add_btn.clicked.connect(lambda: canvas.add_nodes())
 
+        undo_btn = QPushButton("Undo deletion")
+        undo_btn.setFixedSize(160, 25)
+        undo_btn.clicked.connect(lambda: canvas.undo_delete())
+
         zoom_layout = QHBoxLayout()
         zoom_layout.addSpacing(10)
         zoom_layout.addWidget(add_btn)
         zoom_layout.addWidget(prune_btn)
+        zoom_layout.addWidget(undo_btn)
         zoom_layout.addStretch()
         zoom_layout.addWidget(zoom_out_btn)
         zoom_layout.addWidget(zoom_in_btn)
