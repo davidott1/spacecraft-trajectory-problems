@@ -147,9 +147,22 @@ def lambert_solve_nb(r1_vec, r2_vec, dt, mu, side):
         side_eff = side
         if side_eff == 0.0:
             side_eff = 1.0 if cross_z >= 0.0 else -1.0
-        dtheta = math.pi - math.copysign(SIDE_EPS, side_eff)
+        # Rotate r2_vec by -copysign(SIDE_EPS, side_eff) so the geometry
+        # (and hence A) is self-consistent with the chosen branch. Without
+        # this, A=eps but r2_vec is still exactly antipodal to r1_vec, so
+        # g_=A*sqrt(y/mu) is tiny while r2_vec - f*r1_vec is exactly zero,
+        # giving 0/0 ~ tiny in the velocity reconstruction.
+        phi = -math.copysign(SIDE_EPS, side_eff)
+        cphi = math.cos(phi)
+        sphi = math.sin(phi)
+        new_r2 = np.empty(2)
+        new_r2[0] = cphi * r2_vec[0] - sphi * r2_vec[1]
+        new_r2[1] = sphi * r2_vec[0] + cphi * r2_vec[1]
+        r2_vec = new_r2
+        cos_dtheta = (r1_vec[0] * r2_vec[0] + r1_vec[1] * r2_vec[1]) / (r1 * r2)
+        cross_z = r1_vec[0] * r2_vec[1] - r1_vec[1] * r2_vec[0]
+        dtheta = math.pi + phi  # = math.pi - copysign(SIDE_EPS, side_eff)
         sin_dtheta = math.sin(dtheta)
-        cos_dtheta = math.cos(dtheta)
 
     A = sin_dtheta * math.sqrt(r1 * r2 / (1.0 - cos_dtheta))
 
@@ -205,9 +218,21 @@ def lambert_with_jac_nb(r1_vec, r2_vec, dt, mu, z_init, side):
         side_eff = side
         if side_eff == 0.0:
             side_eff = 1.0 if cross_z >= 0.0 else -1.0
-        dtheta = math.pi - math.copysign(SIDE_EPS, side_eff)
+        # See lambert_solve_nb for the rationale: rotate r2_vec so the
+        # geometry is self-consistent with the chosen branch. Jacobians
+        # below are wrt the perturbed r2_vec; for SIDE_EPS=1e-3 this is
+        # an O(1e-3) approximation that the optimizer tolerates.
+        phi = -math.copysign(SIDE_EPS, side_eff)
+        cphi = math.cos(phi)
+        sphi = math.sin(phi)
+        new_r2 = np.empty(2)
+        new_r2[0] = cphi * r2_vec[0] - sphi * r2_vec[1]
+        new_r2[1] = sphi * r2_vec[0] + cphi * r2_vec[1]
+        r2_vec = new_r2
+        cos_dtheta = (r1_vec[0] * r2_vec[0] + r1_vec[1] * r2_vec[1]) / (r1 * r2)
+        cross_z = r1_vec[0] * r2_vec[1] - r1_vec[1] * r2_vec[0]
+        dtheta = math.pi + phi
         sin_dtheta = math.sin(dtheta)
-        cos_dtheta = math.cos(dtheta)
 
     A = sin_dtheta * math.sqrt(r1 * r2 / (1.0 - cos_dtheta))
 

@@ -403,9 +403,15 @@ def lambert_solve(r1_vec, r2_vec, dt, mu, side=0.0):
         return v, v
     if abs(sin_dtheta) < _SIDE_EPS:
         side_eff = side if side != 0.0 else (1.0 if cross_z >= 0.0 else -1.0)
-        dtheta = math.pi - math.copysign(_SIDE_EPS, side_eff)
+        phi = -math.copysign(_SIDE_EPS, side_eff)
+        cphi = math.cos(phi)
+        sphi = math.sin(phi)
+        r2_vec = np.array([cphi * r2_vec[0] - sphi * r2_vec[1],
+                           sphi * r2_vec[0] + cphi * r2_vec[1]])
+        cos_dtheta = float(np.dot(r1_vec, r2_vec) / (r1 * r2))
+        cross_z = r1_vec[0] * r2_vec[1] - r1_vec[1] * r2_vec[0]
+        dtheta = math.pi + phi
         sin_dtheta = math.sin(dtheta)
-        cos_dtheta = math.cos(dtheta)
 
     A = sin_dtheta * math.sqrt(r1 * r2 / (1.0 - cos_dtheta))
 
@@ -473,9 +479,15 @@ def lambert_solve_with_jac(r1_vec, r2_vec, dt, mu, z_init=0.0):
         return _straight_line()
     if abs(sin_dtheta) < _SIDE_EPS:
         side_eff = side if side != 0.0 else (1.0 if cross_z >= 0.0 else -1.0)
-        dtheta = math.pi - math.copysign(_SIDE_EPS, side_eff)
+        phi = -math.copysign(_SIDE_EPS, side_eff)
+        cphi = math.cos(phi)
+        sphi = math.sin(phi)
+        r2_vec = np.array([cphi * r2_vec[0] - sphi * r2_vec[1],
+                           sphi * r2_vec[0] + cphi * r2_vec[1]])
+        cos_dtheta = float(np.dot(r1_vec, r2_vec) / (r1 * r2))
+        cross_z = r1_vec[0] * r2_vec[1] - r1_vec[1] * r2_vec[0]
+        dtheta = math.pi + phi
         sin_dtheta = math.sin(dtheta)
-        cos_dtheta = math.cos(dtheta)
 
     A = sin_dtheta * math.sqrt(r1 * r2 / (1.0 - cos_dtheta))
 
@@ -947,29 +959,28 @@ class Canvas(QWidget):
         return self._orbit_pos_vel(self.sq_orbit_elements, self.sq_nu)
 
     def _hit_triangle(self, pos):
+        # Circular grab pad: shape body OR within `pad` of center. The pad
+        # must exceed the velocity-line grab tolerance (0.30 world units)
+        # so clicks near the shape always translate it instead of grabbing
+        # the velocity arrow that emerges from its center.
+        pad = max(self.tri_size, 0.35)
         if self.tri_deleted:
             r_xy, _ = self._deleted_shape_pos_vel("triangle")
             if r_xy is None:
                 return False
-            s = self.tri_size
-            poly = QPolygonF([
-                QPointF(r_xy[0] - s / 2, r_xy[1] - s / 2),
-                QPointF(r_xy[0] + s / 2, r_xy[1]),
-                QPointF(r_xy[0] - s / 2, r_xy[1] + s / 2),
-            ])
-            return poly.containsPoint(pos, Qt.FillRule.WindingFill)
-        return self._triangle_polygon().containsPoint(pos, Qt.FillRule.WindingFill)
+            return math.hypot(pos.x() - r_xy[0], pos.y() - r_xy[1]) <= pad
+        cx, cy = self.tri_center.x(), self.tri_center.y()
+        return math.hypot(pos.x() - cx, pos.y() - cy) <= pad
 
     def _hit_square(self, pos):
+        pad = max(self.sq_size, 0.35)
         if self.sq_deleted:
             r_xy, _ = self._deleted_shape_pos_vel("square")
             if r_xy is None:
                 return False
-            s = self.sq_size
-            return abs(pos.x() - r_xy[0]) <= s / 2 and abs(pos.y() - r_xy[1]) <= s / 2
-        x, y = self.sq_center.x(), self.sq_center.y()
-        s = self.sq_size
-        return abs(pos.x() - x) <= s / 2 and abs(pos.y() - y) <= s / 2
+            return math.hypot(pos.x() - r_xy[0], pos.y() - r_xy[1]) <= pad
+        cx, cy = self.sq_center.x(), self.sq_center.y()
+        return math.hypot(pos.x() - cx, pos.y() - cy) <= pad
 
     def _slide_deleted_to(self, shape, world_pos):
         """Set the deleted shape's nu to the orbit point closest to world_pos."""
