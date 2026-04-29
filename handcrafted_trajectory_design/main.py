@@ -658,9 +658,13 @@ class Canvas(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setMouseTracking(True)
         self.trajectories = []  # list of {"dots": [QPointF], "segments": [(i, j, mult)]}
-        self.dot_radius = 0.10  # DU
-        self.trace_spacing = 1.0  # DU (used as fallback near Earth center)
-        self.trace_angle = math.radians(30.0)  # rad of true-anomaly travel about Earth
+        self.dot_radius_px = 4.0  # screen pixels; world radius = dot_radius_px / zoom
+        # Target screen-pixel arc length between dropped dots while drawing.
+        # Using pixels (not radians or DU) keeps draw-density independent of
+        # both the current zoom and the orbital radius being traced.
+        self.trace_pixel_spacing = 20.0
+        self.trace_spacing = 1.0  # DU; legacy world-space fallback (unused)
+        self.trace_dtau = math.pi / 6.0  # legacy; kept for back-compat
         self.dragging = False
         self.dragging_shape = None  # "triangle" or "square" when dragging a shape
         self.drag_offset = QPointF(0, 0)
@@ -685,9 +689,10 @@ class Canvas(QWidget):
         self.earth_center = QPointF(0, 0)
         self.earth_radius = 1.0  # DU
         self.tri_center = QPointF(1.5, 0)
-        self.tri_size = 0.4
+        # Shape sizes in screen pixels; world size = px / zoom (see properties below).
+        self.tri_size_px = 16.0
         self.sq_center = QPointF(-4.0, 0)
-        self.sq_size = 0.36
+        self.sq_size_px = 14.0
 
         # Initialize circular velocity for each shape (prograde = CCW with y-up)
         tri_r = math.hypot(self.tri_center.x(), self.tri_center.y())
@@ -897,7 +902,13 @@ class Canvas(QWidget):
         in their list order, accumulating each segment's Sundman-scaled time."""
         node_t = {}
         dots = traj["dots"]
+        n = len(dots)
         for i_start, i_end, mult, _side in traj["segments"]:
+            # Defensive: skip segments referencing out-of-range indices. This
+            # can happen transiently if a paint fires mid-mutation; we'd
+            # rather render a partial trajectory than crash.
+            if not (0 <= i_start < n and 0 <= i_end < n):
+                continue
             if i_start not in node_t:
                 node_t[i_start] = 0.0
             node_t[i_end] = node_t[i_start] + self._seg_tof(dots[i_start], dots[i_end], mult)
@@ -938,6 +949,15 @@ class Canvas(QWidget):
         wy = (self.pan_offset.y() - screen_pos.y()) / self.zoom
         return QPointF(wx, wy)
 
+    @property
+    def tri_size(self):
+        # World-space size; pixel-constant on screen (scales with zoom).
+        return self.tri_size_px / self.zoom
+
+    @property
+    def sq_size(self):
+        return self.sq_size_px / self.zoom
+
     def _triangle_polygon(self):
         x, y = self.tri_center.x(), self.tri_center.y()
         s = self.tri_size
@@ -960,10 +980,10 @@ class Canvas(QWidget):
 
     def _hit_triangle(self, pos):
         # Circular grab pad: shape body OR within `pad` of center. The pad
-        # must exceed the velocity-line grab tolerance (0.30 world units)
-        # so clicks near the shape always translate it instead of grabbing
-        # the velocity arrow that emerges from its center.
-        pad = max(self.tri_size, 0.35)
+        # must exceed the velocity-line grab tolerance so clicks near the
+        # shape always translate it instead of grabbing the velocity arrow
+        # that emerges from its center.
+        pad = max(self.tri_size, 14.0 / self.zoom)
         if self.tri_deleted:
             r_xy, _ = self._deleted_shape_pos_vel("triangle")
             if r_xy is None:
@@ -973,7 +993,7 @@ class Canvas(QWidget):
         return math.hypot(pos.x() - cx, pos.y() - cy) <= pad
 
     def _hit_square(self, pos):
-        pad = max(self.sq_size, 0.35)
+        pad = max(self.sq_size, 14.0 / self.zoom)
         if self.sq_deleted:
             r_xy, _ = self._deleted_shape_pos_vel("square")
             if r_xy is None:
@@ -1749,7 +1769,7 @@ class Canvas(QWidget):
                             proj_x = center.x() + t * lx
                             proj_y = center.y() + t * ly
                             d = math.hypot(pos.x() - proj_x, pos.y() - proj_y)
-                            if d < 0.30:
+                            if d < 12.0 / self.zoom:
                                 if shape == "triangle" and self.tri_deleted:
                                     self._rebase_deleted_to_rendered("triangle")
                                 elif shape == "square" and self.sq_deleted:
@@ -1897,10 +1917,12 @@ class Canvas(QWidget):
         traj = self.trajectories[-1]
         last = traj["dots"][-1]
         pos = self._screen_to_world(QPointF(event.pos()))
-        # Drop a new node every `trace_angle` radians of angular travel about
-        # Earth. Radius interpolates linearly between the last node and the
-        # cursor; if either endpoint is essentially at Earth's center, fall
-        # back to fixed linear spacing so we still lay down dots.
+        # Drop a new node every ~trace_pixel_spacing of on-screen arc length
+        # along the interpolating arc about Earth. Choosing the angular
+        # step from a screen-pixel target keeps draw-density independent of
+        # zoom and orbital radius (otherwise a fixed Delta-theta gives
+        # screen-arc = zoom * r * Delta-theta which blows up at large r and
+        # high zoom, forcing the user to lift their finger).
         ex, ey = self.earth_center.x(), self.earth_center.y()
         rx0, ry0 = last.x() - ex, last.y() - ey
         rx1, ry1 = pos.x() - ex, pos.y() - ey
@@ -1910,7 +1932,9 @@ class Canvas(QWidget):
             a0 = math.atan2(ry0, rx0)
             a1 = math.atan2(ry1, rx1)
             da = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi
-            step = self.trace_angle
+            r_avg = 0.5 * (r0 + r1)
+            # screen arc = zoom * r * dtheta  ->  dtheta = px / (zoom * r)
+            step = self.trace_pixel_spacing / max(self.zoom * r_avg, 1e-6)
             if abs(da) >= step:
                 num_dots = int(abs(da) // step)
                 sgn = 1.0 if da >= 0 else -1.0
@@ -1918,35 +1942,34 @@ class Canvas(QWidget):
                     a = a0 + sgn * step * k
                     r = r0 + (r1 - r0) * (k / max(num_dots, 1))
                     interp = QPointF(ex + r * math.cos(a), ey + r * math.sin(a))
-                    self.trajectories[-1]["segments"].append(
-                        (len(self.trajectories[-1]["dots"]) - 1,
-                         len(self.trajectories[-1]["dots"]),
-                         1.0,
-                         0.0)
-                    )
+                    # Append the dot FIRST so the segment never references
+                    # an out-of-range index even transiently.
                     self.trajectories[-1]["dots"].append(interp)
+                    n_dots = len(self.trajectories[-1]["dots"])
+                    self.trajectories[-1]["segments"].append(
+                        (n_dots - 2, n_dots - 1, 1.0, 0.0)
+                    )
                 self.update()
             return
         dx = pos.x() - last.x()
         dy = pos.y() - last.y()
         dist = math.hypot(dx, dy)
-        if dist >= self.trace_spacing:
-            # Interpolate dots at exact spacing intervals
-            num_dots = int(dist // self.trace_spacing)
+        # Linear-fallback spacing also keyed off screen pixels.
+        spacing = self.trace_pixel_spacing / max(self.zoom, 1e-6)
+        if dist >= spacing:
+            num_dots = int(dist // spacing)
             ux = dx / dist
             uy = dy / dist
             for k in range(1, num_dots + 1):
                 interp = QPointF(
-                    last.x() + ux * self.trace_spacing * k,
-                    last.y() + uy * self.trace_spacing * k,
-                )
-                self.trajectories[-1]["segments"].append(
-                    (len(self.trajectories[-1]["dots"]) - 1,
-                     len(self.trajectories[-1]["dots"]),
-                     1.0,
-                     0.0)
+                    last.x() + ux * spacing * k,
+                    last.y() + uy * spacing * k,
                 )
                 self.trajectories[-1]["dots"].append(interp)
+                n_dots = len(self.trajectories[-1]["dots"])
+                self.trajectories[-1]["segments"].append(
+                    (n_dots - 2, n_dots - 1, 1.0, 0.0)
+                )
             self.update()
 
     def mouseDoubleClickEvent(self, event):
@@ -2389,13 +2412,14 @@ class Canvas(QWidget):
         # Draw all black dots on top of everything (including shapes)
         painter.setBrush(QBrush(QColor("black")))
         painter.setPen(Qt.PenStyle.NoPen)
+        dot_r = self.dot_radius_px / self.zoom
         for traj in self.trajectories:
             node_t = self._traj_node_times(traj)
             for k, dot in enumerate(traj["dots"]):
                 if dot is self.tri_center or dot is self.sq_center:
                     continue
                 p = self._rotate_point_about_earth(dot, node_t.get(k, 0.0))
-                painter.drawEllipse(p, self.dot_radius, self.dot_radius)
+                painter.drawEllipse(p, dot_r, dot_r)
 
         # X-hover highlight: show what an X-click would delete.
         if self.x_held and self.x_hover is not None:
@@ -2460,7 +2484,7 @@ class Canvas(QWidget):
                 pen.setCosmetic(True)
                 painter.setPen(pen)
                 painter.setBrush(Qt.BrushStyle.NoBrush)
-                r = self.dot_radius * 2.5
+                r = (self.dot_radius_px * 2.5) / self.zoom
                 painter.drawEllipse(p, r, r)
 
         # Bottom-left axes overlay: inertial (t=0) vs rotating-frame at t=tf.
