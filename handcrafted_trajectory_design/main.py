@@ -711,6 +711,10 @@ class Canvas(QWidget):
         # axis at a distance scaled to Earth's radius and given a circular
         # prograde velocity for future propagation.
         self.moon_radius = 0.27  # DU (display only; ~1737 km / 6371 km)
+        self.moon_soi_radius = 66100.0 / 6371.0  # DU; ~10.37 DU, cosmetic only
+        # Earth SOI relative to the Sun (~925,000 km / 6371 km ~= 145 DU),
+        # cosmetic only -- the Sun is not plotted.
+        self.earth_soi_radius = 925000.0 / 6371.0
         self.moon_center = QPointF(60.0 * self.earth_radius, 0.0)
         moon_r = math.hypot(self.moon_center.x(), self.moon_center.y())
         moon_v_circ = math.sqrt(MU / moon_r)
@@ -2210,6 +2214,26 @@ class Canvas(QWidget):
             pen.setCosmetic(True)
             painter.setPen(pen)
             painter.drawEllipse(self.earth_center, self.earth_radius, self.earth_radius)
+            # Cosmetic Moon orbit (circular about Earth at the moon's
+            # initial radius). Same shape in inertial / rotating frames.
+            r_moon = math.hypot(
+                self.moon_center.x() - self.earth_center.x(),
+                self.moon_center.y() - self.earth_center.y(),
+            )
+            if r_moon > 1e-9:
+                morb_pen = QPen(QColor(160, 160, 160, 160), 1)
+                morb_pen.setCosmetic(True)
+                painter.setPen(morb_pen)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawEllipse(self.earth_center, r_moon, r_moon)
+            # Cosmetic Earth sphere of influence relative to the Sun
+            # (~925,000 km / 6371 km ~= 145 DU). Sun is not plotted.
+            esoi_pen = QPen(QColor(80, 140, 220, 140), 1)
+            esoi_pen.setCosmetic(True)
+            esoi_pen.setStyle(Qt.PenStyle.DashLine)
+            painter.setPen(esoi_pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(self.earth_center, self.earth_soi_radius, self.earth_soi_radius)
             # Moon: massless visual node, propagated along its circular
             # orbit by tf = sum of every segment's flight time (same clock
             # the ghost square uses).
@@ -2231,6 +2255,13 @@ class Canvas(QWidget):
             pen.setCosmetic(True)
             painter.setPen(pen)
             painter.drawEllipse(moon_pt, self.moon_radius, self.moon_radius)
+            # Cosmetic Moon sphere of influence (~66,100 km / 6371 km ~= 10.37 DU).
+            soi_pen = QPen(QColor(160, 160, 160, 140), 1)
+            soi_pen.setCosmetic(True)
+            soi_pen.setStyle(Qt.PenStyle.DashLine)
+            painter.setPen(soi_pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(moon_pt, self.moon_soi_radius, self.moon_soi_radius)
 
         # Draw trajectories
         center = self.earth_center
