@@ -434,7 +434,7 @@ def lambert_solve(r1_vec, r2_vec, dt, mu, side=0.0):
     return v1, v2
 
 
-def lambert_solve_with_jac(r1_vec, r2_vec, dt, mu, z_init=0.0):
+def lambert_solve_with_jac(r1_vec, r2_vec, dt, mu, z_init=0.0, side=0.0):
     """Lambert solver that also returns analytic Jacobians of (v1, v2)
     w.r.t. (r1, r2, dt) via the implicit function theorem applied to the
     universal-variable equation F(z; r1, r2, dt) = 0.
@@ -697,6 +697,12 @@ class Canvas(QWidget):
         self.sq_advance_mode = False
         self.sq_epoch_center = None
         self.sq_epoch_vel_end = None
+        # Continuation parameter: elapsed time along sq's Kepler orbit from
+        # the epoch state. 0 → sq sits at epoch (the user's drawn position,
+        # = the "fixed case"). Walked toward the trajectory's tf across
+        # successive outer iterations under under-relaxation. Persists
+        # across user edits; only reset on m-toggle.
+        self._sq_advance_time = 0.0
         # Shape positions (center points) — placed in orbit around earth (DU)
         self.earth_center = QPointF(0, 0)
         self.earth_radius = 1.0  # DU
@@ -780,6 +786,25 @@ class Canvas(QWidget):
         self._opt_signals.progress.connect(self._on_opt_progress)
         self._opt_running = False
         self._opt_restart = False
+        # Solver selection: "lm" prefers Levenberg-Marquardt with BFGS as
+        # fallback (current production path). "bfgs" forces scipy BFGS for
+        # every solve, bypassing LM entirely. Toggle here to A/B test.
+        self.solver_mode = "bfgs"
+        # Forward-backward Gauss-Seidel relaxation on interior node positions
+        # before each global solve. Local 2D Newton step per node minimizes
+        # |dv_k|^2 with neighbors fixed, smoothing wild initial guesses so
+        # the global LM doesn't have to absorb the chaos.
+        self.use_relaxation_warmup = False
+        self.relaxation_passes = 3
+        self.relaxation_step_cap = 0.5  # DU per node per pass
+        # sq_advance_mode outer-loop state: when the square auto-propagates
+        # by tf, joint optimization can produce a hyperbolic final segment
+        # because tf and sq_pos must co-vary. Instead, alternate (1) hold
+        # sq fixed → run LM, (2) repropagate sq from the new tf, until
+        # |Δsq| settles. Each inner solve sees a near-fixed endpoint.
+        self._sq_advance_outer_iter = 0
+        self._sq_advance_outer_max = 12
+        self._sq_advance_outer_eps = 1e-3  # TU (gap between _sq_advance_time and tf)
 
         self.setStyleSheet("background-color: white;")
         self.zoom = 50.0  # pixels per DU
@@ -1696,12 +1721,26 @@ class Canvas(QWidget):
 
     def _refresh_sq_advance(self):
         """If sq_advance_mode is on, set sq_center / sq_velocity_end to the
-        Kepler propagation of the saved epoch state by the total flight time.
-        Iterates a few times because tf itself depends on sq_center through
-        Sundman scaling (s = (|r0|+|rf|)/2). No-op if mode off, deleted, or
-        no epoch captured."""
+        Kepler propagation of the saved epoch state by `_sq_advance_time`
+        (the continuation parameter, NOT the trajectory's total flight time).
+        On m-toggle, _sq_advance_time = 0 → sq sits at epoch. The outer
+        loop in _on_opt_done walks _sq_advance_time toward tf gradually.
+        No-op if mode off, deleted, or no epoch captured."""
         if (not self.sq_advance_mode or self.sq_deleted
                 or self.sq_epoch_center is None or self.sq_epoch_vel_end is None):
+            return
+        # When optimize is off, the staggered loop never runs — fall back
+        # to direct tf propagation so sq still follows the user's edits.
+        if self.optimize_mode is None:
+            self._sq_advance_time = self._total_flight_time()
+        t = float(self._sq_advance_time)
+        if t <= 0.0:
+            # sq sits at epoch — the "fixed case" starting point.
+            self.sq_center.setX(self.sq_epoch_center.x())
+            self.sq_center.setY(self.sq_epoch_center.y())
+            self.sq_velocity_end = QPointF(
+                self.sq_epoch_vel_end.x(), self.sq_epoch_vel_end.y(),
+            )
             return
         v_xy = np.array([
             self.sq_epoch_vel_end.x() - self.sq_epoch_center.x(),
@@ -1710,24 +1749,37 @@ class Canvas(QWidget):
         elements = self._orbit_elements_at(self.sq_epoch_center, v_xy)
         if elements is None:
             return
-        for _ in range(4):
-            tf = self._total_flight_time()
-            if tf <= 0.0:
-                # Reset to epoch (no flight time).
-                self.sq_center.setX(self.sq_epoch_center.x())
-                self.sq_center.setY(self.sq_epoch_center.y())
-                self.sq_velocity_end = QPointF(
-                    self.sq_epoch_vel_end.x(), self.sq_epoch_vel_end.y(),
-                )
-                return
-            nu = self._orbit_nu_after_dt(elements, tf)
-            r, v = self._orbit_pos_vel(elements, nu)
-            self.sq_center.setX(float(r[0]))
-            self.sq_center.setY(float(r[1]))
-            self.sq_velocity_end = QPointF(
-                float(r[0]) + float(v[0]) * VEL_SCALE,
-                float(r[1]) + float(v[1]) * VEL_SCALE,
-            )
+        nu = self._orbit_nu_after_dt(elements, t)
+        r, v = self._orbit_pos_vel(elements, nu)
+        self.sq_center.setX(float(r[0]))
+        self.sq_center.setY(float(r[1]))
+        self.sq_velocity_end = QPointF(
+            float(r[0]) + float(v[0]) * VEL_SCALE,
+            float(r[1]) + float(v[1]) * VEL_SCALE,
+        )
+
+    def _sq_orbital_period(self):
+        """Period of sq's Kepler orbit from epoch state, or None for
+        hyperbolic / degenerate orbits."""
+        if (self.sq_epoch_center is None or self.sq_epoch_vel_end is None
+                or self.sq_deleted):
+            return None
+        v_xy = np.array([
+            self.sq_epoch_vel_end.x() - self.sq_epoch_center.x(),
+            self.sq_epoch_vel_end.y() - self.sq_epoch_center.y(),
+        ]) / VEL_SCALE
+        elements = self._orbit_elements_at(self.sq_epoch_center, v_xy)
+        if elements is None:
+            return None
+        e = float(elements["e"])
+        if e >= 1.0 - 1e-9:
+            return None  # parabolic / hyperbolic
+        h_z = float(elements["h_z"])
+        p = h_z * h_z / MU
+        a = p / (1.0 - e * e)
+        if a <= 0.0:
+            return None
+        return 2.0 * math.pi * math.sqrt(a * a * a / MU)
 
     def _toggle_sq_advance_mode(self):
         """Toggle the square's advance-with-tf mode. On enable, capture the
@@ -1742,11 +1794,15 @@ class Canvas(QWidget):
                 self.sq_velocity_end.x(), self.sq_velocity_end.y(),
             )
             self.sq_advance_mode = True
+            # Start the continuation at t=0: sq stays at epoch (the user's
+            # drawn position), so the first inner solve is the fixed case.
+            self._sq_advance_time = 0.0
             self._refresh_sq_advance()
         else:
             self.sq_advance_mode = False
             self.sq_epoch_center = None
             self.sq_epoch_vel_end = None
+            self._sq_advance_time = 0.0
         if self.sq_orbit_mode:
             self._compute_orbit_for_shape("square")
         return True
@@ -2689,6 +2745,109 @@ class Canvas(QWidget):
         self.shift_click_first = None
         self.update()
 
+    def _relaxation_warmup(self):
+        """Forward-backward Gauss-Seidel sweep on interior node positions.
+        For each node k with exactly one incoming + one outgoing segment,
+        take one Newton step on (kx, ky) to minimize |dv_k|^2 holding both
+        neighbors fixed. Alternates forward / backward sweep direction per
+        pass.
+
+        Cheap O(N) Lambert solves per pass — smooths a chaotic initial
+        guess (e.g. a hand-drawn spiral) so the global LM doesn't have to
+        absorb wild local mismatches in one big step. No-op outside the
+        two-body env (parabolic env doesn't have the same pathology).
+
+        Same first-occurrence convention as `_optimize_common` for nodes
+        with multiple incident segments. Shape nodes (tri_center,
+        sq_center) are skipped so they remain anchored.
+        """
+        if not self.use_relaxation_warmup:
+            return
+        if self.env_mode != "two_body":
+            return
+        if not self.trajectories:
+            return
+
+        cx = self.earth_center.x()
+        cy = self.earth_center.y()
+        step_cap = float(self.relaxation_step_cap)
+
+        for pass_idx in range(int(self.relaxation_passes)):
+            backward = (pass_idx % 2 == 1)
+            for traj in self.trajectories:
+                dots = traj["dots"]
+                segments = traj["segments"]
+                if not segments:
+                    continue
+
+                in_seg_idx = {}
+                out_seg_idx = {}
+                for s_idx, (i_start, i_end, _mult, _side) in enumerate(segments):
+                    if i_end not in in_seg_idx:
+                        in_seg_idx[i_end] = s_idx
+                    if i_start not in out_seg_idx:
+                        out_seg_idx[i_start] = s_idx
+
+                node_indices = [
+                    k for k in range(len(dots))
+                    if k in in_seg_idx and k in out_seg_idx
+                    and dots[k] is not self.tri_center
+                    and dots[k] is not self.sq_center
+                ]
+                if backward:
+                    node_indices.reverse()
+
+                for k in node_indices:
+                    dot = dots[k]
+                    in_s = segments[in_seg_idx[k]]
+                    out_s = segments[out_seg_idx[k]]
+                    p_prev = dots[in_s[0]]
+                    p_next = dots[out_s[1]]
+                    mult_in = float(in_s[2])
+                    mult_out = float(out_s[2])
+                    side_in = float(in_s[3])
+                    side_out = float(out_s[3])
+
+                    tof_in = self._seg_tof(p_prev, dot, mult_in)
+                    tof_out = self._seg_tof(dot, p_next, mult_out)
+                    if tof_in <= 0.0 or tof_out <= 0.0:
+                        continue
+
+                    r_prev = np.array([p_prev.x() - cx, p_prev.y() - cy])
+                    r_k = np.array([dot.x() - cx, dot.y() - cy])
+                    r_next = np.array([p_next.x() - cx, p_next.y() - cy])
+
+                    try:
+                        out_in = lambert_solve_with_jac(
+                            r_prev, r_k, tof_in, MU, side=side_in)
+                        out_out = lambert_solve_with_jac(
+                            r_k, r_next, tof_out, MU, side=side_out)
+                    except Exception:
+                        continue
+
+                    # (v1, v2, Jv1_r1, Jv1_r2, Jv1_dt, Jv2_r1, Jv2_r2, Jv2_dt, z)
+                    v2_in = np.asarray(out_in[1])
+                    Jv2_r2_in = np.asarray(out_in[6])
+                    v1_out = np.asarray(out_out[0])
+                    Jv1_r1_out = np.asarray(out_out[2])
+
+                    dv = v1_out - v2_in
+                    J_dv = Jv1_r1_out - Jv2_r2_in
+
+                    H = J_dv.T @ J_dv
+                    lam = 1e-8 * max(float(np.diag(H).max()), 1e-12)
+                    try:
+                        dr = -np.linalg.solve(H + lam * np.eye(2), J_dv.T @ dv)
+                    except np.linalg.LinAlgError:
+                        continue
+
+                    step_mag = float(np.linalg.norm(dr))
+                    if step_mag > step_cap:
+                        dr = dr * (step_cap / step_mag)
+
+                    dot.setX(dot.x() + float(dr[0]))
+                    dot.setY(dot.y() + float(dr[1]))
+
     def _optimize_common(self, cost_mode, apply=True, progress_callback=None):
         """Shared optimizer logic. cost_mode='energy' uses sum(|dv|^2), 'fuel' uses sum(|dv|).
 
@@ -3242,7 +3401,8 @@ class Canvas(QWidget):
         # shapes (nu decision variables); BFGS handles those via the
         # FD-wrapped fun_and_grad above.
         used_lm = False
-        if _NUMBA_AVAILABLE and M_dv > 0 and not free_shapes:
+        if (self.solver_mode == "lm"
+                and _NUMBA_AVAILABLE and M_dv > 0 and not free_shapes):
             try:
                 x_lm, lm_ok = self._lm_solve(
                     x0, lm_eval, n_pos_vars, energy_mode, fuel_eps,
@@ -3265,12 +3425,12 @@ class Canvas(QWidget):
                     progress_callback(xk, n_pos_vars, movable_dots, _free_meta_for_cb)
                 result = scipy_minimize(
                     fun_and_grad_active, x0, method="BFGS", jac=True,
-                    options={"gtol": 1e-6}, callback=scipy_cb,
+                    options={"gtol": 1e-6, "maxiter": 1000000}, callback=scipy_cb,
                 )
             else:
                 result = scipy_minimize(
                     fun_and_grad_active, x0, method="BFGS", jac=True,
-                    options={"gtol": 1e-6},
+                    options={"gtol": 1e-6, "maxiter": 1000000},
                 )
 
         if not apply:
@@ -3351,8 +3511,10 @@ class Canvas(QWidget):
     def _lm_solve(
         self, x0, lm_eval, n_pos_vars, energy_mode, fuel_eps,
         progress_callback=None, movable_dots=None,
-        max_iter=10000, tol_grad=1e-7, tol_step=1e-9,
+        max_iter=1e6, tol_grad=1e-7, tol_step=1e-9,
         lam_init=1e-3, lam_up=10.0, lam_down=0.4,
+        step_max=1e-4,
+        huber_c_factor=5.0,
     ):
         """Levenberg-Marquardt / IRLS solver.
 
@@ -3366,6 +3528,21 @@ class Canvas(QWidget):
         where W = diag(w_k) with w_k = 1 (energy) or w_k = 1/sqrt(|dv_k|^2+eps^2)
         (IRLS); D = diag(diag(J^T W J)) (Marquardt scaling).
 
+        Huber-style robustification: a multiplicative cap min(1, c/|dv_k|)
+        is applied to each node's weight when |dv_k| > c, with
+        c = huber_c_factor * median(|dv_k|). This prevents one wildly
+        hyperbolic transient segment from dominating J^T W r and J^T W J
+        — without the cap, the GN direction becomes "fix that one segment"
+        and ignores everything else. The cap is a no-op once all |dv_k|
+        fall below c (i.e. at convergence), so the underlying cost shape
+        is unchanged at the optimum. Set huber_c_factor=0 to disable.
+
+        Accept gate uses the weighted-residual surrogate
+        cost_w = 0.5 * sum w_k * |r_k|^2 with weights frozen from before
+        the step — that's the GN model the step is constructed to descend,
+        so a Huber-capped step that transiently raises the raw energy/fuel
+        cost (by easing off the dominant residual) is correctly accepted.
+
         Returns (x_new, ok). ok=False if no descent could be made; caller
         should fall back to BFGS.
         """
@@ -3378,18 +3555,32 @@ class Canvas(QWidget):
         M = r.size // 2
 
         def weights_from_r(r_vec):
-            """IRLS weights per residual row. For energy: phi(u)=u^2 → derivative
-            and Hessian both linear in r → effective weight=1. For fuel:
-            phi(u)=sqrt(u^2+eps^2) → Gauss-Newton weight is 1/sqrt(...) per node."""
-            if energy_mode:
-                return np.ones(2 * M)
-            w = np.empty(2 * M)
+            """IRLS weights per residual row. Base: 1 (energy) or
+            1/sqrt(|dv|^2+eps^2) (fuel). Plus Huber cap min(1, c/|dv_k|)
+            on top, c = huber_c_factor * median(|dv|)."""
+            mags = np.empty(M)
             for k in range(M):
                 dvx = r_vec[2 * k]
                 dvy = r_vec[2 * k + 1]
-                wk = 1.0 / math.sqrt(dvx * dvx + dvy * dvy + fuel_eps * fuel_eps)
-                w[2 * k] = wk
-                w[2 * k + 1] = wk
+                mags[k] = math.sqrt(dvx * dvx + dvy * dvy)
+
+            w = np.empty(2 * M)
+            if energy_mode:
+                w.fill(1.0)
+            else:
+                for k in range(M):
+                    wk = 1.0 / math.sqrt(mags[k] * mags[k] + fuel_eps * fuel_eps)
+                    w[2 * k] = wk
+                    w[2 * k + 1] = wk
+
+            if M > 0 and huber_c_factor > 0.0:
+                c = huber_c_factor * float(np.median(mags))
+                if c > 0.0:
+                    for k in range(M):
+                        if mags[k] > c:
+                            f = c / mags[k]
+                            w[2 * k] *= f
+                            w[2 * k + 1] *= f
             return w
 
         lam = lam_init
@@ -3398,13 +3589,16 @@ class Canvas(QWidget):
             # Build Gauss-Newton system: H = J^T W J, g = J^T W r
             JW = J * w[:, None]
             H = JW.T @ J
-            g = JW.T @ r  # this is the gradient of f for energy (factor 2 absorbed only matters for scale; fine for LM)
+            g = JW.T @ r  # gradient of the weighted-LS surrogate
 
             # Convergence check on gradient.
             if np.linalg.norm(g, ord=np.inf) < tol_grad:
                 break
 
             diag_H = np.maximum(np.diag(H), 1e-12)
+
+            # Surrogate cost the GN step is built to descend (same weights w).
+            cost_w = 0.5 * float(np.sum(w * r * r))
 
             # Try LM step; on failure, increase lam and retry.
             accepted = False
@@ -3417,13 +3611,23 @@ class Canvas(QWidget):
                     lam *= lam_up
                     continue
 
+                # Trust-region cap: clip ||p||_inf so one bad segment can't
+                # yank the whole solution. If clipped step doesn't reduce
+                # cost, lam grows below and the next try is more damped
+                # (and hence smaller) anyway.
+                step_inf = float(np.max(np.abs(p))) if p.size else 0.0
+                if step_inf > step_max:
+                    p = p * (step_max / step_inf)
+
                 x_new = x + p
                 cost_new, r_new, J_new = lm_eval(x_new)
                 if r_new is None or not np.isfinite(cost_new):
                     lam *= lam_up
                     continue
 
-                if cost_new < cost:
+                cost_new_w = 0.5 * float(np.sum(w * r_new * r_new))
+
+                if cost_new_w < cost_w:
                     # Accept.
                     step_norm = float(np.linalg.norm(p))
                     x = x_new
@@ -3578,6 +3782,12 @@ class Canvas(QWidget):
         if self._opt_running:
             self._opt_restart = True
             return
+        # Fresh user-triggered kickoff: reset sq_advance staggered counter.
+        self._sq_advance_outer_iter = 0
+        # Pre-LM smoothing: forward/backward Gauss-Seidel on interior nodes.
+        # Mutates dots on the main thread before the worker reads them, so
+        # there's no race with the worker building x0.
+        self._relaxation_warmup()
         self._opt_running = True
         self._opt_executor.submit(self._opt_worker, self.optimize_mode)
 
@@ -3619,15 +3829,50 @@ class Canvas(QWidget):
         self._opt_running = False
         if self._opt_restart:
             self._opt_restart = False
+            self._sq_advance_outer_iter = 0
             self._run_active_optimizer()
             return
         if result is None:
+            self._sq_advance_outer_iter = 0
             return
         if isinstance(result, tuple) and len(result) == 2 and result[0] == "__err__":
             print(f"optimize error: {result[1]}")
+            self._sq_advance_outer_iter = 0
             return
         new_x, n_pos_vars, movable_dots, free_shape_meta = result
         self._optimize_common_apply(new_x, n_pos_vars, movable_dots, free_shape_meta)
+
+        # sq_advance_mode under-relaxed continuation on _sq_advance_time:
+        # walk the orbit-time parameter toward the trajectory's tf with
+        # α=0.5 per outer iteration. The first inner solve runs at
+        # _sq_advance_time=0 (sq at epoch = fixed case); subsequent
+        # iterations spiral sq forward along its Kepler orbit until
+        # _sq_advance_time matches tf. Each inner solve sees a near-fixed
+        # sq endpoint, so no big LM shock from the long final segment.
+        if (self.sq_advance_mode and not self.sq_deleted
+                and self._sq_advance_outer_iter < self._sq_advance_outer_max):
+            tf = self._total_flight_time()
+            time_gap = tf - self._sq_advance_time
+            if abs(time_gap) > self._sq_advance_outer_eps:
+                alpha = 0.5
+                step = alpha * time_gap
+                # Cap absolute step so sq advances by at most one fraction
+                # of its orbital period per iteration. Prevents wraparound
+                # when tf spans multiple sq periods.
+                period_sq = self._sq_orbital_period()
+                if period_sq is not None and period_sq > 0.0:
+                    max_step = 0.15 * period_sq
+                    if step > max_step:
+                        step = max_step
+                    elif step < -max_step:
+                        step = -max_step
+                self._sq_advance_time += step
+                self._refresh_sq_advance()
+                self._sq_advance_outer_iter += 1
+                self._opt_running = True
+                self._opt_executor.submit(self._opt_worker, self.optimize_mode)
+                return
+        self._sq_advance_outer_iter = 0
 
 
 class MainWindow(QMainWindow):
