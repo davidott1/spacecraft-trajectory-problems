@@ -687,6 +687,16 @@ class Canvas(QWidget):
         self.delete_history = []
         self.delete_history_max = 100
         self.s_held = False  # S key held: shape drag slides along its Kepler orbit
+        self.m_held = False  # M key held: click square to toggle advance-with-tf mode
+        # Square "advance" mode: when True, the live square's drawn position
+        # is its Kepler-propagated state at t = total flight time across all
+        # trajectories. sq_epoch_* hold the t=0 reference state captured when
+        # the mode was last enabled. While in this mode every geometry change
+        # repropagates sq_center, so the segment that ends at the square
+        # automatically re-targets the moving destination.
+        self.sq_advance_mode = False
+        self.sq_epoch_center = None
+        self.sq_epoch_vel_end = None
         # Shape positions (center points) — placed in orbit around earth (DU)
         self.earth_center = QPointF(0, 0)
         self.earth_radius = 1.0  # DU
@@ -946,6 +956,16 @@ class Canvas(QWidget):
                         t_max = node_t[k]
         return t_max
 
+    def _square_anchor_time(self):
+        """Time used to rotate the live-square anchor and its velocity arrow
+        into the rotating frame. Equals total_flight_time when the square
+        is in advance-with-tf mode (so its drawn position is consistent
+        with how its inertial state was forward-propagated), otherwise the
+        per-trajectory _square_time."""
+        if self.sq_advance_mode:
+            return self._total_flight_time()
+        return self._square_time()
+
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_X:
             self.x_held = True
@@ -953,6 +973,8 @@ class Canvas(QWidget):
                 self._update_x_hover(self._last_mouse_world)
         elif event.key() == Qt.Key.Key_S:
             self.s_held = True
+        elif event.key() == Qt.Key.Key_M:
+            self.m_held = True
 
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key.Key_X:
@@ -962,6 +984,8 @@ class Canvas(QWidget):
                 self.update()
         elif event.key() == Qt.Key.Key_S:
             self.s_held = False
+        elif event.key() == Qt.Key.Key_M:
+            self.m_held = False
 
     def _screen_to_world(self, screen_pos):
         wx = (screen_pos.x() - self.pan_offset.x()) / self.zoom
@@ -1661,9 +1685,85 @@ class Canvas(QWidget):
             )
         return True
 
+    def _total_flight_time(self):
+        """Sum of every segment's flight time across all trajectories."""
+        tf = 0.0
+        for traj in self.trajectories:
+            dots = traj["dots"]
+            for i_start, i_end, mult, _side in traj["segments"]:
+                tf += self._seg_tof(dots[i_start], dots[i_end], mult)
+        return tf
+
+    def _refresh_sq_advance(self):
+        """If sq_advance_mode is on, set sq_center / sq_velocity_end to the
+        Kepler propagation of the saved epoch state by the total flight time.
+        Iterates a few times because tf itself depends on sq_center through
+        Sundman scaling (s = (|r0|+|rf|)/2). No-op if mode off, deleted, or
+        no epoch captured."""
+        if (not self.sq_advance_mode or self.sq_deleted
+                or self.sq_epoch_center is None or self.sq_epoch_vel_end is None):
+            return
+        v_xy = np.array([
+            self.sq_epoch_vel_end.x() - self.sq_epoch_center.x(),
+            self.sq_epoch_vel_end.y() - self.sq_epoch_center.y(),
+        ]) / VEL_SCALE
+        elements = self._orbit_elements_at(self.sq_epoch_center, v_xy)
+        if elements is None:
+            return
+        for _ in range(4):
+            tf = self._total_flight_time()
+            if tf <= 0.0:
+                # Reset to epoch (no flight time).
+                self.sq_center.setX(self.sq_epoch_center.x())
+                self.sq_center.setY(self.sq_epoch_center.y())
+                self.sq_velocity_end = QPointF(
+                    self.sq_epoch_vel_end.x(), self.sq_epoch_vel_end.y(),
+                )
+                return
+            nu = self._orbit_nu_after_dt(elements, tf)
+            r, v = self._orbit_pos_vel(elements, nu)
+            self.sq_center.setX(float(r[0]))
+            self.sq_center.setY(float(r[1]))
+            self.sq_velocity_end = QPointF(
+                float(r[0]) + float(v[0]) * VEL_SCALE,
+                float(r[1]) + float(v[1]) * VEL_SCALE,
+            )
+
+    def _toggle_sq_advance_mode(self):
+        """Toggle the square's advance-with-tf mode. On enable, capture the
+        current (sq_center, sq_velocity_end) as the epoch and immediately
+        repropagate. On disable, leave the square wherever it currently is.
+        Returns True if the toggle changed state."""
+        if self.sq_deleted or self.sq_velocity_end is None:
+            return False
+        if not self.sq_advance_mode:
+            self.sq_epoch_center = QPointF(self.sq_center.x(), self.sq_center.y())
+            self.sq_epoch_vel_end = QPointF(
+                self.sq_velocity_end.x(), self.sq_velocity_end.y(),
+            )
+            self.sq_advance_mode = True
+            self._refresh_sq_advance()
+        else:
+            self.sq_advance_mode = False
+            self.sq_epoch_center = None
+            self.sq_epoch_vel_end = None
+        if self.sq_orbit_mode:
+            self._compute_orbit_for_shape("square")
+        return True
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             pos = self._screen_to_world(QPointF(event.pos()))
+            # M + click on the live square: toggle advance-with-total-tf mode.
+            # In that mode the square's drawn position becomes its Kepler
+            # propagation by sum of every segment's flight time, refreshed
+            # on every geometry change so the destination tracks the user's
+            # edits.
+            if self.m_held and not self.sq_deleted and self._hit_square(pos):
+                if self._toggle_sq_advance_mode():
+                    self._run_active_optimizer()
+                    self.update()
+                return
             # X + click on a black node to delete it and merge its two
             # incident segments (mult = m_in + m_out).
             # X + click on a segment (within 1 px of arc, >5 px from each
@@ -2123,6 +2223,10 @@ class Canvas(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
+        # Refresh the square's advance-mode position so the drawn endpoint
+        # reflects the current total flight time across all trajectories.
+        self._refresh_sq_advance()
+
         # Apply pan and zoom (y-up convention: negative y-scale flips vertical)
         painter.translate(self.pan_offset.x(), self.pan_offset.y())
         painter.scale(self.zoom, -self.zoom)
@@ -2235,7 +2339,7 @@ class Canvas(QWidget):
         if self.sq_velocity_end is not None and not self.sq_deleted:
             v_in = np.array([self.sq_velocity_end.x() - self.sq_center.x(),
                              self.sq_velocity_end.y() - self.sq_center.y()]) / VEL_SCALE
-            t_sq = self._square_time()
+            t_sq = self._square_anchor_time()
             v_disp = self._rotating_velocity(v_in, self.sq_center, t_sq)
             anchor = self._rotate_point_about_earth(self.sq_center, t_sq)
             _draw_shape_velocity(anchor, v_disp, hollow=False)
@@ -2416,9 +2520,15 @@ class Canvas(QWidget):
         if not self.tri_deleted:
             painter.drawPolygon(self._triangle_polygon())
         if not self.sq_deleted:
-            sq_anchor = self._rotate_point_about_earth(self.sq_center, self._square_time())
+            sq_anchor = self._rotate_point_about_earth(self.sq_center, self._square_anchor_time())
             sq_x = sq_anchor.x() - self.sq_size / 2
             sq_y = sq_anchor.y() - self.sq_size / 2
+            if self.sq_advance_mode:
+                # Hollow square = "moves with total flight time" mode.
+                pen = QPen(QColor("green"), 2)
+                pen.setCosmetic(True)
+                painter.setPen(pen)
+                painter.setBrush(QBrush(QColor("white")))
             painter.drawRect(QRectF(sq_x, sq_y, self.sq_size, self.sq_size))
         # Hollow markers at the current nu for deleted shapes (orbit rendezvous).
         if self.tri_deleted and self.tri_orbit_elements is not None:
@@ -2443,41 +2553,6 @@ class Canvas(QWidget):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             half = self.sq_size * 0.5
             painter.drawRect(QRectF(anchor.x() - half, anchor.y() - half, 2 * half, 2 * half))
-
-        # Ghost square: forward-propagate the square's current state along
-        # its Kepler orbit by tf = sum of every segment's flight time across
-        # all trajectories (not just those terminating at the square), so the
-        # ghost advances every time a new segment is added. Drawn as a hollow
-        # grey square 2x the live square's size.
-        if self.env_mode == "two_body":
-            tf = 0.0
-            for traj in self.trajectories:
-                dots = traj["dots"]
-                for i_start, i_end, mult, _side in traj["segments"]:
-                    tf += self._seg_tof(dots[i_start], dots[i_end], mult)
-            elements = None
-            if self.sq_deleted and self.sq_orbit_elements is not None:
-                elements = self.sq_orbit_elements
-            elif (not self.sq_deleted) and self.sq_velocity_end is not None:
-                v_xy = np.array([
-                    self.sq_velocity_end.x() - self.sq_center.x(),
-                    self.sq_velocity_end.y() - self.sq_center.y(),
-                ]) / VEL_SCALE
-                elements = self._orbit_elements_at(self.sq_center, v_xy)
-            if elements is not None and tf > 0.0:
-                nu_g = self._orbit_nu_after_dt(elements, tf)
-                r_g, _ = self._orbit_pos_vel(elements, nu_g)
-                anchor_g = self._rotate_point_about_earth(
-                    QPointF(float(r_g[0]), float(r_g[1])), tf,
-                )
-                pen = QPen(QColor(160, 160, 160), 2)
-                pen.setCosmetic(True)
-                painter.setPen(pen)
-                painter.setBrush(Qt.BrushStyle.NoBrush)
-                half = self.sq_size  # 2x the live square's half-extent
-                painter.drawRect(QRectF(
-                    anchor_g.x() - half, anchor_g.y() - half, 2 * half, 2 * half,
-                ))
 
         # Draw all black dots on top of everything (including shapes)
         painter.setBrush(QBrush(QColor("black")))
@@ -3494,6 +3569,10 @@ class Canvas(QWidget):
         """Kick off the active optimizer asynchronously. If a solve is already
         in flight, mark that it should be restarted when it finishes so its
         (now-stale) result is discarded."""
+        # If the square is in advance-with-tf mode, repropagate its position
+        # before the optimizer reads sq_center as a fixed endpoint. Cheap,
+        # so we don't gate it on optimize_mode.
+        self._refresh_sq_advance()
         if self.optimize_mode is None:
             return
         if self._opt_running:
