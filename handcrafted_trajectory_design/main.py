@@ -47,9 +47,11 @@ DV_SCALE_DEFAULTS = {"energy": 30.0, "fuel": 10.0, None: 10.0}
 DV_SCALE_MAX = 30.0 * VEL_SCALE  # slider upper bound (== 60.0)
 # Hard-coded "small" delta-v threshold for the prune-small-dvs button (DU/TU).
 SMALL_DV_THRESHOLD = 0.1
-# Rotating frame: 1 revolution per 24 hours. With 1 TU ~ 806.4 s, 24 h ~ 107.14 TU.
-ROT_PERIOD_TU = 24.0 * 3600.0 / 806.4
-OMEGA_ROT = 2.0 * math.pi / ROT_PERIOD_TU  # rad / TU, +z (CCW in y-up world)
+# Rotating frame: locked to the Moon's circular mean motion sqrt(mu / r_moon^3),
+# so the Moon (default at 60 DU from Earth) is stationary in the rotating view.
+MOON_DIST_DU = 60.0
+OMEGA_ROT = math.sqrt(MU / (MOON_DIST_DU ** 3))  # rad / TU, +z (CCW in y-up world)
+ROT_PERIOD_TU = 2.0 * math.pi / OMEGA_ROT
 
 
 def propagate_kepler_period(pos_center, vel_vec, grav_center, mu, num_points):
@@ -879,6 +881,19 @@ class Canvas(QWidget):
         cx, cy = self.earth_center.x(), self.earth_center.y()
         dx = p.x() - cx
         dy = p.y() - cy
+        return QPointF(cx + c * dx - s * dy, cy + s * dx + c * dy)
+
+    def _inertial_from_view(self, p_view, t):
+        """Inverse of _rotate_point_about_earth: interpret p_view as a
+        rotating-frame world point at time t, return the equivalent
+        inertial-frame world point. No-op when not in rotating mode."""
+        if self.frame_mode != "rotating" or t == 0.0:
+            return p_view
+        ang = -self._rot_angle(t)  # +omega*t
+        c, s = math.cos(ang), math.sin(ang)
+        cx, cy = self.earth_center.x(), self.earth_center.y()
+        dx = p_view.x() - cx
+        dy = p_view.y() - cy
         return QPointF(cx + c * dx - s * dy, cy + s * dx + c * dy)
 
     def _rotate_vec(self, v, t):
@@ -1820,7 +1835,14 @@ class Canvas(QWidget):
                 if snap_mode == 'inner':
                     self.trajectories.append({"dots": [snap_node], "segments": []})
                 elif snap_mode == 'outer':
-                    self.trajectories.append({"dots": [snap_node, start_pos], "segments": [(0, 1, 1.0, self._seed_side(snap_node, start_pos))]})
+                    # snap_node (shape) anchors this new trajectory at t=0.
+                    # The connector segment's TOF only depends on radii (which
+                    # are invariant under rotation about earth_center), so we
+                    # can compute dt using the view-frame cursor and then
+                    # convert the cursor to inertial at that t.
+                    dt = self._seg_tof(snap_node, start_pos, 1.0)
+                    start_pos_inertial = self._inertial_from_view(start_pos, dt)
+                    self.trajectories.append({"dots": [snap_node, start_pos_inertial], "segments": [(0, 1, 1.0, self._seed_side(snap_node, start_pos_inertial))]})
                 else:
                     self.trajectories.append({"dots": [start_pos], "segments": []})
                 self.update()
@@ -1921,6 +1943,15 @@ class Canvas(QWidget):
         traj = self.trajectories[-1]
         last = traj["dots"][-1]
         pos = self._screen_to_world(QPointF(event.pos()))
+        # When drawing in the rotating frame, the cursor position the user
+        # sees is in the rotating-frame view. Convert by rotating about
+        # earth by R(+omega * t_dot) per appended dot so stored positions
+        # are inertial. We work the angular interpolation in the view
+        # frame so dots track the cursor visually.
+        node_t_map = self._traj_node_times(traj)
+        last_idx = len(traj["dots"]) - 1
+        t_last = node_t_map.get(last_idx, 0.0)
+        last_view = self._rotate_point_about_earth(last, t_last)
         # Drop a new node every ~trace_pixel_spacing of on-screen arc length
         # along the interpolating arc about Earth. Choosing the angular
         # step from a screen-pixel target keeps draw-density independent of
@@ -1928,7 +1959,7 @@ class Canvas(QWidget):
         # screen-arc = zoom * r * Delta-theta which blows up at large r and
         # high zoom, forcing the user to lift their finger).
         ex, ey = self.earth_center.x(), self.earth_center.y()
-        rx0, ry0 = last.x() - ex, last.y() - ey
+        rx0, ry0 = last_view.x() - ex, last_view.y() - ey
         rx1, ry1 = pos.x() - ex, pos.y() - ey
         r0 = math.hypot(rx0, ry0)
         r1 = math.hypot(rx1, ry1)
@@ -1942,10 +1973,15 @@ class Canvas(QWidget):
             if abs(da) >= step:
                 num_dots = int(abs(da) // step)
                 sgn = 1.0 if da >= 0 else -1.0
+                # Per-segment time delta is the same in both frames since
+                # rotation about earth_center preserves radii.
+                dt_seg = self._seg_tof(last, pos, 1.0)
                 for k in range(1, num_dots + 1):
                     a = a0 + sgn * step * k
                     r = r0 + (r1 - r0) * (k / max(num_dots, 1))
-                    interp = QPointF(ex + r * math.cos(a), ey + r * math.sin(a))
+                    interp_view = QPointF(ex + r * math.cos(a), ey + r * math.sin(a))
+                    t_new = t_last + dt_seg * (k / max(num_dots, 1))
+                    interp = self._inertial_from_view(interp_view, t_new)
                     # Append the dot FIRST so the segment never references
                     # an out-of-range index even transiently.
                     self.trajectories[-1]["dots"].append(interp)
@@ -1955,8 +1991,8 @@ class Canvas(QWidget):
                     )
                 self.update()
             return
-        dx = pos.x() - last.x()
-        dy = pos.y() - last.y()
+        dx = pos.x() - last_view.x()
+        dy = pos.y() - last_view.y()
         dist = math.hypot(dx, dy)
         # Linear-fallback spacing also keyed off screen pixels.
         spacing = self.trace_pixel_spacing / max(self.zoom, 1e-6)
@@ -1964,11 +2000,14 @@ class Canvas(QWidget):
             num_dots = int(dist // spacing)
             ux = dx / dist
             uy = dy / dist
+            dt_seg = self._seg_tof(last, pos, 1.0)
             for k in range(1, num_dots + 1):
-                interp = QPointF(
-                    last.x() + ux * spacing * k,
-                    last.y() + uy * spacing * k,
+                interp_view = QPointF(
+                    last_view.x() + ux * spacing * k,
+                    last_view.y() + uy * spacing * k,
                 )
+                t_new = t_last + dt_seg * (k / max(num_dots, 1))
+                interp = self._inertial_from_view(interp_view, t_new)
                 self.trajectories[-1]["dots"].append(interp)
                 n_dots = len(self.trajectories[-1]["dots"])
                 self.trajectories[-1]["segments"].append(
