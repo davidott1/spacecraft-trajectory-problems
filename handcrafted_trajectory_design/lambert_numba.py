@@ -20,6 +20,12 @@ import numpy as np
 from numba import njit
 
 
+# Half-width of the antipodal-degenerate angular band (radians). Inside this
+# band the natural sign(cross_z) tie-break is numerically unreliable; we use
+# the per-segment `side` hint (±1) to pick a deterministic branch.
+SIDE_EPS = 1.0e-3
+
+
 @njit(cache=True, fastmath=False, inline="always")
 def stumpff_all(z):
     """Return (C, S, Cp, Sp) sharing a single sqrt + trig/hyperbolic eval."""
@@ -107,8 +113,14 @@ def lambert_z_newton(r1, r2, A, dt, mu, z_init):
 
 
 @njit(cache=True, fastmath=False)
-def lambert_solve_nb(r1_vec, r2_vec, dt, mu):
-    """Lambert solver. Returns (ok, v1, v2). ok=0 -> caller should fall back."""
+def lambert_solve_nb(r1_vec, r2_vec, dt, mu, side):
+    """Lambert solver. Returns (ok, v1, v2). ok=0 -> caller should fall back.
+
+    `side` selects the transfer branch when the geometry is within SIDE_EPS
+    of antipodal: side > 0 forces a short-way (CCW, h_z>0) transfer; side < 0
+    forces a long-way (CW, h_z<0) transfer. side == 0 means "auto": fall
+    back to sign(cross_z) (or +1 if cross_z is exactly zero) inside the band.
+    Outside the band, side is ignored."""
     v_fail = np.empty(2)
     v_fail[0] = 0.0
     v_fail[1] = 0.0
@@ -128,8 +140,29 @@ def lambert_solve_nb(r1_vec, r2_vec, dt, mu):
     if cross_z < 0.0:
         dtheta = 2.0 * math.pi - dtheta
     sin_dtheta = math.sin(dtheta)
-    if abs(sin_dtheta) < 1e-14 or abs(1.0 - cos_dtheta) < 1e-14:
+    if abs(1.0 - cos_dtheta) < 1e-14:
+        # dtheta ~ 0: degenerate but not the antipodal case; bail.
         return 0, v_fail, v_fail
+    if abs(sin_dtheta) < SIDE_EPS:
+        side_eff = side
+        if side_eff == 0.0:
+            side_eff = 1.0 if cross_z >= 0.0 else -1.0
+        # Rotate r2_vec by -copysign(SIDE_EPS, side_eff) so the geometry
+        # (and hence A) is self-consistent with the chosen branch. Without
+        # this, A=eps but r2_vec is still exactly antipodal to r1_vec, so
+        # g_=A*sqrt(y/mu) is tiny while r2_vec - f*r1_vec is exactly zero,
+        # giving 0/0 ~ tiny in the velocity reconstruction.
+        phi = -math.copysign(SIDE_EPS, side_eff)
+        cphi = math.cos(phi)
+        sphi = math.sin(phi)
+        new_r2 = np.empty(2)
+        new_r2[0] = cphi * r2_vec[0] - sphi * r2_vec[1]
+        new_r2[1] = sphi * r2_vec[0] + cphi * r2_vec[1]
+        r2_vec = new_r2
+        cos_dtheta = (r1_vec[0] * r2_vec[0] + r1_vec[1] * r2_vec[1]) / (r1 * r2)
+        cross_z = r1_vec[0] * r2_vec[1] - r1_vec[1] * r2_vec[0]
+        dtheta = math.pi + phi  # = math.pi - copysign(SIDE_EPS, side_eff)
+        sin_dtheta = math.sin(dtheta)
 
     A = sin_dtheta * math.sqrt(r1 * r2 / (1.0 - cos_dtheta))
 
@@ -151,8 +184,11 @@ def lambert_solve_nb(r1_vec, r2_vec, dt, mu):
 
 
 @njit(cache=True, fastmath=False)
-def lambert_with_jac_nb(r1_vec, r2_vec, dt, mu, z_init):
+def lambert_with_jac_nb(r1_vec, r2_vec, dt, mu, z_init, side):
     """Lambert + analytic Jacobians.
+
+    `side` selects the transfer branch in the antipodal-degenerate band
+    (see lambert_solve_nb).
 
     Returns (ok, v1, v2, Jv1_r1, Jv1_r2, Jv1_dt, Jv2_r1, Jv2_r2, Jv2_dt, z).
     ok=0 signals the caller to fall back to the Python path (straight-line
@@ -176,8 +212,27 @@ def lambert_with_jac_nb(r1_vec, r2_vec, dt, mu, z_init):
     if cross_z < 0.0:
         dtheta = 2.0 * math.pi - dtheta
     sin_dtheta = math.sin(dtheta)
-    if abs(sin_dtheta) < 1e-14 or abs(1.0 - cos_dtheta) < 1e-14:
+    if abs(1.0 - cos_dtheta) < 1e-14:
         return 0, zero_v, zero_v, zero_m, zero_m, zero_v, zero_m, zero_m, zero_v, 0.0
+    if abs(sin_dtheta) < SIDE_EPS:
+        side_eff = side
+        if side_eff == 0.0:
+            side_eff = 1.0 if cross_z >= 0.0 else -1.0
+        # See lambert_solve_nb for the rationale: rotate r2_vec so the
+        # geometry is self-consistent with the chosen branch. Jacobians
+        # below are wrt the perturbed r2_vec; for SIDE_EPS=1e-3 this is
+        # an O(1e-3) approximation that the optimizer tolerates.
+        phi = -math.copysign(SIDE_EPS, side_eff)
+        cphi = math.cos(phi)
+        sphi = math.sin(phi)
+        new_r2 = np.empty(2)
+        new_r2[0] = cphi * r2_vec[0] - sphi * r2_vec[1]
+        new_r2[1] = sphi * r2_vec[0] + cphi * r2_vec[1]
+        r2_vec = new_r2
+        cos_dtheta = (r1_vec[0] * r2_vec[0] + r1_vec[1] * r2_vec[1]) / (r1 * r2)
+        cross_z = r1_vec[0] * r2_vec[1] - r1_vec[1] * r2_vec[0]
+        dtheta = math.pi + phi
+        sin_dtheta = math.sin(dtheta)
 
     A = sin_dtheta * math.sqrt(r1 * r2 / (1.0 - cos_dtheta))
 
@@ -353,7 +408,7 @@ def _seg_pos(x_vec, kind, var_idx, shape_pos_tri, shape_pos_sq, fixed_xy):
 
 @njit(cache=True, fastmath=False)
 def _solve_segment(
-    r0, rf, tof_seg, mult, z_init,
+    r0, rf, tof_seg, mult, z_init, side,
     center, mu, use_parabola, cg_mode, const_g_vec, g_mag,
     # output slots (all preallocated views into per-segment arrays):
     v0_out, vf_out,
@@ -466,13 +521,20 @@ def _solve_segment(
     if cross_z < 0.0:
         dtheta = 2.0 * math.pi - dtheta
     sin_dtheta = math.sin(dtheta)
-    if abs(sin_dtheta) < 1e-14 or abs(1.0 - cos_dtheta) < 1e-14:
+    if abs(1.0 - cos_dtheta) < 1e-14:
         return _fill_straight_line(
             r1x, r1y, r2x, r2y, tof_seg, mult,
             v0_out, vf_out,
             Jv0_r0_out, Jv0_rf_out, Jv0_dt_out,
             Jvf_r0_out, Jvf_rf_out, Jvf_dt_out,
         )
+    if abs(sin_dtheta) < SIDE_EPS:
+        side_eff = side
+        if side_eff == 0.0:
+            side_eff = 1.0 if cross_z >= 0.0 else -1.0
+        dtheta = math.pi - math.copysign(SIDE_EPS, side_eff)
+        sin_dtheta = math.sin(dtheta)
+        cos_dtheta = math.cos(dtheta)
 
     A = sin_dtheta * math.sqrt(r1 * r2 / (1.0 - cos_dtheta))
     ok, z, C, S, y = lambert_z_newton(r1, r2, A, tof_seg, mu, z_init)
@@ -694,7 +756,7 @@ def fun_and_grad_batch(
     seg_start_kind, seg_end_kind,
     seg_start_var_idx, seg_end_var_idx,
     seg_start_fixed, seg_end_fixed,
-    seg_mult,
+    seg_mult, seg_side,
     # shape + env
     shape_pos_tri, shape_pos_sq,
     center_np, mu,
@@ -766,21 +828,29 @@ def fun_and_grad_batch(
 
         # Sundman-style time scaling: tof_seg = tau * s^1.5 * mult,
         # s = (|r0-c| + |rf-c|) / 2 (distance from earth_center).
-        dx0 = r0x - center_np[0]
-        dy0 = r0y - center_np[1]
-        dxf = rfx - center_np[0]
-        dyf = rfy - center_np[1]
-        r0_mag = math.sqrt(dx0 * dx0 + dy0 * dy0)
-        rf_mag = math.sqrt(dxf * dxf + dyf * dyf)
-        s = 0.5 * (r0_mag + rf_mag)
-        if s < 1e-12:
-            s = 1e-12
-        sqrt_s = math.sqrt(s)
-        s_pow = s * sqrt_s
-        tof_seg = tof * s_pow * mult
+        # Disabled in CG mode (uniform g) where there's no orbital scale.
+        if cg_mode:
+            r0_mag = 0.0
+            rf_mag = 0.0
+            sqrt_s = 1.0
+            s_pow = 1.0
+            tof_seg = tof * mult
+        else:
+            dx0 = r0x - center_np[0]
+            dy0 = r0y - center_np[1]
+            dxf = rfx - center_np[0]
+            dyf = rfy - center_np[1]
+            r0_mag = math.sqrt(dx0 * dx0 + dy0 * dy0)
+            rf_mag = math.sqrt(dxf * dxf + dyf * dyf)
+            s = 0.5 * (r0_mag + rf_mag)
+            if s < 1e-12:
+                s = 1e-12
+            sqrt_s = math.sqrt(s)
+            s_pow = s * sqrt_s
+            tof_seg = tof * s_pow * mult
 
         ok, z_new = _solve_segment(
-            r0, rf, tof_seg, mult, z_cache[i],
+            r0, rf, tof_seg, mult, z_cache[i], seg_side[i],
             center_np, mu, use_parabola, cg_mode, const_g_vec, g_mag,
             v0_buf[i], vf_buf[i],
             Jv0_r0_buf[i], Jv0_rf_buf[i], Jv0_dt_buf[i],
@@ -789,7 +859,7 @@ def fun_and_grad_batch(
         ok_out[i] = ok
         if ok == 1 and not use_parabola:
             z_cache[i] = z_new
-        if ok == 1:
+        if ok == 1 and not cg_mode:
             _apply_sundman_fixup(
                 r0, rf, center_np, tof,
                 r0_mag, rf_mag, sqrt_s, s_pow,
@@ -924,7 +994,7 @@ def lm_eval_batch(
     seg_start_kind, seg_end_kind,
     seg_start_var_idx, seg_end_var_idx,
     seg_start_fixed, seg_end_fixed,
-    seg_mult,
+    seg_mult, seg_side,
     # shape + env
     shape_pos_tri, shape_pos_sq,
     center_np, mu,
@@ -994,22 +1064,29 @@ def lm_eval_batch(
         rf[0] = rfx
         rf[1] = rfy
 
-        # Sundman-style time scaling.
-        dx0 = r0x - center_np[0]
-        dy0 = r0y - center_np[1]
-        dxf = rfx - center_np[0]
-        dyf = rfy - center_np[1]
-        r0_mag = math.sqrt(dx0 * dx0 + dy0 * dy0)
-        rf_mag = math.sqrt(dxf * dxf + dyf * dyf)
-        s = 0.5 * (r0_mag + rf_mag)
-        if s < 1e-12:
-            s = 1e-12
-        sqrt_s = math.sqrt(s)
-        s_pow = s * sqrt_s
-        tof_seg = tof * s_pow * mult
+        # Sundman-style time scaling. Disabled in CG mode.
+        if cg_mode:
+            r0_mag = 0.0
+            rf_mag = 0.0
+            sqrt_s = 1.0
+            s_pow = 1.0
+            tof_seg = tof * mult
+        else:
+            dx0 = r0x - center_np[0]
+            dy0 = r0y - center_np[1]
+            dxf = rfx - center_np[0]
+            dyf = rfy - center_np[1]
+            r0_mag = math.sqrt(dx0 * dx0 + dy0 * dy0)
+            rf_mag = math.sqrt(dxf * dxf + dyf * dyf)
+            s = 0.5 * (r0_mag + rf_mag)
+            if s < 1e-12:
+                s = 1e-12
+            sqrt_s = math.sqrt(s)
+            s_pow = s * sqrt_s
+            tof_seg = tof * s_pow * mult
 
         ok, z_new = _solve_segment(
-            r0, rf, tof_seg, mult, z_cache[i],
+            r0, rf, tof_seg, mult, z_cache[i], seg_side[i],
             center_np, mu, use_parabola, cg_mode, const_g_vec, g_mag,
             v0_buf[i], vf_buf[i],
             Jv0_r0_buf[i], Jv0_rf_buf[i], Jv0_dt_buf[i],
@@ -1018,7 +1095,7 @@ def lm_eval_batch(
         ok_out[i] = ok
         if ok == 1 and not use_parabola:
             z_cache[i] = z_new
-        if ok == 1:
+        if ok == 1 and not cg_mode:
             _apply_sundman_fixup(
                 r0, rf, center_np, tof,
                 r0_mag, rf_mag, sqrt_s, s_pow,
@@ -1134,8 +1211,8 @@ def _warmup():
     r2 = np.array([0.3, 0.9])
     stumpff_all(0.0)
     lambert_z_newton(1.0, 1.0, 0.9, 1.5, 1.0, 0.0)
-    lambert_solve_nb(r1, r2, 1.5, 1.0)
-    lambert_with_jac_nb(r1, r2, 1.5, 1.0, 0.0)
+    lambert_solve_nb(r1, r2, 1.5, 1.0, 0.0)
+    lambert_with_jac_nb(r1, r2, 1.5, 1.0, 0.0, 0.0)
 
     # Warm up batch path: trivial 1-segment two_body/conic case.
     x_vec = np.array([1.0, 0.0, 0.0, 1.0, 1.5])  # two movable dots + tof
@@ -1146,6 +1223,7 @@ def _warmup():
     seg_start_fixed = np.zeros((1, 2))
     seg_end_fixed = np.zeros((1, 2))
     seg_mult = np.array([1.0])
+    seg_side = np.array([0.0])
     shape_pos_tri = np.zeros(2)
     shape_pos_sq = np.zeros(2)
     center = np.zeros(2)
@@ -1175,7 +1253,7 @@ def _warmup():
         seg_start_kind, seg_end_kind,
         seg_start_var_idx, seg_end_var_idx,
         seg_start_fixed, seg_end_fixed,
-        seg_mult,
+        seg_mult, seg_side,
         shape_pos_tri, shape_pos_sq,
         center, 1.0,
         False, False, const_g, 1.0,
@@ -1193,7 +1271,7 @@ def _warmup():
         seg_start_kind, seg_end_kind,
         seg_start_var_idx, seg_end_var_idx,
         seg_start_fixed, seg_end_fixed,
-        seg_mult,
+        seg_mult, seg_side,
         shape_pos_tri, shape_pos_sq,
         center, 1.0,
         True, True, const_g, 1.0,
@@ -1211,7 +1289,7 @@ def _warmup():
         seg_start_kind, seg_end_kind,
         seg_start_var_idx, seg_end_var_idx,
         seg_start_fixed, seg_end_fixed,
-        seg_mult,
+        seg_mult, seg_side,
         shape_pos_tri, shape_pos_sq,
         center, 1.0,
         False, False, const_g, 1.0,
@@ -1228,7 +1306,7 @@ def _warmup():
         seg_start_kind, seg_end_kind,
         seg_start_var_idx, seg_end_var_idx,
         seg_start_fixed, seg_end_fixed,
-        seg_mult,
+        seg_mult, seg_side,
         shape_pos_tri, shape_pos_sq,
         center, 1.0,
         True, True, const_g, 1.0,
