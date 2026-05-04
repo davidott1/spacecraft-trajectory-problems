@@ -803,7 +803,7 @@ class Canvas(QWidget):
         # sq fixed → run LM, (2) repropagate sq from the new tf, until
         # |Δsq| settles. Each inner solve sees a near-fixed endpoint.
         self._sq_advance_outer_iter = 0
-        self._sq_advance_outer_max = 12
+        self._sq_advance_outer_max = 500
         self._sq_advance_outer_eps = 1e-3  # TU (gap between _sq_advance_time and tf)
 
         self.setStyleSheet("background-color: white;")
@@ -3861,7 +3861,7 @@ class Canvas(QWidget):
                 # when tf spans multiple sq periods.
                 period_sq = self._sq_orbital_period()
                 if period_sq is not None and period_sq > 0.0:
-                    max_step = 0.15 * period_sq
+                    max_step = 0.01 * period_sq
                     if step > max_step:
                         step = max_step
                     elif step < -max_step:
