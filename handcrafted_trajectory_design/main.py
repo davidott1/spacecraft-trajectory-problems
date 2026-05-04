@@ -664,7 +664,7 @@ class Canvas(QWidget):
         # Target screen-pixel arc length between dropped dots while drawing.
         # Using pixels (not radians or DU) keeps draw-density independent of
         # both the current zoom and the orbital radius being traced.
-        self.trace_pixel_spacing = 20.0
+        self.trace_pixel_spacing = 30.0
         self.trace_spacing = 1.0  # DU; legacy world-space fallback (unused)
         self.trace_dtau = math.pi / 6.0  # legacy; kept for back-compat
         self.dragging = False
@@ -3943,7 +3943,7 @@ class Canvas(QWidget):
                     return 0.0
                 step = alpha * gap
                 if period is not None and period > 0.0:
-                    max_step = 0.01 * period
+                    max_step = 0.05 * period
                     if step > max_step:
                         step = max_step
                     elif step < -max_step:
