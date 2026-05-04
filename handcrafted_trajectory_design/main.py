@@ -745,6 +745,12 @@ class Canvas(QWidget):
         self.moon_orbit_elements = self._orbit_elements_at(
             self.moon_center, np.array([moon_vx, moon_vy]),
         )
+        # Moon is always orbiting (no toggle, unlike sq's advance mode).
+        # _moon_advance_time is the continuation parameter walked toward
+        # tf in the staggered outer loop, mirroring _sq_advance_time. The
+        # moon_center QPointF is updated to position(epoch, this time) so
+        # segment endpoints attached to moon follow its orbital motion.
+        self._moon_advance_time = 0.0
 
         self.tri_orbit = []  # list of QPointF for triangle Kepler orbit
         self.sq_orbit = []  # list of QPointF for square Kepler orbit
@@ -1070,6 +1076,13 @@ class Canvas(QWidget):
         cx, cy = self.sq_center.x(), self.sq_center.y()
         return math.hypot(pos.x() - cx, pos.y() - cy) <= pad
 
+    def _hit_moon(self, pos):
+        # Moon hit pad: visual radius + a click-tolerance pad. Moon has no
+        # delete state so no rendezvous-orbit fallback like sq.
+        pad = max(self.moon_radius, 14.0 / self.zoom)
+        cx, cy = self.moon_center.x(), self.moon_center.y()
+        return math.hypot(pos.x() - cx, pos.y() - cy) <= pad
+
     def _slide_deleted_to(self, shape, world_pos):
         """Set the deleted shape's nu to the orbit point closest to world_pos."""
         elements = (self.tri_orbit_elements if shape == "triangle"
@@ -1143,18 +1156,21 @@ class Canvas(QWidget):
                 self.sq_nu = elements["nu0"]
 
     def _snap_target_for(self, pos, r_inner, r_outer):
-        """Pick the closer of triangle/square if within r_outer of pos.
+        """Pick the closest of triangle/square/moon if within r_outer of pos.
         Returns (shape_dot, distance, mode) where mode is 'inner' (d < r_inner),
         'outer' (r_inner <= d < r_outer), or None (no snap)."""
-        d_tri = math.hypot(pos.x() - self.tri_center.x(), pos.y() - self.tri_center.y())
-        d_sq = math.hypot(pos.x() - self.sq_center.x(), pos.y() - self.sq_center.y())
-        if d_tri <= d_sq and d_tri < r_outer:
-            shape, d = self.tri_center, d_tri
-        elif d_sq < r_outer:
-            shape, d = self.sq_center, d_sq
-        else:
+        candidates = [
+            (self.tri_center,
+             math.hypot(pos.x() - self.tri_center.x(), pos.y() - self.tri_center.y())),
+            (self.sq_center,
+             math.hypot(pos.x() - self.sq_center.x(), pos.y() - self.sq_center.y())),
+            (self.moon_center,
+             math.hypot(pos.x() - self.moon_center.x(), pos.y() - self.moon_center.y())),
+        ]
+        best_shape, best_d = min(candidates, key=lambda c: c[1])
+        if best_d >= r_outer:
             return None, None, None
-        return shape, d, ('inner' if d < r_inner else 'outer')
+        return best_shape, best_d, ('inner' if best_d < r_inner else 'outer')
 
     def _find_nearest_dot(self, pos, max_dist=0.30):
         """Find the nearest dot (including triangle/square centers) across all
@@ -1182,6 +1198,12 @@ class Canvas(QWidget):
             best_dist = d
             best_dot = self.sq_center
             best_traj = None
+        # Check moon center
+        d = math.hypot(pos.x() - self.moon_center.x(), pos.y() - self.moon_center.y())
+        if d < best_dist:
+            best_dist = d
+            best_dot = self.moon_center
+            best_traj = None
         return best_dot, best_traj
 
     def _update_x_hover(self, pos):
@@ -1202,7 +1224,9 @@ class Canvas(QWidget):
                 new_hover = ("segment", seg[0], seg[1])
             else:
                 dot, traj = self._find_nearest_dot(pos, max_dist=12.0 / self.zoom)
-                if dot is not None and dot is not self.tri_center and dot is not self.sq_center:
+                if (dot is not None and dot is not self.tri_center
+                        and dot is not self.sq_center
+                        and dot is not self.moon_center):
                     new_hover = ("node", traj, dot)
         if new_hover != self.x_hover:
             self.x_hover = new_hover
@@ -1372,7 +1396,7 @@ class Canvas(QWidget):
         - 0 incident segments (orphan): just remove the node, prune empty
           trajectories.
         Other configurations are no-ops."""
-        if dot is self.tri_center or dot is self.sq_center:
+        if dot is self.tri_center or dot is self.sq_center or dot is self.moon_center:
             return False
         for traj in self.trajectories:
             dots = traj["dots"]
@@ -1439,7 +1463,7 @@ class Canvas(QWidget):
         for traj in self.trajectories:
             new_dots = []
             for d in traj["dots"]:
-                if d is self.tri_center or d is self.sq_center:
+                if d is self.tri_center or d is self.sq_center or d is self.moon_center:
                     new_dots.append(d)
                 else:
                     new_dots.append(QPointF(d.x(), d.y()))
@@ -1758,6 +1782,45 @@ class Canvas(QWidget):
             float(r[1]) + float(v[1]) * VEL_SCALE,
         )
 
+    def _moon_orbital_period(self):
+        """Period of the moon's circular Kepler orbit, or None if degenerate."""
+        if self.moon_orbit_elements is None:
+            return None
+        e = float(self.moon_orbit_elements["e"])
+        if e >= 1.0 - 1e-9:
+            return None
+        h_z = float(self.moon_orbit_elements["h_z"])
+        p = h_z * h_z / MU
+        a = p / (1.0 - e * e)
+        if a <= 0.0:
+            return None
+        return 2.0 * math.pi * math.sqrt(a * a * a / MU)
+
+    def _refresh_moon_advance(self):
+        """Update moon_center / moon_velocity_end to the Kepler propagation
+        of the moon's initial state by `_moon_advance_time`. Always-on (the
+        moon is always orbiting); no toggle.
+
+        Mirrors the optimize-off fallback: when no minimize is active, sync
+        `_moon_advance_time` to tf so the moon still tracks the user's
+        edits visually."""
+        if self.moon_orbit_elements is None:
+            return
+        if self.optimize_mode is None:
+            self._moon_advance_time = self._total_flight_time()
+        t = float(self._moon_advance_time)
+        if t <= 0.0:
+            nu = self.moon_orbit_elements["nu0"]
+        else:
+            nu = self._orbit_nu_after_dt(self.moon_orbit_elements, t)
+        r, v = self._orbit_pos_vel(self.moon_orbit_elements, nu)
+        self.moon_center.setX(float(r[0]))
+        self.moon_center.setY(float(r[1]))
+        self.moon_velocity_end = QPointF(
+            float(r[0]) + float(v[0]) * VEL_SCALE,
+            float(r[1]) + float(v[1]) * VEL_SCALE,
+        )
+
     def _sq_orbital_period(self):
         """Period of sq's Kepler orbit from epoch state, or None for
         hyperbolic / degenerate orbits."""
@@ -1955,7 +2018,9 @@ class Canvas(QWidget):
             # Check for dragging a black node (no modifier)
             if not event.modifiers():
                 dot, traj = self._find_nearest_dot(pos)
-                if dot is not None and dot is not self.tri_center and dot is not self.sq_center:
+                if (dot is not None and dot is not self.tri_center
+                        and dot is not self.sq_center
+                        and dot is not self.moon_center):
                     self.dragging_dot = dot
                     return
             # Trajectory drawing requires Cmd
@@ -2282,6 +2347,8 @@ class Canvas(QWidget):
         # Refresh the square's advance-mode position so the drawn endpoint
         # reflects the current total flight time across all trajectories.
         self._refresh_sq_advance()
+        # Moon's position is always-orbiting; sync to current advance time.
+        self._refresh_moon_advance()
 
         # Apply pan and zoom (y-up convention: negative y-scale flips vertical)
         painter.translate(self.pan_offset.x(), self.pan_offset.y())
@@ -2413,12 +2480,13 @@ class Canvas(QWidget):
             pen.setCosmetic(True)
             painter.setPen(pen)
             painter.drawEllipse(self.earth_center, self.earth_radius, self.earth_radius)
-            # Cosmetic Moon orbit (circular about Earth at the moon's
-            # initial radius). Same shape in inertial / rotating frames.
-            r_moon = math.hypot(
-                self.moon_center.x() - self.earth_center.x(),
-                self.moon_center.y() - self.earth_center.y(),
-            )
+            # Cosmetic Moon orbit (circular about Earth, constant radius).
+            # Use semi-latus rectum p (= a for circular) from cached elements
+            # since moon_center moves along the orbit each frame.
+            r_moon = 0.0
+            if self.moon_orbit_elements is not None:
+                h_z = float(self.moon_orbit_elements["h_z"])
+                r_moon = h_z * h_z / MU
             if r_moon > 1e-9:
                 morb_pen = QPen(QColor(160, 160, 160, 160), 1)
                 morb_pen.setCosmetic(True)
@@ -2433,22 +2501,12 @@ class Canvas(QWidget):
             painter.setPen(esoi_pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawEllipse(self.earth_center, self.earth_soi_radius, self.earth_soi_radius)
-            # Moon: massless visual node, propagated along its circular
-            # orbit by tf = sum of every segment's flight time (same clock
-            # the ghost square uses).
-            tf_moon = 0.0
-            for traj in self.trajectories:
-                dots = traj["dots"]
-                for i_start, i_end, mult, _side in traj["segments"]:
-                    tf_moon += self._seg_tof(dots[i_start], dots[i_end], mult)
-            if tf_moon > 0.0 and self.moon_orbit_elements is not None:
-                nu_m = self._orbit_nu_after_dt(self.moon_orbit_elements, tf_moon)
-                r_m, _ = self._orbit_pos_vel(self.moon_orbit_elements, nu_m)
-                moon_pt = self._rotate_point_about_earth(
-                    QPointF(float(r_m[0]), float(r_m[1])), tf_moon,
-                )
-            else:
-                moon_pt = self.moon_center
+            # Moon: position lives in moon_center, auto-updated each
+            # _refresh_moon_advance to position(epoch, _moon_advance_time).
+            # Rotate into rotating frame using the same time index.
+            moon_pt = self._rotate_point_about_earth(
+                self.moon_center, float(self._moon_advance_time),
+            )
             painter.setBrush(QBrush(QColor(160, 160, 160)))
             pen = QPen(QColor(160, 160, 160), 2)
             pen.setCosmetic(True)
@@ -2505,7 +2563,7 @@ class Canvas(QWidget):
             segments = traj["segments"]
             node_t = self._traj_node_times(traj)
             for k, dot in enumerate(dots):
-                if dot is self.tri_center or dot is self.sq_center:
+                if dot is self.tri_center or dot is self.sq_center or dot is self.moon_center:
                     continue
                 # Find segments where this node is an endpoint
                 incoming_vel = None  # arrival velocity at node
@@ -2617,7 +2675,7 @@ class Canvas(QWidget):
         for traj in self.trajectories:
             node_t = self._traj_node_times(traj)
             for k, dot in enumerate(traj["dots"]):
-                if dot is self.tri_center or dot is self.sq_center:
+                if dot is self.tri_center or dot is self.sq_center or dot is self.moon_center:
                     continue
                 p = self._rotate_point_about_earth(dot, node_t.get(k, 0.0))
                 painter.drawEllipse(p, dot_r, dot_r)
@@ -2889,7 +2947,8 @@ class Canvas(QWidget):
             for i_start, i_end, _mult, _side in traj["segments"]:
                 for idx in (i_start, i_end):
                     dot = dots[idx]
-                    if dot is not self.tri_center and dot is not self.sq_center:
+                    if (dot is not self.tri_center and dot is not self.sq_center
+                            and dot is not self.moon_center):
                         if id(dot) not in movable_set:
                             movable_set.add(id(dot))
                             movable_dots.append(dot)
@@ -3721,7 +3780,7 @@ class Canvas(QWidget):
                 dots = traj["dots"]
                 segments = traj["segments"]
                 for k, dot in enumerate(dots):
-                    if dot is self.tri_center or dot is self.sq_center:
+                    if dot is self.tri_center or dot is self.sq_center or dot is self.moon_center:
                         continue
                     if id(dot) in skip:
                         continue
@@ -3798,6 +3857,8 @@ class Canvas(QWidget):
         # before the optimizer reads sq_center as a fixed endpoint. Cheap,
         # so we don't gate it on optimize_mode.
         self._refresh_sq_advance()
+        # Moon is always orbiting — refresh its position too.
+        self._refresh_moon_advance()
         if self.optimize_mode is None:
             return
         if self._opt_running:
@@ -3870,25 +3931,48 @@ class Canvas(QWidget):
         # iterations spiral sq forward along its Kepler orbit until
         # _sq_advance_time matches tf. Each inner solve sees a near-fixed
         # sq endpoint, so no big LM shock from the long final segment.
-        if (self.sq_advance_mode and not self.sq_deleted
-                and self._sq_advance_outer_iter < self._sq_advance_outer_max):
+        if self._sq_advance_outer_iter < self._sq_advance_outer_max:
             tf = self._total_flight_time()
-            time_gap = tf - self._sq_advance_time
-            if abs(time_gap) > self._sq_advance_outer_eps:
-                alpha = 0.5
-                step = alpha * time_gap
-                # Cap absolute step so sq advances by at most one fraction
-                # of its orbital period per iteration. Prevents wraparound
-                # when tf spans multiple sq periods.
-                period_sq = self._sq_orbital_period()
-                if period_sq is not None and period_sq > 0.0:
-                    max_step = 0.01 * period_sq
+            alpha = 0.5
+
+            def _walk_step(time_var, period):
+                """Compute α-damped step toward tf, capped to a fraction of
+                the shape's orbital period to prevent wraparound."""
+                gap = tf - time_var
+                if abs(gap) <= self._sq_advance_outer_eps:
+                    return 0.0
+                step = alpha * gap
+                if period is not None and period > 0.0:
+                    max_step = 0.01 * period
                     if step > max_step:
                         step = max_step
                     elif step < -max_step:
                         step = -max_step
-                self._sq_advance_time += step
-                self._refresh_sq_advance()
+                return step
+
+            need_resubmit = False
+
+            if self.sq_advance_mode and not self.sq_deleted:
+                step = _walk_step(self._sq_advance_time, self._sq_orbital_period())
+                if step != 0.0:
+                    self._sq_advance_time += step
+                    self._refresh_sq_advance()
+                    need_resubmit = True
+
+            # Moon is always-on; only walk if the moon participates in any
+            # segment (otherwise advancing it is pointless work).
+            moon_used = any(
+                d is self.moon_center
+                for traj in self.trajectories for d in traj["dots"]
+            )
+            if moon_used:
+                step = _walk_step(self._moon_advance_time, self._moon_orbital_period())
+                if step != 0.0:
+                    self._moon_advance_time += step
+                    self._refresh_moon_advance()
+                    need_resubmit = True
+
+            if need_resubmit:
                 self._sq_advance_outer_iter += 1
                 self._opt_running = True
                 self._opt_executor.submit(self._opt_worker, self.optimize_mode)
