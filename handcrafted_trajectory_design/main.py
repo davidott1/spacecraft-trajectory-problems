@@ -2737,6 +2737,24 @@ class Canvas(QWidget):
         painter.drawText(QPointF(xf_tip.x() + 4, xf_tip.y() + 4), "xhatf")
         painter.drawText(QPointF(yf_tip.x() + 4, yf_tip.y() - 2), "yhatf")
 
+        # Top-left overlay: trajectory total flight time and (in
+        # sq_advance_mode) the square's elapsed orbit time. Both update
+        # live during minimization because paintEvent runs on every
+        # progress-callback frame.
+        tf_traj = self._total_flight_time()
+        font_tof = painter.font()
+        font_tof.setPointSize(11)
+        painter.setFont(font_tof)
+        painter.setPen(QPen(QColor(220, 220, 220)))
+        painter.drawText(QPointF(20, 95), f"t_traj: {tf_traj:.3f} TU")
+        if self.sq_advance_mode and not self.sq_deleted:
+            t_sq = float(self._sq_advance_time)
+            gap = tf_traj - t_sq
+            painter.drawText(QPointF(20, 113), f"t_sq:   {t_sq:.3f} TU")
+            painter.drawText(QPointF(20, 131), f"Δ:      {gap:+.3f} TU")
+        else:
+            painter.drawText(QPointF(20, 113), "t_sq:   —")
+
         painter.end()
 
 
@@ -3740,13 +3758,16 @@ class Canvas(QWidget):
 
     def set_optimize_mode(self, mode):
         """mode in {None, 'energy', 'fuel'}. When set, runs once immediately
-        and then on every subsequent drag release."""
+        and then on every subsequent drag release. Routed through the
+        async path so the sq_advance staggered loop fires for the initial
+        solve too — otherwise the square stays at epoch when the user
+        enables Minimize after drawing with M already on."""
         assert mode in (None, "energy", "fuel")
         self.optimize_mode = mode
         if self.on_dv_scale_changed is not None:
             self.on_dv_scale_changed(self.current_dv_scale())
         if mode is not None:
-            self._optimize_common(mode)
+            self._run_active_optimizer()
 
     def current_dv_scale(self):
         return self.dv_scale_by_mode[self.optimize_mode]
