@@ -1,0 +1,2 @@
+# This file ensures the fixtures directory is tracked by git.
+# Place test data files (ephems, TLEs, SPICE kernels) in subdirectories here.

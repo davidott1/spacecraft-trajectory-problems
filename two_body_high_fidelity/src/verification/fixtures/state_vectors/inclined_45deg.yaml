@@ -1,0 +1,12 @@
+frame             : J2000                                                                    # reference frame of the state vector
+epoch             : 2025-10-01T00:00:00Z                                                     # epoch of the state vector in ISO format
+coordinate_system : cartesian                                                                # coordinate system of the state vector
+pos_vec__m        : 7000.0e3, 0.0e0, 0.0e0                                                   # position vector [m]
+vec_vec__m_per_s  :    0.0e0, 5.3033e3, 5.3033e3                                             # velocity vector [m/s]
+mass__kg          : 420000.0                                                                 # mass [kg]
+drag              :                                                                          # drag parameters
+  coeff           : 2.2                                                                      # drag coefficient, c_d [-]
+  area__m2        : 1000.0                                                                   # drag cross-sectional area [m²]
+srp               :                                                                          # solar radiation pressure parameters
+  coeff           : 1.2                                                                      # solar radiation pressure coefficient, c_r [-]
+  area__m2        : 1000.0                                                                   # srp cross-sectional area [m²]

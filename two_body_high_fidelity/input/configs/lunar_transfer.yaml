@@ -1,0 +1,38 @@
+# Lunar Transfer Configuration
+#
+# Patched conic Earth-to-Moon transfer optimization.
+#
+# This configuration defines a minimum-ΔV transfer from a 200 km circular LEO
+# to a 100 km circular LLO using the patched conic approximation.
+#
+# The optimizer searches over departure times within the search window
+# to find the best geometry for reaching the Moon's sphere of influence.
+#
+# Usage:
+#   python -m src.main \
+#     --initial-state-source sv \
+#     --initial-state-filename lunar_transfer_leo.yaml \
+#     --timespan 2025-10-01T00:00:00 2025-10-15T00:00:00
+
+# Initial state
+initial_state_source   : sv
+initial_state_filename : lunar_transfer_leo.yaml
+
+# Time span (search window for departure)
+timespan : 2025-10-01T00:00:00 2025-10-31T00:00:00
+
+# Force models (none needed for patched conic - optimizer uses two-body)
+include_drag       : false
+include_srp        : false
+include_relativity : false
+
+# No comparisons
+compare_jpl_horizons : false
+compare_tle          : false
+
+# Orbit determination (disabled for transfer optimization)
+include_orbit_determination : false
+
+# Numerical integration
+atol : 1.0e-12
+rtol : 1.0e-12

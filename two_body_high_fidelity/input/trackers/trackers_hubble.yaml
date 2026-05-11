@@ -1,0 +1,74 @@
+# Tracker stations configured for Hubble Space Telescope (LEO at ~540 km altitude)
+# HST uses TDRSS relay satellites, but we model ground stations for tracking
+
+- name                          : "White Sands"
+  position                      :
+    latitude__deg               : 32.5
+    longitude__deg              : -106.6
+    altitude__m                 : 1450.0
+  performance                   :
+    constraints                 :
+      range_min_max__m          :    0.0,  2000.0e3
+      azimuth_min_max__deg      : -180.0,   180.0
+      elevation_min_max__deg    :   10.0,    90.0
+    uncertainty                 :
+      range__m                  : 10.0
+      range_rate__m_per_s       :  1.0
+      azimuth__deg              :  0.1
+      azimuth_rate__deg_per_s   :  0.01
+      elevation__deg            :  0.1
+      elevation_rate__deg_per_s :  0.01
+
+- name                          : "Goddard"
+  position                      :
+    latitude__deg               : 39.0
+    longitude__deg              : -76.8
+    altitude__m                 : 19.0
+  performance                   :
+    constraints                 :
+      range_min_max__m          :    0.0,  2000.0e3
+      azimuth_min_max__deg      : -180.0,   180.0
+      elevation_min_max__deg    :   10.0,    90.0
+    uncertainty                 :
+      range__m                  : 10.0
+      range_rate__m_per_s       :  1.0
+      azimuth__deg              :  0.1
+      azimuth_rate__deg_per_s   :  0.01
+      elevation__deg            :  0.1
+      elevation_rate__deg_per_s :  0.01
+
+- name                          : "Canberra"
+  position                      :
+    latitude__deg               : -35.4
+    longitude__deg              : 149.0
+    altitude__m                 : 680.0
+  performance                   :
+    constraints                 :
+      range_min_max__m          :    0.0,  2000.0e3
+      azimuth_min_max__deg      : -180.0,   180.0
+      elevation_min_max__deg    :   10.0,    90.0
+    uncertainty                 :
+      range__m                  : 10.0
+      range_rate__m_per_s       :  1.0
+      azimuth__deg              :  0.1
+      azimuth_rate__deg_per_s   :  0.01
+      elevation__deg            :  0.1
+      elevation_rate__deg_per_s :  0.01
+
+- name                          : "Madrid"
+  position                      :
+    latitude__deg               : 40.4
+    longitude__deg              : -4.2
+    altitude__m                 : 770.0
+  performance                   :
+    constraints                 :
+      range_min_max__m          :    0.0,  2000.0e3
+      azimuth_min_max__deg      : -180.0,   180.0
+      elevation_min_max__deg    :   10.0,    90.0
+    uncertainty                 :
+      range__m                  : 10.0
+      range_rate__m_per_s       :  1.0
+      azimuth__deg              :  0.1
+      azimuth_rate__deg_per_s   :  0.01
+      elevation__deg            :  0.1
+      elevation_rate__deg_per_s :  0.01
