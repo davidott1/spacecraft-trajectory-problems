@@ -1,9 +1,7 @@
-# Data files and folders
+# Data directories
 data/ephems/
-data/gravity_models/
 data/spice_kernels/
 data/tles/
-*.gfc
 
 # Output directory
 output/
@@ -14,13 +12,3 @@ __pycache__/
 
 # Ignore generated images
 *.png
-
-# Ignore coverage data
-.coverage
-.pytest_cache/
-.env
-.vscode/
-
-# Ignore scripts directory
-scripts/*
-!scripts/saved/

@@ -4,10 +4,10 @@ Download ephemeris and TLE data for any satellite by NORAD ID
 Usage:
   python -m src.download.ephems_and_tles <norad_id> <start_time> <end_time> [step]
   
-Examples:
+Example:
   python -m src.download.ephems_and_tles 25544 "2025-10-01" "2025-10-08"
   python -m src.download.ephems_and_tles 25544 "2025-10-01T00:00:00Z" "2025-10-02T00:00:00Z" 1m
-  python -m src.download.ephems_and_tles 39166 "2025-10-01" "2025-10-02" 5m
+  python -m src.download.ephems_and_tles 25544 "2025-10-01 00:00" "2025-10-08 00:00"
 """
 
 import requests
@@ -17,7 +17,7 @@ import os
 from astroquery.jplhorizons import Horizons
 from pathlib                import Path
 from datetime               import datetime
-from astropy.time           import Time as AstropyTime, TimeDelta as AstropyTimeDelta
+from astropy.time           import Time, TimeDelta
 from astropy.table          import Table
 from astropy                import units as u
 from typing                 import List, Dict, Tuple, Optional, Union
@@ -28,10 +28,8 @@ from typing                 import List, Dict, Tuple, Optional, Union
 #   /local_absolute_path/two_body_high_fidelity/
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent  #
 
-from src.model.constants       import CONVERTER
-from src.input.cli             import parse_time
-from src.input.loader          import load_supported_objects
-from src.utility.string_helper import sanitize_filename
+from src.model.constants import CONVERTER
+from src.input.cli       import parse_time
 
 EPHEM_OUTPUT_DIR = PROJECT_ROOT / 'data' / 'ephems'
 TLE_OUTPUT_DIR   = PROJECT_ROOT / 'data' / 'tles'
@@ -41,8 +39,7 @@ def get_satellite_name(
   norad_id : int,
 ) -> str:
   """
-  Get satellite name from supported_objects.yaml or return generic name.
-  Names are sanitized for consistent file naming.
+  Get satellite name from NORAD ID or return generic name.
   
   Input:
   ------
@@ -52,22 +49,20 @@ def get_satellite_name(
   Output:
   -------
   str:
-    Sanitized satellite name for filenames.
+    Satellite name.
   """
-  # Load supported objects from YAML
-  supported_objects = load_supported_objects()
-  
-  # Convert norad_id to string for lookup (YAML keys are strings)
-  norad_id_str = str(norad_id)
-  
-  if norad_id_str in supported_objects:
-    # Get the 'name' field from the object properties
-    obj_props = supported_objects[norad_id_str]
-    raw_name = obj_props.get('name', f'object_{norad_id}')
-    return sanitize_filename(raw_name)
-  else:
-    # Return generic name if not in YAML
-    return f'sat{norad_id}'
+  known_satellites = {
+    25544: 'iss',
+    25994: 'terra',
+    27424: 'aqua',
+    26407: 'gps_iir_5',
+    38833: 'gps_iif_2',
+    39166: 'gps_iif_3',
+    41866: 'goes16',
+    43226: 'goes17',
+    51850: 'goes18',
+  }
+  return known_satellites.get(norad_id, f'sat{norad_id}')
 
 def download_tle_for_satellite(
   norad_id    : int,
@@ -112,7 +107,7 @@ def download_tle_for_satellite(
             tle_year = 2000 + tle_year if tle_year < 57 else 1900 + tle_year
             tle_day_of_year = float(tle_epoch_str[2:])
             
-            tle_epoch_time = AstropyTime(f"{tle_year}-01-01", format='iso') + AstropyTimeDelta((tle_day_of_year - 1) * u.day) # type: ignore
+            tle_epoch_time = Time(f"{tle_year}-01-01", format='iso') + TimeDelta((tle_day_of_year - 1) * u.day) # type: ignore
             epoch_jd = tle_epoch_time.jd
             
             print(f"Downloaded TLE for NORAD {norad_id}")
@@ -263,130 +258,24 @@ def download_horizons_ephemeris(
   print(f"Time range: {start_time} to {end_time}")
   print(f"Time step: {step}")
   
-  # Load supported objects config
-  supported_objects = load_supported_objects()
-  norad_id_str = str(norad_id)
+  # Query HORIZONS using NORAD catalog number (negative ID format)
+  sat_id = -(100000 + norad_id)
+  obj = Horizons(
+    id       = f"{sat_id}",
+    location = '@399',  # Earth center (geocentric)
+    epochs   = {'start' : start_time.strftime('%Y-%m-%d %H:%M'),
+                'stop'  : end_time.strftime('%Y-%m-%d %H:%M'),
+                'step'  : step}
+  )
   
-  # Get object properties if available
-  obj_props = supported_objects.get(norad_id_str, {})
-  naif_id = obj_props.get('naif_id', None)
-  obj_name = obj_props.get('name', None)
+  # Get vectors in ICRF/J2000 equatorial frame
+  vectors = obj.vectors(refplane='earth', cache=False)
   
-  # Default to TLE-based ID for Horizons (negative 100000 + norad)
-  default_sat_id = f"-{100000 + norad_id}"
-  
-  # Build epochs dict for Horizons query
-  epochs_dict = {
-    'start' : start_time.strftime('%Y-%m-%d %H:%M'),
-    'stop'  : end_time.strftime('%Y-%m-%d %H:%M'),
-    'step'  : step
-  }
-  
-  vectors = None
-  
-  # Strategy 1: Try NAIF ID first (if available)
-  if naif_id is not None:
-    sat_id = str(naif_id)
-    print(f"Trying NAIF ID '{sat_id}' for Horizons query...")
-    try:
-      obj = Horizons(
-        id       = sat_id,
-        location = '@399',
-        epochs   = epochs_dict
-      )
-      vectors = obj.vectors(refplane='earth', cache=False)
-      print(f"  Success: Using NAIF ID {sat_id}")
-    except ValueError as e:
-      error_msg = str(e)
-      print(f"  Failed with NAIF ID: {error_msg[:100]}...")
-      
-      # Check if it's an ambiguous target error
-      if 'Ambiguous target name' in error_msg:
-        # Try to extract the correct ID from the error message
-        # Look for our naif_id in the list
-        lines = error_msg.split('\n')
-        for line in lines:
-          # Lines with IDs look like: "      -64  OSIRIS-REx (spacecraft)..."
-          line_stripped = line.strip()
-          if line_stripped.startswith(str(naif_id)) or line_stripped.startswith(f"-{abs(int(naif_id))}"):
-            # Found our ID, extract the full name
-            parts = line_stripped.split()
-            if len(parts) >= 2:
-              # Try querying with the exact ID
-              exact_id = parts[0]
-              print(f"  Retrying with exact ID '{exact_id}' from disambiguation list...")
-              try:
-                obj = Horizons(
-                  id       = exact_id,
-                  location = '@399',
-                  epochs   = epochs_dict
-                )
-                vectors = obj.vectors(refplane='earth', cache=False)
-                print(f"  Success: Using exact ID {exact_id}")
-              except Exception as e2:
-                print(f"  Failed with exact ID: {e2}")
-            break
-  
-  # Strategy 2: Try object name (if NAIF ID failed or unavailable)
-  if vectors is None and obj_name is not None:
-    print(f"Trying object name '{obj_name}' for Horizons query...")
-    try:
-      obj = Horizons(
-        id       = obj_name,
-        location = '@399',
-        epochs   = epochs_dict
-      )
-      vectors = obj.vectors(refplane='earth', cache=False)
-      print(f"  Success: Using name '{obj_name}'")
-    except ValueError as e:
-      error_msg = str(e)
-      print(f"  Failed with name: {error_msg[:100]}...")
-      
-      # Check if it's an ambiguous target error and we have a NAIF ID to disambiguate
-      if 'Ambiguous target name' in error_msg and naif_id is not None:
-        # Parse the error to find the ID matching our naif_id
-        lines = error_msg.split('\n')
-        for line in lines:
-          line_stripped = line.strip()
-          # Check if this line contains our NAIF ID
-          if line_stripped.startswith(str(naif_id)) or line_stripped.startswith(f"{naif_id} "):
-            parts = line_stripped.split()
-            if len(parts) >= 1:
-              exact_id = parts[0]
-              print(f"  Found matching ID '{exact_id}' in disambiguation list, retrying...")
-              try:
-                obj = Horizons(
-                  id       = exact_id,
-                  location = '@399',
-                  epochs   = epochs_dict
-                )
-                vectors = obj.vectors(refplane='earth', cache=False)
-                print(f"  Success: Using disambiguated ID {exact_id}")
-              except Exception as e2:
-                print(f"  Failed with disambiguated ID: {e2}")
-            break
-  
-  # Strategy 3: Fall back to default TLE-based ID
-  if vectors is None:
-    print(f"Trying default TLE-based ID '{default_sat_id}' for Horizons query...")
-    try:
-      obj = Horizons(
-        id       = default_sat_id,
-        location = '@399',
-        epochs   = epochs_dict
-      )
-      vectors = obj.vectors(refplane='earth', cache=False)
-      print(f"  Success: Using default ID {default_sat_id}")
-    except Exception as e:
-      # All strategies failed
-      raise RuntimeError(
-        f"All Horizons query strategies failed for NORAD {norad_id}. "
-        f"Tried NAIF ID: {naif_id}, Name: {obj_name}, Default: {default_sat_id}. "
-        f"Last error: {e}"
-      )
+  print(f"Retrieved {len(vectors)} data points")
+  print(f"Reference frame: ICRF/J2000 Earth equatorial (refplane='earth')")
   
   # Add UTC time columns manually (TDB to UTC conversion)
-  tdb_times = AstropyTime(vectors['datetime_jd'], format='jd', scale='tdb')
+  tdb_times = Time(vectors['datetime_jd'], format='jd', scale='tdb')
   utc_times = tdb_times.utc
   
   # Calculate TDB-UTC offset
@@ -467,15 +356,13 @@ def download_horizons_ephemeris(
   return vectors
 
 def download_ephems_and_tles(
-  norad_id      : int,
-  start_time    : datetime,
-  end_time      : datetime,
-  step          : str = '1h',
-  download_ephem: bool = True,
-  download_tle  : bool = True,
+  norad_id   : int,
+  start_time : datetime,
+  end_time   : datetime,
+  step       : str = '1h',
 ) -> Dict:
   """
-  Download HORIZONS ephemeris and/or TLE data for a satellite.
+  Download both HORIZONS ephemeris and TLE history for a satellite.
   
   Input:
   ------
@@ -487,10 +374,6 @@ def download_ephems_and_tles(
     End time.
   step : str
     Time step for ephemeris (default: '1h').
-  download_ephem : bool
-    Whether to download ephemeris data (default: True).
-  download_tle : bool
-    Whether to download TLE data (default: True).
   
   Output:
   -------
@@ -501,17 +384,13 @@ def download_ephems_and_tles(
   EPHEM_OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
   TLE_OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
   
-  # Get satellite name from YAML (not from Horizons query)
   sat_name            = get_satellite_name(norad_id)
   start_timestamp_str = start_time.strftime('%Y%m%dT%H%M%SZ')
   end_timestamp_str   = end_time.strftime('%Y%m%dT%H%M%SZ')
   
-  # Define output file paths with consistent naming
-  # Ephemeris: horizons_ephem_<norad_id>_<name>_<start>_<end>_<step>.csv
-  horizons_file = EPHEM_OUTPUT_DIR / f'horizons_ephem_{norad_id}_{sat_name}_{start_timestamp_str}_{end_timestamp_str}_{step}.csv'
-  
-  # TLE: celestrak_tle_<norad_id>_<name>_<start>_<end>.txt
-  tle_file = TLE_OUTPUT_DIR / f'celestrak_tle_{norad_id}_{sat_name}_{start_timestamp_str}_{end_timestamp_str}.txt'
+  # Define output file paths
+  horizons_file    = EPHEM_OUTPUT_DIR / f'horizons_ephem_{norad_id}_{sat_name}_{start_timestamp_str}_{end_timestamp_str}_{step}.csv'
+  tle_history_file = TLE_OUTPUT_DIR / f'celestrak_tles_{norad_id}_{sat_name}_{start_timestamp_str}_{end_timestamp_str}.txt'
   
   horizons_status = "skipped"
   tle_status      = "skipped"
@@ -521,83 +400,61 @@ def download_ephems_and_tles(
   print(f"PROCESSING STARTED")
   print("="*80)
   print(f"Satellite NORAD ID          : {norad_id}")
-  print(f"Satellite name              : {sat_name}")
+  print(f"Satellite name              : {sat_name.upper()}")
   print(f"Time range                  : {start_time} to {end_time}")
-  print(f"Download ephemeris          : {download_ephem}")
-  print(f"Download TLE                : {download_tle}")
+  print(f"Ephemeris output folderpath : {EPHEM_OUTPUT_DIR}")
+  print(f"TLEs output folderpath      : {TLE_OUTPUT_DIR}")
   
-  if download_ephem:
-    print(f"Ephemeris output folderpath : {EPHEM_OUTPUT_DIR}")
-  if download_tle:
-    print(f"TLE output folderpath       : {TLE_OUTPUT_DIR}")
+  # Download HORIZONS ephemeris
+  print("\n" + "="*80)
+  print("PROCESSING HORIZONS EPHEMERIS")
+  print("="*80)
+  if horizons_file.exists():
+    print(f"HORIZONS file already exists, skipping download:\n  {horizons_file}")
+    horizons_data = None # Data not loaded, just confirming file exists
+  else:
+    horizons_data = download_horizons_ephemeris(
+      norad_id    = norad_id,
+      start_time  = start_time,
+      end_time    = end_time,
+      step        = step,
+      output_file = horizons_file
+    )
+    horizons_status = "downloaded"
   
-  horizons_data = None
-  tle_data = None
-  
-  # Download HORIZONS ephemeris if requested
-  if download_ephem:
-    print("\n" + "="*80)
-    print("PROCESSING HORIZONS EPHEMERIS")
-    print("="*80)
-    if horizons_file.exists():
-      print(f"HORIZONS file already exists, skipping download:\n  {horizons_file}")
-    else:
-      horizons_data = download_horizons_ephemeris(
+  # Download TLE history
+  print("\n" + "="*80)
+  print("PROCESSING TLE HISTORY")
+  print("="*80)
+  if tle_history_file.exists():
+    print(f"TLE history file already exists, skipping download:\n  {tle_history_file}")
+    tle_history = None # Data not loaded, just confirming file exists
+  else:
+    try:
+      tle_history = download_historical_tles(
         norad_id    = norad_id,
         start_time  = start_time,
         end_time    = end_time,
-        step        = step,
-        output_file = horizons_file
+        output_file = tle_history_file
       )
-      horizons_status = "downloaded"
-  
-  # Download TLE if requested
-  if download_tle:
-    print("\n" + "="*80)
-    print("PROCESSING TLE")
-    print("="*80)
-    
-    # Use the same sanitized name for TLE file
-    tle_file = TLE_OUTPUT_DIR / f'celestrak_tle_{norad_id}_{sat_name}_{start_timestamp_str}_{end_timestamp_str}.txt'
-    
-    if tle_file.exists():
-      print(f"TLE file already exists, skipping download:\n  {tle_file}")
-    else:
-      try:
-        line1, line2, epoch_jd = download_tle_for_satellite(
-          norad_id    = norad_id,
-          output_file = None,
-        )
-        
-        # Save with object name as first line (3-line format)
-        with open(tle_file, 'w') as f:
-          object_name = sat_name.upper().replace('_', ' ')
-          f.write(f"{object_name}\n")
-          f.write(f"{line1}\n")
-          f.write(f"{line2}\n")
-        
-        print(f"  Saved TLE to: {tle_file}")
-        tle_status = "downloaded"
-        tle_data = {'line1': line1, 'line2': line2, 'epoch_jd': epoch_jd}
-        
-      except RuntimeError as e:
-        print(f"WARNING: TLE download failed - {e}")
-        tle_status = "failed"
+      tle_status = "downloaded"
+    except RuntimeError as e:
+      print(f"WARNING: TLE download skipped - {e}")
+      tle_history = None
+      tle_status = "skipped (no credentials)"
   
   print("\n" + "="*80)
   print("PROCESSING COMPLETE")
   print("="*80)
-  if download_ephem:
-    print(f"HORIZONS file : {horizons_status}")
-  if download_tle:
-    print(f"TLE file      : {tle_status}")
+  print(f"HORIZONS file    : {horizons_status}")
+  print(f"TLE history file : {tle_status}")
   print()
   
   return {
     'horizons_file'    : horizons_file,
-    'tle_file'         : tle_file,
+    'tle_history_file' : tle_history_file,
     'horizons_data'    : horizons_data,
-    'tle_data'         : tle_data,
+    'tle_history'      : tle_history,
     'sat_name'         : sat_name,
     'norad_id'         : norad_id,
   }
@@ -618,10 +475,10 @@ def parse_command_line_args() -> Tuple[int, datetime, datetime, str]:
   """
   if len(sys.argv) < 4:
     print("Usage: python -m src.download.ephems_and_tles <norad_id> <start_time> <end_time> [step]")
-    print("\nExamples:")
+    print("\nExample:")
     print('  python -m src.download.ephems_and_tles 25544 "2025-10-01" "2025-10-08"')
     print('  python -m src.download.ephems_and_tles 25544 "2025-10-01T00:00:00Z" "2025-10-02T00:00:00Z" 1m')
-    print('  python -m src.download.ephems_and_tles 39166 "2025-10-01" "2025-10-02" 5m')
+    print('  python -m src.download.ephems_and_tles 25544 "2025-10-01 00:00" "2025-10-08 00:00"')
     print("\nTime format (UTC assumed):")
     print("  YYYY-MM-DD")
     print("  YYYY-MM-DD HH:MM")
@@ -631,7 +488,6 @@ def parse_command_line_args() -> Tuple[int, datetime, datetime, str]:
     print("  YYYY-MM-DDTHH:MM:SSZ")
     print("\nCommon satellites:")
     print("  25544 - ISS")
-    print("  39166 - GPS IIF-3 (NAVSTAR 68)")
     print("  41866 - GOES-16")
     print("  43226 - GOES-17")
     print("  51850 - GOES-18")
@@ -643,9 +499,10 @@ def parse_command_line_args() -> Tuple[int, datetime, datetime, str]:
   # Parse times
   start_str = sys.argv[2]
   end_str   = sys.argv[3]
-  
-  # Get step if provided
-  step = sys.argv[4] if len(sys.argv) > 4 else '1h'
+  try:
+    step = sys.argv[4]
+  except IndexError:
+    step = '1h'
   
   try:
     start_time = parse_time(start_str)
@@ -680,5 +537,4 @@ def parse_command_line_args() -> Tuple[int, datetime, datetime, str]:
 
 if __name__ == "__main__":
   norad_id, start_time, end_time, step = parse_command_line_args()
-  # Always download both when using the combined module
-  download_ephems_and_tles(norad_id, start_time, end_time, step, download_ephem=True, download_tle=True)
+  download_ephems_and_tles(norad_id, start_time, end_time, step)

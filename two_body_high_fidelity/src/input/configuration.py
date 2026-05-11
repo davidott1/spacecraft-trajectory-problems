@@ -1,63 +1,39 @@
-import yaml
-import numpy as np
-import os
-
 from pathlib  import Path
 from datetime import datetime
+from types    import SimpleNamespace
 from typing   import Optional
 
-from src.schemas.config        import OutputPaths, SimulationConfig, InitialStateConfig, ComparisonConfig
-from src.schemas.orbit_determination import OrbitDeterminationConfig
-from src.schemas.gravity       import GravityModelConfig, SphericalHarmonicsConfig, ThirdBodyConfig, RelativityConfig, SolidEarthTidesConfig, OceanTidesConfig
-from src.schemas.spacecraft    import SpacecraftProperties, DragConfig, SRPConfig, ManeuversConfig
-from src.schemas.propagation   import PropagationConfig
-from src.schemas.state         import TLEData, CartesianState
-from src.model.constants       import SOLARSYSTEMCONSTANTS
-from src.input.loader          import load_supported_objects
-from src.utility.string_helper import sanitize_filename
+from src.input.loader        import load_supported_objects
+from src.input.cli           import parse_time
+from src.utility.tle_helper  import get_tle_satellite_and_tle_epoch
 
 
 def print_input_configuration(
-  initial_state_source       : str,
-  initial_state_norad_id     : Optional[str],
-  initial_state_filename     : Optional[str],
-  desired_timespan           : list,
-  include_drag               : bool,
-  compare_tle                : bool,
-  compare_jpl_horizons       : bool,
-  third_bodies_list          : list,
-  gravity_harmonics_list     : list,
-  two_body_gravity_model     : GravityModelConfig,
-  include_srp                : bool,
-  include_relativity         : bool,
-  auto_download              : bool,
-  maneuver_filename          : Optional[str]   = None,
-  maneuvers                  : Optional[list]  = None,
-  include_solid_tides        : bool            = False,
-  include_ocean_tides        : bool            = False,
-  include_tracker_skyplots   : bool            = False,
-  tracker_filename           : Optional[str]   = None,
-  include_tracker_on_body    : bool            = False,
-  include_orbit_determination: bool            = False,
-  process_noise_pos          : Optional[float] = None,
-  process_noise_vel          : Optional[float] = None,
-  use_approx_jacobian        : Optional[bool]  = None,
-  use_analytic_jacobian      : Optional[bool]  = None,
-  jacobian_approx_eps        : Optional[float] = None,
-  make_meas_from             : str             = 'jpl_horizons',
-  make_meas_from_explicitly_set : bool          = False,
+  input_object_type    : str,
+  norad_id             : str,
+  desired_timespan     : list,
+  include_spice        : bool,
+  include_drag         : bool,
+  compare_tle          : bool,
+  compare_jpl_horizons : bool,
+  third_bodies_list    : list,
+  zonal_harmonics_list : list,
+  include_srp          : bool,
+  initial_state_source : str,
 ) -> None:
   """
   Print the input configuration in a formatted table.
 
   Input:
   ------
-    initial_state_source : str
-      Source for the initial state vector ('jpl_horizons' or 'tle').
-    initial_state_norad_id : str
+    input_object_type : str
+      Type of input object (e.g., 'norad-id').
+    norad_id : str
       NORAD catalog ID of the satellite.
     desired_timespan : list
-      Initial and final time in ISO format as list of strings.
+      Initial and final time in ISO format (e.g., ['2025-10-01T00:00:00', '2025-10-02T00:00:00']) as list of strings.
+    include_spice : bool
+      Flag to enable/disable SPICE usage.
     include_drag : bool
       Flag to enable/disable Drag force modeling.
     compare_tle : bool
@@ -65,121 +41,60 @@ def print_input_configuration(
     compare_jpl_horizons : bool
       Flag to enable/disable JPL Horizons comparison.
     third_bodies_list : list
-      List of third bodies to include. Empty list if disabled.
-    gravity_harmonics_list : list
-      List of gravity harmonics to include. Empty list if disabled.
-    two_body_gravity_model : GravityModelConfig
-      Gravity model configuration object.
+      List of third bodies to include (e.g., ['SUN', 'MOON']). Empty list if disabled.
+    zonal_harmonics_list : list
+      List of zonal harmonics to include (e.g., ['J2', 'J3']). Empty list if disabled.
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
-      
-  Output:
-  -------
-    None
+    initial_state_source : str
+      Source for the initial state vector ('jpl_horizons' or 'tle').
   """
-  # Print header
-  title = "Input Configuration"
-  print("\n" + "-" * len(title))
-  print(title)
-  print("-" * len(title))
-  print()
-
-  # Progress subsection
-  print("  Progress")
-
   # Define defaults for comparison
-  print("    Define default configuration values")
   defaults = {
-    'initial_state_source'        : 'jpl_horizons',
-    'initial_state_norad_id'      : None,
-    'initial_state_filename'      : None,
-    'timespan'                    : None,
-    'gravity_harmonics'           : [],
-    'gravity_harmonics_degree'    : None,
-    'gravity_harmonics_order'     : None,
-    'gravity_harmonics_filename'  : 'EGM2008.gfc',
-    'third_bodies'                : [],
-    'include_drag'                : False,
-    'include_srp'                 : False,
-    'include_relativity'          : False,
-    'include_solid_tides'         : False,
-    'include_ocean_tides'         : False,
-    'compare_jpl_horizons'        : False,
-    'compare_tle'                 : False,
-    'auto_download'               : False,
-    'maneuver_filename'           : None,
-    'include_tracker_skyplots'    : False,
-    'tracker_filename'            : None,
-    'include_tracker_on_body'     : False,
-    'include_orbit_determination' : False,
-    'process_noise_pos'           : 1e-4,
-    'process_noise_vel'           : 1e-7,
-    'use_approx_jacobian'         : True,
-    'use_analytic_jacobian'       : False,
-    'jacobian_approx_eps'         : 1e-6,
-    'make_meas_from'              : 'jpl_horizons',
+    'input_object_type'    : None,
+    'norad_id'             : None,
+    'timespan'             : None,
+    'initial_state_source' : 'jpl_horizons',
+    'zonal_harmonics'      : [],
+    'third_bodies'         : [],
+    'include_drag'         : False,
+    'include_srp'          : False,
+    'include_spice'        : False,
+    'compare_jpl_horizons' : False,
+    'compare_tle'          : False,
   }
-
+  
   # Format values for display
-  print("    Format configuration values for display")
-  timespan_str     = f"{desired_timespan[0]} {desired_timespan[1]}" if desired_timespan else "None"
-  harmonics_str    = ' '.join(gravity_harmonics_list) if gravity_harmonics_list else "None"
-  gh_deg_order_str = f"{two_body_gravity_model.spherical_harmonics.degree} {two_body_gravity_model.spherical_harmonics.order}" if two_body_gravity_model.spherical_harmonics.degree is not None else "None"
-  third_str        = ' '.join(third_bodies_list) if third_bodies_list else "None"
-
-  # Format process noise for display
-  proc_noise_pos_str = f"{process_noise_pos:.0e}" if process_noise_pos is not None else f"{defaults['process_noise_pos']:.0e}"
-  proc_noise_vel_str = f"{process_noise_vel:.0e}" if process_noise_vel is not None else f"{defaults['process_noise_vel']:.0e}"
-  jacobian_eps_str   = f"{jacobian_approx_eps:.0e}" if jacobian_approx_eps is not None else f"{defaults['jacobian_approx_eps']:.0e}"
-
-  # Resolve Jacobian flags for display
-  use_approx_display = use_approx_jacobian if use_approx_jacobian is not None else defaults['use_approx_jacobian']
-  use_analytic_display = use_analytic_jacobian if use_analytic_jacobian is not None else defaults['use_analytic_jacobian']
-
-  # Build configuration entries: (name, value, default, user_set)
-  print("    Build configuration table entries")
+  timespan_str = f"{desired_timespan[0]} {desired_timespan[1]}" if desired_timespan else "None"
+  zonal_str    = ' '.join(zonal_harmonics_list) if zonal_harmonics_list else "None"
+  third_str    = ' '.join(third_bodies_list) if third_bodies_list else "None"
+  
+  # Build configuration entries: (name, value, default, is_explicit)
   entries = [
-    ('initial_state_source',      initial_state_source,            defaults['initial_state_source'],        initial_state_source       != defaults['initial_state_source']),
-    ('initial_state_norad_id',    initial_state_norad_id,          defaults['initial_state_norad_id'],      initial_state_norad_id     is not None),
-    ('initial_state_filename',    initial_state_filename,          defaults['initial_state_filename'],      initial_state_filename     is not None),
-    ('timespan',                  timespan_str,                    defaults['timespan'],                    desired_timespan           is not None),
-    ('gravity_harmonics',         harmonics_str,                   defaults['gravity_harmonics'],           gravity_harmonics_list     is not None and len(gravity_harmonics_list) > 0),
-    ('gravity_degree_order',      gh_deg_order_str,                "None",                                  two_body_gravity_model.spherical_harmonics.degree is not None),
-    ('gravity_file',              two_body_gravity_model.filename, defaults['gravity_harmonics_filename'],  two_body_gravity_model.filename != defaults['gravity_harmonics_filename']),
-    ('third_bodies',              third_str,                       defaults['third_bodies'],                third_bodies_list          is not None and len(third_bodies_list) > 0),
-    ('include_drag',              include_drag,                    defaults['include_drag'],                include_drag               != defaults['include_drag']),
-    ('include_srp',               include_srp,                     defaults['include_srp'],                 include_srp                != defaults['include_srp']),
-    ('include_relativity',        include_relativity,              defaults['include_relativity'],          include_relativity         != defaults['include_relativity']),
-    ('include_solid_tides',       include_solid_tides,             defaults['include_solid_tides'],         include_solid_tides        != defaults['include_solid_tides']),
-    ('include_ocean_tides',       include_ocean_tides,             defaults['include_ocean_tides'],         include_ocean_tides        != defaults['include_ocean_tides']),
-    ('maneuver_filename',         maneuver_filename,               defaults['maneuver_filename'],           maneuver_filename          is not None),
-    ('compare_jpl_horizons',      compare_jpl_horizons,            defaults['compare_jpl_horizons'],        compare_jpl_horizons       != defaults['compare_jpl_horizons']),
-    ('compare_tle',               compare_tle,                     defaults['compare_tle'],                 compare_tle                != defaults['compare_tle']),
-    ('auto_download',             auto_download,                   defaults['auto_download'],               auto_download              != defaults['auto_download']),
-    ('include_tracker_skyplots',  include_tracker_skyplots,        defaults['include_tracker_skyplots'],    include_tracker_skyplots   != defaults['include_tracker_skyplots']),
-    ('tracker_filename',          tracker_filename,                defaults['tracker_filename'],            tracker_filename           is not None),
-    ('include_tracker_on_body',   include_tracker_on_body,         defaults['include_tracker_on_body'],     include_tracker_on_body    != defaults['include_tracker_on_body']),
-    ('include_orbit_determination', include_orbit_determination,   defaults['include_orbit_determination'], include_orbit_determination != defaults['include_orbit_determination']),
-    ('process_noise_pos',         proc_noise_pos_str,              f"{defaults['process_noise_pos']:.0e}",  process_noise_pos is not None and process_noise_pos != defaults['process_noise_pos']),
-    ('process_noise_vel',         proc_noise_vel_str,              f"{defaults['process_noise_vel']:.0e}",  process_noise_vel is not None and process_noise_vel != defaults['process_noise_vel']),
-    ('use_approx_jacobian',       use_approx_display,              defaults['use_approx_jacobian'],         use_approx_jacobian is not None and use_approx_jacobian != defaults['use_approx_jacobian']),
-    ('use_analytic_jacobian',     use_analytic_display,            defaults['use_analytic_jacobian'],       use_analytic_jacobian is not None and use_analytic_jacobian != defaults['use_analytic_jacobian']),
-    ('jacobian_approx_eps',       jacobian_eps_str,                f"{defaults['jacobian_approx_eps']:.0e}",jacobian_approx_eps is not None and jacobian_approx_eps != defaults['jacobian_approx_eps']),
-    ('make_meas_from',            make_meas_from,                  defaults['make_meas_from'],              make_meas_from_explicitly_set),
+    ('input_object_type',    input_object_type,    defaults['input_object_type'],    input_object_type is not None),
+    ('norad_id',             norad_id,             defaults['norad_id'],             norad_id is not None and norad_id != ''),
+    ('timespan',             timespan_str,         defaults['timespan'],             desired_timespan is not None),
+    ('initial_state_source', initial_state_source, defaults['initial_state_source'], initial_state_source != defaults['initial_state_source']),
+    ('zonal_harmonics',      zonal_str,            defaults['zonal_harmonics'],      len(zonal_harmonics_list) > 0),
+    ('third_bodies',         third_str,            defaults['third_bodies'],         len(third_bodies_list) > 0),
+    ('include_drag',         include_drag,         defaults['include_drag'],         include_drag != defaults['include_drag']),
+    ('include_srp',          include_srp,          defaults['include_srp'],          include_srp != defaults['include_srp']),
+    ('include_spice',        include_spice,        defaults['include_spice'],        include_spice != defaults['include_spice']),
+    ('compare_jpl_horizons', compare_jpl_horizons, defaults['compare_jpl_horizons'], compare_jpl_horizons != defaults['compare_jpl_horizons']),
+    ('compare_tle',          compare_tle,          defaults['compare_tle'],          compare_tle != defaults['compare_tle']),
   ]
-
+  
   # Convert entries to strings for width calculation
-  print("    Calculate table column widths")
-  headers = ['Argument', 'Value', 'Default', 'User Set']
+  headers = ['Argument', 'Value', 'Default', 'Explicit']
   rows = []
-  for name, value, default, user_set in entries:
+  for name, value, default, is_explicit in entries:
     rows.append([
       name,
       str(value) if value is not None else "None",
       str(default) if default is not None else "None",
-      str(user_set),
+      str(is_explicit),
     ])
-
+  
   # Calculate column widths: max of header and all values, plus 4 for spacing
   min_spacing = 4
   col_widths = []
@@ -188,687 +103,330 @@ def print_input_configuration(
     for row in rows:
       max_len = max(max_len, len(row[col_idx]))
     col_widths.append(max_len + min_spacing)
-  print()
-
-  # Summary subsection
-  print("  Summary")
-  header_line = "    " + "".join(h.ljust(col_widths[i]) for i, h in enumerate(headers))
+  
+  # Print table
+  print("\nInput Configuration")
+  header_line = "  " + "".join(h.ljust(col_widths[i]) for i, h in enumerate(headers))
   print(header_line)
-  separator_line = "    " + "".join(("-" * (col_widths[i] - min_spacing)).ljust(col_widths[i]) for i in range(len(headers)))
+  separator_line = "  " + "".join(("-" * (col_widths[i] - min_spacing)).ljust(col_widths[i]) for i in range(len(headers)))
   print(separator_line)
-
+  
   for row in rows:
-    row_line = "    " + "".join(row[col_idx].ljust(col_widths[col_idx]) for col_idx in range(len(row)))
+    row_line = "  " + "".join(row[col_idx].ljust(col_widths[col_idx]) for col_idx in range(len(row)))
     print(row_line)
 
-  # Maneuvers subsection (if any)
-  if maneuvers is not None and len(maneuvers) > 0:
-    print()
-    print(f"  Maneuvers ({len(maneuvers)})")
-    for idx, mnvr in enumerate(maneuvers, 1):
-      print(f"    Maneuver {idx}")
-      print(f"      Time     : {mnvr.time_dt.isoformat()}")
-      print(f"      ΔV       : {mnvr.mag():.3f} m/s")
-      print(f"      Frame    : {mnvr.frame}")
 
-
-def print_paths(
-  config : SimulationConfig,
-) -> None:
+def print_paths(config: SimpleNamespace) -> None:
   """
   Print the paths configuration.
   
   Input:
   ------
-    config : SimulationConfig
+    config : SimpleNamespace
       Configuration object containing path attributes.
-      
-  Output:
-  -------
-    None
   """
-  title = "Paths and Files Setup"
-  print("\n" + "-" * len(title))
-  print(title)
-  print("-" * len(title))
-  print()
-
-  # Calculate folder paths
-  data_folderpath  = config.output_paths.spice_kernels_folderpath.parent
-  input_folderpath = data_folderpath.parent / 'input'
-
-  # Progress subsection
-  print("  Progress")
-  print("    Calculate data folder path")
-  print()
-
-  # Summary subsection
-  print("  Summary")
-  print(f"    Output Folderpath          : {config.output_paths.base_folderpath.parent}")
-  print(f"      Timestamp Folderpath     : <output_folderpath>/{config.output_paths.base_folderpath.name}")
-  print(f"      Figures Folderpath       : <output_folderpath>/{config.output_paths.base_folderpath.name}/{config.output_paths.figures_folderpath.name}")
-  print(f"      Files Folderpath         : <output_folderpath>/{config.output_paths.base_folderpath.name}/{config.output_paths.logs_folderpath.name}")
-  print(f"      Log Filepath             : <output_folderpath>/{config.output_paths.base_folderpath.name}/{config.output_paths.logs_folderpath.name}/{config.output_paths.log_filepath.name}")
-  print(f"    Data Folderpath            : {data_folderpath}")
-  print(f"      SPICE Kernels Folderpath : <data_folderpath>/{config.output_paths.spice_kernels_folderpath.relative_to(data_folderpath)}")
-  print(f"      LSK Filepath             : <data_folderpath>/{config.output_paths.lsk_filepath.relative_to(data_folderpath)}")
-  print(f"      Gravity Folderpath       : <data_folderpath>/{config.gravity.folderpath.relative_to(data_folderpath)}")
-  print(f"      JPL Horizons Folderpath  : <data_folderpath>/{config.output_paths.jpl_horizons_folderpath.relative_to(data_folderpath)}")
-  print(f"      TLEs Folderpath          : <data_folderpath>/{config.output_paths.tles_folderpath.relative_to(data_folderpath)}")
-  print(f"    Input Folderpath           : {input_folderpath}")
-  try:
-    initial_states_rel = config.output_paths.initial_states_folderpath.relative_to(input_folderpath)
-    print(f"      Initial States Folderpath : <input_folderpath>/{initial_states_rel}")
-  except ValueError:
-    print(f"      Initial States Folderpath : {config.output_paths.initial_states_folderpath}")
+  data_folderpath = config.output_folderpath.parent / 'data'
+  
+  print("\nPaths and Files Setup")
+  print(f"  Output Folderpath          : {config.output_folderpath}")
+  print(f"    Timestamp Folderpath     : <output_folderpath>/{config.timestamp_folderpath.relative_to(config.output_folderpath)}")
+  print(f"    Figures Folderpath       : <output_folderpath>/{config.figures_folderpath.relative_to(config.output_folderpath)}")
+  print(f"    Files Folderpath         : <output_folderpath>/{config.files_folderpath.relative_to(config.output_folderpath)}")
+  print(f"    Log Filepath             : <output_folderpath>/{config.log_filepath.relative_to(config.output_folderpath)}")
+  print(f"  Data Folderpath            : {data_folderpath}")
+  print(f"    SPICE Kernels Folderpath : <data_folderpath>/{config.spice_kernels_folderpath.relative_to(data_folderpath)}")
+  print(f"    LSK Filepath             : <data_folderpath>/{config.lsk_filepath.relative_to(data_folderpath)}")
+  print(f"    JPL Horizons Folderpath  : <data_folderpath>/{config.jpl_horizons_folderpath.relative_to(data_folderpath)}")
+  print(f"    TLEs Folderpath          : <data_folderpath>/{config.tles_folderpath.relative_to(data_folderpath)}")
 
 
 def print_configuration(
-  config                         : SimulationConfig,
-  make_meas_from                 : str  = 'jpl_horizons',
-  include_tracker_on_body        : bool = False,
-  make_meas_from_explicitly_set  : bool = False,
+  config : SimpleNamespace,
 ) -> None:
   """
   Print the complete configuration (input arguments and paths).
-
+  
   Input:
   ------
-    config : SimulationConfig
+    config : SimpleNamespace
       Configuration object containing all input and path attributes.
-    make_meas_from : str
-      Source for measurement simulation ('jpl_horizons' or 'model').
-
-  Output:
-  -------
-    None
   """
   print_input_configuration(
-    initial_state_source        = config.initial_state.source,
-    initial_state_norad_id      = config.initial_state.norad_id,
-    initial_state_filename      = config.initial_state.filename,
-    desired_timespan            = [config.time_o_dt, config.time_f_dt],
-    include_drag                = config.include_drag,
-    compare_tle                 = config.comparison.compare_tle,
-    compare_jpl_horizons        = config.comparison.compare_jpl_horizons,
-    third_bodies_list           = config.gravity.third_body.bodies,
-    gravity_harmonics_list      = config.gravity.spherical_harmonics.coefficients,
-    two_body_gravity_model      = config.gravity,
-    include_srp                 = config.include_srp,
-    include_relativity          = config.gravity.relativity.enabled,
-    auto_download               = config.auto_download,
-    maneuver_filename           = config.spacecraft.maneuvers.filename,
-    maneuvers                   = config.spacecraft.maneuvers,
-    include_solid_tides         = config.gravity.solid_tides.enabled,
-    include_ocean_tides         = config.gravity.ocean_tides.enabled,
-    include_tracker_skyplots    = config.output_paths.tracker_filepath is not None if config.output_paths else False,
-    tracker_filename            = config.output_paths.tracker_filepath.name if config.output_paths and config.output_paths.tracker_filepath else None,
-    include_tracker_on_body     = include_tracker_on_body,
-    include_orbit_determination = config.orbit_determination.enabled,
-    process_noise_pos           = config.orbit_determination.process_noise_pos,
-    process_noise_vel           = config.orbit_determination.process_noise_vel,
-    use_approx_jacobian         = config.gravity.use_approx_jacobian,
-    use_analytic_jacobian       = config.gravity.use_analytic_jacobian,
-    jacobian_approx_eps         = config.gravity.jacobian_approx_eps,
-    make_meas_from              = make_meas_from,
-    make_meas_from_explicitly_set = make_meas_from_explicitly_set,
+    input_object_type    = config.input_object_type,
+    norad_id             = config.norad_id,
+    desired_timespan     = config.desired_timespan,
+    include_spice        = config.include_spice,
+    include_drag         = config.include_drag,
+    compare_tle          = config.compare_tle,
+    compare_jpl_horizons = config.compare_jpl_horizons,
+    third_bodies_list    = config.third_bodies_list,
+    zonal_harmonics_list = config.zonal_harmonics_list,
+    include_srp          = config.include_srp,
+    initial_state_source = config.initial_state_source,
   )
-
+  
   print_paths(config)
 
 
 def normalize_input(
+  input_object_type    : str,
   initial_state_source : str,
-  gravity_harmonics    : Optional[list] = None,
-) -> tuple[str, list]:
+) -> tuple[str, str]:
   """
-  Normalize input strings.
+  Normalize input strings for object type and initial state source.
   
   Input:
   ------
+    input_object_type : str
+      Type of input object (e.g., 'norad-id').
     initial_state_source : str
       Source for the initial state vector (e.g., 'jpl-horizons').
-    gravity_harmonics : list | None
-      List of gravity harmonics.
   
   Output:
   -------
-    initial_state_source : str
-      Normalized initial state source.
-    gravity_harmonics_list : list
-      Normalized gravity harmonics list (uppercase).
+    tuple[str, str]
+      Normalized input object type and initial state source.
   """
+  # Normalize input object type
+  input_object_type = input_object_type.replace('-', '_').replace(' ', '_')
+
   # Normalize initial state source
   initial_state_source = initial_state_source.lower().replace('-', '_').replace(' ', '_')
-  
   if 'horizons' in initial_state_source:
     initial_state_source = 'jpl_horizons'
-  elif initial_state_source in ['sv', 'custom_sv', 'custom_state_vector', 'state_vector']:
-    initial_state_source = 'custom_state_vector'
-  
-  # Normalize gravity harmonics
-  gravity_harmonics_list = [h.upper() for h in gravity_harmonics] if gravity_harmonics is not None else []
   
   # Return normalized values
-  return initial_state_source, gravity_harmonics_list
-
-
+  return input_object_type, initial_state_source
 
 
 def build_config(
-  initial_state_norad_id         : Optional[str],
-  initial_state_filename         : Optional[str],
-  timespan_dt                    : list[datetime],
-  include_drag                   : bool            = False,
-  compare_tle                    : bool            = False,
-  compare_jpl_horizons           : bool            = False,
-  third_bodies                   : Optional[list]  = None,
-  gravity_harmonics              : Optional[list]  = None,
-  include_srp                    : bool            = False,
-  include_relativity             : bool            = False,
-  include_solid_tides            : bool            = False,
-  include_ocean_tides            : bool            = False,
-  auto_download                  : bool            = False,
-  initial_state_source           : str             = 'jpl_horizons',
-  gravity_harmonics_degree_order : Optional[list]  = None,
-  gravity_model_filename         : Optional[str]   = None,
-  atol                           : float           = 1e-15,
-  rtol                           : float           = 1e-12,
-  include_tracker_skyplots       : bool            = False,
-  tracker_filename               : Optional[str]   = None,
-  tracker_filepath               : Optional[str]   = None,
-  include_tracker_on_body        : bool            = False,
-  maneuver_filename              : Optional[str]   = None,
-  include_orbit_determination    : bool            = False,
-  process_noise_pos              : Optional[float] = None,
-  process_noise_vel              : Optional[float] = None,
-  use_approx_jacobian            : Optional[bool]  = None,
-  use_analytic_jacobian          : Optional[bool]  = None,
-  jacobian_approx_eps            : Optional[float] = None,
-  initial_maneuver_plan          : Optional[str]   = None,
-  optimize                       : Optional[list]  = None,
-  resume_from                    : Optional[str]   = None,
-) -> SimulationConfig:
+  input_object_type    : str,
+  norad_id             : str,
+  desired_timespan     : list,
+  include_spice        : bool           = False,
+  include_drag         : bool           = False,
+  compare_tle          : bool           = False,
+  compare_jpl_horizons : bool           = False,
+  third_bodies         : Optional[list] = None,
+  zonal_harmonics      : Optional[list] = None,
+  include_srp          : bool           = False,
+  initial_state_source : str            = 'jpl_horizons',
+) -> SimpleNamespace:
   """
   Parse, validate, and set up input parameters for orbit propagation.
   
   Input:
   ------
-    initial_state_source : str
-      Source for the initial state vector ('jpl_horizons', 'tle', or 'custom_state_vector').
-    initial_state_norad_id : str
+    input_object_type : str
+      Type of input object (e.g., norad-id).
+    norad_id : str
       NORAD catalog ID of the satellite.
-    timespan_dt : list[datetime]
-      Initial and final time as list of datetime objects.
+    desired_timespan : list
+      Initial and final time in ISO format (e.g., ['2025-10-01T00:00:00', '2025-10-02T00:00:00']) as list of strings.
+    use_spice : bool
+      Flag to enable/disable SPICE usage.
     include_drag : bool
       Flag to enable/disable Drag force modeling.
-    compare_tle : bool
-      Flag to enable/disable TLE comparison.
-    compare_jpl_horizons : bool
-      Flag to enable/disable JPL Horizons comparison.
     third_bodies : list | None
-      List of third bodies to include. None if disabled.
-    gravity_harmonics : list | None
-      List of gravity harmonics to include (e.g., ['J2', 'J3', 'J4']).
-      None or empty list disables all harmonics.
+      List of third bodies to include (e.g., ['SUN', 'MOON']). None if disabled.
+    zonal_harmonics : list | None
+      List of zonal harmonics to include (e.g., ['J2', 'J3']). None if disabled.
+      Empty list [] implies default ['J2'].
     include_srp : bool
       Flag to enable/disable Solar Radiation Pressure.
-    atol : float
-      Absolute tolerance for numerical integration.
-    rtol : float
-      Relative tolerance for numerical integration.
+    initial_state_source : str
+      Source for the initial state vector ('jpl_horizons' or 'tle').
   
   Output:
   -------
-    config : SimulationConfig
+    SimpleNamespace
       Configuration object containing parsed and calculated propagation parameters.
   
   Raises:
   -------
     ValueError
       If NORAD ID is not supported.
-      If timespan is not provided.
   """
-
-  # Validate required arguments
-  if timespan_dt is None:
-    raise ValueError(
-      "timespan is required but was not provided. "
-      "Please provide --timespan via command line or 'timespan' in config file."
-    )
-
-  if not isinstance(timespan_dt, (list, tuple)) or len(timespan_dt) != 2:
-    raise ValueError(
-      f"timespan must be a list or tuple of exactly 2 datetime objects, got: {type(timespan_dt).__name__}"
-    )
-
+  
   # Normalize inputs
-  initial_state_source, gravity_harmonics_list = normalize_input(
+  input_object_type, initial_state_source = normalize_input(
+    input_object_type,
     initial_state_source,
-    gravity_harmonics,
   )
   
-  # Validate: skyplot arguments
-  if (tracker_filename is not None or tracker_filepath is not None) and not include_tracker_skyplots:
-    raise ValueError("--tracker-filename or --tracker-filepath requires --include-tracker-skyplots to be set.")
-  
-  # Validate: cannot use both gravity harmonics options
-  has_coefficients = gravity_harmonics_list is not None and len(gravity_harmonics_list) > 0
-  has_degree_order = gravity_harmonics_degree_order is not None
-  
-  if has_coefficients and has_degree_order:
-    raise ValueError(
-      "Cannot use both --gravity-harmonics-coefficients and --gravity-harmonics-degree-order. "
-      "Please use only one method to specify gravity harmonics."
-    )
-  
-  # Handle gravity harmonics logic
-  # include_gravity_harmonics is True if EITHER explicit coefficients OR degree/order is specified
-  include_gravity_harmonics = has_coefficients or has_degree_order
-
-  if gravity_harmonics_degree_order is not None:
-    if len(gravity_harmonics_degree_order) != 2:
-      raise ValueError("--gravity-harmonics-degree-order requires exactly 2 values: DEGREE ORDER")
-    gravity_harmonics_degree = gravity_harmonics_degree_order[0]
-    gravity_harmonics_order  = gravity_harmonics_degree_order[1]
+  # Handle zonal harmonics logic
+  include_zonal_harmonics = zonal_harmonics is not None
+  if zonal_harmonics is not None and len(zonal_harmonics) == 0:
+    zonal_harmonics_list = ['J2']
   else:
-    gravity_harmonics_degree = None
-    gravity_harmonics_order  = None
+    zonal_harmonics_list = zonal_harmonics
 
   # Handle third bodies logic
-  # If third_bodies contains None (from --third-bodies None), treat as disabled
-  if third_bodies is not None and len(third_bodies) > 0 and third_bodies[0] is None:
-    third_bodies = None
-
-  include_third_body = third_bodies is not None and len(third_bodies) > 0
+  include_third_body = third_bodies is not None
   third_bodies_list  = [b.upper() for b in third_bodies] if third_bodies is not None else []
 
   # Unpack timespan
-  time_o_dt    = timespan_dt[0]
-  time_f_dt    = timespan_dt[1]
+  desired_time_o_str = desired_timespan[0]
+  desired_time_f_str = desired_timespan[1]
   
-  # Set up foldernames, folderpaths, filenames, and filepaths
-  paths = setup_paths(
-    initial_state_source      = initial_state_source,
-    initial_state_filename    = initial_state_filename,
-    gravity_model_filename    = gravity_model_filename,
-    include_tracker_skyplots  = include_tracker_skyplots,
-    tracker_filename          = tracker_filename,
-    tracker_filepath          = tracker_filepath,
-  )
+  # Validate: NORAD ID required for norad-id input type
+  if input_object_type == 'norad_id' and not norad_id:
+    raise ValueError("NORAD ID is required when input-object-type is 'norad-id'")
 
-  # Initialize variables
-  obj_props               = {}
-  custom_state_vec        = None
-  custom_cartesian_state  = None
+  # Validate: SRP requires SPICE
+  if include_srp:
+    include_spice = True
 
-  # --- Logic for Custom State Vector ---
-  if initial_state_source == 'custom_state_vector':
-    # Validation
-    if initial_state_norad_id is not None:
-      print(f"[WARNING] --initial-state-norad-id ({initial_state_norad_id}) is ignored when using custom state vector.")
-      # Or terminate as requested:
-      raise ValueError("Argument --initial-state-norad-id is not allowed when using a custom state vector.")
-      
-    if compare_tle or compare_jpl_horizons:
-      raise ValueError("Comparisons (TLE/Horizons) are not allowed when using a custom state vector.")
-      
-    # Load Custom State Vector File
-    sv_filepath = paths['custom_state_vector_filepath']
-      
-    with open(sv_filepath, 'r') as f:
-      sv_data = yaml.safe_load(f)
-      
-    # Extract properties
-    object_name_display = sv_data.get('name', 'CustomObject')
-    
-    # Sanitize object name for filenames
-    object_name = sanitize_filename(object_name_display)
-    
-    # Ensure defaults for mass, drag, srp if not present
-    if 'mass__kg' not in sv_data:
-        sv_data['mass__kg'] = 1000.0 # Default mass
-    
-    # Handle drag defaults
-    default_drag = {'coeff': 2.2, 'area__m2': 10.0}
-    if 'drag' not in sv_data or sv_data['drag'] is None:
-        sv_data['drag'] = default_drag
-    else:
-        # Fill in missing keys in existing drag dict
-        for k, v in default_drag.items():
-            if k not in sv_data['drag']:
-                sv_data['drag'][k] = v
-    
-    # Handle SRP defaults
-    default_srp = {'coeff': 1.3, 'area__m2': 10.0}
-    if 'srp' not in sv_data or sv_data['srp'] is None:
-        sv_data['srp'] = default_srp
-    else:
-        # Fill in missing keys in existing srp dict
-        for k, v in default_srp.items():
-            if k not in sv_data['srp']:
-                sv_data['srp'][k] = v
+  # Validate: norad is insupported objects
+  supported_objects = load_supported_objects()
+  if norad_id not in supported_objects:
+    raise ValueError(f"NORAD ID {norad_id} is not supported. Supported IDs: {list(supported_objects.keys())}")
 
-    obj_props = sv_data
-    
-    # Extract state
-    # Support 'state' (6-element list) OR 'pos_vec__m' and 'vel_vec__m_per_s'
-    if 'state' in sv_data:
-        custom_state_vec = np.array(sv_data['state'])
-    elif 'pos_vec__m' in sv_data and ('vel_vec__m_per_s' in sv_data or 'vec_vec__m_per_s' in sv_data):
-        # Handle potential typo in YAML key
-        vel_key = 'vel_vec__m_per_s' if 'vel_vec__m_per_s' in sv_data else 'vec_vec__m_per_s'
+  # Get object properties
+  obj_props = supported_objects[norad_id]
 
-        pos_raw = sv_data['pos_vec__m']
-        vel_raw = sv_data[vel_key]
+  # Get object name
+  object_name = obj_props.get('name', 'object_name')
 
-        # Helper to parse "x, y, z" string or [x, y, z] list
-        def parse_vec3(raw_val):
-          if isinstance(raw_val, str):
-            # Remove brackets if present and split
-            clean = raw_val.replace('[', '').replace(']', '')
-            return np.array([float(x.strip()) for x in clean.split(',')])
-          elif isinstance(raw_val, list):
-            return np.array([float(x) for x in raw_val])
-          else:
-            raise ValueError(f"Unknown format for vector: {raw_val}")
+  # Target propagation start/end times from arguments
+  desired_time_o_dt = parse_time(desired_time_o_str)
+  desired_time_f_dt = parse_time(desired_time_f_str)
 
-        pos = parse_vec3(pos_raw)
-        vel = parse_vec3(vel_raw)
-        custom_state_vec = np.concatenate((pos, vel))
-    else:
-      raise ValueError(f"Custom state vector file {initial_state_filename} must contain 'state' or 'pos_vec__m'/'vel_vec__m_per_s'.")
+  desired_delta_time_of_s = (desired_time_f_dt - desired_time_o_dt).total_seconds()
 
-    # Create CartesianState from parsed vector
-    custom_cartesian_state = CartesianState(
-      position = custom_state_vec[0:3],
-      velocity = custom_state_vec[3:6],
-      frame    = sv_data.get('frame', 'J2000'),
-    )
-
-  # --- Logic for Standard Sources (Horizons/TLE) ---
-  else:
-    # Validate: NORAD ID required
-    if not initial_state_norad_id:
-      raise ValueError("Initial State NORAD ID is required for Horizons/TLE sources.")
-
-    # Validate: norad is in supported objects
-    supported_objects = load_supported_objects()
-    if initial_state_norad_id not in supported_objects:
-      raise ValueError(f"NORAD ID {initial_state_norad_id} is not supported. Supported IDs: {list(supported_objects.keys())}")
-
-    # Get object properties
-    obj_props = supported_objects[initial_state_norad_id]
-
-    # Get object name (original for display, sanitized for filenames)
-    object_name_display = obj_props.get('name', 'object_name')
-    object_name = sanitize_filename(object_name_display)
-    
-    # Update paths with correct name
-    paths = setup_paths(
-      include_tracker_skyplots = include_tracker_skyplots,
-      tracker_filename         = tracker_filename,
-      tracker_filepath         = tracker_filepath,
-    )
-  
-  # Create SpacecraftProperties object (maneuvers will be loaded later in load_files)
-  spacecraft = SpacecraftProperties(
-    mass      = obj_props['mass__kg'],
-    drag      = DragConfig(
-      enabled = include_drag,
-      cd      = obj_props['drag']['coeff'],
-      area    = obj_props['drag']['area__m2']
-    ),
-    srp       = SRPConfig(
-      enabled = include_srp,
-      cr      = obj_props['srp']['coeff'],
-      area    = obj_props['srp']['area__m2']
-    ),
-    maneuvers = ManeuversConfig(filename=maneuver_filename),  # items populated in load_files
-    norad_id  = initial_state_norad_id,
-    name      = object_name
-  )
-
-  # Create PropagationConfig object
-  propagation_config = PropagationConfig(
-    time_o_dt = time_o_dt,
-    time_f_dt = time_f_dt,
-    atol      = atol,
-    rtol      = rtol,
-  )
-
-  # Resolve Jacobian selection flags
-  use_approx = use_approx_jacobian is True
-  use_analytic = use_analytic_jacobian is True
-  if use_approx and use_analytic:
-    raise ValueError("Only one of use_approx_jacobian or use_analytic_jacobian can be True")
-  if not use_approx and not use_analytic:
-    use_approx = True
-
-  # Create GravityModelConfig
-  gravity_model = GravityModelConfig(
-    gp                  = SOLARSYSTEMCONSTANTS.EARTH.GP,
-    folderpath          = paths['gravity_model_folderpath'],
-    filename            = paths['gravity_model_filename'],
-    spherical_harmonics = SphericalHarmonicsConfig(
-      degree       = gravity_harmonics_degree if gravity_harmonics_degree is not None else 0,
-      order        = gravity_harmonics_order  if gravity_harmonics_order  is not None else 0,
-      coefficients = gravity_harmonics_list,
-    ),
-    third_body = ThirdBodyConfig(
-      enabled = include_third_body,
-      bodies  = third_bodies_list,
-    ),
-    relativity = RelativityConfig(
-      enabled = include_relativity,
-    ),
-    solid_tides = SolidEarthTidesConfig(
-      enabled = include_solid_tides,
-    ),
-    ocean_tides = OceanTidesConfig(
-      enabled = include_ocean_tides,
-    ),
-    use_approx_jacobian   = use_approx,
-    use_analytic_jacobian = use_analytic,
-    jacobian_approx_eps   = jacobian_approx_eps,
-  )
-
-  # Create InitialStateConfig
-  initial_state_config = InitialStateConfig(
-    source   = initial_state_source,
-    norad_id = initial_state_norad_id,
-    filename = initial_state_filename,
-    state    = custom_cartesian_state,
+  # Set up paths and files
+  paths = setup_paths_and_files(
+    norad_id          = norad_id,
+    obj_name          = object_name,
+    desired_time_o_dt = desired_time_o_dt,
+    desired_time_f_dt = desired_time_f_dt,
   )
   
-  # Create ComparisonConfig
-  comparison_config = ComparisonConfig(
-    compare_jpl_horizons = compare_jpl_horizons,
-    compare_tle          = compare_tle,
+  return SimpleNamespace(
+    # Store original input values for print_configuration
+    input_object_type = input_object_type,
+    norad_id          = norad_id,
+    desired_timespan  = desired_timespan,
+    # Parsed and calculated values
+    obj_props                = obj_props,
+    object_name              = object_name,
+    desired_time_o_dt        = desired_time_o_dt,
+    desired_time_f_dt        = desired_time_f_dt,
+    desired_delta_time_of_s  = desired_delta_time_of_s,
+    mass                     = obj_props['mass__kg'],
+    cd                       = obj_props['drag']['coeff'],
+    area_drag                = obj_props['drag']['area__m2'],
+    cr                       = obj_props['srp']['coeff'],
+    area_srp                 = obj_props['srp']['area__m2'],
+    include_spice            = include_spice,
+    include_drag             = include_drag,
+    compare_tle              = compare_tle,
+    compare_jpl_horizons     = compare_jpl_horizons,
+    include_third_body       = include_third_body,
+    third_bodies_list        = third_bodies_list,
+    include_zonal_harmonics  = include_zonal_harmonics,
+    zonal_harmonics_list     = zonal_harmonics_list,
+    include_srp              = include_srp,
+    initial_state_source     = initial_state_source,
+    output_folderpath        = paths['output_folderpath'],
+    timestamp_folderpath     = paths['timestamp_folderpath'],
+    figures_folderpath       = paths['figures_folderpath'],
+    files_folderpath         = paths['files_folderpath'],
+    log_filepath             = paths['log_filepath'],
+    spice_kernels_folderpath = paths['spice_kernels_folderpath'],
+    jpl_horizons_folderpath  = paths['jpl_horizons_folderpath'],
+    tles_folderpath          = paths['tles_folderpath'],
+    lsk_filepath             = paths['lsk_filepath'],
+    # Values calculated later
+    tle_line_0   = None,
+    tle_line_1   = None,
+    tle_line_2   = None,
+    tle_epoch_dt = None,
   )
 
-  # Create OrbitDeterminationConfig
-  od_config = OrbitDeterminationConfig(
-    enabled           = include_orbit_determination,
-    process_noise_pos = process_noise_pos if process_noise_pos is not None else 1e-4,
-    process_noise_vel = process_noise_vel if process_noise_vel is not None else 1e-7,
-  )
-  
-  # Update output_paths with all path information
-  output_paths = paths['output_paths']
-  output_paths.spice_kernels_folderpath = paths['spice_kernels_folderpath']
-  output_paths.lsk_filepath             = paths['lsk_filepath']
-  output_paths.jpl_horizons_folderpath  = paths['jpl_horizons_folderpath']
-  output_paths.tles_folderpath          = paths['tles_folderpath']
-  output_paths.initial_states_folderpath = paths['initial_states_folderpath']
 
-  return SimulationConfig(
-    initial_state       = initial_state_config,
-    time_o_dt           = time_o_dt,
-    time_f_dt           = time_f_dt,
-    spacecraft          = spacecraft,
-    gravity             = gravity_model,
-    comparison          = comparison_config,
-    output_paths        = output_paths,
-    object_name         = object_name,
-    object_name_display = object_name_display,
-    auto_download       = auto_download,
-    propagation_config  = propagation_config,
-    orbit_determination = od_config,
-    optimize            = optimize,
-    initial_maneuver_plan = initial_maneuver_plan,
-    resume_from         = resume_from,
-  )
-
-
-def setup_paths(
-  initial_state_source     : Optional[str]  = None,
-  initial_state_filename   : Optional[str]  = None,
-  gravity_model_filename   : Optional[str]  = None,
-  include_tracker_skyplots : bool           = False,
-  tracker_filename         : Optional[str]  = None,
-  tracker_filepath         : Optional[str]  = None,
+def setup_paths_and_files(
+  norad_id          : str,
+  obj_name          : str,
+  desired_time_o_dt : datetime,
+  desired_time_f_dt : datetime,
 ) -> dict:
   """
   Set up all required folder paths and file names for the propagation.
   
   Input:
   ------
-    initial_state_source : str | None
-      Source of initial state. Used to validate custom state vector file.
-    initial_state_filename : str | None
-      Filename of custom state vector.
-    gravity_model_filename : str | None
-      Filename of gravity model. If None, defaults to EGM2008.gfc.
-    include_tracker_skyplots : bool
-      Flag to enable skyplot generation.
-    tracker_filename : str | None
-      Tracker YAML filename (assumes input/trackers/ folder).
-    tracker_filepath : str | None
-      Absolute path to tracker YAML file.
+    norad_id : str
+      NORAD catalog ID of the satellite.
+    obj_name : str
+      Name of the object (e.g., 'ISS').
+    desired_time_o_dt : datetime
+      Desired initial time as a datetime object.
+    desired_time_f_dt : datetime
+      Desired final time as a datetime object.
       
   Output:
   -------
-    paths : dict
+    dict
       A dictionary containing paths to output, data, SPICE kernels,
       Horizons ephemeris folder, TLEs folder, and leap seconds files.
   """
-  # Check for test data override (used by pytest fixtures)
-  test_data_path = os.environ.get('ORBIT_PROPAGATOR_TEST_DATA')
-  
-  if test_data_path:
-    # Use test fixtures
-    data_folderpath = Path(test_data_path)
-    project_root = Path(__file__).parent.parent.parent
-  else:
-    # Normal operation: use project data folder
-    project_root = Path(__file__).parent.parent.parent
-    data_folderpath = project_root / 'data'
+  # Project and data paths
+  #   Adjusted for location in src/input/configuration.py (depth: src/input/configuration.py -> input -> src -> root)
+  project_root    = Path(__file__).parent.parent.parent
+  data_folderpath = project_root / 'data'
   
   # SPICE kernels path
   spice_kernels_folderpath = data_folderpath / 'spice_kernels'
   lsk_filepath             = spice_kernels_folderpath / 'naif0012.tls'
   
-  # Gravity coefficients path
-  gravity_model_folderpath = data_folderpath / 'gravity_models'
-  
-  if gravity_model_filename is None:
-    gravity_model_filename = 'EGM2008.gfc'
-
   # TLEs folderpath
   tles_folderpath = data_folderpath / 'tles'
-
-  # Initial states folderpath (in input/ folder)
-  input_folderpath = project_root / 'input'
-  initial_states_folderpath = input_folderpath / 'initial_states'
   
-  custom_state_vector_filepath = None
-  if initial_state_source == 'custom_state_vector':
-    if not initial_state_filename:
-      raise ValueError("Argument --initial-state-filename is required when using a custom state vector.")
-    
-    custom_state_vector_filepath = initial_states_folderpath / initial_state_filename
-    if not custom_state_vector_filepath.exists():
-      raise FileNotFoundError(f"Custom state vector file not found: {custom_state_vector_filepath}")
-
   # Horizons ephemeris folder (loader will search for compatible files)
   jpl_horizons_folderpath = data_folderpath / 'ephems'
   
-  # Tracker filepath - determine based on skyplot settings
-  trackers_folderpath = input_folderpath / 'trackers'
-  resolved_tracker_filepath = None
-  
-  if include_tracker_skyplots:
-    if tracker_filepath is not None:
-      # Absolute path provided
-      resolved_tracker_filepath = Path(tracker_filepath)
-    elif tracker_filename is not None:
-      # Relative filename provided - look in input/trackers/
-      resolved_tracker_filepath = trackers_folderpath / tracker_filename
-    else:
-      # No path specified - find first .yaml in input/trackers/
-      if trackers_folderpath.exists():
-        yaml_files = list(trackers_folderpath.glob('*.yaml'))
-        if yaml_files:
-          resolved_tracker_filepath = yaml_files[0]
-        else:
-          print(f"[WARNING] --include-tracker-skyplots enabled but no .yaml files found in {trackers_folderpath}")
-      else:
-        print(f"[WARNING] --include-tracker-skyplots enabled but trackers folder not found: {trackers_folderpath}")
-  
   # Define output folderpath
-  timestamp_str        = datetime.now().strftime("%Y%m%d_%H%M%S")
+  timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
   output_folderpath    = project_root / 'output'
   timestamp_folderpath = output_folderpath / timestamp_str
+  figures_folderpath   = timestamp_folderpath / 'figures'
+  files_folderpath     = timestamp_folderpath / 'files'
+  log_filepath         = files_folderpath / 'output.log'
   
-  # Initialize OutputPaths
-  output_paths = OutputPaths(
-    base_folderpath  = timestamp_folderpath,
-    logs_folderpath  = timestamp_folderpath / 'files',
-    log_filepath     = timestamp_folderpath / 'files' / 'output.log',
-    data_folderpath  = data_folderpath,
-    tracker_filepath = resolved_tracker_filepath,
-  )
-  output_paths.ensure_directories()
+  # Ensure output directory exists
+  figures_folderpath.mkdir(parents=True, exist_ok=True)
+  files_folderpath.mkdir(parents=True, exist_ok=True)
 
   return {
-    'output_paths'                 : output_paths,
-    'output_folderpath'            : output_folderpath,
-    'timestamp_folderpath'         : timestamp_folderpath,
-    'figures_folderpath'           : output_paths.figures_folderpath,
-    'files_folderpath'             : output_paths.logs_folderpath,
-    'log_filepath'                 : output_paths.log_filepath,
-    'spice_kernels_folderpath'     : spice_kernels_folderpath,
-    'gravity_model_folderpath'     : gravity_model_folderpath,
-    'gravity_model_filename'       : gravity_model_filename,
-    'jpl_horizons_folderpath'      : jpl_horizons_folderpath,
-    'tles_folderpath'              : tles_folderpath,
-    'initial_states_folderpath'     : initial_states_folderpath,
-    'custom_state_vector_filepath' : custom_state_vector_filepath,
-    'lsk_filepath'                 : lsk_filepath,
-    'tracker_filepath'             : tracker_filepath,
+    'output_folderpath'        : output_folderpath,
+    'timestamp_folderpath'     : timestamp_folderpath,
+    'figures_folderpath'       : figures_folderpath,
+    'files_folderpath'         : files_folderpath,
+    'log_filepath'             : log_filepath,
+    'spice_kernels_folderpath' : spice_kernels_folderpath,
+    'jpl_horizons_folderpath'  : jpl_horizons_folderpath,
+    'tles_folderpath'          : tles_folderpath,
+    'lsk_filepath'             : lsk_filepath,
   }
 
 
 def extract_tle_to_config(
-  config               : SimulationConfig,
-  result_celestrak_tle : Optional[TLEData],
+  config              : SimpleNamespace,
+  result_celestrak_tle : Optional[dict],
 ) -> None:
   """
-  Extract TLE data from TLEData object and store on config object.
+  Extract TLE data from result dictionary and store on config object.
   
   Input:
   ------
-    config : SimulationConfig
+    config : SimpleNamespace
       Configuration object to store TLE data on.
-    result_celestrak_tle : TLEData | None
-      TLEData object from get_celestrak_tle.
-      
-  Output:
-  -------
-    None
+    result_celestrak_tle : dict | None
+      Result dictionary from get_celestrak_tle containing TLE data.
   """
-  if result_celestrak_tle is not None:
-    config.tle_line_1   = result_celestrak_tle.line_1
-    config.tle_line_2   = result_celestrak_tle.line_2
-    config.tle_epoch_dt = result_celestrak_tle.epoch_dt
+  if result_celestrak_tle and result_celestrak_tle.get('success'):
+    config.tle_line_0   = result_celestrak_tle['tle_line_0']
+    config.tle_line_1   = result_celestrak_tle['tle_line_1']
+    config.tle_line_2   = result_celestrak_tle['tle_line_2']
+    config.tle_epoch_dt = result_celestrak_tle['tle_epoch_dt']

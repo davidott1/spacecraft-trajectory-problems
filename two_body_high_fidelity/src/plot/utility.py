@@ -5,26 +5,20 @@ from typing   import Any
 
 
 def get_equal_limits(
-  ax              : Any,
-  buffer_fraction : float = 0.0,
+  ax : Any,
 ) -> tuple[float, float]:
   """
   Get equal limits for a 3D plot to ensure aspect ratio is preserved.
   
   Input:
   ------
-    ax : matplotlib.axes._subplots.Axes3DSubplot
-      The 3D axes object.
-    buffer_fraction : float
-      Fraction of the range to add as buffer on each side (default 0.0).
-      E.g., 0.25 adds 25% buffer to each side.
+  ax : matplotlib.axes._subplots.Axes3DSubplot
+    The 3D axes object.
     
   Output:
   -------
-    min_limit : float
-      The minimum limit for all axes.
-    max_limit : float
-      The maximum limit for all axes.
+  tuple[float, float]
+    The minimum and maximum limits for all axes.
   """
   x_limits   = ax.get_xlim3d()
   y_limits   = ax.get_ylim3d()
@@ -32,14 +26,6 @@ def get_equal_limits(
   all_limits = np.array([x_limits, y_limits, z_limits])
   min_limit  = np.min(all_limits[:, 0])
   max_limit  = np.max(all_limits[:, 1])
-  
-  # Apply buffer if specified
-  if buffer_fraction > 0:
-    range_limit = max_limit - min_limit
-    buffer      = buffer_fraction * range_limit
-    min_limit  -= buffer
-    max_limit  += buffer
-  
   return min_limit, max_limit
 
 
@@ -59,10 +45,6 @@ def add_utc_time_axis(
       The epoch time corresponding to t=0.
     max_time : float
       The maximum time value on the primary x-axis.
-      
-  Output:
-  -------
-    None
   """
   ax2 = ax.twiny()
   ax2.set_xlim(ax.get_xlim())
@@ -83,27 +65,7 @@ def add_utc_time_axis(
   ax2.xaxis.tick_top()
 
 
-def add_stats(
-  ax    : Any,
-  data  : np.ndarray,
-  label : str,
-) -> None:
-  """
-  Add statistics text box to a plot axis.
-  
-  Input:
-  ------
-    ax : matplotlib.axes.Axes
-      The axes object to add statistics to.
-    data : np.ndarray
-      Data array to compute statistics from.
-    label : str
-      Label prefix for statistics text.
-      
-  Output:
-  -------
-    None
-  """
+def add_stats(ax, data, label):
   stats = (
     f'{label} Mean : {np.mean(data):.3f}\n'
     f'{label} RMS  : {np.sqrt(np.mean(data**2)):.3f}\n'

@@ -1,13 +1,4 @@
-class PRINTFORMATTER:
-  SCIENTIFIC_NOTATION = ">19.12e"          # scientific notation format
-
 class CONVERTER:
-  # Unity Values
-  ONE_AU  = 1.0                            # [astronomical unit]
-  ONE_M   = 1.0                            # [meter]
-  ONE_SEC = 1.0                            # [second]
-  ONE_KG  = 1.0                            # [kilogram]
-
   # Angle Conversions
   RAD_PER_DEG = 3.141592653589793 / 180.0  # [radian] per [degree]
   DEG_PER_RAD = 180.0 / 3.141592653589793  # [degree] per [radian]
@@ -28,71 +19,10 @@ class CONVERTER:
   M_PER_SEC__PER__AU_PER_DAY = M_PER_AU / SEC_PER_DAY  # [meters/second] per [astronomical units/day]
 
 class PHYSICALCONSTANTS:
-  speed_of_light = 299792458.0  # Speed of light in vacuum [m/s]
-
-class NAIFIDS:
-  """
-  NAIF ID codes for celestial bodies used by SPICE.
-  Reference: https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/req/naif_ids.html
-  
-  Notes:
-  ------
-  For planets with moons, DE440 ephemeris contains barycenters (1-9), not planet centers.
-  For third-body gravitational perturbations, barycenters are appropriate since:
-  1. The barycenter represents the center of mass of the planet system
-  2. The difference between barycenter and planet center is negligible at interplanetary distances
-  """
-  # Sun
-  SUN     = 10
-  
-  # Inner planets (planet centers available in DE440)
-  MERCURY = 199
-  VENUS   = 299
-  EARTH   = 399
-  MOON    = 301
-  
-  # Outer planets - use barycenters (planet centers not in DE440)
-  MARS            = 4    # Mars Barycenter
-  JUPITER         = 5    # Jupiter Barycenter
-  SATURN          = 6    # Saturn Barycenter
-  URANUS          = 7    # Uranus Barycenter
-  NEPTUNE         = 8    # Neptune Barycenter
-  PLUTO           = 9    # Pluto Barycenter
-  
-  # Planet center IDs (for reference, may not be in all SPK files)
-  MARS_CENTER     = 499
-  JUPITER_CENTER  = 599
-  SATURN_CENTER   = 699
-  URANUS_CENTER   = 799
-  NEPTUNE_CENTER  = 899
-  PLUTO_CENTER    = 999
-  
-  # Mapping from body name to NAIF ID (uses barycenters for outer planets)
-  NAME_TO_ID = {
-    'SUN'     : SUN,
-    'MERCURY' : MERCURY,
-    'VENUS'   : VENUS,
-    'EARTH'   : EARTH,
-    'MOON'    : MOON,
-    'MARS'    : MARS,
-    'JUPITER' : JUPITER,
-    'SATURN'  : SATURN,
-    'URANUS'  : URANUS,
-    'NEPTUNE' : NEPTUNE,
-    'PLUTO'   : PLUTO,
-  }
-
-class SOLARSYSTEMCONSTANTS:
   """
   Class to hold physical constants.
-
-  Notes:
-    - Default value
-    - Values could be overwritten by loading the values from an external file.
-    - Some constants are from "OrbitalMotion", created by Hanspeter Schaub on 6/19/05.
-    - 
+  Some constants are from "OrbitalMotion", created by Hanspeter Schaub on 6/19/05.
   """
-
   class SUN:
     class RADIUS:
       EQUATOR = 696340000.0                 # Sun's equatorial radius [m]
@@ -132,6 +62,10 @@ class SOLARSYSTEMCONSTANTS:
     INC = 0.00005    * CONVERTER.DEG_PER_RAD  # Inclination [rad]
 
     # SGP4 uses WGS-72 constants (not WGS-84)
+    # Standard WGS-84 values:
+    # J2 = 1.08263e-3
+    # J3 = -2.532153e-6
+    # J4 = -1.61962159137e-6
     
     # SGP4/WGS-72 values for better agreement:
     J2_WGS84 =  1.08263e-3                  # WGS-84 J2 coefficient
@@ -151,34 +85,12 @@ class SOLARSYSTEMCONSTANTS:
     J3 = J3_WGS72
     J4 = J4_WGS72
     
-    # Tesseral harmonics (degree 2, order 1 and 2)
-    C21 = -1.86e-10                     # C21 tesseral harmonic coefficient (normalized)
-    S21 = -1.19e-9                      # S21 tesseral harmonic coefficient (normalized) 
-    C22 =  2.43914352e-6                # C22 tesseral harmonic coefficient (normalized)
-    S22 = -1.40016683e-6                # S22 tesseral harmonic coefficient (normalized)
-    
-    # Tesseral harmonics (degree 3)
-    C31 =  2.03046e-6                   # C31 tesseral harmonic coefficient (normalized)
-    S31 =  2.48513e-7                   # S31 tesseral harmonic coefficient (normalized)
-    C32 =  9.04788e-7                   # C32 tesseral harmonic coefficient (normalized)
-    S32 = -6.19005e-7                   # S32 tesseral harmonic coefficient (normalized)
-    C33 =  7.21282e-7                   # C33 tesseral harmonic coefficient (normalized)
-    S33 =  1.41434e-6                   # S33 tesseral harmonic coefficient (normalized)
-    
     # Rotation rate
     OMEGA = 7.2921150e-5                    # Earth's rotation rate [rad/s]
     
     # Reference atmosphere parameters (simplified exponential model)
     RHO_0 = 1.225                           # Earth's sea level density [kg/m³]
     H_0   = 8500.0                          # Earth's scale height [m]
-
-    # Solar radiation pressure at Earth's distance
-    G_SC         = 1361.0                                    # solar constant [W/m²] at 1 AU
-    PRESSURE_SRP = G_SC / PHYSICALCONSTANTS.speed_of_light   # solar radiation pressure at 1 AU [N/m²]. approx 4.56e-6 N/m².
-
-    # Love numbers for solid Earth tides (IERS 2010 Conventions)
-    K2_LOVE = 0.302                                          # Degree-2 gravitational Love number
-    K3_LOVE = 0.093                                          # Degree-3 gravitational Love number
 
   class MOON:
     class RADIUS:
