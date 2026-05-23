@@ -10,12 +10,21 @@ Assumptions:
 """
 
 import multiprocessing as mp
+import os
+import sys
 
 import numpy as np
 import matplotlib.pyplot as plt
 from numba import njit
 from scipy.integrate import solve_ivp
-from scipy.optimize import root
+from scipy.optimize import root, minimize, least_squares
+
+# Analytic-Jacobian Lambert kernel (∂v1,∂v2 w.r.t. r1,r2,dt), reused from the
+# sibling handcrafted_trajectory_design project. Unit-agnostic (mu passed in).
+sys.path.insert(0, os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "..", "handcrafted_trajectory_design"))
+from lambert_numba import lambert_with_jac_nb  # noqa: E402
 
 # -------- Constants / scenario --------
 MU = 398600.4418            # km^3/s^2 — Earth
@@ -547,6 +556,31 @@ def _shoot_to_moon(r1, v_guess, t_dep, t_arr, r_target,
     return v, v_f, STATUS_MAX_ITER, last_residual
 
 
+def _newton_shoot_counted(r1, v0, t_dep, t_arr, r_target,
+                          mu_moon=None, pos_tol=50.0, max_iter=30):
+    """Same STM-Jacobian Newton shoot as _shoot_to_moon, but returns the
+    iteration count: (v, v_f, status, n_iter, residual_km). n_iter is the
+    number of Newton correction steps taken to reach pos_tol (0 if the
+    initial guess already satisfies it)."""
+    if mu_moon is None:
+        mu_moon = MU_MOON
+    v = np.asarray(v0, dtype=np.float64).copy()
+    v_f = v
+    last_residual = np.inf
+    for it in range(max_iter):
+        r_f, v_f, phi_rv = _propagate_em_stm(r1, v, t_dep, t_arr,
+                                             mu_moon=mu_moon)
+        last_residual = float(np.linalg.norm(r_f - r_target))
+        if last_residual < pos_tol:
+            return v, v_f, STATUS_OK, it, last_residual
+        try:
+            dv = np.linalg.solve(phi_rv, -(r_f - r_target))
+        except np.linalg.LinAlgError:
+            return v, v_f, STATUS_SINGULAR_JAC, it, last_residual
+        v = v + dv
+    return v, v_f, STATUS_MAX_ITER, max_iter, last_residual
+
+
 def _solve_cell_with_moon(args):
     """Worker: cell with Moon gravity, sweeping N=0 + N=1 (short, long) Lambert seeds.
     Returns the best (lowest-ΔV) successful shoot for the cell."""
@@ -932,6 +966,43 @@ def plot_porkchop_arrival(dv_total, out_name="porkchop_arrival.png",
     print(f"Saved {out_name}  (min ΔV = {vmin:.4f} km/s)")
 
 
+def plot_porkchop_grid_raw(dv, out_name="porkchop_discretized_raw.png",
+                           title="Discretized grid (raw cells, no interp)",
+                           dv_span=2.0):
+    """Raw grid: one colored square per (departure, time-of-flight) cell, NO
+    interpolation. NaN cells (screened / non-converged) render grey. This is
+    the faithful picture of exactly what the optimizer produced per cell."""
+    dv = np.asarray(dv, dtype=np.float64)              # (n_TOF, n_DEP)
+    vmin = float(np.nanmin(dv))
+    vmax = vmin + dv_span
+
+    # Cell-edge arrays so each cell is a square (pcolormesh, flat shading).
+    ddep = T_DEP[1] - T_DEP[0]
+    dtof = TOF[1] - TOF[0]
+    dep_edges = np.concatenate([T_DEP - 0.5 * ddep, [T_DEP[-1] + 0.5 * ddep]])
+    tof_edges = np.concatenate([TOF - 0.5 * dtof, [TOF[-1] + 0.5 * dtof]])
+
+    cmap = plt.cm.viridis.copy()
+    cmap.set_bad("lightgrey")
+    Zm = np.ma.masked_invalid(dv)
+
+    fig, ax = plt.subplots(figsize=(9, 7))
+    ax.set_facecolor("lightgrey")
+    pc = ax.pcolormesh(dep_edges, tof_edges, Zm, cmap=cmap,
+                       vmin=vmin, vmax=vmax, shading="flat")
+    plt.colorbar(pc, ax=ax, label="Total ΔV [km/s]", extend="max")
+    n_ok = int(np.sum(np.isfinite(dv)))
+    ax.set_xlabel("Departure time [hr]")
+    ax.set_ylabel("Time of flight [hr]")
+    ax.set_title(
+        f"{title}: circ {R_PARK:.0f} km → circ {R_TGT:.0f} km\n"
+        f"min ΔV = {vmin:.3f} km/s   ({n_ok} converged cells)"
+    )
+    fig.tight_layout()
+    fig.savefig(out_name, dpi=120)
+    print(f"Saved {out_name}  (min ΔV = {vmin:.4f} km/s, {n_ok} cells)")
+
+
 def _replay_failed_cell(args):
     """Propagate the Lambert-seed trajectory for a single failed cell.
     Module-level so multiprocessing.Pool can pickle it."""
@@ -1048,6 +1119,991 @@ def plot_max_iter_failure_trajectories(status,
     fig.tight_layout()
     fig.savefig(out_name, dpi=120)
     print(f"Saved {out_name}  (plotted {n_plotted}/{n_fail} failed trajectories)")
+
+
+def _kepler_uv(r0_vec, v0_vec, dt, mu, tol=1e-10, max_iter=100):
+    """Universal-variable Kepler propagation of a state by time dt.
+    Returns (r_vec, v_vec). Valid for elliptic / parabolic / hyperbolic conics.
+    Reuses the JIT Stumpff functions used by the Lambert solver."""
+    if dt == 0.0:
+        return r0_vec.copy(), v0_vec.copy()
+    r0 = np.linalg.norm(r0_vec)
+    v0 = np.linalg.norm(v0_vec)
+    vr0 = np.dot(r0_vec, v0_vec) / r0
+    alpha = 2.0 / r0 - v0 * v0 / mu          # = 1/a  (sign => conic type)
+    sqrt_mu = np.sqrt(mu)
+
+    if alpha > 1e-12:                         # ellipse
+        chi = sqrt_mu * alpha * dt
+    elif alpha < -1e-12:                      # hyperbola
+        a = 1.0 / alpha
+        chi = (np.sign(dt) * np.sqrt(-a) *
+               np.log((-2.0 * mu * alpha * dt) /
+                      (np.dot(r0_vec, v0_vec) + np.sign(dt) *
+                       np.sqrt(-mu * a) * (1.0 - r0 * alpha))))
+    else:                                     # near-parabolic
+        chi = sqrt_mu * dt / r0
+
+    for _ in range(max_iter):
+        z = alpha * chi * chi
+        C = _stumpff_C(z)
+        S = _stumpff_S(z)
+        F = (r0 * vr0 / sqrt_mu * chi * chi * C +
+             (1.0 - alpha * r0) * chi ** 3 * S +
+             r0 * chi - sqrt_mu * dt)
+        dF = (r0 * vr0 / sqrt_mu * chi * (1.0 - alpha * chi * chi * S) +
+              (1.0 - alpha * r0) * chi * chi * C + r0)
+        dchi = F / dF
+        chi -= dchi
+        if abs(dchi) < tol:
+            break
+
+    z = alpha * chi * chi
+    C = _stumpff_C(z)
+    S = _stumpff_S(z)
+    f = 1.0 - chi * chi / r0 * C
+    g = dt - chi ** 3 / sqrt_mu * S
+    r_vec = f * r0_vec + g * v0_vec
+    r = np.linalg.norm(r_vec)
+    gdot = 1.0 - chi * chi / r * C
+    fdot = sqrt_mu / (r * r0) * (alpha * chi ** 3 * S - chi)
+    v_vec = fdot * r0_vec + gdot * v0_vec
+    return r_vec, v_vec
+
+
+def _march_conic_sundman(r1, v1, mu, delta_tau, tof):
+    """ONE Sundman march from (r1, v1) to tof (NO period bisection):
+        Δt_k = (|r_init| + |r_fin|)^(3/2) / √μ · Δτ   (implicit -> inner FP)
+    Nodes are Kepler-propagated from (r1, v1) by cumulative time; the final
+    segment is truncated to land exactly at tof. ~n_seg·(few) Kepler calls,
+    so ~15 ms — cheap (the old cost was the bisection's ~70 marches).
+    Returns (node_r, node_v, seg_dt)."""
+    sqrt_mu = np.sqrt(mu)
+    node_r = [r1.copy()]
+    node_v = [v1.copy()]
+    seg_dt = []
+    t_acc = 0.0
+    r_init_mag = np.linalg.norm(r1)
+    eps = 1e-9 * tof
+    while t_acc < tof - eps and len(seg_dt) < 100_000:
+        rstar = 2.0 * r_init_mag                       # predictor
+        dt = rstar ** 1.5 / sqrt_mu * delta_tau
+        rk, vk = _kepler_uv(r1, v1, t_acc + dt, mu)
+        for _ in range(30):                            # implicit rstar
+            rstar = r_init_mag + np.linalg.norm(rk)
+            dt_new = rstar ** 1.5 / sqrt_mu * delta_tau
+            if abs(dt_new - dt) <= 1e-12 * dt:
+                dt = dt_new
+                break
+            dt = dt_new
+            rk, vk = _kepler_uv(r1, v1, t_acc + dt, mu)
+        if t_acc + dt >= tof:                          # final partial segment
+            dt = tof - t_acc
+            rk, vk = _kepler_uv(r1, v1, tof, mu)
+        t_acc += dt
+        node_r.append(rk)
+        node_v.append(vk)
+        seg_dt.append(dt)
+        r_init_mag = np.linalg.norm(rk)
+    # Merge a degenerate near-zero final segment (truncation sliver) into the
+    # previous one. Such a Δt≈0 / Δθ≈0 leg is singular for Lambert and
+    # corrupts the optimizer warm start (huge chord/Δt velocity) -> spurious
+    # high-ΔV basin. Drop the second-to-last node so the final leg is whole.
+    if len(seg_dt) >= 2 and seg_dt[-1] < 0.1 * seg_dt[-2]:
+        seg_dt[-2] += seg_dt[-1]
+        seg_dt.pop()
+        node_r.pop(-2)
+        node_v.pop(-2)
+    return node_r, node_v, seg_dt
+
+
+def discretize_conic_segments(r1, v1, tof, mu, segs_per_rev=24):
+    """Self-consistent initial guess for the discretized transfer: ONE cheap
+    Sundman march of the conic with the fixed seed Δτ = 2π/segs_per_rev (the
+    1/√μ factor makes that the circular-orbit value, so segs_per_rev means
+    segments per physical rev). No Δτ bisection — Δτ and the node positions
+    are refined jointly by optimize_net_delta_v (BFGS). Because the nodes lie
+    on the conic with consistent Sundman Δt, the per-segment Lambert legs
+    reproduce the conic (node ΔV ~0), giving BFGS a good warm start.
+    Returns nodes, seg_dt, the seed Δτ, per-seg Lambert, and node ΔVs."""
+    r1n = np.linalg.norm(r1)
+    v1n = np.linalg.norm(v1)
+    inv_a = 2.0 / r1n - v1n * v1n / mu        # = 1/a (vis-viva)
+    elliptic = inv_a > 1e-12
+    T = 2.0 * np.pi * np.sqrt((1.0 / inv_a) ** 3 / mu) if elliptic else np.nan
+
+    delta_tau = 2.0 * np.pi / segs_per_rev
+    node_r, node_v_true, seg_dt = _march_conic_sundman(
+        r1, v1, mu, delta_tau, tof)
+    n_seg = len(seg_dt)
+
+    # Per-segment Lambert on the conic (for the initial-guess trajectory plot).
+    seg_v_out, seg_v_in = [], []
+    for k in range(n_seg):
+        sol = lambert_uv(node_r[k], node_r[k + 1], seg_dt[k], mu, prograde=True)
+        if sol is None:
+            seg_v_out.append(None)
+            seg_v_in.append(None)
+        else:
+            seg_v_out.append(sol[0])
+            seg_v_in.append(sol[1])
+
+    node_dv = []
+    for k in range(1, n_seg):
+        if seg_v_in[k - 1] is None or seg_v_out[k] is None:
+            node_dv.append(np.nan)
+        else:
+            node_dv.append(float(np.linalg.norm(seg_v_out[k] - seg_v_in[k - 1])))
+    node_dv = np.array(node_dv)
+
+    return {
+        "n_seg": n_seg, "T": T, "seg_dt": seg_dt,
+        "delta_tau": delta_tau, "dtau_resid": 0.0,
+        "node_r": node_r, "node_v_true": node_v_true,
+        "seg_v_out": seg_v_out, "seg_v_in": seg_v_in,
+        "node_dv": node_dv,
+    }
+
+
+def moon_gravity_node_delta_v(node_r, seg_dt, t_dep_s, mu_moon):
+    """Lumped Moon-gravity Δv at every node, using a ~= Δv/Δt:
+
+        Δv_k = a_moon(r_k, t_k) · Δt*_k
+
+    where Δt*_k is half the previous segment's flight time plus half the next
+    segment's (one-sided at the two endpoints). a_moon is the *direct* lunar
+    term  mu_moon·(r_moon - r_sc)/|r_moon - r_sc|³, matching the Moon term in
+    _dynamics_em (_moon_state gives the Moon position at absolute time t).
+    In this simplified scenario the Moon sits at R_TGT — the same circle the
+    conic arc arrives on — so the arrival node coincides with the Moon and the
+    point-mass term diverges. Nodes within MOON_ARRIVAL_OFFSET (≈lunar radius,
+    the model's "surface") are returned as NaN: the 1/r² model is meaningless
+    there.
+
+    Returns (dv [n_node,3] km/s, t_nodes [n_node] s absolute, min_sep km)."""
+    n_node = len(node_r)
+    n_seg = len(seg_dt)
+    t_nodes = t_dep_s + np.concatenate([[0.0], np.cumsum(seg_dt)])
+    dv = np.full((n_node, 3), np.nan)
+    min_sep = np.inf
+    for k in range(n_node):
+        prev_dt = seg_dt[k - 1] if k - 1 >= 0 else 0.0
+        next_dt = seg_dt[k] if k < n_seg else 0.0
+        dt_star = 0.5 * prev_dt + 0.5 * next_dt
+        r_moon, _ = _moon_state(t_nodes[k])
+        d = r_moon - node_r[k]
+        dn = np.linalg.norm(d)
+        min_sep = min(min_sep, dn)
+        if dn < MOON_ARRIVAL_OFFSET:          # inside the Moon: model invalid
+            continue
+        a_moon = mu_moon * d / dn ** 3
+        dv[k] = a_moon * dt_star
+    return dv, t_nodes, min_sep
+
+
+def plot_evolved_solutions(cells, segs_per_rev=24,
+                           out_name="evolved_solutions.png"):
+    """For each (t_dep_hr, t_arr_hr) grid cell: run the exact grid path
+    (conic seed -> discretize -> net-Δv min, target = Moon offset) and plot
+    the conic warm start vs the evolved (final) trajectory, with the same
+    ΔV the grid records plus the diagnostics that expose bad cells (min
+    node-to-Moon separation, dep/arr burns, Σ|Δv_net|, n_fail, ok)."""
+    n = len(cells)
+    nc = min(2, n)
+    nr = int(np.ceil(n / nc))
+    fig, axes = plt.subplots(nr, nc, figsize=(7.5 * nc, 7.0 * nr),
+                             squeeze=False)
+    th = np.linspace(0, 2 * np.pi, 360)
+    for idx, (t_dep_hr, t_arr_hr) in enumerate(cells):
+        ax = axes[idx // nc][idx % nc]
+        t_d = t_dep_hr * 3600.0
+        tof_s = (t_arr_hr - t_dep_hr) * 3600.0
+        r1, v_park = circ_state(R_PARK, THETA_PARK_0, N_PARK, t_d)
+        r_moon, v_moon = _moon_state(t_d + tof_s)
+        r_tgt = r_moon * (1.0 - MOON_ARRIVAL_OFFSET / np.linalg.norm(r_moon))
+        ok, v1x, v1y, _z, _x, _y, _z2 = _lambert_njit(
+            r1[0], r1[1], 0.0, r_tgt[0], r_tgt[1], 0.0,
+            tof_s, MU, 1, 0, 0, 1e-8, 400)
+        if not ok:
+            ax.set_title(f"t_dep={t_dep_hr:.2f},t_arr={t_arr_hr:.2f}: "
+                         "conic Lambert FAIL")
+            continue
+        v1 = np.array([v1x, v1y, 0.0])
+        d = discretize_conic_segments(r1, v1, tof_s, MU, segs_per_rev)
+        opt = optimize_net_delta_v(r1, r_tgt, d["node_r"], d["seg_dt"],
+                                   t_d, MU, MU_MOON)
+        nrf = opt["node_r"]
+        sdf = opt["seg_dt"]
+        # ΔV exactly as the grid records it
+        s0 = lambert_uv(nrf[0], nrf[1], sdf[0], MU, prograde=True)
+        sN = lambert_uv(nrf[-2], nrf[-1], sdf[-1], MU, prograde=True)
+        dv_dep = np.linalg.norm(s0[0] - v_park) if s0 else np.nan
+        dv_arr = np.linalg.norm(v_moon - sN[1]) if sN else np.nan
+        dv_tot = dv_dep + dv_arr + opt["sum_final"]
+        # min node-to-Moon separation along the evolved path
+        tn = t_d + np.concatenate([[0.0], np.cumsum(sdf)])
+        seps = [np.linalg.norm(_moon_state(tn[k])[0] - np.asarray(nrf[k]))
+                for k in range(len(nrf))]
+        min_sep = min(seps)
+
+        # reference circles / bodies
+        ax.plot(R_PARK * np.cos(th), R_PARK * np.sin(th), "k--",
+                lw=0.5, alpha=0.4)
+        ax.plot(R_TGT * np.cos(th), R_TGT * np.sin(th), "k--",
+                lw=0.5, alpha=0.4)
+        ax.add_patch(plt.Circle((0, 0), R_EARTH, color="#6fa8dc", alpha=0.5))
+        # Moon keep-out ring at the arrival node
+        ax.add_patch(plt.Circle((r_tgt[0], r_tgt[1]), MOON_ARRIVAL_OFFSET,
+                                color="grey", alpha=0.25))
+        # conic warm start (blue) vs evolved (red)
+        cs, _, _ = _piecewise_lambert_xy(d["node_r"], d["seg_dt"], MU)
+        for leg in cs:
+            if leg is not None:
+                ax.plot(leg[:, 0], leg[:, 1], color="#1f77b4",
+                        lw=1.0, alpha=0.5)
+        es, _, _ = _piecewise_lambert_xy(nrf, sdf, MU)
+        for leg in es:
+            if leg is not None:
+                ax.plot(leg[:, 0], leg[:, 1], color="#d62728", lw=1.6)
+        Pf = np.array(nrf)
+        ax.plot(Pf[:, 0], Pf[:, 1], "o", color="#2ca02c", ms=3.5)
+        ax.plot([r1[0]], [r1[1]], "ko", ms=6)
+        ax.plot([r_tgt[0]], [r_tgt[1]], "k*", ms=13)
+        ax.set_aspect("equal")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        flag = "" if opt["ok"] else "  [NOT-CONV]"
+        ax.set_title(
+            f"t_dep={t_dep_hr:.2f}, t_arr={t_arr_hr:.2f} hr  "
+            f"ΔV={dv_tot:.3f} km/s{flag}\n"
+            f"dep={dv_dep:.3f}  arr={dv_arr:.3f}  "
+            f"Σ|Δv_net|={opt['sum_final']*1000:.2f} m/s  "
+            f"nf={opt['n_fail']}  min Moon sep={min_sep:.0f} km",
+            fontsize=9)
+        print(f"  ({t_dep_hr:.2f},{t_arr_hr:.2f}) dv={dv_tot:.4f} "
+              f"dep={dv_dep:.4f} arr={dv_arr:.4f} "
+              f"sumfinal={opt['sum_final']*1000:.3f}m/s nf={opt['n_fail']} "
+              f"ok={opt['ok']} min_sep={min_sep:.0f}km n_seg={d['n_seg']}")
+    for k in range(n, nr * nc):
+        axes[k // nc][k % nc].axis("off")
+    fig.suptitle("Evolved discretized solutions at selected grid cells "
+                 "(blue = conic warm start, red = evolved; grey ring = "
+                 "Moon keep-out)", fontsize=12)
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    fig.savefig(out_name, dpi=120)
+    print(f"Saved {out_name}")
+
+
+def plot_solution_evolution(place=(0.5, 130.0), segs_per_rev=24,
+                            out_name="solution_evolution.png"):
+    """ONE figure: the discretized trajectory for ONE solution at every BFGS
+    iteration (one subplot per iteration). Shows how the net-Δv-minimizing
+    optimizer bends the conic warm start into the Moon-perturbed arc."""
+    t_dep_hr, t_arr_hr = place
+    t_d = t_dep_hr * 3600.0
+    tof_s = (t_arr_hr - t_dep_hr) * 3600.0
+    r1, v_park = circ_state(R_PARK, THETA_PARK_0, N_PARK, t_d)
+    r_moon, v_moon = _moon_state(t_d + tof_s)
+    r_tgt = r_moon * (1.0 - MOON_ARRIVAL_OFFSET / np.linalg.norm(r_moon))
+
+    ok, v1x, v1y, _z1, _vx, _vy, _z2 = _lambert_njit(
+        r1[0], r1[1], 0.0, r_tgt[0], r_tgt[1], 0.0,
+        tof_s, MU, 1, 0, 0, 1e-8, 400)
+    v1 = np.array([v1x, v1y, 0.0])
+    d = discretize_conic_segments(r1, v1, tof_s, MU, segs_per_rev)
+    opt = optimize_net_delta_v(r1, r_tgt, d["node_r"], d["seg_dt"],
+                               t_d, MU, MU_MOON, record_iters=True)
+    its = opt["iters"]
+    n = len(its)
+    nc = int(np.ceil(np.sqrt(n)))
+    nr = int(np.ceil(n / nc))
+    fig, axes = plt.subplots(nr, nc, figsize=(3.2 * nc, 3.2 * nr),
+                             squeeze=False)
+    th = np.linspace(0, 2 * np.pi, 240)
+    # common extent from the initial guess so all panels share a frame
+    all0 = np.array(its[0]["node_r"])
+    span = 1.15 * np.max(np.abs(all0[:, :2]))
+    for idx in range(nr * nc):
+        ax = axes[idx // nc][idx % nc]
+        if idx >= n:
+            ax.axis("off")
+            continue
+        it = its[idx]
+        ax.plot(R_PARK * np.cos(th), R_PARK * np.sin(th), "k--",
+                lw=0.4, alpha=0.4)
+        ax.plot(R_TGT * np.cos(th), R_TGT * np.sin(th), "k--",
+                lw=0.4, alpha=0.4)
+        ax.add_patch(plt.Circle((0, 0), R_EARTH, color="#6fa8dc", alpha=0.5))
+        segs, _, _ = _piecewise_lambert_xy(it["node_r"], it["seg_dt"], MU)
+        for leg in segs:
+            if leg is not None:
+                ax.plot(leg[:, 0], leg[:, 1], color="#d62728", lw=1.0)
+        P = np.array(it["node_r"])
+        ax.plot(P[:, 0], P[:, 1], "o", color="#2ca02c", ms=2.5)
+        ax.plot([r1[0]], [r1[1]], "ko", ms=4)
+        ax.plot([r_tgt[0]], [r_tgt[1]], "k*", ms=9)
+        ax.set_xlim(-span, span)
+        ax.set_ylim(-span, span)
+        ax.set_aspect("equal")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        tag = "init" if idx == 0 else f"it {idx}"
+        ax.set_title(f"{tag}: Σ|Δv_net|={it['sum'] * 1000:.1f} m/s"
+                     + (f"  nf={it['n_fail']}" if it["n_fail"] else ""),
+                     fontsize=8)
+    fig.suptitle(
+        f"Net-Δv minimization, one solution  t_dep={t_dep_hr:.2f} hr, "
+        f"t_arr={t_arr_hr:.2f} hr  ({d['n_seg']} segs, {n - 1} BFGS iters, "
+        f"Σ|Δv_net|: {opt['sum_init'] * 1000:.0f}→"
+        f"{opt['sum_final'] * 1000:.3f} m/s)", fontsize=12)
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    fig.savefig(out_name, dpi=120)
+    print(f"Saved {out_name}  ({n} iterations, "
+          f"Σ|Δv_net| {opt['sum_init'] * 1000:.1f} -> "
+          f"{opt['sum_final'] * 1000:.4f} m/s, ok={opt['ok']})")
+
+
+def _piecewise_lambert_xy(node_r, seg_dt, mu, n_pts=30):
+    """Sample the piecewise trajectory: per segment solve Lambert between the
+    given nodes, then propagate that leg analytically. Returns a list of
+    (xs, ys) arrays (one per segment) plus the per-segment v_out / v_in."""
+    segs, vouts, vins = [], [], []
+    for k in range(len(seg_dt)):
+        sol = lambert_uv(node_r[k], node_r[k + 1], seg_dt[k], mu,
+                         prograde=True)
+        if sol is None:
+            segs.append(None)
+            vouts.append(None)
+            vins.append(None)
+            continue
+        vo, vi = sol
+        ss = np.linspace(0.0, seg_dt[k], n_pts)
+        leg = np.array([_kepler_uv(node_r[k], vo, s, mu)[0] for s in ss])
+        segs.append(leg)
+        vouts.append(vo)
+        vins.append(vi)
+    return segs, vouts, vins
+
+
+def optimize_net_delta_v(r1, r2, node_r0, seg_dt, t_dep_s, mu, mu_moon,
+                         record_iters=False):
+    """Joint BFGS solve over the decision vector  x = [Δτ, interior nodes].
+
+    Segment time is explicit from the decision vector (no Δτ bisection / no
+    Kepler marching):
+
+        Δt_k = (|r_k| + |r_{k+1}|)^(3/2) / √μ · Δτ
+
+    so rstar is never implicit. Δτ is otherwise free; the flight-time closure
+    is added as a penalty. Objective minimized by BFGS:
+
+        J = Σ_k ‖Δv_net_k‖²  +  W·((Σ Δt_k − tof)/tof)²
+        Δv_net_k = (v_out_k − v_in_k) − a_moon(r_k, t_k)·Δt*_k
+
+    Endpoints r1, r2 and the flight time tof = Σ seg_dt are fixed; interior
+    positions are nondimensionalized by L so the vector is well scaled for
+    BFGS (Δτ ≈ 2π/segs with the 1/√μ factor). Returns the optimized
+    nodes / seg_dt / Δτ and init+final Δv_net diagnostics (same dict keys as
+    before, plus 'seg_dt', 'delta_tau', 'time_resid')."""
+    n_seg = len(seg_dt)
+    n_int = n_seg - 1
+    W = 1.0e4                                   # flight-time-closure weight
+    FAIL_PEN = 1.0                              # canonical Δv per bad Lambert
+
+    # ---- Canonical units: LU = R_TGT, TU = sqrt(LU^3/mu_SI)  =>  mu = 1.
+    # All optimizer-internal math is O(1)-scaled (the SI km/s problem is
+    # pathologically conditioned for BFGS: positions ~1e5, Δτ ~0.2). Inputs
+    # are converted in here; outputs are converted back to SI on return.
+    mu_SI = float(mu)
+    NT_SI = globals()["N_TGT"]                  # module globals (N_TGT/R_TGT
+    LU = float(globals()["R_TGT"])              # are shadowed as locals below)
+    TU = np.sqrt(LU ** 3 / mu_SI)
+    VU = LU / TU
+    seg_dt_c = np.asarray(seg_dt, dtype=np.float64) / TU
+    node0 = np.asarray(node_r0, dtype=np.float64)[:, :2] / LU
+    r1xy = np.asarray(r1[:2], dtype=np.float64) / LU
+    r2xy = np.asarray(r2[:2], dtype=np.float64) / LU
+
+    # Canonical shadows of the names the closures use (mu = 1, sqrt_mu = 1).
+    mu = 1.0
+    sqrt_mu = 1.0
+    mu_moon = mu_moon / mu_SI
+    t_dep_s = t_dep_s / TU
+    R_TGT = LU / LU                                        # = 1.0
+    N_TGT = NT_SI * TU
+    OFF = MOON_ARRIVAL_OFFSET / LU
+    tof = float(seg_dt_c.sum())
+    L = 1.0                                                # positions already O(1)
+
+    # Fixed per-segment weights `mult` (as in handcrafted_trajectory_design):
+    #   Δt_k = Δτ · rstar_k^1.5/√μ · mult_k.  Calibrated once so x0 (Δτ=dtau0,
+    # nodes=node0) reproduces the discretization's seg_dt EXACTLY — including
+    # the truncated final segment a single global Δτ can't represent. So x0 is
+    # the exact conic split (Σ|Δv_net| ≈ Σ|Δv_moon|) and Δτ stays the single
+    # time decision variable. `mult` is a constant factor in Δt_k, so the
+    # analytic gradient is unchanged (it folds into `coef`).
+    rmag0 = np.linalg.norm(node0, axis=1)
+    rstar0_seg = rmag0[:-1] + rmag0[1:]                     # (n_seg,)
+    dtau0 = 2.0 * np.pi / 24.0                              # arbitrary ref
+    mult = seg_dt_c * sqrt_mu / (rstar0_seg ** 1.5 * dtau0)
+
+    x0 = np.empty(1 + 2 * n_int)
+    x0[0] = dtau0
+    x0[1::2] = node0[1:n_seg, 0] / L
+    x0[2::2] = node0[1:n_seg, 1] / L
+
+    z_cache = [0.0] * n_seg
+
+    def _pack(x):
+        """Per-segment Lambert + analytic Jacobians at decision vector x."""
+        dtau = x[0]
+        P = np.zeros((n_seg + 1, 2))
+        P[0] = r1xy
+        P[-1] = r2xy
+        P[1:n_seg, 0] = x[1::2] * L
+        P[1:n_seg, 1] = x[2::2] * L
+        rmag = np.linalg.norm(P, axis=1)
+        rstar = rmag[:-1] + rmag[1:]                       # (n_seg,)
+        coef = rstar ** 1.5 / sqrt_mu * mult              # Δt = coef·Δτ
+        Dt = coef * dtau
+        f = 1.5 * Dt / rstar
+        gA = f[:, None] * (P[:-1] / rmag[:-1, None])       # ∂Δt_k/∂P_k
+        gB = f[:, None] * (P[1:] / rmag[1:, None])         # ∂Δt_k/∂P_{k+1}
+        t_node = t_dep_s + np.concatenate([[0.0], np.cumsum(Dt)])
+        v1 = np.zeros((n_seg, 2))
+        v2 = np.zeros((n_seg, 2))
+        J1r1 = np.zeros((n_seg, 2, 2))
+        J1r2 = np.zeros((n_seg, 2, 2))
+        J1dt = np.zeros((n_seg, 2))
+        J2r1 = np.zeros((n_seg, 2, 2))
+        J2r2 = np.zeros((n_seg, 2, 2))
+        J2dt = np.zeros((n_seg, 2))
+        okk = np.ones(n_seg, dtype=bool)
+        I2 = np.eye(2)
+        for k in range(n_seg):
+            dtk = Dt[k]
+            o = (lambert_with_jac_nb(P[k], P[k + 1], dtk, mu, z_cache[k])
+                 if dtk > 0.0 else (0,))
+            if dtk > 0.0 and o[0] != 0:
+                v1[k], v2[k] = o[1], o[2]
+                J1r1[k], J1r2[k], J1dt[k] = o[3], o[4], o[5]
+                J2r1[k], J2r2[k], J2dt[k] = o[6], o[7], o[8]
+                z_cache[k] = o[9]
+            else:
+                # Straight-line constant-velocity fallback for a degenerate
+                # sub-arc, with a CONSISTENT Jacobian, so the gradient is
+                # always defined and BFGS can step away from the degeneracy
+                # (instead of dying at nit=0 on a FAIL_PEN flat spot — this
+                # matches handcrafted_trajectory_design). okk[k]=False marks
+                # that this segment is not a true Lambert arc.
+                okk[k] = False
+                dts = dtk if dtk > 1e-9 else 1e-9
+                chord = P[k + 1] - P[k]
+                v1[k] = v2[k] = chord / dts
+                J1r1[k] = J2r1[k] = -I2 / dts
+                J1r2[k] = J2r2[k] = I2 / dts
+                J1dt[k] = J2dt[k] = -chord / (dts * dts)
+        return (dtau, P, rmag, rstar, coef, Dt, gA, gB, t_node,
+                v1, v2, J1r1, J1r2, J1dt, J2r1, J2r2, J2dt, okk)
+
+    def _node_terms(pk):
+        """Per interior node k (i = k-1): (dvnet, S=2·dvnet, a, M, vmoon,
+        Dtstar, w=∂dvnet/∂t_node[k]) or None if a touching leg failed."""
+        (dtau, P, rmag, rstar, coef, Dt, gA, gB, t_node,
+         v1, v2, J1r1, J1r2, J1dt, J2r1, J2r2, J2dt, okk) = pk
+        out = []
+        for k in range(1, n_seg):
+            # v1/v2/J always populated now (real Lambert or straight-line
+            # fallback), so every node yields a differentiable term.
+            Dtstar = 0.5 * (Dt[k - 1] + Dt[k])
+            th = THETA_TGT_0 + N_TGT * t_node[k]
+            rm = R_TGT * np.array([np.cos(th), np.sin(th)])
+            vm = R_TGT * N_TGT * np.array([-np.sin(th), np.cos(th)])
+            dvec = rm - P[k]
+            raw = np.linalg.norm(dvec)
+            dist = max(raw, OFF)
+            a = mu_moon * dvec / dist ** 3
+            dvnet = (v1[k] - v2[k - 1]) - a * Dtstar
+            if raw >= OFF:
+                M = mu_moon * (np.eye(2) / dist ** 3 -
+                               3.0 * np.outer(dvec, dvec) / dist ** 5)
+            else:                                         # clamp: a frozen
+                M = mu_moon * np.eye(2) / dist ** 3
+            w = -(M @ vm) * Dtstar          # ∂dvnet/∂t_node[k]
+            out.append((dvnet, 2.0 * dvnet, a, M, vm, Dtstar, w))
+        return out
+
+    # ---- Levenberg–Marquardt / least-squares form (as in the reference):
+    # residual r = [ Δv_net_k components (canonical) , √W·tr ] so that
+    # Σ r² = Σ‖Δv_net‖² + W·tr² = J. Gauss-Newton/LM exploits this
+    # sum-of-squares structure and is far more robust than BFGS on the
+    # degenerate-sub-arc non-convexity.
+    n_var = 1 + 2 * n_int
+    n_res = 2 * n_int + 1
+    sqrtW = np.sqrt(W)
+
+    def _resid(x):
+        pk = _pack(x)
+        nt = _node_terms(pk)
+        Dt = pk[5]
+        r = np.empty(n_res)
+        for i, t in enumerate(nt):
+            r[2 * i] = t[0][0]
+            r[2 * i + 1] = t[0][1]
+        r[-1] = sqrtW * (float(np.sum(Dt)) - tof) / tof
+        return r
+
+    def _jac(x):
+        pk = _pack(x)
+        (dtau, P, rmag, rstar, coef, Dt, gA, gB, t_node,
+         v1, v2, J1r1, J1r2, J1dt, J2r1, J2r2, J2dt, okk) = pk
+        nt = _node_terms(pk)
+        Jm = np.zeros((n_res, n_var))
+        cT = sqrtW / tof
+        for iv in range(n_var):
+            dP = np.zeros((n_seg + 1, 2))
+            dDt = np.zeros(n_seg)
+            if iv == 0:                                    # Δτ
+                dDt[:] = coef
+            else:
+                node = (iv - 1) // 2 + 1                    # interior node
+                ax = (iv - 1) % 2
+                dP[node, ax] = L
+                dDt[node - 1] = gB[node - 1, ax] * L
+                dDt[node] = gA[node, ax] * L
+            dtnode = np.concatenate([[0.0], np.cumsum(dDt)])
+            Jm[-1, iv] = cT * dDt.sum()
+            for i, k in enumerate(range(1, n_seg)):
+                dvnet, S, a, M, vm, Dtstar, w = nt[i]
+                dv1 = J1r1[k] @ dP[k] + J1r2[k] @ dP[k + 1] + J1dt[k] * dDt[k]
+                dv2 = (J2r1[k - 1] @ dP[k - 1] + J2r2[k - 1] @ dP[k] +
+                       J2dt[k - 1] * dDt[k - 1])
+                dconic = dv1 - dv2
+                dDtstar = 0.5 * (dDt[k - 1] + dDt[k])
+                ddvec = vm * dtnode[k] - dP[k]
+                ddmoon = (M @ ddvec) * Dtstar + a * dDtstar
+                dnet = dconic - ddmoon
+                Jm[2 * i, iv] = dnet[0]
+                Jm[2 * i + 1, iv] = dnet[1]
+        return Jm
+
+    def _vectors(x):
+        pk = _pack(x)
+        P = pk[1]
+        Dt = pk[5]
+        okk = pk[-1]
+        nt = _node_terms(pk)
+        rn = np.full((n_int, 3), np.nan)
+        dvm = np.full((n_int, 3), np.nan)
+        dvn = np.full((n_int, 3), np.nan)
+        nf = 0
+        for i, k in enumerate(range(1, n_seg)):
+            rn[i] = (P[k, 0], P[k, 1], 0.0)               # full row finite
+            dvnet, S, a, M, vm, Dtstar, w = nt[i]
+            dvn[i] = (dvnet[0], dvnet[1], 0.0)
+            avm = a * Dtstar
+            dvm[i] = (avm[0], avm[1], 0.0)
+            if not (okk[k] and okk[k - 1]):               # straight-line seg
+                nf += 1                                   # -> not a true arc
+        node_r = [np.array([P[k, 0], P[k, 1], 0.0])
+                  for k in range(n_seg + 1)]
+        tr = (float(np.sum(Dt)) - tof) / tof
+        return node_r, list(Dt), float(pk[0]), rn, dvm, dvn, nf, tr
+
+    nr0c, _, _, rn0c, dvm0c, dvn0c, _, _ = _vectors(x0)
+
+    iters = []                                  # per-iteration snapshots (SI)
+
+    def _snap(xk):
+        nrc, dtc, _, _, _, dvc, nfk, trk = _vectors(np.asarray(xk))
+        iters.append({
+            "node_r": [np.array([p[0] * LU, p[1] * LU, 0.0]) for p in nrc],
+            "seg_dt": [dd * TU for dd in dtc],
+            "sum": float(np.nansum(np.linalg.norm(dvc * VU, axis=1))),
+            "n_fail": int(nfk), "tres": float(trk),
+        })
+
+    if record_iters:
+        _snap(x0)                               # frame 0 = initial guess
+    # Levenberg–Marquardt (analytic Jacobian), the reference's solver for
+    # this sum-of-squared-residuals transcription.
+    sol = least_squares(_resid, x0, jac=_jac, method="lm",
+                        xtol=1e-12, ftol=1e-12, gtol=1e-12, max_nfev=400)
+    if record_iters:
+        _snap(sol.x)                            # frame 1 = converged
+    nrfc, dtfc, dtauf, rnfc, dvmfc, dvnfc, nff, trf = _vectors(sol.x)
+
+    # ---- Convert canonical -> SI for all returned quantities.
+    pconv = np.array([LU, LU, 1.0])
+    node_r = [np.array([p[0] * LU, p[1] * LU, 0.0]) for p in nrfc]
+    seg_dt_out = [d * TU for d in dtfc]
+    rn0, dvm0, dvn0 = rn0c * pconv, dvm0c * VU, dvn0c * VU
+    rnf, dvmf, dvnf = rnfc * pconv, dvmfc * VU, dvnfc * VU
+
+    # Departure/arrival velocities straight from the optimizer's own solution
+    # (first-leg v_out, last-leg v_in) so callers don't re-solve the legs with
+    # a different Lambert solver — that disagreement was dropping converged
+    # cells as spurious lambert_fail holes.
+    pkf = _pack(sol.x)
+    v_dep = np.array([pkf[9][0, 0], pkf[9][0, 1], 0.0]) * VU      # v1[0]
+    v_arr = np.array([pkf[10][-1, 0], pkf[10][-1, 1], 0.0]) * VU  # v2[-1]
+
+    mag_init = np.linalg.norm(dvn0, axis=1)
+    mag_fin = np.linalg.norm(dvnf, axis=1)
+    sum_final = float(np.nansum(mag_fin))
+    # "Converged" = a ballistic arc was found: net Δv driven to ~0 and the
+    # flight time closed. We do NOT require n_fail==0 — a single straight-line
+    # fallback on a sub-arc that crosses the 180° Lambert singularity still
+    # yields a valid net-zero trajectory (garbage cells fail sum_final<5e-3
+    # anyway, with leftover net Δv of 0.1–30 km/s).
+    ok = bool(sum_final < 5.0e-3 and abs(trf) < 1.0e-4)
+    return {
+        "node_r": node_r,
+        "seg_dt": seg_dt_out, "delta_tau": float(dtauf),
+        "time_resid": float(trf),
+        "v_dep": v_dep, "v_arr": v_arr,
+        "int_r0": rn0, "dv_moon0": dvm0, "dv_net0": dvn0,
+        "int_r": rnf, "dv_moon": dvmf, "dv_net": dvnf,
+        "mag_init": mag_init, "mag_final": mag_fin,
+        "sum_init": float(np.nansum(mag_init)),
+        "sum_final": sum_final,
+        "ok": ok, "n_fail": int(nff), "iters": iters,
+    }
+
+
+def _solve_cell_discretized(args):
+    """Worker: conic N=0 Lambert seed -> Sundman discretization -> net-Δv
+    minimization (Moon-perturbed). Returns (i, j, dv_total, status).
+    dv_total = |Δv_dep| + |Δv_arr| + Σ|Δv_net|  (the last term ≈0 when the
+    optimizer finds the ballistic Moon-perturbed arc)."""
+    i, j, t_d, tof_s, segs_per_rev, mu_moon = args
+    th_park = THETA_PARK_0 + N_PARK * t_d
+    r1 = np.array([R_PARK * np.cos(th_park), R_PARK * np.sin(th_park), 0.0])
+    v_park = np.array([-R_PARK * N_PARK * np.sin(th_park),
+                        R_PARK * N_PARK * np.cos(th_park), 0.0])
+    r_moon, v_moon = _moon_state(t_d + tof_s)
+    r_target = r_moon * (1.0 - MOON_ARRIVAL_OFFSET / np.linalg.norm(r_moon))
+
+    ok, v1x, v1y, _z1, v2x, v2y, _z2 = _lambert_njit(
+        r1[0], r1[1], 0.0, r_target[0], r_target[1], 0.0,
+        tof_s, MU, 1, 0, 0, 1e-8, 400)
+    if not ok:
+        return i, j, np.nan, STATUS_LAMBERT_FAIL
+    if abs(r1[0] * v1y - r1[1] * v1x) < H_MIN_SEED:
+        return i, j, np.nan, STATUS_SEED_DEGENERATE
+    # Cheap conic-seed screen: skip cells already far too expensive.
+    dv1_seed = np.hypot(v1x - v_park[0], v1y - v_park[1])
+    dv2_seed = np.hypot(v_moon[0] - v2x, v_moon[1] - v2y)
+    if dv1_seed + dv2_seed > DV_MAX_SEED:
+        return i, j, np.nan, STATUS_SEED_OVER_CAP
+
+    v1 = np.array([v1x, v1y, 0.0])
+    try:
+        d = discretize_conic_segments(r1, v1, tof_s, MU, segs_per_rev)
+        opt = optimize_net_delta_v(r1, r_target, d["node_r"], d["seg_dt"],
+                                   t_d, MU, mu_moon)
+    except Exception:
+        return i, j, np.nan, STATUS_MAX_ITER
+
+    # Only a genuinely-converged cell yields a meaningful ΔV.
+    if not opt["ok"]:
+        return i, j, np.nan, STATUS_MAX_ITER
+    # Dep/arr burns from the optimizer's own first/last leg velocities (no
+    # second-solver re-solve, which used to drop converged cells).
+    dv_total = (float(np.linalg.norm(opt["v_dep"] - v_park)) +
+                float(np.linalg.norm(v_moon - opt["v_arr"])) +
+                opt["sum_final"])
+    return i, j, dv_total, STATUS_OK
+
+
+def run_grid_discretized(segs_per_rev=24, verbose=True, n_workers=None,
+                         mu_moon=None):
+    """Porkchop grid (N=0) solved by the discretized net-Δv-minimization
+    method. mu_moon=None uses MU_MOON (Moon-perturbed); pass 0.0 for the pure
+    two-body (Kepler) grid on the identical cells/target/screen.
+    Returns (dv, status) — each shape (n_TOF, n_DEP)."""
+    import time
+    if mu_moon is None:
+        mu_moon = MU_MOON
+    n_t, n_d = len(TOF), len(T_DEP)
+    dv = np.full((n_t, n_d), np.nan)
+    status = np.full((n_t, n_d), -1, dtype=np.int8)
+
+    if n_workers is None:
+        n_workers = mp.cpu_count()
+    cell_args = [
+        (i, j, float(T_DEP[j] * 3600.0), float(TOF[i] * 3600.0),
+         segs_per_rev, mu_moon)
+        for i in range(n_t) for j in range(n_d)
+    ]
+    chunksize = max(1, len(cell_args) // (n_workers * 4))
+    total = len(cell_args)
+    t_start = time.time()
+    with mp.Pool(n_workers) as pool:
+        for n_done, (i, j, val, st) in enumerate(
+            pool.imap_unordered(_solve_cell_discretized, cell_args,
+                                chunksize=chunksize), 1
+        ):
+            dv[i, j] = val
+            status[i, j] = st
+            if verbose:
+                pct = 100.0 * n_done / total
+                elapsed = time.time() - t_start
+                eta = elapsed * (total - n_done) / n_done if n_done else 0.0
+                print(f"\r  disc-grid: {n_done}/{total}  ({pct:5.1f}%)  "
+                      f"elapsed {elapsed:6.1f}s  ETA {eta:6.1f}s",
+                      end="", flush=True)
+    if verbose:
+        print()
+        n_ok = int(np.sum(status == STATUS_OK))
+        n_lam = int(np.sum(status == STATUS_LAMBERT_FAIL))
+        n_mi = int(np.sum(status == STATUS_MAX_ITER))
+        n_dg = int(np.sum(status == STATUS_SEED_DEGENERATE))
+        n_cap = int(np.sum(status == STATUS_SEED_OVER_CAP))
+        print(f"  status: ok={n_ok}, lambert_fail={n_lam}, "
+              f"not_converged={n_mi}, seed_degen={n_dg}, "
+              f"seed_over_cap={n_cap}")
+        if n_ok:
+            print(f"  discretized grid min ΔV = {np.nanmin(dv):.4f} km/s")
+    return dv, status
+
+
+def plot_discretized_compare(dv_total, places, segs_per_rev=24,
+                             out_name="compare_discretized.png"):
+    """One figure: the conic porkchop plus three solution panels. Each panel
+    shows the undiscretized conic, the initial-guess discretization, and the
+    net-Δv-minimized (Moon-perturbed) final solution."""
+    fig, axes = plt.subplots(2, 2, figsize=(15, 14))
+    ax_pork = axes[0, 0]
+    sol_axes = [axes[0, 1], axes[1, 0], axes[1, 1]]
+
+    # ---- Porkchop panel (same construction as plot_porkchop_arrival) ----
+    t_arr_grid = np.linspace(T_DEP[0] + TOF[0], T_DEP[-1] + TOF[-1], 300)
+    DEP, ARR = np.meshgrid(T_DEP, t_arr_grid)
+    TOF_query = ARR - DEP
+    Z = np.full_like(DEP, np.nan)
+    for j in range(len(T_DEP)):
+        col_tof = TOF_query[:, j]
+        valid = (col_tof >= TOF[0]) & (col_tof <= TOF[-1])
+        Z[valid, j] = np.interp(col_tof[valid], TOF, dv_total[:, j])
+    vmin = float(np.nanmin(Z))
+    vmax = vmin + 2.0
+    Z_clip = np.where(Z > vmax, np.nan, Z)
+    levels = np.linspace(vmin, vmax, 40)
+    ax_pork.set_facecolor("lightgrey")
+    cs = ax_pork.contourf(DEP, ARR, Z_clip, levels=levels, cmap="viridis",
+                          extend="neither")
+    ax_pork.contour(DEP, ARR, Z_clip, levels=12, colors="k",
+                    linewidths=0.4, alpha=0.5)
+    plt.colorbar(cs, ax=ax_pork, label="Total ΔV [km/s]")
+    ax_pork.set_xlabel("Departure time [hr]")
+    ax_pork.set_ylabel("Arrival time [hr]")
+    ax_pork.set_title(f"Porkchop (conic, N=0)   min ΔV = {vmin:.3f} km/s")
+
+    # ---- Three solution panels ----
+    for idx, (ax, (t_dep_hr, t_arr_hr)) in enumerate(zip(sol_axes, places), 1):
+        t_d = t_dep_hr * 3600.0
+        tof_s = (t_arr_hr - t_dep_hr) * 3600.0
+        r1, v_park = circ_state(R_PARK, THETA_PARK_0, N_PARK, t_d)
+        r2, v_tgt = circ_state(R_TGT, THETA_TGT_0, N_TGT, t_d + tof_s)
+
+        # Mark this place on the porkchop.
+        ax_pork.plot([t_dep_hr], [t_arr_hr], "*", color="red", ms=15)
+        ax_pork.annotate(f"({idx})", (t_dep_hr, t_arr_hr),
+                         textcoords="offset points", xytext=(6, 4),
+                         color="red", fontsize=11, fontweight="bold")
+
+        sol = lambert_uv(r1, r2, tof_s, MU, prograde=True)
+        if sol is None:
+            ax.set_title(f"({idx}) t_dep={t_dep_hr:.2f}, "
+                         f"t_arr={t_arr_hr:.2f} hr — no Lambert solution")
+            continue
+        v_t1, v_t2 = sol
+        dv_tot = np.linalg.norm(v_t1 - v_park) + np.linalg.norm(v_tgt - v_t2)
+
+        # Undiscretized conic, time-sampled with the same propagator the
+        # discretization uses (so any visible gap is a real mismatch).
+        ts = np.linspace(0.0, tof_s, 600)
+        und = np.array([_kepler_uv(r1, v_t1, t, MU)[0] for t in ts])
+        ax.plot(und[:, 0], und[:, 1], color="#1f77b4", lw=2.6, alpha=0.9,
+                label=f"Undiscretized  (ΔV={dv_tot:.3f} km/s)")
+
+        # Initial guess: conic discretization (per-segment Lambert).
+        d = discretize_conic_segments(r1, v_t1, tof_s, MU, segs_per_rev)
+        for k in range(d["n_seg"]):
+            vo = d["seg_v_out"][k]
+            if vo is None:
+                continue
+            ss = np.linspace(0.0, d["seg_dt"][k], 30)
+            seg = np.array([_kepler_uv(d["node_r"][k], vo, s, MU)[0]
+                            for s in ss])
+            ax.plot(seg[:, 0], seg[:, 1], color="#d62728", lw=1.0,
+                    linestyle="--", alpha=0.8,
+                    label="Initial guess (conic disc.)" if k == 0 else None)
+        nodes0 = np.array(d["node_r"])
+        ax.plot(nodes0[:, 0], nodes0[:, 1], "o", color="#d62728",
+                ms=3.0, alpha=0.7)
+
+        # Minimize Σ|Δv_net|, Δv_net = Δv_conic − Δv_moon, over interior nodes.
+        opt = optimize_net_delta_v(r1, r2, d["node_r"], d["seg_dt"],
+                                   t_d, MU, MU_MOON)
+        segs_f, _, _ = _piecewise_lambert_xy(opt["node_r"], opt["seg_dt"], MU)
+        for k, leg in enumerate(segs_f):
+            if leg is None:
+                continue
+            ax.plot(leg[:, 0], leg[:, 1], color="#2ca02c", lw=1.6,
+                    alpha=0.9,
+                    label="Final (min Σ|Δv_net|)" if k == 0 else None)
+        nodes_f = np.array(opt["node_r"])
+        ax.plot(nodes_f[:, 0], nodes_f[:, 1], "o", color="#2ca02c", ms=3.5)
+
+        # Δv vectors at the interior nodes, for BOTH the initial guess and the
+        # final solution. Δv_moon shares one scale (init vs final comparable);
+        # each Δv_net field gets its own scale so it stays visible (init
+        # Δv_net≈−Δv_moon is large; final Δv_net≈0 for converged places).
+        span = max(np.ptp(und[:, 0]), np.ptp(und[:, 1]))
+        arrow_len = 10.0                               # 10x longer vectors
+
+        def _Smag(*fields):
+            m = max((float(np.nanmax(np.hypot(f[:, 0], f[:, 1])))
+                     for f in fields
+                     if np.isfinite(f).any() and np.nanmax(
+                         np.hypot(f[:, 0], f[:, 1])) > 0), default=0.0)
+            return (m / (arrow_len * 0.18 * span)) if m > 0 else 1.0
+
+        def _sum_mps(f):
+            return np.nansum(np.hypot(f[:, 0], f[:, 1])) * 1000.0
+
+        ir0, dvm0, dvn0 = opt["int_r0"], opt["dv_moon0"], opt["dv_net0"]
+        ir, dvm, dvn = opt["int_r"], opt["dv_moon"], opt["dv_net"]
+        f0 = ~np.isnan(dvm0[:, 0])
+        ff = ~np.isnan(dvm[:, 0])
+
+        aS_m = _Smag(dvm0, dvm)                         # shared Moon scale
+        aS_n0 = _Smag(dvn0)                             # init-net own scale
+        aS_nf = _Smag(dvn)                              # final-net own scale
+        qopts = dict(angles="xy", scale_units="xy", width=0.004)
+        # Convention: light shade = initial guess, saturated = final;
+        # green hue = Δv_moon, pink/magenta hue = Δv_net.
+        if f0.any():
+            ax.quiver(ir0[f0, 0], ir0[f0, 1], dvm0[f0, 0], dvm0[f0, 1],
+                      scale=aS_m, color="#98df8a", alpha=0.85, **qopts,
+                      label=f"Δv_moon init  (Σ={_sum_mps(dvm0):.1f} m/s)")
+            ax.quiver(ir0[f0, 0], ir0[f0, 1], dvn0[f0, 0], dvn0[f0, 1],
+                      scale=aS_n0, color="#f7b6d2", alpha=0.9, **qopts,
+                      label=f"Δv_net init  (Σ={_sum_mps(dvn0):.1f} m/s)")
+        if ff.any():
+            ax.quiver(ir[ff, 0], ir[ff, 1], dvm[ff, 0], dvm[ff, 1],
+                      scale=aS_m, color="#2ca02c", alpha=0.85, **qopts,
+                      label=f"Δv_moon final (Σ={_sum_mps(dvm):.1f} m/s)")
+            ax.quiver(ir[ff, 0], ir[ff, 1], dvn[ff, 0], dvn[ff, 1],
+                      scale=aS_nf, color="#e377c2", alpha=0.95, **qopts,
+                      label=(f"Δv_net final (Σ={opt['sum_final']*1000:.2f}"
+                             f" m/s, indep.)"))
+
+        mxf = np.nanmax(opt["mag_final"]) if opt["mag_final"].size else 0.0
+        mxf = 0.0 if np.isnan(mxf) else mxf
+        print(f"  place {idx} BFGS Σ|Δv_net|: "
+              f"init={opt['sum_init'] * 1000:.2f} -> "
+              f"final={opt['sum_final'] * 1000:.4f} m/s  "
+              f"(max node {mxf * 1000:.4f} m/s, Δτ={opt['delta_tau']:.4g}, "
+              f"time_resid={opt['time_resid']:.1e}, "
+              f"{'ok' if opt['ok'] else 'NO-CONV'}, "
+              f"{d['n_seg']} segs, {opt['n_fail']} bad seg, "
+              f"μ_moon×{MU_MOON_SCALE})")
+
+        fail_note = (f", {opt['n_fail']} bad seg" if opt["n_fail"] else "")
+        seg_info = (f"{d['n_seg']} segs  "
+                    f"Σ|Δv_net|: {opt['sum_init'] * 1000:.1f}→"
+                    f"{opt['sum_final'] * 1000:.3f} m/s  "
+                    f"(Δτ={opt['delta_tau']:.3g}, "
+                    f"tres={opt['time_resid']:.0e}){fail_note}")
+
+        th = np.linspace(0, 2 * np.pi, 400)
+        ax.plot(R_PARK * np.cos(th), R_PARK * np.sin(th), "k--",
+                lw=0.5, alpha=0.4)
+        ax.plot(R_TGT * np.cos(th), R_TGT * np.sin(th), "k--",
+                lw=0.5, alpha=0.4)
+        ax.add_patch(plt.Circle((0, 0), R_EARTH, color="#6fa8dc", alpha=0.5))
+        ax.plot([r1[0]], [r1[1]], "ko", ms=7)
+        ax.plot([r2[0]], [r2[1]], "k*", ms=14)
+        ax.set_aspect("equal")
+        ax.set_xlabel("x [km]")
+        ax.set_ylabel("y [km]")
+        ax.set_title(f"({idx}) t_dep={t_dep_hr:.2f}, t_arr={t_arr_hr:.2f} hr\n"
+                     f"{seg_info}")
+        ax.legend(loc="upper right", fontsize=8)
+
+    fig.suptitle("Net-Δv minimization: initial conic discretization vs "
+                 f"Moon-perturbed final ({segs_per_rev} segs/period)",
+                 fontsize=14)
+    fig.tight_layout()
+    fig.savefig(out_name, dpi=120)
+    print(f"Saved {out_name}")
+
+
+def compare_newton_guesses(places, segs_per_rev=48, mu_moon=None):
+    """For each place, run the Moon-gravity Newton shooter from two initial
+    guesses and tabulate the iteration counts:
+
+      A: conic Lambert solution velocity (the legacy seed)
+      B: departure velocity of the net-Δv-minimized discretized solution
+
+    Both target the Moon offset point r_moon·(1−R_moon/|r_moon|) and refine
+    under full Earth+Moon dynamics. A lower count for B means the discretized
+    solution is a better Newton seed."""
+    if mu_moon is None:
+        mu_moon = MU_MOON
+    name = {STATUS_OK: "ok", STATUS_MAX_ITER: "max_iter",
+            STATUS_SINGULAR_JAC: "singular"}
+    rows = []
+    for (t_dep_hr, t_arr_hr) in places:
+        t_d = t_dep_hr * 3600.0
+        tof_s = (t_arr_hr - t_dep_hr) * 3600.0
+        t_a = t_d + tof_s
+        r1, _ = circ_state(R_PARK, THETA_PARK_0, N_PARK, t_d)
+        r_moon, _ = _moon_state(t_a)
+        r_tgt = r_moon * (1.0 - MOON_ARRIVAL_OFFSET / np.linalg.norm(r_moon))
+
+        solA = lambert_uv(r1, r_tgt, tof_s, MU, prograde=True)
+        gA = None if solA is None else solA[0]
+
+        gB = None
+        if gA is not None:
+            d = discretize_conic_segments(r1, gA, tof_s, MU, segs_per_rev)
+            opt = optimize_net_delta_v(r1, r_tgt, d["node_r"], d["seg_dt"],
+                                       t_d, MU, mu_moon)
+            sB = lambert_uv(r1, opt["node_r"][1], opt["seg_dt"][0], MU,
+                            prograde=True)
+            gB = None if sB is None else sB[0]
+
+        recA = (_newton_shoot_counted(r1, gA, t_d, t_a, r_tgt,
+                                      mu_moon=mu_moon)
+                if gA is not None else None)
+        recB = (_newton_shoot_counted(r1, gB, t_d, t_a, r_tgt,
+                                      mu_moon=mu_moon)
+                if gB is not None else None)
+        rows.append((t_dep_hr, t_arr_hr, recA, recB))
+
+    def _fmt(rec):
+        if rec is None:
+            return f"{'—':>5} {'(no seed)':>10} {'—':>10}"
+        _, _, st, nit, res = rec
+        return f"{nit:>5d} {name.get(st, st):>10} {res:>10.2f}"
+
+    print()
+    print(f"  Newton initial-guess comparison  (μ_moon×{MU_MOON_SCALE}, "
+          f"{segs_per_rev} segs/period, pos_tol=50 km)")
+    print("  " + "-" * 78)
+    print(f"  {'place (t_dep,t_arr) hr':<24}"
+          f"|{'conic seed':^28}|{'discretized seed':^28}")
+    print(f"  {'':<24}|{'iters':>5} {'status':>10} {'res km':>10} "
+          f"|{'iters':>5} {'status':>10} {'res km':>10} ")
+    print("  " + "-" * 78)
+    for (td, ta, recA, recB) in rows:
+        print(f"  ({td:>4.2f}, {ta:>6.2f}){'':<10}|{_fmt(recA)} |{_fmt(recB)} ")
+    print("  " + "-" * 78)
+    return rows
 
 
 def plot_compare_solutions(places, out_name="compare_solutions.png",
@@ -1358,6 +2414,29 @@ if __name__ == "__main__":
     # multi-rev trajectory plots commented out (conic set is N=0 only)
     # plot_trajectories_multirev(t_dep_hr=0.0, max_n_rev=2)
     # plot_trajectories_multirev(t_dep_hr=1.4, max_n_rev=2)
+
+    # Discretized vs undiscretized conic check (24 segs per period)
+    cmp_places = [(0.5, 18.0), (0.5, 50.0), (0.5, 130.0)]
+    plot_discretized_compare(dv_n0, places=cmp_places, segs_per_rev=24)
+
+    # Porkchop via the discretized net-Δv-minimization method (N=0)
+    t2 = time.time()
+    dv_disc, disc_status = run_grid_discretized(segs_per_rev=24)
+    print(f"  discretized grid done in {time.time() - t2:.1f}s")
+    plot_porkchop_arrival(dv_disc,
+                          out_name="porkchop_discretized.png",
+                          title="Porkchop (discretized net-Δv min, N=0)")
+    plot_porkchop_grid_raw(dv_disc,
+                           out_name="porkchop_discretized_raw.png",
+                           title="Discretized net-Δv min, N=0 (raw cells)")
+
+    # Same exact grid with Moon gravity OFF (pure Kepler / two-body).
+    t3 = time.time()
+    dv_kep, kep_status = run_grid_discretized(segs_per_rev=24, mu_moon=0.0)
+    print(f"  kepler grid done in {time.time() - t3:.1f}s")
+    plot_porkchop_grid_raw(dv_kep,
+                           out_name="porkchop_kepler_raw.png",
+                           title="Kepler (no Moon gravity), N=0 (raw cells)")
 
     # --- Newton section commented out: conic set only for now ---
     # # Conic grid restricted to N=0 for an apples-to-apples Newton comparison
