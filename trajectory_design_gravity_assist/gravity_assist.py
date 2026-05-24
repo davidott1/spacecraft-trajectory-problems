@@ -17,12 +17,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
-# ---- Central body (fixed at the origin) ----
-MU_C = 1.0                       # central-body gravitational parameter [canonical]
+# ---- Central body: Earth (fixed at the origin) ----
+MU_C = 1.0                       # central-body grav. parameter [canonical] = Earth
 
-# ---- Assist body: massive, on a circular planar orbit ----
+# ---- Assist body: the Moon, on a circular planar orbit ----
+# Mass set to the Moon's fraction of Earth: mu_moon / mu_earth ≈ 0.0123.
+_MU_EARTH_SI = 398600.4418       # km^3/s^2
+_MU_MOON_SI = 4902.800066        # km^3/s^2
 R_A = 1.0                        # assist orbit radius -> defines the length unit
-MU_A = 1.0e-2                    # assist-body gravitational parameter (its mass)
+MU_A = MU_C * (_MU_MOON_SI / _MU_EARTH_SI)   # ≈ 0.0123 (Moon's fraction of Earth)
 R_BODY = 0.03                    # assist-body physical radius (min flyby periapsis) [DU]
 N_A = np.sqrt(MU_C / R_A ** 3)   # assist mean motion (central fixed)
 THETA_A0 = 0.0                   # assist phase angle at t = 0 [rad]
@@ -228,90 +231,236 @@ def _prop2(r0, v0, T, n=700, mu=MU_C):
     return sol.y[0], sol.y[1]
 
 
-def plot_before_after(r_p=R_BODY, out_name="gravity_assist_before_after.png"):
-    """Inertial-frame paths: the Hohmann transfer out to the assist body
-    (before) and the post-flyby heliocentric orbit (after), for both flyby
-    sides. The encounter is placed at the assist body's t=0 position (R_A, 0);
-    the flyby is the instantaneous velocity kink in patched conics."""
-    th_enc = 0.0
-    rhat = np.array([np.cos(th_enc), np.sin(th_enc)])
-    that = np.array([-np.sin(th_enc), np.cos(th_enc)])     # prograde tangent
-    a_t = 0.5 * (R_INIT + R_A)
+def _hyperbola_xy(v_inf, r_p, din, dout, mu_a=MU_A, r_max=None, n=500):
+    """Flyby hyperbola in the assist-body frame, oriented so its incoming
+    asymptote points along `din` and its outgoing asymptote along `dout`
+    (so it matches the analytic v∞ turn). Body at the origin. Clipped to r_max."""
+    e = 1.0 + r_p * v_inf ** 2 / mu_a
+    p = r_p * (1.0 + e)
+    nu_inf = np.arccos(-1.0 / e)
+    nu = np.linspace(-nu_inf + 0.03, nu_inf - 0.03, n)
+    r = p / (1.0 + e * np.cos(nu))
+    if r_max is not None:
+        m = r <= r_max
+        nu, r = nu[m], r[m]
+    best = None
+    for side in (1.0, -1.0):                       # pick the side matching dout
+        P = np.vstack([r * np.cos(nu), side * r * np.sin(nu)])
+        di = P[:, 1] - P[:, 0]
+        di = di / np.linalg.norm(di)
+        ang = np.arctan2(din[1], din[0]) - np.arctan2(di[1], di[0])
+        c, s = np.cos(ang), np.sin(ang)
+        Pr = np.array([[c, -s], [s, c]]) @ P
+        do = Pr[:, -1] - Pr[:, -2]
+        do = do / np.linalg.norm(do)
+        score = float(np.dot(do, dout))
+        if best is None or score > best[0]:
+            best = (score, Pr)
+    return best[1][0], best[1][1]
 
-    # Before: depart the inner orbit at the transfer periapsis (opposite side),
-    # coast half the transfer ellipse to apoapsis at the encounter.
-    th_dep = th_enc + np.pi
-    rhat_d = np.array([np.cos(th_dep), np.sin(th_dep)])
+
+def plot_flyby_explainer(r_p=R_BODY, out_name="gravity_assist_explainer.png"):
+    """Three linked frames showing how the body-frame hyperbola maps to the
+    inertial orbit change, with the two flyby sides color-coded throughout."""
+    _, v_apo, v_cA, v_inf = hohmann_to_assist()
+    r_soi = soi_radius()
+    th = np.linspace(0, 2 * np.pi, 400)
+
+    # Encounter at (R_A, 0): tangential = +y, radial = +x.
+    rhat = np.array([1.0, 0.0])
+    that = np.array([0.0, 1.0])
+    v_a = v_cA * that
+    din = (-v_inf * that)                          # incoming v∞ (inertial dir)
+    din = din / np.linalg.norm(din)
+
+    cases = []                                     # (sign, label, color, outcome)
+    for sign, col in [(+1, "#2ca02c"), (-1, "#9467bd")]:
+        o = flyby_outcome(r_p, sign)
+        vout = o["vinf_out"][0] * that + o["vinf_out"][1] * rhat
+        dout = vout / np.linalg.norm(vout)
+        hx, hy = _hyperbola_xy(v_inf, r_p, din, dout, r_max=r_soi)
+        # which side of the body the path passes: +x = outer (away from the
+        # central body), -x = inner (toward it). Here v∞ is purely retrograde,
+        # so the two sides differ in radial direction, not front/back.
+        k = int(np.argmin(np.hypot(hx, hy)))
+        edge = "outer-side" if hx[k] > 0 else "inner-side"
+        cases.append(dict(sign=sign, col=col, o=o, vout=vout, dout=dout,
+                          hx=hx, hy=hy, edge=edge))
+
+    fig, axs = plt.subplots(1, 3, figsize=(18, 6.2))
+
+    # ---- Panel A: assist-body frame (the hyperbola) ----
+    # Same v∞ arrows as panel B (red in, green/purple out) — here they are the
+    # asymptotes of the actual flyby path, i.e. the *cause* of the v∞ rotation.
+    ax = axs[0]
+    L = 0.33 * r_soi                              # arrow length
+    ax.plot(r_soi * np.cos(th), r_soi * np.sin(th), "0.8", ls="--", lw=1,
+            label="sphere of influence")
+    ax.add_patch(plt.Circle((0, 0), R_BODY, color="0.4"))
+    ax.annotate("", xy=0.11 * that, xytext=(0, 0),
+                arrowprops=dict(arrowstyle="->", color="0.6", lw=1.3))
+    ax.text(0.01, 0.11, "v_a (body motion)", color="0.6", fontsize=8)
+    for c in cases:                              # the two flyby paths
+        ax.plot(c["hx"], c["hy"], "-", color=c["col"], lw=2, label=c["edge"])
+    # incoming v∞ (shared) — tangent to the incoming asymptote, toward the body
+    p_in = 0.85 * r_soi * (-din)                  # up where the S/C comes from
+    ax.annotate("", xy=p_in + L * din, xytext=p_in,
+                arrowprops=dict(arrowstyle="-|>", color="#d62728", lw=2.5))
+    ax.text(p_in[0] + 0.012, p_in[1], "v∞ in", color="#d62728", fontsize=10)
+    # outgoing v∞ for each side — tangent to that asymptote, away from the body
+    for c in cases:
+        tail = np.array([c["hx"][-1], c["hy"][-1]])
+        ax.annotate("", xy=tail + L * c["dout"], xytext=tail,
+                    arrowprops=dict(arrowstyle="-|>", color=c["col"], lw=2.5))
+        ax.text(tail[0] + L * c["dout"][0], tail[1] + L * c["dout"][1] - 0.012,
+                "v∞ out", color=c["col"], fontsize=9, ha="center")
+    ax.plot([0], [0], "o", color="0.4", ms=4)
+    ax.set_aspect("equal")
+    ax.set_xlim(-1.35 * r_soi, 1.35 * r_soi)
+    ax.set_ylim(-1.35 * r_soi, 1.35 * r_soi)
+    ax.set_xlabel("x [DU]")
+    ax.set_ylabel("y [DU]")
+    ax.legend(fontsize=8, loc="lower right")
+    ax.set_title("1. Assist-body frame (co-moving): path = hyperbola\n"
+                 f"S/C speed = v∞={v_inf:.3f}; gravity rotates it by "
+                 f"δ={cases[0]['o']['delta']*180/np.pi:.0f}°")
+
+    # ---- Panel B: velocity addition v_sc = v_a + v∞ (the bridge) ----
+    ax = axs[1]
+    ax.plot(v_a[0] + v_inf * np.cos(th), v_a[1] + v_inf * np.sin(th),
+            "0.7", ls="--", lw=1, label="v∞ circle")
+    ax.annotate("", xy=v_a, xytext=(0, 0),
+                arrowprops=dict(arrowstyle="->", color="0.5", lw=2))
+    ax.text(v_a[0] + 0.02, v_a[1], "v_a", color="0.4", fontsize=9)
+    ax.annotate("", xy=v_a + (-v_inf * that), xytext=(0, 0),
+                arrowprops=dict(arrowstyle="->", color="#d62728", lw=2))
+    ax.text(0.02, v_apo, "v_sc in", color="#d62728", fontsize=9)
+    for c in cases:
+        tip = v_a + c["vout"]
+        ax.annotate("", xy=tip, xytext=(0, 0),
+                    arrowprops=dict(arrowstyle="->", color=c["col"], lw=2))
+        ax.annotate("", xy=tip, xytext=v_a,
+                    arrowprops=dict(arrowstyle="->", color=c["col"], lw=1.2,
+                                    alpha=0.5))
+        ax.plot([tip[0]], [tip[1]], "o", color=c["col"], ms=4)
+    ax.plot([0], [0], "ko", ms=4)
+    ax.set_aspect("equal")
+    ax.set_xlabel("v_x [DU/TU]")
+    ax.set_ylabel("v_y [DU/TU]")
+    ax.legend(fontsize=8, loc="lower right")
+    ax.set_title("2. Velocity bridge: v_sc = v_a + v∞\n"
+                 "turning v∞ moves v_sc on the circle")
+
+    # ---- Panel C: inertial frame (before / after) ----
+    ax = axs[2]
+    a_t = 0.5 * (R_INIT + R_A)
+    th_dep = np.pi
     that_d = np.array([-np.sin(th_dep), np.cos(th_dep)])
     v_peri = np.sqrt(MU_C * (2.0 / R_INIT - 1.0 / a_t))
-    r_dep = R_INIT * rhat_d
-    v_dep = v_peri * that_d
-    T_trans = np.pi * np.sqrt(a_t ** 3 / MU_C)
-    bx, by = _prop2(r_dep, v_dep, T_trans)
+    r_dep = R_INIT * np.array([np.cos(th_dep), np.sin(th_dep)])
+    bx, by = _prop2(r_dep, v_peri * that_d, np.pi * np.sqrt(a_t ** 3 / MU_C))
+    r_enc = R_A * rhat
+    ax.plot(R_A * np.cos(th), R_A * np.sin(th), "k--", lw=0.6, alpha=0.4)
+    ax.plot(R_INIT * np.cos(th), R_INIT * np.sin(th), "b--", lw=0.5, alpha=0.3)
+    ax.plot(bx, by, "-", color="#1f77b4", lw=2, label="before")
+    for c in cases:
+        v_in = v_a + c["vout"]          # full heliocentric velocity = v_a + v∞_out
+        T_new = 2 * np.pi * np.sqrt(c["o"]["a"] ** 3 / MU_C)
+        ax_, ay_ = _prop2(r_enc, v_in, T_new)
+        ax.plot(ax_, ay_, "-", color=c["col"], lw=1.7,
+                label=f"after {c['edge'].split()[0]} (r_a={c['o']['ra']:.2f})")
+        ex = r_enc + r_soi * v_in / np.linalg.norm(v_in)   # zero-SOI exit
+        ax.plot([ex[0]], [ex[1]], "o", mfc="none", mec=c["col"], ms=9, mew=1.6)
+    # SOI of the assist body (centered on it). The S/C enters along v∞ (the
+    # upstream side of the relative velocity = top here), not where the
+    # heliocentric line happens to cross.
+    ax.add_patch(plt.Circle((r_enc[0], r_enc[1]), r_soi, fill=False,
+                            ec="0.5", ls=":", lw=1.3, label="SOI"))
+    e0 = r_enc - r_soi * din                              # on SOI, upstream side
+    ax.plot([e0[0]], [e0[1]], "r*", ms=11, label="enters along v∞")
+    ax.annotate("", xy=e0 + 0.6 * r_soi * din, xytext=e0,
+                arrowprops=dict(arrowstyle="-|>", color="#d62728", lw=2))
+    ax.plot([0], [0], "o", color="gold", ms=12, mec="k")
+    ax.plot([r_dep[0]], [r_dep[1]], "b^", ms=8)
+    ax.plot([r_enc[0]], [r_enc[1]], "r*", ms=14)
+    ax.set_aspect("equal")
+    ax.set_xlabel("x [DU]")
+    ax.set_ylabel("y [DU]")
+    ax.legend(fontsize=7, loc="upper left")
+    ax.set_title("3. Inertial frame: before & after  (SOI dotted)\n"
+                 f"apoapsis {R_A:g} → {cases[0]['o']['ra']:.2f} DU")
+
+    fig.suptitle("Gravity assist across frames — green/purple = the two flyby "
+                 "sides (same v∞, opposite turn)", fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.94])
+    fig.savefig(out_name, dpi=150)
+    print(f"Saved {out_name}")
+
+
+def plot_soi_entry(out_name="gravity_assist_soi_entry.png"):
+    """Inertial-frame zoom on the encounter showing where the S/C enters the
+    SOI: along its velocity *relative* to the body, v∞ = v_sc - v_a, which here
+    points retrograde (down). The heliocentric orbit approaches from below, but
+    relative to the moving body the S/C slips in from the upstream (top) side —
+    the offset between the two is exactly v_a."""
+    _, v_apo, v_cA, v_inf = hohmann_to_assist()
+    r_soi = soi_radius()
+    rhat = np.array([1.0, 0.0])
+    that = np.array([0.0, 1.0])
+    v_a = v_cA * that
+    din = -v_inf * that
+    din = din / np.linalg.norm(din)                 # incoming v∞ direction (down)
     r_enc = R_A * rhat
 
-    # After: apply the flyby, propagate the new heliocentric orbit one period.
-    afters = []
-    for sign, lab, col in [(+1, "after (lead flyby)", "#2ca02c"),
-                           (-1, "after (trail flyby)", "#9467bd")]:
-        o = flyby_outcome(r_p, sign)
-        v_in = o["v_out"][0] * that + o["v_out"][1] * rhat   # -> inertial
-        T_new = (2.0 * np.pi * np.sqrt(o["a"] ** 3 / MU_C)
-                 if np.isfinite(o["a"]) else 4.0 * T_trans)
-        ax_, ay_ = _prop2(r_enc, v_in, T_new)
-        afters.append((ax_, ay_, lab, col, o))
+    a_t = 0.5 * (R_INIT + R_A)
+    r_dep = R_INIT * np.array([-1.0, 0.0])
+    bx, by = _prop2(r_dep, np.sqrt(MU_C * (2.0 / R_INIT - 1.0 / a_t)) *
+                    np.array([0.0, -1.0]), np.pi * np.sqrt(a_t ** 3 / MU_C))
 
     th = np.linspace(0, 2 * np.pi, 400)
-    fig, ax = plt.subplots(figsize=(8, 8))
-    ax.plot(R_A * np.cos(th), R_A * np.sin(th), "k--", lw=0.7, alpha=0.5,
-            label="Assist orbit")
-    ax.plot(R_INIT * np.cos(th), R_INIT * np.sin(th), "b--", lw=0.6, alpha=0.4,
-            label="Initial orbit")
-    ax.plot(bx, by, "-", color="#1f77b4", lw=2.2, label="Before: Hohmann transfer")
-    for ax_, ay_, lab, col, o in afters:
-        ax.plot(ax_, ay_, "-", color=col, lw=1.8,
-                label=f"{lab}: r_a={o['ra']:.2f}")
-    ax.plot([0], [0], "o", color="gold", ms=14, mec="k", label="Central body")
-    ax.plot([r_dep[0]], [r_dep[1]], "b^", ms=10, label="Departure")
-    ax.plot([r_enc[0]], [r_enc[1]], "o", color="0.4", ms=11)
-    ax.plot([r_enc[0]], [r_enc[1]], "r*", ms=15, label="Flyby (assist body)")
+    fig, ax = plt.subplots(figsize=(7.5, 7.5))
+    ax.plot(R_A * np.cos(th), R_A * np.sin(th), "k--", lw=0.6, alpha=0.4)
+    ax.plot(bx, by, "-", color="#1f77b4", lw=2, label="before (heliocentric)")
+    for sign, col, lab in [(+1, "#2ca02c", "outer"), (-1, "#9467bd", "inner")]:
+        o = flyby_outcome(R_BODY, sign)
+        vsc = v_a + o["vinf_out"][0] * that + o["vinf_out"][1] * rhat
+        ax_, ay_ = _prop2(r_enc, vsc,
+                          2 * np.pi * np.sqrt(o["a"] ** 3 / MU_C))
+        ax.plot(ax_, ay_, "-", color=col, lw=1.7,
+                label=f"after {lab} (r_a={o['ra']:.2f})")
+        # zero-SOI exit: where the straight outgoing asymptote (v_sc_out) meets
+        # the reference circle — symmetric with the entry, no SOI curving.
+        ex = r_enc + r_soi * vsc / np.linalg.norm(vsc)
+        ax.plot([ex[0]], [ex[1]], "o", mfc="none", mec=col, ms=11, mew=1.8)
+        ax.plot([r_enc[0], ex[0]], [r_enc[1], ex[1]], "-", color=col, lw=0.8,
+                alpha=0.5)
+    ax.add_patch(plt.Circle((1, 0), r_soi, fill=False, ec="0.5", ls=":",
+                            lw=1.5, label="SOI"))
+    ax.add_patch(plt.Circle((1, 0), R_BODY, color="0.4"))
+    ax.annotate("", xy=r_enc + 0.45 * r_soi * that, xytext=r_enc,
+                arrowprops=dict(arrowstyle="-|>", color="0.55", lw=2))
+    ax.text(r_enc[0] + 0.015, r_enc[1] + 0.42 * r_soi, "v_a", color="0.5",
+            fontsize=9)
+    ent = r_enc - r_soi * din                         # upstream side -> top
+    ax.plot([ent[0]], [ent[1]], "r*", ms=16, label="enters along v∞")
+    ax.annotate("", xy=ent + 0.55 * r_soi * din, xytext=ent,
+                arrowprops=dict(arrowstyle="-|>", color="#d62728", lw=2.5))
+    ax.text(ent[0] + 0.02, ent[1], "v∞ in", color="#d62728", fontsize=10)
+    ax.plot([0], [0], "o", color="gold", ms=12, mec="k")
     ax.set_aspect("equal")
-    ax.legend(fontsize=8, loc="upper left")
+    ax.set_xlim(0.6, 1.4)
+    ax.set_ylim(-0.45, 0.45)
+    ax.legend(fontsize=8, loc="lower left")
     ax.set_xlabel("x [DU]")
     ax.set_ylabel("y [DU]")
-    ax.set_title("Gravity assist — before vs after  "
-                 f"(flyby r_p={r_p:g} DU)\n"
-                 f"apoapsis {R_A:g} → {afters[0][4]['ra']:.2f} DU")
+    ax.set_title("Where the S/C enters the SOI (inertial frame)\n"
+                 "enters along v∞ = v_sc − v_a (top); orbit approaches from below")
     fig.tight_layout()
     fig.savefig(out_name, dpi=150)
-    print(f"Saved {out_name}")
-
-
-def plot_config(out_name="gravity_assist_config.png"):
-    """Sketch the system geometry at t = 0."""
-    th = np.linspace(0, 2 * np.pi, 400)
-    fig, ax = plt.subplots(figsize=(7, 7))
-    ax.plot(R_A * np.cos(th), R_A * np.sin(th), "k--", lw=0.8, alpha=0.6,
-            label="Assist orbit")
-    ax.plot(R_INIT * np.cos(th), R_INIT * np.sin(th), "b--", lw=0.8, alpha=0.6,
-            label="Initial S/C orbit")
-    ax.plot([0], [0], "o", color="gold", ms=15, mec="k", label="Central body")
-    ra, _ = assist_state(0.0)
-    ax.plot([ra[0]], [ra[1]], "o", color="0.4", ms=10, label="Assist body (t=0)")
-    rs, _ = circular_state(R_INIT, THETA_SC0)
-    ax.plot([rs[0]], [rs[1]], "b^", ms=9, label="Spacecraft (t=0)")
-    ax.set_aspect("equal")
-    ax.legend(fontsize=8, loc="upper right")
-    ax.set_xlabel("x [DU]")
-    ax.set_ylabel("y [DU]")
-    ax.set_title("Gravity-assist setup (canonical units)\n"
-                 f"μ_c={MU_C:g}, μ_a={MU_A:g}, R_a={R_A:g}, R_init={R_INIT:g}")
-    fig.tight_layout()
-    fig.savefig(out_name, dpi=150)
-    print(f"Saved {out_name}")
+    print(f"Saved {out_name}  (SOI radius {r_soi:.3f} DU)")
 
 
 if __name__ == "__main__":
-    plot_config()
     plot_concept()
-    plot_before_after()
+    plot_flyby_explainer()
+    plot_soi_entry()
