@@ -44,9 +44,6 @@ MOON_CLOSE_APPROACH_ABORT = 500.0  # km
 # Hohmann h ≈ 70,580 km²/s; circular-park h ≈ 51,580 km²/s; rectilinear h → 0.
 H_MIN_SEED = 5000.0  # km²/s
 
-# Skip Newton shooting when the conic Lambert seed's total ΔV is already above this.
-# Anything well beyond the porkchop loins is uninteresting; saves runtime.
-DV_MAX_SEED = 7.0  # km/s
 R_EARTH = 6378.0            # km
 
 R_PARK = R_EARTH + 300.0    # parking orbit radius (300 km LEO)
@@ -57,6 +54,15 @@ THETA_TGT_0 = np.deg2rad(90.0)  # target true anomaly at t=0 [rad]
 
 N_PARK = np.sqrt(MU / R_PARK**3)
 N_TGT = np.sqrt(MU / R_TGT**3)
+
+# Approximate two-impulse Hohmann ΔV between the coplanar circular orbits.
+_A_HOHMANN = 0.5 * (R_PARK + R_TGT)
+DV_HOHMANN = (abs(np.sqrt(MU * (2 / R_PARK - 1 / _A_HOHMANN)) - np.sqrt(MU / R_PARK))
+              + abs(np.sqrt(MU / R_TGT) - np.sqrt(MU * (2 / R_TGT - 1 / _A_HOHMANN))))
+
+# Skip Newton shooting when the conic Lambert seed's total ΔV is already above this.
+# Anything beyond is uninteresting (Hohmann ΔV ≈ 4.14 km/s for reference).
+DV_MAX_SEED = 5.0  # km/s
 
 # Grid (hours)
 T_DEP = np.linspace(0.0, 2.0, 41)       # departure window
@@ -1986,6 +1992,168 @@ def run_grid_discretized(segs_per_rev=24, verbose=True, n_workers=None,
     return dv, status
 
 
+def plot_homotopy_trajectories(t_dep_hr, t_arr_hr, factors=None,
+                               segs_per_rev=24, out_name=None):
+    """One figure for a single grid cell: overlay the conic (μ_moon=0)
+    trajectory and the converged trajectory at every homotopy factor
+    (warm-started up the ladder). Up to 1+len(factors) curves, colored by
+    factor — shows how the arc bends as lunar gravity ramps and where (if
+    anywhere) the continuation breaks."""
+    if factors is None:
+        factors = [round(0.1 * k, 1) for k in range(1, 11)]
+    t_d = t_dep_hr * 3600.0
+    tof_s = (t_arr_hr - t_dep_hr) * 3600.0
+    r1, v_park = circ_state(R_PARK, THETA_PARK_0, N_PARK, t_d)
+    r_moon, v_moon = _moon_state(t_d + tof_s)
+    r_tgt = r_moon * (1.0 - MOON_ARRIVAL_OFFSET / np.linalg.norm(r_moon))
+    ok, v1x, v1y, *_ = _lambert_njit(r1[0], r1[1], 0.0, r_tgt[0], r_tgt[1], 0.0,
+                                     tof_s, MU, 1, 0, 0, 1e-8, 400)
+    v1 = np.array([v1x, v1y, 0.0])
+    d = discretize_conic_segments(r1, v1, tof_s, MU, segs_per_rev)
+    node_r, seg_dt = d["node_r"], d["seg_dt"]
+
+    # (factor, node_r, seg_dt) — start with the conic (μ_moon = 0).
+    chain = [(0.0, node_r, seg_dt)]
+    fail_at = None
+    for f in factors:
+        opt = optimize_net_delta_v(r1, r_tgt, node_r, seg_dt, t_d, MU,
+                                   f * MU_MOON_FULL)
+        if not opt["ok"]:
+            fail_at = f
+            break
+        node_r, seg_dt = opt["node_r"], opt["seg_dt"]
+        chain.append((f, node_r, seg_dt))
+
+    fig, ax = plt.subplots(figsize=(9, 9))
+    th = np.linspace(0, 2 * np.pi, 400)
+    ax.plot(R_PARK * np.cos(th), R_PARK * np.sin(th), "k--", lw=0.5, alpha=0.4)
+    ax.plot(R_TGT * np.cos(th), R_TGT * np.sin(th), "k--", lw=0.5, alpha=0.4)
+    ax.add_patch(plt.Circle((0, 0), R_EARTH, color="#6fa8dc", alpha=0.5))
+    cmap = plt.cm.viridis
+    for (f, nr, sd) in chain:
+        col = cmap(f)
+        segs, _, _ = _piecewise_lambert_xy(nr, sd, MU)
+        first = True
+        for leg in segs:
+            if leg is None:
+                continue
+            ax.plot(leg[:, 0], leg[:, 1], color=col, lw=1.3, alpha=0.9,
+                    label=(f"μ_moon ×{f:.1f}" if first else None))
+            first = False
+    ax.plot([r1[0]], [r1[1]], "ko", ms=7)
+    ax.plot([r_tgt[0]], [r_tgt[1]], "k*", ms=14)
+    ax.set_aspect("equal")
+    ax.set_xlabel("x [km]")
+    ax.set_ylabel("y [km]")
+    fail_txt = (f"  — FAILED at μ_moon ×{fail_at:.1f}" if fail_at is not None
+                else "  — reached ×1.0")
+    ax.set_title(f"Homotopy trajectories  t_dep={t_dep_hr:.2f}, "
+                 f"t_arr={t_arr_hr:.2f} hr{fail_txt}", fontsize=11)
+    ax.legend(loc="upper right", fontsize=7, ncol=2)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(0, 1))
+    sm.set_array([])
+    plt.colorbar(sm, ax=ax, label="μ_moon factor")
+    fig.tight_layout()
+    if out_name is None:
+        out_name = f"homotopy_traj_d{t_dep_hr:.2f}_a{t_arr_hr:.2f}.png"
+    fig.savefig(out_name, dpi=120)
+    print(f"Saved {out_name}  ({len(chain)} trajectories, "
+          f"{'failed at x%.1f' % fail_at if fail_at else 'reached x1.0'})")
+    return fail_at
+
+
+def _solve_cell_homotopy(args):
+    """Moon-gravity homotopy for one cell: start from the conic discretization
+    and ramp μ_moon through `factors` (×MU_MOON_FULL), warm-starting each step
+    from the previous factor's converged solution. Small μ steps keep the cell
+    on the conic-continued family (no basin jumps). Returns (i, j, dv_list,
+    status) where dv_list[k] is the total ΔV at factors[k] (NaN if it dropped)."""
+    i, j, t_d, tof_s, segs_per_rev, factors = args
+    nf = len(factors)
+    th_park = THETA_PARK_0 + N_PARK * t_d
+    r1 = np.array([R_PARK * np.cos(th_park), R_PARK * np.sin(th_park), 0.0])
+    v_park = np.array([-R_PARK * N_PARK * np.sin(th_park),
+                        R_PARK * N_PARK * np.cos(th_park), 0.0])
+    r_moon, v_moon = _moon_state(t_d + tof_s)
+    r_target = r_moon * (1.0 - MOON_ARRIVAL_OFFSET / np.linalg.norm(r_moon))
+
+    ok, v1x, v1y, _z1, v2x, v2y, _z2 = _lambert_njit(
+        r1[0], r1[1], 0.0, r_target[0], r_target[1], 0.0,
+        tof_s, MU, 1, 0, 0, 1e-8, 400)
+    if not ok:
+        return i, j, [np.nan] * nf, STATUS_LAMBERT_FAIL
+    if abs(r1[0] * v1y - r1[1] * v1x) < H_MIN_SEED:
+        return i, j, [np.nan] * nf, STATUS_SEED_DEGENERATE
+    if (np.hypot(v1x - v_park[0], v1y - v_park[1]) +
+            np.hypot(v_moon[0] - v2x, v_moon[1] - v2y)) > DV_MAX_SEED:
+        return i, j, [np.nan] * nf, STATUS_SEED_OVER_CAP
+
+    v1 = np.array([v1x, v1y, 0.0])
+    try:
+        d = discretize_conic_segments(r1, v1, tof_s, MU, segs_per_rev)
+        node_r, seg_dt = d["node_r"], d["seg_dt"]      # conic initial guess
+    except Exception:
+        return i, j, [np.nan] * nf, STATUS_MAX_ITER
+
+    dvs = []
+    for f in factors:
+        mu_moon = f * MU_MOON_FULL
+        try:
+            opt = optimize_net_delta_v(r1, r_target, node_r, seg_dt,
+                                       t_d, MU, mu_moon)
+        except Exception:
+            opt = None
+        if opt is None or not opt["ok"]:
+            dvs += [np.nan] * (nf - len(dvs))          # dropped at this factor
+            break
+        dvs.append(float(np.linalg.norm(opt["v_dep"] - v_park)) +
+                   float(np.linalg.norm(v_moon - opt["v_arr"])) +
+                   opt["sum_final"])
+        node_r, seg_dt = opt["node_r"], opt["seg_dt"]  # warm start next factor
+    st = (STATUS_OK if len(dvs) == nf and not np.isnan(dvs[-1])
+          else STATUS_MAX_ITER)
+    return i, j, dvs, st
+
+
+def run_grid_homotopy(segs_per_rev=24, factors=None, verbose=True,
+                      n_workers=None):
+    """Moon-gravity homotopy porkchop: each cell starts from its conic
+    solution and ramps μ_moon through `factors`, warm-starting each step from
+    the previous. Returns (dv_by_factor, status, factors) — dv_by_factor[k] is
+    the (n_TOF, n_DEP) ΔV grid at factors[k]."""
+    import time
+    if factors is None:
+        factors = [round(0.1 * k, 1) for k in range(1, 11)]   # 0.1 .. 1.0
+    n_t, n_d = len(TOF), len(T_DEP)
+    dv_by_factor = [np.full((n_t, n_d), np.nan) for _ in factors]
+    status = np.full((n_t, n_d), -1, dtype=np.int8)
+    if n_workers is None:
+        n_workers = mp.cpu_count()
+    cell_args = [(i, j, float(T_DEP[j] * 3600.0), float(TOF[i] * 3600.0),
+                  segs_per_rev, tuple(factors))
+                 for i in range(n_t) for j in range(n_d)]
+    chunksize = max(1, len(cell_args) // (n_workers * 4))
+    total = len(cell_args)
+    t0 = time.time()
+    with mp.Pool(n_workers) as pool:
+        for n, (i, j, dvs, st) in enumerate(
+            pool.imap_unordered(_solve_cell_homotopy, cell_args,
+                                chunksize=chunksize), 1):
+            status[i, j] = st
+            for k, val in enumerate(dvs):
+                dv_by_factor[k][i, j] = val
+            if verbose and n % 200 == 0:
+                print(f"\r  homotopy: {n}/{total}  "
+                      f"elapsed {time.time() - t0:6.1f}s", end="", flush=True)
+    if verbose:
+        print()
+        for k, f in enumerate(factors):
+            nok = int(np.sum(np.isfinite(dv_by_factor[k])))
+            mn = (np.nanmin(dv_by_factor[k]) if nok else np.nan)
+            print(f"  μ_moon ×{f:.1f}: {nok} cells, min ΔV = {mn:.4f} km/s")
+    return dv_by_factor, status, factors
+
+
 def plot_discretized_compare(dv_total, places, segs_per_rev=24,
                              out_name="compare_discretized.png"):
     """One figure: the conic porkchop plus three solution panels. Each panel
@@ -2519,41 +2687,14 @@ def plot_porkchop_arrival_multirev(dv_best, n_best):
 
 if __name__ == "__main__":
     import time
-    t0 = time.time()
-    dv_best, n_best, dv_n0 = run_grid_multirev(max_n_rev=0)  # N>0 revs commented out
-    print(f"  conic grid done in {time.time() - t0:.1f}s")
-    print_summary(dv_n0)
-    plot_porkchop_arrival(dv_n0,
-                          out_name="porkchop_arrival.png",
-                          title="Porkchop (conic, N=0)")
-    plot_porkchop_arrival_multirev(dv_best, n_best)
-    plot_trajectories_fixed_dep(t_dep_hr=0.0)
-    plot_trajectories_fixed_dep(t_dep_hr=1.4)
-    # multi-rev trajectory plots commented out (conic set is N=0 only)
-    # plot_trajectories_multirev(t_dep_hr=0.0, max_n_rev=2)
-    # plot_trajectories_multirev(t_dep_hr=1.4, max_n_rev=2)
-
-    # Discretized vs undiscretized conic check (24 segs per period)
-    cmp_places = [(0.5, 18.0), (0.5, 50.0), (0.5, 130.0)]
-    plot_discretized_compare(dv_n0, places=cmp_places, segs_per_rev=24)
-
-    # Porkchop via the discretized net-Δv-minimization method (N=0)
+    # Only the two raw-cell porkchops: full Moon gravity and pure Kepler (no Moon).
     t2 = time.time()
-    dv_disc, disc_status = run_grid_discretized(segs_per_rev=24)
+    dv_disc, _ = run_grid_discretized(segs_per_rev=24)
     print(f"  discretized grid done in {time.time() - t2:.1f}s")
-    plot_porkchop_arrival(dv_disc,
-                          out_name="porkchop_discretized.png",
-                          title="Porkchop (discretized net-Δv min, N=0)")
-    plot_porkchop_grid_raw(dv_disc,
-                           out_name="porkchop_discretized_raw.png",
+    plot_porkchop_grid_raw(dv_disc, out_name="porkchop_discretized_raw.png",
                            title="Discretized net-Δv min, N=0 (raw cells)")
-
-    # Same exact grid with Moon gravity OFF (pure Kepler / two-body).
-    t3 = time.time()
-    dv_kep, kep_status = run_grid_discretized(segs_per_rev=24, mu_moon=0.0)
-    print(f"  kepler grid done in {time.time() - t3:.1f}s")
-    plot_porkchop_grid_raw(dv_kep,
-                           out_name="porkchop_kepler_raw.png",
+    dv_kep, _ = run_grid_discretized(segs_per_rev=24, mu_moon=0.0)
+    plot_porkchop_grid_raw(dv_kep, out_name="porkchop_kepler_raw.png",
                            title="Kepler (no Moon gravity), N=0 (raw cells)")
 
     # --- Newton section commented out: conic set only for now ---
