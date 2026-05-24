@@ -304,10 +304,10 @@ def _solve_cell_n(args):
     vpx = -R_PARK * N_PARK * np.sin(th_park)
     vpy = R_PARK * N_PARK * np.cos(th_park)
 
+    # No lunar gravity (Kepler) -> aim at the Moon's exact position, match its
+    # velocity (no lunar-radius standoff needed; there is no singularity).
     (rm, vm) = _moon_state(t_d + tof_s, moon_ecc)
-    rmn = np.hypot(rm[0], rm[1])
-    r2x = rm[0] * (1.0 - MOON_ARRIVAL_OFFSET / rmn)
-    r2y = rm[1] * (1.0 - MOON_ARRIVAL_OFFSET / rmn)
+    r2x, r2y = rm[0], rm[1]
     vtx, vty = vm[0], vm[1]
 
     if n_rev == 0:
@@ -1023,17 +1023,21 @@ def _overlay_nrev_bands(ax, n_best, cell_fontsize=3.5):
     outline so it reads on any colormap value); only valid cells (N >= 0) get a
     number. ax axes are departure-hr (x), TOF-hr (y). No band dividers — the
     per-cell frontier is genuinely jagged (and diagonal at high lunar ecc), so
-    a horizontal majority-line summary was misleading."""
+    a horizontal majority-line summary was misleading. Returns the list of
+    Text artists (so an interactive view can rescale them on zoom)."""
     n_best = np.asarray(n_best)
     stroke = [mpe.withStroke(linewidth=0.6, foreground="black")]
+    texts = []
     for i in range(len(TOF)):
         for j in range(len(T_DEP)):
             N = int(n_best[i, j])
             if N < 0:
                 continue
-            ax.text(T_DEP[j], TOF[i], str(N), fontsize=cell_fontsize,
-                    color="white", ha="center", va="center",
-                    path_effects=stroke)
+            texts.append(ax.text(T_DEP[j], TOF[i], str(N),
+                                 fontsize=cell_fontsize, color="white",
+                                 ha="center", va="center", clip_on=True,
+                                 path_effects=stroke))
+    return texts
 
 
 def plot_porkchop_grid_raw(dv, out_name="porkchop_discretized_raw.png",
@@ -1089,7 +1093,7 @@ def _multirev_solutions(i, j, moon_ecc, hard_cap=30):
     tof_s = float(TOF[i] * 3600.0)
     r1, v_park = circ_state(R_PARK, THETA_PARK_0, N_PARK, t_d)
     r_moon, v_moon = _moon_state(t_d + tof_s, moon_ecc)
-    r_tgt = r_moon * (1.0 - MOON_ARRIVAL_OFFSET / np.linalg.norm(r_moon))
+    r_tgt = r_moon                  # Kepler: target the Moon's exact position
 
     sols = []
     n_rev = 0
@@ -1167,12 +1171,12 @@ def _draw_multirev(ax, data, moon_ecc):
 
 def interactive_porkchop(dv, n_best, moon_ecc, vmin, vmax, title, hard_cap=30):
     """Open ONE window split into best-of-N-rev porkchop (left) + trajectory
-    (right). The left panel overlays the N-rev band boundaries (where the
-    optimal number of revolutions changes) from n_best. ⌘-click (Cmd / super /
-    meta — Ctrl also accepted) a cell to draw ALL its N-rev Lambert solutions in
-    the right panel *in place*. We never open a second window: the macosx
-    backend segfaults when a new figure is shown from inside a click callback,
-    so the panel redraws on the existing canvas."""
+    (right). The left panel writes each cell's best N inside it; the numbers
+    auto-grow as you zoom in (so a tight zoom is readable). ⌘-click (Cmd /
+    super / meta — Ctrl also accepted) a cell to draw ALL its N-rev Lambert
+    solutions in the right panel *in place*. We never open a second window: the
+    macosx backend segfaults when a new figure is shown from inside a click
+    callback, so the panel redraws on the existing canvas."""
     try:
         plt.switch_backend("macosx")           # native, interactive on macOS
     except Exception:
@@ -1197,7 +1201,26 @@ def interactive_porkchop(dv, n_best, moon_ecc, vmin, vmax, title, hard_cap=30):
                         cmap=cmap, vmin=vmin, vmax=vmax, shading="flat")
     fig.colorbar(pc, ax=axL, label="Total ΔV [km/s]", extend="max")
 
-    _overlay_nrev_bands(axL, n_best)    # N-rev band dividers + labels
+    cell_texts = _overlay_nrev_bands(axL, n_best)   # per-cell best-N numbers
+
+    # Rescale the per-cell numbers on zoom/pan so they fill a cell in the
+    # current view (text is sized in points, fixed on screen otherwise).
+    def _rescale_numbers(_=None):
+        bb = axL.get_window_extent()
+        h_pts = bb.height * 72.0 / fig.dpi
+        w_pts = bb.width * 72.0 / fig.dpi
+        yspan = abs(axL.get_ylim()[1] - axL.get_ylim()[0])
+        xspan = abs(axL.get_xlim()[1] - axL.get_xlim()[0])
+        rows = max(1.0, yspan / dtof)
+        cols = max(1.0, xspan / ddep)
+        fs = 0.8 * min(h_pts / rows, (w_pts / cols) / 1.4)   # fit a cell
+        fs = float(np.clip(fs, 2.0, 28.0))
+        for t in cell_texts:
+            t.set_fontsize(fs)
+        fig.canvas.draw_idle()
+
+    axL.callbacks.connect("xlim_changed", _rescale_numbers)
+    axL.callbacks.connect("ylim_changed", _rescale_numbers)
 
     axL.set_xlabel("Departure time [hr]")
     axL.set_ylabel("Arrival time [hr]")
