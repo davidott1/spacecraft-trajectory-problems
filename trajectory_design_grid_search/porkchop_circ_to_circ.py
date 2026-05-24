@@ -1823,12 +1823,25 @@ def optimize_net_delta_v(r1, r2, node_r0, seg_dt, t_dep_s, mu, mu_moon,
     }
 
 
-def _solve_cell_discretized(args):
-    """Worker: conic N=0 Lambert seed -> Sundman discretization -> net-Δv
-    minimization (Moon-perturbed). Returns (i, j, dv_total, status).
-    dv_total = |Δv_dep| + |Δv_arr| + Σ|Δv_net|  (the last term ≈0 when the
-    optimizer finds the ballistic Moon-perturbed arc)."""
-    i, j, t_d, tof_s, segs_per_rev, mu_moon = args
+def _interp_nodes(node_prev, n_new, r1, r2):
+    """Resample a previous solution's node positions onto n_new+1 nodes by
+    normalized index (linear), pinning the endpoints to this cell's r1, r2.
+    Used to warm-start a cell from its converged neighbor across n_seg changes."""
+    P = np.array([[p[0], p[1]] for p in node_prev])
+    sp = np.linspace(0.0, 1.0, len(P))
+    sn = np.linspace(0.0, 1.0, n_new + 1)
+    x = np.interp(sn, sp, P[:, 0])
+    y = np.interp(sn, sp, P[:, 1])
+    nodes = [np.array([x[k], y[k], 0.0]) for k in range(n_new + 1)]
+    nodes[0] = np.array([r1[0], r1[1], 0.0])
+    nodes[-1] = np.array([r2[0], r2[1], 0.0])
+    return nodes
+
+
+def _discretized_cell(i, j, t_d, tof_s, segs_per_rev, mu_moon, warm_node=None):
+    """Solve one cell. warm_node=None -> cold start (Sundman-ODE discretize);
+    else continue from the neighbor's converged nodes (interpolated to this
+    cell's n_seg). Returns (status, dv_total, opt_dict_or_None)."""
     th_park = THETA_PARK_0 + N_PARK * t_d
     r1 = np.array([R_PARK * np.cos(th_park), R_PARK * np.sin(th_park), 0.0])
     v_park = np.array([-R_PARK * N_PARK * np.sin(th_park),
@@ -1840,32 +1853,56 @@ def _solve_cell_discretized(args):
         r1[0], r1[1], 0.0, r_target[0], r_target[1], 0.0,
         tof_s, MU, 1, 0, 0, 1e-8, 400)
     if not ok:
-        return i, j, np.nan, STATUS_LAMBERT_FAIL
+        return STATUS_LAMBERT_FAIL, np.nan, None
     if abs(r1[0] * v1y - r1[1] * v1x) < H_MIN_SEED:
-        return i, j, np.nan, STATUS_SEED_DEGENERATE
-    # Cheap conic-seed screen: skip cells already far too expensive.
-    dv1_seed = np.hypot(v1x - v_park[0], v1y - v_park[1])
-    dv2_seed = np.hypot(v_moon[0] - v2x, v_moon[1] - v2y)
-    if dv1_seed + dv2_seed > DV_MAX_SEED:
-        return i, j, np.nan, STATUS_SEED_OVER_CAP
+        return STATUS_SEED_DEGENERATE, np.nan, None
+    if (np.hypot(v1x - v_park[0], v1y - v_park[1]) +
+            np.hypot(v_moon[0] - v2x, v_moon[1] - v2y)) > DV_MAX_SEED:
+        return STATUS_SEED_OVER_CAP, np.nan, None
 
     v1 = np.array([v1x, v1y, 0.0])
     try:
-        d = discretize_conic_segments(r1, v1, tof_s, MU, segs_per_rev)
-        opt = optimize_net_delta_v(r1, r_target, d["node_r"], d["seg_dt"],
+        if warm_node is None:
+            d = discretize_conic_segments(r1, v1, tof_s, MU, segs_per_rev)
+            node_r0, seg_dt0 = d["node_r"], d["seg_dt"]
+        else:                                          # continuation warm start
+            rn = np.linalg.norm(r1)
+            inv_a = 2.0 / rn - (v1x * v1x + v1y * v1y) / MU
+            T = (2.0 * np.pi * np.sqrt((1.0 / inv_a) ** 3 / MU)
+                 if inv_a > 1e-12 else tof_s)
+            n_seg = max(4, int(round(segs_per_rev * tof_s / T)))
+            node_r0 = _interp_nodes(warm_node, n_seg, r1, r_target)
+            seg_dt0 = [tof_s / n_seg] * n_seg
+        opt = optimize_net_delta_v(r1, r_target, node_r0, seg_dt0,
                                    t_d, MU, mu_moon)
     except Exception:
-        return i, j, np.nan, STATUS_MAX_ITER
+        return STATUS_MAX_ITER, np.nan, None
 
-    # Only a genuinely-converged cell yields a meaningful ΔV.
     if not opt["ok"]:
-        return i, j, np.nan, STATUS_MAX_ITER
-    # Dep/arr burns from the optimizer's own first/last leg velocities (no
-    # second-solver re-solve, which used to drop converged cells).
+        return STATUS_MAX_ITER, np.nan, opt
     dv_total = (float(np.linalg.norm(opt["v_dep"] - v_park)) +
                 float(np.linalg.norm(v_moon - opt["v_arr"])) +
                 opt["sum_final"])
-    return i, j, dv_total, STATUS_OK
+    return STATUS_OK, dv_total, opt
+
+
+def _solve_cell_discretized(args):
+    """Single-cell cold solve (used by the Newton-seed comparison, etc.)."""
+    i, j, t_d, tof_s, segs_per_rev, mu_moon = args
+    st, dv, _ = _discretized_cell(i, j, t_d, tof_s, segs_per_rev, mu_moon)
+    return i, j, dv, st
+
+
+def _solve_cell_cold(args):
+    """Cold-start worker (Phase 1): every cell independent -> each finds its
+    own best solution (smooth where it converges). Returns
+    (i, j, dv, status, node_r) — node_r kept for converged cells so a
+    non-converged neighbor can warm-start from it in the rescue pass."""
+    i, j, t_d, tof_s, segs_per_rev, mu_moon = args
+    st, dv, opt = _discretized_cell(i, j, t_d, tof_s, segs_per_rev,
+                                    mu_moon, warm_node=None)
+    node = opt["node_r"] if (st == STATUS_OK and opt is not None) else None
+    return i, j, dv, st, node
 
 
 def run_grid_discretized(segs_per_rev=24, verbose=True, n_workers=None,
@@ -1883,28 +1920,57 @@ def run_grid_discretized(segs_per_rev=24, verbose=True, n_workers=None,
 
     if n_workers is None:
         n_workers = mp.cpu_count()
-    cell_args = [
-        (i, j, float(T_DEP[j] * 3600.0), float(TOF[i] * 3600.0),
-         segs_per_rev, mu_moon)
-        for i in range(n_t) for j in range(n_d)
-    ]
+    t_d_of = [float(T_DEP[j] * 3600.0) for j in range(n_d)]
+    tof_of = [float(TOF[i] * 3600.0) for i in range(n_t)]
+
+    # --- Phase 1: cold-start every cell in parallel (independent -> smooth).
+    node_of = {}                                   # (i,j) -> converged node_r
+    cell_args = [(i, j, t_d_of[j], tof_of[i], segs_per_rev, mu_moon)
+                 for i in range(n_t) for j in range(n_d)]
     chunksize = max(1, len(cell_args) // (n_workers * 4))
     total = len(cell_args)
     t_start = time.time()
     with mp.Pool(n_workers) as pool:
-        for n_done, (i, j, val, st) in enumerate(
-            pool.imap_unordered(_solve_cell_discretized, cell_args,
+        for n_done, (i, j, val, st, node) in enumerate(
+            pool.imap_unordered(_solve_cell_cold, cell_args,
                                 chunksize=chunksize), 1
         ):
             dv[i, j] = val
             status[i, j] = st
-            if verbose:
-                pct = 100.0 * n_done / total
-                elapsed = time.time() - t_start
-                eta = elapsed * (total - n_done) / n_done if n_done else 0.0
-                print(f"\r  disc-grid: {n_done}/{total}  ({pct:5.1f}%)  "
-                      f"elapsed {elapsed:6.1f}s  ETA {eta:6.1f}s",
+            if node is not None:
+                node_of[(i, j)] = node
+            if verbose and n_done % 200 == 0:
+                print(f"\r  disc-grid cold: {n_done}/{total}  "
+                      f"elapsed {time.time() - t_start:6.1f}s",
                       end="", flush=True)
+
+    # --- Phase 2: rescue non-converged cells from their best converged
+    # neighbor (any of the 4 directions), warm-started. Repeat until a pass
+    # rescues nothing. Only touches the handful of stragglers.
+    nbrs = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+    for _pass in range(6):
+        rescued = 0
+        targets = list(zip(*np.where(status == STATUS_MAX_ITER)))
+        for i, j in targets:
+            cand = [(dv[i + a, j + b], (i + a, j + b)) for a, b in nbrs
+                    if (i + a, j + b) in node_of]
+            if not cand:
+                continue
+            _, best = min(cand)                    # cheapest converged neighbor
+            st, val, opt = _discretized_cell(
+                i, j, t_d_of[j], tof_of[i], segs_per_rev, mu_moon,
+                warm_node=node_of[best])
+            if st == STATUS_OK and opt is not None:
+                dv[i, j] = val
+                status[i, j] = STATUS_OK
+                node_of[(i, j)] = opt["node_r"]
+                rescued += 1
+        if verbose:
+            print(f"\r  disc-grid rescue pass {_pass + 1}: "
+                  f"+{rescued} cells          ")
+        if rescued == 0:
+            break
+
     if verbose:
         print()
         n_ok = int(np.sum(status == STATUS_OK))
