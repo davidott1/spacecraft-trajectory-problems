@@ -50,7 +50,13 @@ R_PARK = R_EARTH + 300.0    # parking orbit radius (300 km LEO)
 R_TGT = 96_100.0            # target circular orbit radius (25% of lunar distance)
 
 THETA_PARK_0 = 0.0          # spacecraft true anomaly at t=0 [rad]
-THETA_TGT_0 = np.deg2rad(90.0)  # target true anomaly at t=0 [rad]
+THETA_TGT_0 = np.deg2rad(90.0)  # target mean anomaly at t=0 [rad]
+
+# Lunar (target) orbit eccentricity. 0.0 => circle of radius R_TGT (a = R_TGT,
+# periapsis along +x). THETA_TGT_0 + N_TGT*t is the Moon's MEAN anomaly, so at
+# ecc=0 this reduces exactly to the previous circular model. Default value; the
+# grid threads the active value through worker args (globals don't cross spawn).
+MOON_ECC = 0.0
 
 N_PARK = np.sqrt(MU / R_PARK**3)
 N_TGT = np.sqrt(MU / R_TGT**3)
@@ -62,7 +68,7 @@ DV_HOHMANN = (abs(np.sqrt(MU * (2 / R_PARK - 1 / _A_HOHMANN)) - np.sqrt(MU / R_P
 
 # Skip Newton shooting when the conic Lambert seed's total ΔV is already above this.
 # Anything beyond is uninteresting (Hohmann ΔV ≈ 4.14 km/s for reference).
-DV_MAX_SEED = 5.0  # km/s
+DV_MAX_SEED = 5.5  # km/s
 
 # Grid (hours)
 T_DEP = np.linspace(0.0, 2.0, 41)       # departure window
@@ -378,11 +384,37 @@ def run_grid_multirev(max_n_rev=None, hard_cap=30, verbose=True, n_workers=None)
 
 
 # -------- 3-body dynamics + shooting --------
-def _moon_state(t):
-    th = THETA_TGT_0 + N_TGT * t
-    r = R_TGT * np.array([np.cos(th), np.sin(th), 0.0])
-    v = R_TGT * N_TGT * np.array([-np.sin(th), np.cos(th), 0.0])
-    return r, v
+def _moon_rv(M, a, n, ecc):
+    """Moon position & velocity (2-D) on a Keplerian ellipse: semi-major axis
+    a, mean motion n, eccentricity ecc, periapsis along +x, mean anomaly M.
+    Returns (r[2], v[2]) with v = dr/dt (true Keplerian velocity), so the
+    optimizer's ∂r/∂t = v chain-rule term stays exact. At ecc=0 this is the
+    circular orbit a·[cosM, sinM], velocity a·n·[-sinM, cosM]."""
+    if ecc <= 0.0:
+        c, s = np.cos(M), np.sin(M)
+        return (np.array([a * c, a * s]),
+                np.array([-a * n * s, a * n * c]))
+    twopi = 2.0 * np.pi
+    Mr = M - twopi * np.floor(M / twopi)          # wrap to [0, 2π) for Newton
+    E = Mr if ecc < 0.8 else np.pi
+    for _ in range(60):
+        dE = (E - ecc * np.sin(E) - Mr) / (1.0 - ecc * np.cos(E))
+        E -= dE
+        if abs(dE) < 1e-14:
+            break
+    cE, sE = np.cos(E), np.sin(E)
+    b = a * np.sqrt(1.0 - ecc * ecc)
+    Edot = n / (1.0 - ecc * cE)                    # dE/dt
+    return (np.array([a * (cE - ecc), b * sE]),
+            np.array([-a * sE * Edot, b * cE * Edot]))
+
+
+def _moon_state(t, ecc=None):
+    if ecc is None:
+        ecc = MOON_ECC
+    rm, vm = _moon_rv(THETA_TGT_0 + N_TGT * t, R_TGT, N_TGT, ecc)
+    return (np.array([rm[0], rm[1], 0.0]),
+            np.array([vm[0], vm[1], 0.0]))
 
 
 @njit(cache=True, fastmath=True)
@@ -974,13 +1006,17 @@ def plot_porkchop_arrival(dv_total, out_name="porkchop_arrival.png",
 
 def plot_porkchop_grid_raw(dv, out_name="porkchop_discretized_raw.png",
                            title="Discretized grid (raw cells, no interp)",
-                           dv_span=2.0):
+                           dv_span=2.0, vmin=None, vmax=None):
     """Raw grid: one colored square per (departure, time-of-flight) cell, NO
     interpolation. NaN cells (screened / non-converged) render grey. This is
-    the faithful picture of exactly what the optimizer produced per cell."""
+    the faithful picture of exactly what the optimizer produced per cell.
+
+    vmin/vmax pin the color scale (e.g. to a shared min/max across several
+    grids). If left None they default to [nanmin(dv), nanmin(dv)+dv_span]."""
     dv = np.asarray(dv, dtype=np.float64)              # (n_TOF, n_DEP)
-    vmin = float(np.nanmin(dv))
-    vmax = vmin + dv_span
+    data_min = float(np.nanmin(dv))
+    vmin = data_min if vmin is None else float(vmin)
+    vmax = (vmin + dv_span) if vmax is None else float(vmax)
 
     # Cell-edge arrays so each cell is a square (pcolormesh, flat shading).
     ddep = T_DEP[1] - T_DEP[0]
@@ -1002,11 +1038,11 @@ def plot_porkchop_grid_raw(dv, out_name="porkchop_discretized_raw.png",
     ax.set_ylabel("Time of flight [hr]")
     ax.set_title(
         f"{title}: circ {R_PARK:.0f} km → circ {R_TGT:.0f} km\n"
-        f"min ΔV = {vmin:.3f} km/s   ({n_ok} converged cells)"
+        f"min ΔV = {data_min:.3f} km/s   ({n_ok} converged cells)"
     )
     fig.tight_layout()
     fig.savefig(out_name, dpi=120)
-    print(f"Saved {out_name}  (min ΔV = {vmin:.4f} km/s, {n_ok} cells)")
+    print(f"Saved {out_name}  (min ΔV = {data_min:.4f} km/s, {n_ok} cells)")
 
 
 def _replay_failed_cell(args):
@@ -1522,7 +1558,7 @@ def _piecewise_lambert_xy(node_r, seg_dt, mu, n_pts=30):
 
 def optimize_net_delta_v(r1, r2, node_r0, seg_dt, t_dep_s, mu, mu_moon,
                          record_iters=False, v_dep_ref=None, v_arr_ref=None,
-                         burn_weight=0.0):
+                         burn_weight=0.0, moon_ecc=0.0):
     """Joint BFGS solve over the decision vector  x = [Δτ, interior nodes].
 
     Segment time is explicit from the decision vector (no Δτ bisection / no
@@ -1649,9 +1685,8 @@ def optimize_net_delta_v(r1, r2, node_r0, seg_dt, t_dep_s, mu, mu_moon,
             # v1/v2/J always populated now (real Lambert or straight-line
             # fallback), so every node yields a differentiable term.
             Dtstar = 0.5 * (Dt[k - 1] + Dt[k])
-            th = THETA_TGT_0 + N_TGT * t_node[k]
-            rm = R_TGT * np.array([np.cos(th), np.sin(th)])
-            vm = R_TGT * N_TGT * np.array([-np.sin(th), np.cos(th)])
+            rm, vm = _moon_rv(THETA_TGT_0 + N_TGT * t_node[k],
+                              R_TGT, N_TGT, moon_ecc)
             dvec = rm - P[k]
             raw = np.linalg.norm(dvec)
             dist = max(raw, OFF)
@@ -1844,7 +1879,8 @@ def _interp_nodes(node_prev, n_new, r1, r2):
     return nodes
 
 
-def _discretized_cell(i, j, t_d, tof_s, segs_per_rev, mu_moon, warm_node=None):
+def _discretized_cell(i, j, t_d, tof_s, segs_per_rev, mu_moon, warm_node=None,
+                      moon_ecc=0.0):
     """Solve one cell. warm_node=None -> cold start (Sundman-ODE discretize);
     else continue from the neighbor's converged nodes (interpolated to this
     cell's n_seg). Returns (status, dv_total, opt_dict_or_None)."""
@@ -1852,7 +1888,7 @@ def _discretized_cell(i, j, t_d, tof_s, segs_per_rev, mu_moon, warm_node=None):
     r1 = np.array([R_PARK * np.cos(th_park), R_PARK * np.sin(th_park), 0.0])
     v_park = np.array([-R_PARK * N_PARK * np.sin(th_park),
                         R_PARK * N_PARK * np.cos(th_park), 0.0])
-    r_moon, v_moon = _moon_state(t_d + tof_s)
+    r_moon, v_moon = _moon_state(t_d + tof_s, moon_ecc)
     r_target = r_moon * (1.0 - MOON_ARRIVAL_OFFSET / np.linalg.norm(r_moon))
 
     ok, v1x, v1y, _z1, v2x, v2y, _z2 = _lambert_njit(
@@ -1880,7 +1916,7 @@ def _discretized_cell(i, j, t_d, tof_s, segs_per_rev, mu_moon, warm_node=None):
             node_r0 = _interp_nodes(warm_node, n_seg, r1, r_target)
             seg_dt0 = [tof_s / n_seg] * n_seg
         opt = optimize_net_delta_v(r1, r_target, node_r0, seg_dt0,
-                                   t_d, MU, mu_moon)
+                                   t_d, MU, mu_moon, moon_ecc=moon_ecc)
     except Exception:
         return STATUS_MAX_ITER, np.nan, None
 
@@ -1904,18 +1940,19 @@ def _solve_cell_cold(args):
     own best solution (smooth where it converges). Returns
     (i, j, dv, status, node_r) — node_r kept for converged cells so a
     non-converged neighbor can warm-start from it in the rescue pass."""
-    i, j, t_d, tof_s, segs_per_rev, mu_moon = args
+    i, j, t_d, tof_s, segs_per_rev, mu_moon, moon_ecc = args
     st, dv, opt = _discretized_cell(i, j, t_d, tof_s, segs_per_rev,
-                                    mu_moon, warm_node=None)
+                                    mu_moon, warm_node=None, moon_ecc=moon_ecc)
     node = opt["node_r"] if (st == STATUS_OK and opt is not None) else None
     return i, j, dv, st, node
 
 
 def run_grid_discretized(segs_per_rev=24, verbose=True, n_workers=None,
-                         mu_moon=None):
+                         mu_moon=None, moon_ecc=0.0):
     """Porkchop grid (N=0) solved by the discretized net-Δv-minimization
     method. mu_moon=None uses MU_MOON (Moon-perturbed); pass 0.0 for the pure
-    two-body (Kepler) grid on the identical cells/target/screen.
+    two-body (Kepler) grid on the identical cells/target/screen. moon_ecc sets
+    the lunar (target) orbit eccentricity (threaded through worker args).
     Returns (dv, status) — each shape (n_TOF, n_DEP)."""
     import time
     if mu_moon is None:
@@ -1931,7 +1968,7 @@ def run_grid_discretized(segs_per_rev=24, verbose=True, n_workers=None,
 
     # --- Phase 1: cold-start every cell in parallel (independent -> smooth).
     node_of = {}                                   # (i,j) -> converged node_r
-    cell_args = [(i, j, t_d_of[j], tof_of[i], segs_per_rev, mu_moon)
+    cell_args = [(i, j, t_d_of[j], tof_of[i], segs_per_rev, mu_moon, moon_ecc)
                  for i in range(n_t) for j in range(n_d)]
     chunksize = max(1, len(cell_args) // (n_workers * 4))
     total = len(cell_args)
@@ -1965,7 +2002,7 @@ def run_grid_discretized(segs_per_rev=24, verbose=True, n_workers=None,
             _, best = min(cand)                    # cheapest converged neighbor
             st, val, opt = _discretized_cell(
                 i, j, t_d_of[j], tof_of[i], segs_per_rev, mu_moon,
-                warm_node=node_of[best])
+                warm_node=node_of[best], moon_ecc=moon_ecc)
             if st == STATUS_OK and opt is not None:
                 dv[i, j] = val
                 status[i, j] = STATUS_OK
@@ -2687,15 +2724,35 @@ def plot_porkchop_arrival_multirev(dv_best, n_best):
 
 if __name__ == "__main__":
     import time
-    # Only the two raw-cell porkchops: full Moon gravity and pure Kepler (no Moon).
-    t2 = time.time()
-    dv_disc, _ = run_grid_discretized(segs_per_rev=24)
-    print(f"  discretized grid done in {time.time() - t2:.1f}s")
-    plot_porkchop_grid_raw(dv_disc, out_name="porkchop_discretized_raw.png",
-                           title="Discretized net-Δv min, N=0 (raw cells)")
-    dv_kep, _ = run_grid_discretized(segs_per_rev=24, mu_moon=0.0)
-    plot_porkchop_grid_raw(dv_kep, out_name="porkchop_kepler_raw.png",
-                           title="Kepler (no Moon gravity), N=0 (raw cells)")
+    # Raw-cell porkchops at several lunar (target) orbit eccentricities. For
+    # each ecc: full Moon gravity + pure Kepler (no Moon). The eccentric lunar
+    # orbit moves the target, so the Kepler grid also varies with ecc.
+    eccs = [0.0, 0.1, 0.5]
+    grids = {}                                 # (kind, ecc) -> dv array
+    for e in eccs:
+        t2 = time.time()
+        dv_disc, _ = run_grid_discretized(segs_per_rev=24, moon_ecc=e)
+        dv_kep, _ = run_grid_discretized(segs_per_rev=24, mu_moon=0.0,
+                                         moon_ecc=e)
+        print(f"  ecc={e:.1f} grids done in {time.time() - t2:.1f}s")
+        grids[("moon", e)] = dv_disc
+        grids[("kep", e)] = dv_kep
+
+    # One shared color scale across all six: min over every grid, single top
+    # at the DV_MAX_SEED cap so all plots are directly comparable.
+    shared_min = float(min(np.nanmin(g) for g in grids.values()))
+    shared_max = DV_MAX_SEED  # km/s
+    for e in eccs:
+        plot_porkchop_grid_raw(
+            grids[("moon", e)],
+            out_name=f"porkchop_moon_gravity_raw_ecc{e:.1f}.png",
+            title=f"Discretized net-Δv min, N=0, lunar ecc={e:.1f} (raw cells)",
+            vmin=shared_min, vmax=shared_max)
+        plot_porkchop_grid_raw(
+            grids[("kep", e)],
+            out_name=f"porkchop_kepler_raw_ecc{e:.1f}.png",
+            title=f"Kepler (no Moon gravity), N=0, lunar ecc={e:.1f} (raw cells)",
+            vmin=shared_min, vmax=shared_max)
 
     # --- Newton section commented out: conic set only for now ---
     # # Conic grid restricted to N=0 for an apples-to-apples Newton comparison
