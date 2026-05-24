@@ -15,6 +15,7 @@ import sys
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as mpe
 from numba import njit
 from scipy.integrate import solve_ivp
 from scipy.optimize import root, minimize, least_squares
@@ -288,10 +289,14 @@ def circ_state(R, theta0, n, t):
 
 # -------- Grid search (parallel + JIT) --------
 def _solve_cell_n(args):
-    """Worker: solve one (i, j) cell for one N (both branches if N>0).
-    Returns (i, j, best_dv) — best_dv is np.inf if no solution exists.
+    """Worker: solve one (i, j) cell for one N (both branches if N>0). Targets
+    the (possibly eccentric) Moon at arrival — r_target offset toward Earth by a
+    lunar radius, arrival burn matching the lunar velocity — same convention as
+    the Kepler grid. Returns (i, j, best_dv); best_dv is np.inf only if no
+    Lambert solution exists. The DV_MAX_SEED cap is applied after the N-sweep
+    so it can't prematurely terminate it.
     """
-    i, j, t_d, tof_s, n_rev = args
+    i, j, t_d, tof_s, n_rev, moon_ecc = args
     # Inline circ_state to avoid extra function call overhead
     th_park = THETA_PARK_0 + N_PARK * t_d
     r1x = R_PARK * np.cos(th_park)
@@ -299,11 +304,11 @@ def _solve_cell_n(args):
     vpx = -R_PARK * N_PARK * np.sin(th_park)
     vpy = R_PARK * N_PARK * np.cos(th_park)
 
-    th_tgt = THETA_TGT_0 + N_TGT * (t_d + tof_s)
-    r2x = R_TGT * np.cos(th_tgt)
-    r2y = R_TGT * np.sin(th_tgt)
-    vtx = -R_TGT * N_TGT * np.sin(th_tgt)
-    vty = R_TGT * N_TGT * np.cos(th_tgt)
+    (rm, vm) = _moon_state(t_d + tof_s, moon_ecc)
+    rmn = np.hypot(rm[0], rm[1])
+    r2x = rm[0] * (1.0 - MOON_ARRIVAL_OFFSET / rmn)
+    r2y = rm[1] * (1.0 - MOON_ARRIVAL_OFFSET / rmn)
+    vtx, vty = vm[0], vm[1]
 
     if n_rev == 0:
         branches = (0,)  # branch_short ignored; pick one
@@ -323,11 +328,13 @@ def _solve_cell_n(args):
         dv = dv1 + dv2
         if dv < best:
             best = dv
-    return i, j, best
+    return i, j, best     # DV_MAX_SEED cap applied after the full N-sweep
 
 
-def run_grid_multirev(max_n_rev=None, hard_cap=30, verbose=True, n_workers=None):
+def run_grid_multirev(max_n_rev=None, hard_cap=30, verbose=True, n_workers=None,
+                      moon_ecc=0.0):
     """Parallel grid sweep over N=0,1,2,... until no cell has any solution.
+    Conic (Kepler) multi-rev Lambert to the (possibly eccentric) Moon.
     Returns (dv_best, n_best, dv_n0):
       dv_best[i,j] = min total ΔV across all N (NaN if unsolvable)
       n_best[i,j]  = N that achieves dv_best (or -1)
@@ -345,7 +352,8 @@ def run_grid_multirev(max_n_rev=None, hard_cap=30, verbose=True, n_workers=None)
     with mp.Pool(n_workers) as pool:
         while True:
             cell_args = [
-                (i, j, float(T_DEP[j] * 3600.0), float(TOF[i] * 3600.0), n_rev)
+                (i, j, float(T_DEP[j] * 3600.0), float(TOF[i] * 3600.0),
+                 n_rev, moon_ecc)
                 for i in range(n_t) for j in range(n_d)
             ]
             chunksize = max(1, len(cell_args) // (n_workers * 4))
@@ -378,8 +386,14 @@ def run_grid_multirev(max_n_rev=None, hard_cap=30, verbose=True, n_workers=None)
                     print(f"  reached hard cap N={hard_cap}, stopping")
                 break
 
+    # Apply the ΔV cap now (after the full N-sweep): cells whose cheapest
+    # N-rev solution still exceeds DV_MAX_SEED are screened out (NaN).
     dv_best[~np.isfinite(dv_best)] = np.nan
     dv_n0[~np.isfinite(dv_n0)] = np.nan
+    over = dv_best > DV_MAX_SEED
+    dv_best[over] = np.nan
+    n_best[over] = -1
+    dv_n0[dv_n0 > DV_MAX_SEED] = np.nan
     return dv_best, n_best, dv_n0
 
 
@@ -1004,15 +1018,35 @@ def plot_porkchop_arrival(dv_total, out_name="porkchop_arrival.png",
     print(f"Saved {out_name}  (min ΔV = {vmin:.4f} km/s)")
 
 
+def _overlay_nrev_bands(ax, n_best, cell_fontsize=3.5):
+    """Write each cell's actual best N-rev count inside it (white glyph, black
+    outline so it reads on any colormap value); only valid cells (N >= 0) get a
+    number. ax axes are departure-hr (x), TOF-hr (y). No band dividers — the
+    per-cell frontier is genuinely jagged (and diagonal at high lunar ecc), so
+    a horizontal majority-line summary was misleading."""
+    n_best = np.asarray(n_best)
+    stroke = [mpe.withStroke(linewidth=0.6, foreground="black")]
+    for i in range(len(TOF)):
+        for j in range(len(T_DEP)):
+            N = int(n_best[i, j])
+            if N < 0:
+                continue
+            ax.text(T_DEP[j], TOF[i], str(N), fontsize=cell_fontsize,
+                    color="white", ha="center", va="center",
+                    path_effects=stroke)
+
+
 def plot_porkchop_grid_raw(dv, out_name="porkchop_discretized_raw.png",
                            title="Discretized grid (raw cells, no interp)",
-                           dv_span=2.0, vmin=None, vmax=None):
+                           dv_span=2.0, vmin=None, vmax=None, n_best=None):
     """Raw grid: one colored square per (departure, time-of-flight) cell, NO
     interpolation. NaN cells (screened / non-converged) render grey. This is
     the faithful picture of exactly what the optimizer produced per cell.
 
     vmin/vmax pin the color scale (e.g. to a shared min/max across several
-    grids). If left None they default to [nanmin(dv), nanmin(dv)+dv_span]."""
+    grids). If left None they default to [nanmin(dv), nanmin(dv)+dv_span].
+    n_best (optional): per-cell best N-rev array — overlays the N-band
+    boundaries when given."""
     dv = np.asarray(dv, dtype=np.float64)              # (n_TOF, n_DEP)
     data_min = float(np.nanmin(dv))
     vmin = data_min if vmin is None else float(vmin)
@@ -1033,16 +1067,167 @@ def plot_porkchop_grid_raw(dv, out_name="porkchop_discretized_raw.png",
     pc = ax.pcolormesh(dep_edges, tof_edges, Zm, cmap=cmap,
                        vmin=vmin, vmax=vmax, shading="flat")
     plt.colorbar(pc, ax=ax, label="Total ΔV [km/s]", extend="max")
+    if n_best is not None:
+        _overlay_nrev_bands(ax, n_best)
     n_ok = int(np.sum(np.isfinite(dv)))
     ax.set_xlabel("Departure time [hr]")
-    ax.set_ylabel("Time of flight [hr]")
+    ax.set_ylabel("Arrival time [hr]")
     ax.set_title(
         f"{title}: circ {R_PARK:.0f} km → circ {R_TGT:.0f} km\n"
         f"min ΔV = {data_min:.3f} km/s   ({n_ok} converged cells)"
     )
     fig.tight_layout()
-    fig.savefig(out_name, dpi=120)
+    fig.savefig(out_name, dpi=300)          # high DPI so per-cell N is readable
     print(f"Saved {out_name}  (min ΔV = {data_min:.4f} km/s, {n_ok} cells)")
+
+
+def _multirev_solutions(i, j, moon_ecc, hard_cap=30):
+    """Every conic (Kepler) Lambert solution for cell (i, j): N=0, then both
+    branches (long/short) of N=1, 2, 3, … until no branch has a solution.
+    Each entry has its total ΔV and propagated polyline. Pure compute."""
+    t_d = float(T_DEP[j] * 3600.0)
+    tof_s = float(TOF[i] * 3600.0)
+    r1, v_park = circ_state(R_PARK, THETA_PARK_0, N_PARK, t_d)
+    r_moon, v_moon = _moon_state(t_d + tof_s, moon_ecc)
+    r_tgt = r_moon * (1.0 - MOON_ARRIVAL_OFFSET / np.linalg.norm(r_moon))
+
+    sols = []
+    n_rev = 0
+    while True:
+        # branch_short flag -> period convention: bs=0 gives the smaller
+        # semi-major axis (shorter period) = "short"; bs=1 the larger a = "long".
+        branches = [(0, "—")] if n_rev == 0 else [(0, "short"), (1, "long")]
+        any_ok = False
+        for bs, bname in branches:
+            ok, v1x, v1y, _z, v2x, v2y, _z2 = _lambert_njit(
+                r1[0], r1[1], 0.0, r_tgt[0], r_tgt[1], 0.0,
+                tof_s, MU, 1, n_rev, bs, 1e-8, 400)
+            if not ok:
+                continue
+            any_ok = True
+            v1 = np.array([v1x, v1y, 0.0])
+            dv = (np.hypot(v1x - v_park[0], v1y - v_park[1]) +
+                  np.hypot(v_moon[0] - v2x, v_moon[1] - v2y))
+            ss = np.linspace(0.0, tof_s, 160 * (n_rev + 1))
+            poly = np.array([_kepler_uv(r1, v1, s, MU)[0][:2] for s in ss])
+            sols.append(dict(n_rev=n_rev, branch=bname, dv=dv, poly=poly))
+        if not any_ok:
+            break
+        n_rev += 1
+        if n_rev > hard_cap:
+            break
+    return dict(r1=r1, r_tgt=r_tgt, r_moon=r_moon, sols=sols,
+                title=f"t_dep = {T_DEP[j]:.2f} hr,  TOF = {TOF[i]:.1f} hr")
+
+
+def _draw_multirev(ax, data, moon_ecc):
+    """Render all N-rev Lambert arcs for a cell into an axes (colored by N,
+    cheapest one drawn bold). Used for the interactive right-hand panel."""
+    ax.clear()
+    th = np.linspace(0, 2 * np.pi, 360)
+    tt = np.linspace(0.0, 2 * np.pi / N_TGT, 720)     # one lunar period
+    mp_xy = np.array([_moon_state(t, moon_ecc)[0][:2] for t in tt])
+    ax.plot(mp_xy[:, 0], mp_xy[:, 1], "k--", lw=0.7, alpha=0.5,
+            label=f"Lunar orbit (ecc={moon_ecc:.1f})")
+    ax.plot(R_PARK * np.cos(th), R_PARK * np.sin(th), "b--", lw=0.7,
+            alpha=0.5, label="Parking orbit")
+    ax.add_patch(plt.Circle((0, 0), R_EARTH, color="#6fa8dc", alpha=0.6))
+
+    sols = data["sols"]
+    if sols:
+        best = int(np.argmin([s["dv"] for s in sols]))
+        cmap = plt.cm.turbo
+        for k, s in enumerate(sols):
+            col = cmap(0.12 + 0.76 * k / max(1, len(sols) - 1))
+            is_best = (k == best)
+            tag = (f"N={s['n_rev']}" +
+                   ("" if s["branch"] == "—" else f" {s['branch']}") +
+                   f": {s['dv']:.3f}" + (" *" if is_best else ""))
+            ax.plot(s["poly"][:, 0], s["poly"][:, 1], "-", color=col,
+                    lw=2.4 if is_best else 1.0,
+                    alpha=1.0 if is_best else 0.7, label=tag, zorder=3 if is_best else 2)
+        info = (f"best N={sols[best]['n_rev']}"
+                f"  ΔV={sols[best]['dv']:.3f} km/s   "
+                f"({len(sols)} N-rev solutions)")
+    else:
+        info = "no Lambert solution"
+
+    ax.plot([data["r1"][0]], [data["r1"][1]], "ko", ms=6, label="Departure")
+    ax.plot([data["r_tgt"][0]], [data["r_tgt"][1]], "r*", ms=15,
+            label="Arrival")
+    rm = data["r_moon"]
+    ax.add_patch(plt.Circle((rm[0], rm[1]), MOON_ARRIVAL_OFFSET,
+                            color="0.4", alpha=0.8))
+    ax.set_aspect("equal")
+    ax.set_xlabel("x [km]")
+    ax.set_ylabel("y [km]")
+    ax.legend(fontsize=7, loc="upper right")
+    ax.set_title(f"{data['title']}\n{info}")
+
+
+def interactive_porkchop(dv, n_best, moon_ecc, vmin, vmax, title, hard_cap=30):
+    """Open ONE window split into best-of-N-rev porkchop (left) + trajectory
+    (right). The left panel overlays the N-rev band boundaries (where the
+    optimal number of revolutions changes) from n_best. ⌘-click (Cmd / super /
+    meta — Ctrl also accepted) a cell to draw ALL its N-rev Lambert solutions in
+    the right panel *in place*. We never open a second window: the macosx
+    backend segfaults when a new figure is shown from inside a click callback,
+    so the panel redraws on the existing canvas."""
+    try:
+        plt.switch_backend("macosx")           # native, interactive on macOS
+    except Exception:
+        for be in ("TkAgg", "Qt5Agg", "QtAgg"):
+            try:
+                plt.switch_backend(be)
+                break
+            except Exception:
+                continue
+
+    dv = np.asarray(dv, dtype=np.float64)
+    ddep = T_DEP[1] - T_DEP[0]
+    dtof = TOF[1] - TOF[0]
+    dep_edges = np.concatenate([T_DEP - 0.5 * ddep, [T_DEP[-1] + 0.5 * ddep]])
+    tof_edges = np.concatenate([TOF - 0.5 * dtof, [TOF[-1] + 0.5 * dtof]])
+    cmap = plt.cm.viridis.copy()
+    cmap.set_bad("lightgrey")
+
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(15, 7))
+    axL.set_facecolor("lightgrey")
+    pc = axL.pcolormesh(dep_edges, tof_edges, np.ma.masked_invalid(dv),
+                        cmap=cmap, vmin=vmin, vmax=vmax, shading="flat")
+    fig.colorbar(pc, ax=axL, label="Total ΔV [km/s]", extend="max")
+
+    _overlay_nrev_bands(axL, n_best)    # N-rev band dividers + labels
+
+    axL.set_xlabel("Departure time [hr]")
+    axL.set_ylabel("Arrival time [hr]")
+    axL.set_title(f"{title}\n⌘-click a cell to plot its N-rev solutions")
+    axR.set_aspect("equal")
+    axR.set_title("(⌘-click a cell)")
+
+    _MODS = ("cmd", "super", "meta", "ctrl", "control")
+
+    def on_click(event):
+        if event.inaxes is not axL or event.xdata is None:
+            return
+        if not any(m in (event.key or "") for m in _MODS):
+            return                              # plain click: ignore
+        j = int(np.argmin(np.abs(T_DEP - event.xdata)))
+        i = int(np.argmin(np.abs(TOF - event.ydata)))
+        try:
+            data = _multirev_solutions(i, j, moon_ecc, hard_cap)
+            _draw_multirev(axR, data, moon_ecc)         # live, in place
+            fig.canvas.draw_idle()
+            n_sol = len(data["sols"])
+            print(f"  ⌘-click (dep={T_DEP[j]:.2f}hr, tof={TOF[i]:.1f}hr): "
+                  f"{n_sol} N-rev solution(s)")
+        except Exception as exc:                # never kill the event loop
+            print(f"  trajectory generation failed: {exc!r}")
+
+    fig.canvas.mpl_connect("button_press_event", on_click)
+    fig.tight_layout()
+    print("Interactive porkchop open — ⌘-click (or Ctrl-click) a cell.")
+    plt.show()
 
 
 def _replay_failed_cell(args):
@@ -2724,35 +2909,46 @@ def plot_porkchop_arrival_multirev(dv_best, n_best):
 
 if __name__ == "__main__":
     import time
-    # Raw-cell porkchops at several lunar (target) orbit eccentricities. For
-    # each ecc: full Moon gravity + pure Kepler (no Moon). The eccentric lunar
-    # orbit moves the target, so the Kepler grid also varies with ecc.
+
+    # --- Interactive mode: open the best-of-N-rev Kepler porkchop; ⌘-click a
+    # cell to plot all its N-rev solutions.  Usage:
+    #   python porkchop_circ_to_circ.py --interactive [ecc]
+    if any(a in ("--interactive", "-i") for a in sys.argv[1:]):
+        rest = [a for a in sys.argv[1:] if a not in ("--interactive", "-i")]
+        ecc = next((float(a) for a in rest
+                    if a.replace(".", "", 1).isdigit()), 0.0)
+        print(f"Building best-of-N-rev Kepler grid (lunar ecc={ecc:.1f})…")
+        dv_best, n_best, _ = run_grid_multirev(moon_ecc=ecc)
+        title = f"Kepler best-of-N-rev, lunar ecc={ecc:.1f}"
+        interactive_porkchop(dv_best, n_best, ecc,
+                             vmin=float(np.nanmin(dv_best)),
+                             vmax=DV_MAX_SEED, title=title)
+        sys.exit(0)
+
+    # Best-of-N-rev Kepler porkchops at several lunar (target) orbit
+    # eccentricities: for each cell, sweep N=0,1,2,… until no Lambert solution
+    # remains and keep the cheapest. The eccentric lunar orbit moves the
+    # target, so the grid varies with ecc.
     eccs = [0.0, 0.1, 0.5]
-    grids = {}                                 # (kind, ecc) -> dv array
+    grids = {}                                 # ecc -> best-of-N dv array
+    nbest = {}                                 # ecc -> best-of-N n_best array
     for e in eccs:
         t2 = time.time()
-        dv_disc, _ = run_grid_discretized(segs_per_rev=24, moon_ecc=e)
-        dv_kep, _ = run_grid_discretized(segs_per_rev=24, mu_moon=0.0,
-                                         moon_ecc=e)
-        print(f"  ecc={e:.1f} grids done in {time.time() - t2:.1f}s")
-        grids[("moon", e)] = dv_disc
-        grids[("kep", e)] = dv_kep
+        dv_best, n_best, _ = run_grid_multirev(moon_ecc=e)
+        print(f"  ecc={e:.1f} best-of-N grid done in {time.time() - t2:.1f}s "
+              f"(N up to {int(np.nanmax(n_best))})")
+        grids[e] = dv_best
+        nbest[e] = n_best
 
-    # One shared color scale across all six: min over every grid, single top
-    # at the DV_MAX_SEED cap so all plots are directly comparable.
+    # One shared color scale: min over every grid, single top at DV_MAX_SEED.
     shared_min = float(min(np.nanmin(g) for g in grids.values()))
     shared_max = DV_MAX_SEED  # km/s
     for e in eccs:
         plot_porkchop_grid_raw(
-            grids[("moon", e)],
-            out_name=f"porkchop_moon_gravity_raw_ecc{e:.1f}.png",
-            title=f"Discretized net-Δv min, N=0, lunar ecc={e:.1f} (raw cells)",
-            vmin=shared_min, vmax=shared_max)
-        plot_porkchop_grid_raw(
-            grids[("kep", e)],
+            grids[e],
             out_name=f"porkchop_kepler_raw_ecc{e:.1f}.png",
-            title=f"Kepler (no Moon gravity), N=0, lunar ecc={e:.1f} (raw cells)",
-            vmin=shared_min, vmax=shared_max)
+            title=f"Kepler best-of-N-rev, lunar ecc={e:.1f} (raw cells)",
+            vmin=shared_min, vmax=shared_max, n_best=nbest[e])
 
     # --- Newton section commented out: conic set only for now ---
     # # Conic grid restricted to N=0 for an apples-to-apples Newton comparison
