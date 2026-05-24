@@ -2935,7 +2935,7 @@ if __name__ == "__main__":
 
     # --- Interactive mode: open the best-of-N-rev Kepler porkchop; ⌘-click a
     # cell to plot all its N-rev solutions.  Usage:
-    #   python porkchop_circ_to_circ.py --interactive [ecc]
+    #   python porkchop.py --interactive [ecc]
     if any(a in ("--interactive", "-i") for a in sys.argv[1:]):
         rest = [a for a in sys.argv[1:] if a not in ("--interactive", "-i")]
         ecc = next((float(a) for a in rest
