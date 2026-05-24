@@ -1217,36 +1217,65 @@ def _march_conic_sundman(r1, v1, mu, delta_tau, tof):
     return node_r, node_v, seg_dt
 
 
+def _sundman_nodes(r1, v1, mu, tof, n_seg, alpha=1.5):
+    """Place n_seg+1 nodes by integrating the two-body problem in the Sundman
+    independent variable τ.  7-state y = [r(3), v(3), t]:
+
+        dr/dτ = v · r^α,   dv/dτ = (−μ r/|r|³) · r^α,   dt/dτ = r^α
+
+    Shoot on total τ: integrate until the time state reaches tof (terminal
+    event), giving τ_f. Then Δτ = τ_f/n_seg and the nodes are the integrated
+    states sampled at k·Δτ (uniform in τ ⇒ Sundman spacing, dense near
+    periapsis). Returns (Δτ, node_r, node_v, seg_dt)."""
+    def rhs(tau, y):
+        px, py, pz, vx, vy, vz, _t = y
+        r = np.sqrt(px * px + py * py + pz * pz)
+        s = r ** alpha
+        ar = -mu / r ** 3 * s
+        return [vx * s, vy * s, vz * s, ar * px, ar * py, ar * pz, s]
+
+    def hit_tof(tau, y):
+        return y[6] - tof
+    hit_tof.terminal = True
+    hit_tof.direction = 1.0
+
+    y0 = [r1[0], r1[1], r1[2], v1[0], v1[1], v1[2], 0.0]
+    tau_max = 10.0 * tof / (np.linalg.norm(r1) ** alpha)   # safe upper bound
+    sol = solve_ivp(rhs, (0.0, tau_max), y0, method="DOP853",
+                    rtol=1e-10, atol=1e-3, events=hit_tof, dense_output=True)
+    tau_f = sol.t_events[0][0]
+    dtau = tau_f / n_seg
+    node_r, node_v = [], []
+    for k in range(n_seg + 1):
+        yk = sol.sol(k * dtau)
+        node_r.append(np.array([yk[0], yk[1], yk[2]]))
+        node_v.append(np.array([yk[3], yk[4], yk[5]]))
+    seg_dt = [float(sol.sol((k + 1) * dtau)[6] - sol.sol(k * dtau)[6])
+              for k in range(n_seg)]
+    return dtau, node_r, node_v, seg_dt
+
+
 def discretize_conic_segments(r1, v1, tof, mu, segs_per_rev=24):
-    """Self-consistent initial guess for the discretized transfer: ONE cheap
-    Sundman march of the conic with the fixed seed Δτ = 2π/segs_per_rev (the
-    1/√μ factor makes that the circular-orbit value, so segs_per_rev means
-    segments per physical rev). No Δτ bisection — Δτ and the node positions
-    are refined jointly by optimize_net_delta_v (BFGS). Because the nodes lie
-    on the conic with consistent Sundman Δt, the per-segment Lambert legs
-    reproduce the conic (node ΔV ~0), giving BFGS a good warm start.
-    Returns nodes, seg_dt, the seed Δτ, per-seg Lambert, and node ΔVs."""
+    """Break the conic into N Sundman segments with NO truncated last segment:
+    find Δτ so N segments (Δt=rstar^1.5/√μ·Δτ) span exactly tof, landing the
+    final node on conic(tof)=r_target. The nodes are then Sundman-consistent
+    with the optimizer's own Δt rule, so the warm-start net ΔV ≈ Σ|Δv_moon|."""
     r1n = np.linalg.norm(r1)
     v1n = np.linalg.norm(v1)
     inv_a = 2.0 / r1n - v1n * v1n / mu        # = 1/a (vis-viva)
     elliptic = inv_a > 1e-12
     T = 2.0 * np.pi * np.sqrt((1.0 / inv_a) ** 3 / mu) if elliptic else np.nan
 
-    delta_tau = 2.0 * np.pi / segs_per_rev
-    node_r, node_v_true, seg_dt = _march_conic_sundman(
-        r1, v1, mu, delta_tau, tof)
-    n_seg = len(seg_dt)
+    n_seg = int(round(segs_per_rev * tof / T)) if elliptic else segs_per_rev
+    n_seg = max(4, n_seg)
+    delta_tau, node_r, node_v_true, seg_dt = _sundman_nodes(
+        r1, v1, mu, tof, n_seg)
 
-    # Per-segment Lambert on the conic (for the initial-guess trajectory plot).
     seg_v_out, seg_v_in = [], []
     for k in range(n_seg):
         sol = lambert_uv(node_r[k], node_r[k + 1], seg_dt[k], mu, prograde=True)
-        if sol is None:
-            seg_v_out.append(None)
-            seg_v_in.append(None)
-        else:
-            seg_v_out.append(sol[0])
-            seg_v_in.append(sol[1])
+        seg_v_out.append(sol[0] if sol else None)
+        seg_v_in.append(sol[1] if sol else None)
 
     node_dv = []
     for k in range(1, n_seg):
@@ -1486,7 +1515,8 @@ def _piecewise_lambert_xy(node_r, seg_dt, mu, n_pts=30):
 
 
 def optimize_net_delta_v(r1, r2, node_r0, seg_dt, t_dep_s, mu, mu_moon,
-                         record_iters=False):
+                         record_iters=False, v_dep_ref=None, v_arr_ref=None,
+                         burn_weight=0.0):
     """Joint BFGS solve over the decision vector  x = [Δτ, interior nodes].
 
     Segment time is explicit from the decision vector (no Δτ bisection / no
@@ -1535,17 +1565,14 @@ def optimize_net_delta_v(r1, r2, node_r0, seg_dt, t_dep_s, mu, mu_moon,
     tof = float(seg_dt_c.sum())
     L = 1.0                                                # positions already O(1)
 
-    # Fixed per-segment weights `mult` (as in handcrafted_trajectory_design):
-    #   Δt_k = Δτ · rstar_k^1.5/√μ · mult_k.  Calibrated once so x0 (Δτ=dtau0,
-    # nodes=node0) reproduces the discretization's seg_dt EXACTLY — including
-    # the truncated final segment a single global Δτ can't represent. So x0 is
-    # the exact conic split (Σ|Δv_net| ≈ Σ|Δv_moon|) and Δτ stays the single
-    # time decision variable. `mult` is a constant factor in Δt_k, so the
-    # analytic gradient is unchanged (it folds into `coef`).
+    # Step rule:  Δt_k = rstar_k^1.5 · Δτ  (mu=1 canonical, no mult).
+    # "Find Δτ that satisfies the flight time" is closed-form for fixed nodes:
+    #   tof = Σ Δt_k = Δτ · Σ rstar_k^1.5   =>   Δτ0 = tof / Σ rstar_k^1.5.
+    # Δτ then stays a free decision variable so it keeps satisfying the time
+    # term as the interior nodes move during the joint minimization.
     rmag0 = np.linalg.norm(node0, axis=1)
     rstar0_seg = rmag0[:-1] + rmag0[1:]                     # (n_seg,)
-    dtau0 = 2.0 * np.pi / 24.0                              # arbitrary ref
-    mult = seg_dt_c * sqrt_mu / (rstar0_seg ** 1.5 * dtau0)
+    dtau0 = tof / float(np.sum(rstar0_seg ** 1.5))
 
     x0 = np.empty(1 + 2 * n_int)
     x0[0] = dtau0
@@ -1564,7 +1591,7 @@ def optimize_net_delta_v(r1, r2, node_r0, seg_dt, t_dep_s, mu, mu_moon,
         P[1:n_seg, 1] = x[2::2] * L
         rmag = np.linalg.norm(P, axis=1)
         rstar = rmag[:-1] + rmag[1:]                       # (n_seg,)
-        coef = rstar ** 1.5 / sqrt_mu * mult              # Δt = coef·Δτ
+        coef = rstar ** 1.5 / sqrt_mu                     # Δt = coef·Δτ
         Dt = coef * dtau
         f = 1.5 * Dt / rstar
         gA = f[:, None] * (P[:-1] / rmag[:-1, None])       # ∂Δt_k/∂P_k
@@ -1639,8 +1666,19 @@ def optimize_net_delta_v(r1, r2, node_r0, seg_dt, t_dep_s, mu, mu_moon,
     # sum-of-squares structure and is far more robust than BFGS on the
     # degenerate-sub-arc non-convexity.
     n_var = 1 + 2 * n_int
-    n_res = 2 * n_int + 1
     sqrtW = np.sqrt(W)
+    # Boundary-burn residuals: minimize departure |v_dep - v_park| and arrival
+    # |v_arr - v_moon| too (total-Δv "energy" objective, as in the reference).
+    # This selects the min-Δv member among the otherwise-arbitrary net-zero
+    # solutions, so the porkchop varies smoothly cell-to-cell.
+    has_burn = (v_dep_ref is not None and v_arr_ref is not None
+                and burn_weight > 0.0)
+    wb = float(burn_weight)
+    if has_burn:
+        vdr = np.asarray(v_dep_ref[:2], dtype=np.float64) / VU
+        var = np.asarray(v_arr_ref[:2], dtype=np.float64) / VU
+    n_res = 2 * n_int + 1 + (4 if has_burn else 0)
+    iT = 2 * n_int                                # time-closure residual index
 
     def _resid(x):
         pk = _pack(x)
@@ -1650,7 +1688,11 @@ def optimize_net_delta_v(r1, r2, node_r0, seg_dt, t_dep_s, mu, mu_moon,
         for i, t in enumerate(nt):
             r[2 * i] = t[0][0]
             r[2 * i + 1] = t[0][1]
-        r[-1] = sqrtW * (float(np.sum(Dt)) - tof) / tof
+        r[iT] = sqrtW * (float(np.sum(Dt)) - tof) / tof
+        if has_burn:
+            v1, v2 = pk[9], pk[10]
+            r[iT + 1:iT + 3] = wb * (v1[0] - vdr)
+            r[iT + 3:iT + 5] = wb * (v2[-1] - var)
         return r
 
     def _jac(x):
@@ -1660,6 +1702,7 @@ def optimize_net_delta_v(r1, r2, node_r0, seg_dt, t_dep_s, mu, mu_moon,
         nt = _node_terms(pk)
         Jm = np.zeros((n_res, n_var))
         cT = sqrtW / tof
+        ns1 = n_seg - 1
         for iv in range(n_var):
             dP = np.zeros((n_seg + 1, 2))
             dDt = np.zeros(n_seg)
@@ -1672,7 +1715,7 @@ def optimize_net_delta_v(r1, r2, node_r0, seg_dt, t_dep_s, mu, mu_moon,
                 dDt[node - 1] = gB[node - 1, ax] * L
                 dDt[node] = gA[node, ax] * L
             dtnode = np.concatenate([[0.0], np.cumsum(dDt)])
-            Jm[-1, iv] = cT * dDt.sum()
+            Jm[iT, iv] = cT * dDt.sum()
             for i, k in enumerate(range(1, n_seg)):
                 dvnet, S, a, M, vm, Dtstar, w = nt[i]
                 dv1 = J1r1[k] @ dP[k] + J1r2[k] @ dP[k + 1] + J1dt[k] * dDt[k]
@@ -1685,6 +1728,15 @@ def optimize_net_delta_v(r1, r2, node_r0, seg_dt, t_dep_s, mu, mu_moon,
                 dnet = dconic - ddmoon
                 Jm[2 * i, iv] = dnet[0]
                 Jm[2 * i + 1, iv] = dnet[1]
+            if has_burn:
+                # ∂v_dep/∂x = ∂v1[0]; node0 fixed so only via seg-0 endpoint1+Δt
+                dvdep = J1r2[0] @ dP[1] + J1dt[0] * dDt[0]
+                # ∂v_arr/∂x = ∂v2[-1]; node n fixed so via seg-(n-1) start+Δt
+                dvarr = (J2r1[ns1] @ dP[ns1] + J2dt[ns1] * dDt[ns1])
+                Jm[iT + 1, iv] = wb * dvdep[0]
+                Jm[iT + 2, iv] = wb * dvdep[1]
+                Jm[iT + 3, iv] = wb * dvarr[0]
+                Jm[iT + 4, iv] = wb * dvarr[1]
         return Jm
 
     def _vectors(x):
