@@ -289,13 +289,11 @@ def circ_state(R, theta0, n, t):
 
 # -------- Grid search (parallel + JIT) --------
 def _solve_cell_n(args):
-    """Worker: solve one (i, j) cell for one N (both branches if N>0). 3-D
-    Kepler: aim at the Moon's exact position on its orbit (elements in `morb` =
-    (ecc, sma, inc, raan, argp)), match its velocity. The departure burn picks
-    up any plane change (v1z) since the parking orbit is in the xy-plane.
-    Returns (i, j, best_dv); best_dv is np.inf only if no Lambert solution
-    exists. The DV_MAX_SEED cap is applied after the N-sweep so it can't
-    prematurely terminate it.
+    """Worker: solve one (i, j) cell for one N (both branches if N>0). Planar
+    Kepler: aim at the Moon's exact position on its orbit (morb = (ecc, sma)),
+    match its velocity. Returns (i, j, best_dv); best_dv is np.inf only if no
+    Lambert solution exists. The DV_MAX_SEED cap is applied after the N-sweep
+    so it can't prematurely terminate it.
     """
     i, j, t_d, tof_s, n_rev, morb = args
     # Inline circ_state to avoid extra function call overhead
@@ -305,7 +303,7 @@ def _solve_cell_n(args):
     vpx = -R_PARK * N_PARK * np.sin(th_park)
     vpy = R_PARK * N_PARK * np.cos(th_park)
 
-    rm, vm = _moon_state(t_d + tof_s, *morb)          # 3-D target r & v
+    rm, vm = _moon_state(t_d + tof_s, *morb)          # target r & v (z=0)
 
     if n_rev == 0:
         branches = (0,)  # branch_short ignored; pick one
@@ -314,15 +312,14 @@ def _solve_cell_n(args):
 
     best = np.inf
     for bs in branches:
-        ok, v1x, v1y, v1z, v2x, v2y, v2z = _lambert_njit(
-            r1x, r1y, 0.0, rm[0], rm[1], rm[2],
+        ok, v1x, v1y, _v1z, v2x, v2y, _v2z = _lambert_njit(
+            r1x, r1y, 0.0, rm[0], rm[1], 0.0,
             tof_s, MU, 1, n_rev, bs, 1e-8, 400,
         )
         if not ok:
             continue
-        dv1 = np.sqrt((v1x - vpx) ** 2 + (v1y - vpy) ** 2 + v1z ** 2)
-        dv2 = np.sqrt((vm[0] - v2x) ** 2 + (vm[1] - v2y) ** 2
-                      + (vm[2] - v2z) ** 2)
+        dv1 = np.sqrt((v1x - vpx) ** 2 + (v1y - vpy) ** 2)
+        dv2 = np.sqrt((vm[0] - v2x) ** 2 + (vm[1] - v2y) ** 2)
         dv = dv1 + dv2
         if dv < best:
             best = dv
@@ -332,15 +329,15 @@ def _solve_cell_n(args):
 def run_grid_multirev(max_n_rev=None, hard_cap=30, verbose=True, n_workers=None,
                       morb=None):
     """Parallel grid sweep over N=0,1,2,... until no cell has any solution.
-    Conic (Kepler) multi-rev Lambert to the Moon, whose orbit is given by
-    morb = (ecc, sma, inc, raan, argp) (angles in radians; defaults to the
-    planar circle at R_TGT). Returns (dv_best, n_best, dv_n0):
+    Conic (Kepler) multi-rev Lambert to the Moon, whose planar orbit is given
+    by morb = (ecc, sma) (defaults to the circle at R_TGT). Returns
+    (dv_best, n_best, dv_n0):
       dv_best[i,j] = min total ΔV across all N (NaN if unsolvable)
       n_best[i,j]  = N that achieves dv_best (or -1)
       dv_n0[i,j]   = ΔV for N=0 specifically (NaN if no N=0 solution)
     """
     if morb is None:
-        morb = (0.0, R_TGT, 0.0, 0.0, 0.0)
+        morb = (0.0, R_TGT)
     n_t, n_d = len(TOF), len(T_DEP)
     dv_best = np.full((n_t, n_d), np.inf)
     n_best = np.full((n_t, n_d), -1, dtype=np.int32)
@@ -424,26 +421,15 @@ def _moon_rv(M, a, n, ecc):
             np.array([-a * sE * Edot, b * cE * Edot]))
 
 
-def _moon_state(t, ecc=0.0, sma=None, inc=0.0, raan=0.0, argp=0.0):
-    """Moon (target) state at time t for a Keplerian orbit defined by
-    eccentricity, semi-major axis (default R_TGT) and orientation angles
-    inclination / RAAN / argument-of-periapsis (radians). THETA_TGT_0 is the
-    mean anomaly at epoch. Returns 3-D (r, v); reduces to the planar circle
-    at ecc=inc=raan=argp=0 and sma=R_TGT."""
+def _moon_state(t, ecc=0.0, sma=None):
+    """Moon (target) state at time t for a planar Keplerian orbit defined by
+    eccentricity and semi-major axis (default R_TGT); THETA_TGT_0 is the mean
+    anomaly at epoch. Returns (r, v) as 3-D vectors in the xy-plane (z=0)."""
     a = R_TGT if sma is None else sma
     n = np.sqrt(MU / a ** 3)
-    rpf, vpf = _moon_rv(THETA_TGT_0 + n * t, a, n, ecc)   # in-plane (perifocal)
-    r = np.array([rpf[0], rpf[1], 0.0])
-    v = np.array([vpf[0], vpf[1], 0.0])
-    if inc or raan or argp:                              # perifocal -> inertial
-        cO, sO = np.cos(raan), np.sin(raan)
-        ci, si = np.cos(inc), np.sin(inc)
-        cw, sw = np.cos(argp), np.sin(argp)
-        Q = (np.array([[cO, -sO, 0.0], [sO, cO, 0.0], [0.0, 0.0, 1.0]]) @
-             np.array([[1.0, 0.0, 0.0], [0.0, ci, -si], [0.0, si, ci]]) @
-             np.array([[cw, -sw, 0.0], [sw, cw, 0.0], [0.0, 0.0, 1.0]]))
-        r, v = Q @ r, Q @ v
-    return r, v
+    rpf, vpf = _moon_rv(THETA_TGT_0 + n * t, a, n, ecc)
+    return (np.array([rpf[0], rpf[1], 0.0]),
+            np.array([vpf[0], vpf[1], 0.0]))
 
 
 @njit(cache=True, fastmath=True)
@@ -1102,9 +1088,9 @@ def plot_porkchop_grid_raw(dv, out_name="porkchop_discretized_raw.png",
 
 def _multirev_solutions(i, j, morb, hard_cap=30):
     """Every conic (Kepler) Lambert solution for cell (i, j): N=0, then both
-    branches (short/long) of N=1, 2, 3, … until no branch has a solution. 3-D
-    (the Moon orbit `morb` may be inclined). Each entry has its total ΔV and
-    its xy-projected polyline. Pure compute."""
+    branches (short/long) of N=1, 2, 3, … until no branch has a solution.
+    Planar (the Moon orbit `morb` = (ecc, sma)). Each entry has its total ΔV
+    and its xy polyline. Pure compute."""
     t_d = float(T_DEP[j] * 3600.0)
     tof_s = float(TOF[i] * 3600.0)
     r1, v_park = circ_state(R_PARK, THETA_PARK_0, N_PARK, t_d)
@@ -1119,16 +1105,15 @@ def _multirev_solutions(i, j, morb, hard_cap=30):
         branches = [(0, "—")] if n_rev == 0 else [(0, "short"), (1, "long")]
         any_ok = False
         for bs, bname in branches:
-            ok, v1x, v1y, v1z, v2x, v2y, v2z = _lambert_njit(
-                r1[0], r1[1], 0.0, r_tgt[0], r_tgt[1], r_tgt[2],
+            ok, v1x, v1y, _z, v2x, v2y, _z2 = _lambert_njit(
+                r1[0], r1[1], 0.0, r_tgt[0], r_tgt[1], 0.0,
                 tof_s, MU, 1, n_rev, bs, 1e-8, 400)
             if not ok:
                 continue
             any_ok = True
-            v1 = np.array([v1x, v1y, v1z])
-            v2 = np.array([v2x, v2y, v2z])
-            dv = float(np.linalg.norm(v1 - v_park) +
-                       np.linalg.norm(v_moon - v2))
+            v1 = np.array([v1x, v1y, 0.0])
+            dv = (np.hypot(v1x - v_park[0], v1y - v_park[1]) +
+                  np.hypot(v_moon[0] - v2x, v_moon[1] - v2y))
             ss = np.linspace(0.0, tof_s, 160 * (n_rev + 1))
             poly = np.array([_kepler_uv(r1, v1, s, MU)[0][:2] for s in ss])
             sols.append(dict(n_rev=n_rev, branch=bname, dv=dv, poly=poly))
@@ -1142,8 +1127,8 @@ def _multirev_solutions(i, j, morb, hard_cap=30):
 
 
 def _draw_multirev(ax, data, morb):
-    """Render all N-rev Lambert arcs for a cell into an axes (xy projection;
-    colored by N, cheapest one drawn bold). Used for the right-hand panel."""
+    """Render all N-rev Lambert arcs for a cell into a 2-D axes (colored by N,
+    cheapest one drawn bold). Used for the right-hand panel."""
     ax.clear()
     ecc, sma = morb[0], (R_TGT if morb[1] is None else morb[1])
     n_moon = np.sqrt(MU / sma ** 3)
@@ -1167,8 +1152,8 @@ def _draw_multirev(ax, data, morb):
                    ("" if s["branch"] == "—" else f" {s['branch']}") +
                    f": {s['dv']:.3f}" + (" *" if is_best else ""))
             ax.plot(s["poly"][:, 0], s["poly"][:, 1], "-", color=col,
-                    lw=2.4 if is_best else 1.0,
-                    alpha=1.0 if is_best else 0.7, label=tag, zorder=3 if is_best else 2)
+                    lw=2.4 if is_best else 1.0, alpha=1.0 if is_best else 0.7,
+                    label=tag, zorder=3 if is_best else 2)
         info = (f"best N={sols[best]['n_rev']}"
                 f"  ΔV={sols[best]['dv']:.3f} km/s   "
                 f"({len(sols)} N-rev solutions)")
@@ -2954,8 +2939,8 @@ if __name__ == "__main__":
     import time
 
     # Lunar (target) orbit elements are CLI flags. Usage:
-    #   python porkchop.py --interactive --ecc 0.1 --sma 96100 --inc 10 ...
-    #   python porkchop.py                      (batch: ecc sweep, other elts from flags)
+    #   python porkchop.py --interactive --ecc 0.1 --sma 96100
+    #   python porkchop.py                  (batch: ecc sweep, sma from flag)
     ap = argparse.ArgumentParser(description="Kepler best-of-N-rev porkchop")
     ap.add_argument("--interactive", "-i", action="store_true",
                     help="open the interactive ⌘-click porkchop window")
@@ -2963,21 +2948,13 @@ if __name__ == "__main__":
                     help="lunar orbit eccentricity")
     ap.add_argument("--sma", type=float, default=R_TGT,
                     help="lunar orbit semi-major axis [km]")
-    ap.add_argument("--inc", type=float, default=0.0,
-                    help="lunar orbit inclination [deg]")
-    ap.add_argument("--raan", type=float, default=0.0,
-                    help="right ascension of ascending node [deg]")
-    ap.add_argument("--argp", type=float, default=0.0,
-                    help="argument of periapsis [deg]")
     args = ap.parse_args()
 
-    def _morb(ecc):                     # bundle elements (angles -> radians)
-        return (ecc, args.sma, np.deg2rad(args.inc),
-                np.deg2rad(args.raan), np.deg2rad(args.argp))
+    def _morb(ecc):
+        return (ecc, args.sma)
 
     def _eltxt(ecc):
-        return (f"a={args.sma:.0f} km, e={ecc:.2f}, i={args.inc:.0f}°, "
-                f"Ω={args.raan:.0f}°, ω={args.argp:.0f}°")
+        return f"a={args.sma:.0f} km, e={ecc:.2f}"
 
     # --- Interactive mode: best-of-N-rev porkchop; ⌘-click a cell to plot all
     # its N-rev solutions.
