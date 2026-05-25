@@ -821,6 +821,15 @@ def plot_multi_flyby(n_flybys=6, r_p=None, out_name="gravity_assist_multi_flyby.
     z_moon = np.zeros_like(th)
     ax3d.plot(x_moon, y_moon, z_moon, "-", color="#9467bd", lw=2.5, label="Moon orbit", alpha=0.8)
 
+    # Hohmann transfer from R_INIT to R_A
+    a_t = 0.5 * (R_INIT + R_A)
+    r_dep = R_INIT * np.array([-1.0, 0.0])
+    v_peri = np.sqrt(MU_C * (2.0 / R_INIT - 1.0 / a_t))
+    bx, by = _prop2(r_dep, np.sqrt(MU_C * (2.0 / R_INIT - 1.0 / a_t)) * np.array([0.0, -1.0]),
+                    np.pi * np.sqrt(a_t ** 3 / MU_C))
+    bz = np.zeros_like(bx)
+    ax3d.plot(bx, by, bz, "-", color="0.5", lw=2, alpha=0.6, label="Hohmann transfer")
+
     colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"]
     linestyles = ["-", "-", "-", "-", "-", "-"]  # all solid
     total_inc = 0.0
@@ -885,6 +894,9 @@ def plot_multi_flyby(n_flybys=6, r_p=None, out_name="gravity_assist_multi_flyby.
     # Initial and Moon orbits
     ax2d.plot(x_init, y_init, "--", color="#d62728", lw=2, label="initial orbit", alpha=0.7)
     ax2d.plot(x_moon, y_moon, "-", color="#9467bd", lw=2.5, label="Moon orbit", alpha=0.8)
+
+    # Hohmann transfer
+    ax2d.plot(bx, by, "-", color="0.5", lw=2, alpha=0.6, label="Hohmann transfer")
 
     # GA legs — cumulative inclination at every half-revolution
     total_inc_2d = 0.0
