@@ -824,6 +824,7 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
     colors = ["#1f77b4", "#ff7f0e", "#2ca02c"]
     linestyles = ["-", "-", "-"]  # all solid
     total_inc = 0.0
+    sma_check = []
 
     # Plot GA legs in 3D — cumulative inclination
     # All use same post-GA velocity, but rotated around x-axis for tilt
@@ -842,6 +843,12 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
         v_z = sin_i * v_y_base + cos_i * v_z_base
         v_out_3d = np.array([0.0, v_y, v_z])
         r_enc_3d = np.array([r_enc[0], r_enc[1], 0.0])
+
+        # Compute SMA from energy at encounter point
+        v_mag_sq = np.sum(v_out_3d ** 2)
+        E = 0.5 * v_mag_sq - MU_C / np.linalg.norm(r_enc_3d)
+        a_computed = -MU_C / (2.0 * E) if E < 0 else np.inf
+        sma_check.append(a_computed)
 
         if np.isfinite(a_sc):
             t_prop = 1.5 * 2.0 * np.pi * np.sqrt(a_sc ** 3 / MU_C)
@@ -919,12 +926,13 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
     print(f"  Initial orbit:  R_INIT = {R_INIT} DU")
     print(f"  Moon orbit:     R_A = {R_A} DU")
     print(f"  Flyby r_p:      {r_p:.4f} DU")
-    print(f"\n  Leg | δ (°) | Δi (°) | a (DU)")
-    print(f"  ----+-------+--------+-------")
-    for enc in encounters:
-        print(f"   {enc['flyby']}  | {enc['delta_deg']:5.1f} | {enc['i_deg']:6.1f} | {enc['a']:.4f}")
-    print(f"  ----+-------+--------+-------")
+    print(f"\n  Leg | δ (°) | Δi (°) | a (DU) | a_check (DU)")
+    print(f"  ----+-------+--------+--------+----------")
+    for i, enc in enumerate(encounters):
+        print(f"   {enc['flyby']}  | {enc['delta_deg']:5.1f} | {enc['i_deg']:6.1f} | {enc['a']:.4f} | {sma_check[i]:.4f}")
+    print(f"  ----+-------+--------+--------+----------")
     print(f"  Total accumulated inclination: {total_inc:.1f}°")
+    print(f"  SMA consistency check: all legs should have same a ✓" if np.allclose(sma_check, sma_check[0], rtol=1e-4) else f"  SMA MISMATCH! ✗")
 
 
 if __name__ == "__main__":
