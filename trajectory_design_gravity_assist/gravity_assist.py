@@ -961,12 +961,12 @@ def plot_multi_flyby(n_flybys=6, r_p=None, out_name="gravity_assist_multi_flyby.
     print(f"  SMA consistency check: all legs should have same a ✓" if np.allclose(sma_check, sma_check[0], rtol=1e-4) else f"  SMA MISMATCH! ✗")
 
 
-def plot_vinf_sphere(out_name="gravity_assist_vinf_sphere.png"):
+def plot_vinf_sphere(encounters_list, out_name="gravity_assist_vinf_sphere.png"):
     """Plot the v_infinity sphere showing how the relative velocity vector
     marches around after each successive GA at the ascending/descending nodes."""
     _, v_apo, v_cA, v_inf = hohmann_to_assist()
     r_p, _, _ = find_resonance_rp(verbose=False)
-    delta = encounters[0]["outcome"]["delta"] if 'encounters' in dir() else turn_angle(v_inf, r_p)
+    delta = encounters_list[0]["outcome"]["delta"] if encounters_list else turn_angle(v_inf, r_p)
 
     fig = plt.figure(figsize=(12, 10))
     ax = fig.add_subplot(111, projection="3d")
@@ -1011,9 +1011,9 @@ def plot_vinf_sphere(out_name="gravity_assist_vinf_sphere.png"):
 
         ax.quiver(0, 0, 0, vinf_out[0], vinf_out[1], vinf_out[2],
                  color=colors[i], arrow_length_ratio=0.15, linewidth=2.5,
-                 label=f"Leg {i+1}: i={total_inc+encounters[0]['i_deg']:.1f}°")
+                 label=f"Leg {i+1}: i={total_inc+encounters_list[0]['i_deg']:.1f}°")
 
-        total_inc += encounters[0]["i_deg"]
+        total_inc += encounters_list[0]["i_deg"]
 
     ax.set_xlabel("x (v-space)", fontsize=11)
     ax.set_ylabel("y (v-space)", fontsize=11)
@@ -1032,6 +1032,7 @@ def plot_vinf_sphere(out_name="gravity_assist_vinf_sphere.png"):
     fig.tight_layout()
     fig.savefig(out_name, dpi=150)
     print(f"Saved {out_name}")
+    plt.show()  # Keep interactive window open for rotation
 
 
 if __name__ == "__main__":
@@ -1044,4 +1045,4 @@ if __name__ == "__main__":
 
     # Need to populate encounters for vinf_sphere plot
     encounters = propagate_multi_flyby(6, None)
-    plot_vinf_sphere()
+    plot_vinf_sphere(encounters)
