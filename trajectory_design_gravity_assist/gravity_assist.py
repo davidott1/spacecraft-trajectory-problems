@@ -822,6 +822,7 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
     ax3d.plot(x_moon, y_moon, z_moon, "-", color="#9467bd", lw=2.5, label="Moon orbit", alpha=0.8)
 
     colors = ["#1f77b4", "#ff7f0e", "#2ca02c"]
+    linestyles = ["-", "--", ":"]
     total_inc = 0.0
 
     # Plot GA legs in 3D
@@ -840,7 +841,7 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
             t_prop = 10.0
 
         x, y, z = _prop3(r_enc_3d, v_out_3d, t_prop, n=500)
-        ax3d.plot(x, y, z, "-", color=colors[i], lw=2.5, label=f"Leg {i+1}: Δi={enc['i_deg']:.1f}°")
+        ax3d.plot(x, y, z, linestyles[i], color=colors[i], lw=2.5, label=f"Leg {i+1}: Δi={enc['i_deg']:.1f}°")
         ax3d.scatter([r_enc[0]], [r_enc[1]], [0], s=120, color=colors[i], marker="*", edgecolors="k", linewidths=1)
         total_inc += enc["i_deg"]
 
@@ -879,7 +880,7 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
             t_prop = 10.0
 
         x, y, z = _prop3(r_enc_3d, v_out_3d, t_prop, n=500)
-        ax2d.plot(x, y, "-", color=colors[i], lw=2.5, label=f"Leg {i+1}: Δi={enc['i_deg']:.1f}°")
+        ax2d.plot(x, y, linestyles[i], color=colors[i], lw=2.5, label=f"Leg {i+1}: Δi={enc['i_deg']:.1f}°")
         ax2d.plot(r_enc[0], r_enc[1], "*", color=colors[i], ms=12, markeredgecolor="k", markeredgewidth=0.5)
 
     ax2d.plot(0, 0, "o", color="gold", ms=10, markeredgecolor="k", markeredgewidth=1)
