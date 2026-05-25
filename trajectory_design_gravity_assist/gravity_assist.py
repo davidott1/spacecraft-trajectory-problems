@@ -825,13 +825,16 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
     linestyles = ["-", "--", ":"]
     total_inc = 0.0
 
-    # Plot GA legs in 3D
+    # Plot GA legs in 3D — cumulative inclination
     for i, enc in enumerate(encounters):
         delta = enc["outcome"]["delta"]
         a_sc = enc["a"]
 
-        v_y = v_cA - v_inf * np.cos(delta)
-        v_z = v_inf * np.sin(delta)
+        # Construct velocity with cumulative inclination from previous GA
+        # At ascending node: v = v_apo * (0, cos(i_cumulative), sin(i_cumulative))
+        i_rad = np.radians(total_inc)
+        v_y = v_apo * np.cos(i_rad) - v_inf * np.cos(delta)
+        v_z = v_apo * np.sin(i_rad) + v_inf * np.sin(delta)
         v_out_3d = np.array([0.0, v_y, v_z])
         r_enc_3d = np.array([r_enc[0], r_enc[1], 0.0])
 
@@ -841,7 +844,7 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
             t_prop = 10.0
 
         x, y, z = _prop3(r_enc_3d, v_out_3d, t_prop, n=500)
-        ax3d.plot(x, y, z, linestyles[i], color=colors[i], lw=2.5, label=f"Leg {i+1}: Δi={enc['i_deg']:.1f}°")
+        ax3d.plot(x, y, z, linestyles[i], color=colors[i], lw=2.5, label=f"Leg {i+1}: i={total_inc+enc['i_deg']:.1f}°")
         ax3d.scatter([r_enc[0]], [r_enc[1]], [0], s=120, color=colors[i], marker="*", edgecolors="k", linewidths=1)
         total_inc += enc["i_deg"]
 
@@ -864,13 +867,16 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
     ax2d.plot(x_init, y_init, "--", color="#d62728", lw=2, label="initial orbit", alpha=0.7)
     ax2d.plot(x_moon, y_moon, "-", color="#9467bd", lw=2.5, label="Moon orbit", alpha=0.8)
 
-    # GA legs
+    # GA legs — cumulative inclination
+    total_inc_2d = 0.0
     for i, enc in enumerate(encounters):
         delta = enc["outcome"]["delta"]
         a_sc = enc["a"]
 
-        v_y = v_cA - v_inf * np.cos(delta)
-        v_z = v_inf * np.sin(delta)
+        # Construct velocity with cumulative inclination
+        i_rad = np.radians(total_inc_2d)
+        v_y = v_apo * np.cos(i_rad) - v_inf * np.cos(delta)
+        v_z = v_apo * np.sin(i_rad) + v_inf * np.sin(delta)
         v_out_3d = np.array([0.0, v_y, v_z])
         r_enc_3d = np.array([r_enc[0], r_enc[1], 0.0])
 
@@ -880,8 +886,9 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
             t_prop = 10.0
 
         x, y, z = _prop3(r_enc_3d, v_out_3d, t_prop, n=500)
-        ax2d.plot(x, y, linestyles[i], color=colors[i], lw=2.5, label=f"Leg {i+1}: Δi={enc['i_deg']:.1f}°")
+        ax2d.plot(x, y, linestyles[i], color=colors[i], lw=2.5, label=f"Leg {i+1}: i={total_inc_2d+enc['i_deg']:.1f}°")
         ax2d.plot(r_enc[0], r_enc[1], "*", color=colors[i], ms=12, markeredgecolor="k", markeredgewidth=0.5)
+        total_inc_2d += enc["i_deg"]
 
     ax2d.plot(0, 0, "o", color="gold", ms=10, markeredgecolor="k", markeredgewidth=1)
     ax2d.set_xlabel("x [DU]", fontsize=10)
