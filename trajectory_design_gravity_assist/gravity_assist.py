@@ -961,6 +961,79 @@ def plot_multi_flyby(n_flybys=6, r_p=None, out_name="gravity_assist_multi_flyby.
     print(f"  SMA consistency check: all legs should have same a ✓" if np.allclose(sma_check, sma_check[0], rtol=1e-4) else f"  SMA MISMATCH! ✗")
 
 
+def plot_vinf_sphere(out_name="gravity_assist_vinf_sphere.png"):
+    """Plot the v_infinity sphere showing how the relative velocity vector
+    marches around after each successive GA at the ascending/descending nodes."""
+    _, v_apo, v_cA, v_inf = hohmann_to_assist()
+    r_p, _, _ = find_resonance_rp(verbose=False)
+    delta = encounters[0]["outcome"]["delta"] if 'encounters' in dir() else turn_angle(v_inf, r_p)
+
+    fig = plt.figure(figsize=(12, 10))
+    ax = fig.add_subplot(111, projection="3d")
+
+    # Draw v_infinity sphere
+    th = np.linspace(0, 2*np.pi, 100)
+    ph = np.linspace(0, np.pi, 50)
+    TH, PH = np.meshgrid(th, ph)
+    Xs = v_inf * np.sin(PH) * np.cos(TH)
+    Ys = v_inf * np.sin(PH) * np.sin(TH)
+    Zs = v_inf * np.cos(PH)
+    ax.plot_surface(Xs, Ys, Zs, alpha=0.1, color="cyan")
+
+    # Initial v_infinity (retrograde, pointing in -y direction)
+    vinf_in = np.array([0, -v_inf, 0])
+    ax.quiver(0, 0, 0, vinf_in[0], vinf_in[1], vinf_in[2],
+             color="red", arrow_length_ratio=0.15, linewidth=3, label="initial v∞")
+
+    # v_infinity vectors after each GA
+    # They rotate around different axes depending on whether ascending or descending node
+    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"]
+    total_inc = 0.0
+
+    for i in range(6):
+        # Rotate around x-axis for cumulative inclination
+        i_rad = np.radians(total_inc)
+        cos_i = np.cos(i_rad)
+        sin_i = np.sin(i_rad)
+
+        # Start with v_infinity in the (y, z) plane after rotating by inclination
+        # vinf_in rotated around x-axis
+        vy_rot = cos_i * (-v_inf) - sin_i * 0
+        vz_rot = sin_i * (-v_inf) + cos_i * 0
+
+        # Now rotate by turn angle δ in the (y, z) plane
+        delta_i_rad = np.radians(total_inc) + delta  # effective turn in rotated frame
+        cos_d = np.cos(delta)
+        sin_d = np.sin(delta)
+        vy_out = cos_d * vy_rot - sin_d * vz_rot
+        vz_out = sin_d * vy_rot + cos_d * vz_rot
+        vinf_out = np.array([0, vy_out, vz_out])
+
+        ax.quiver(0, 0, 0, vinf_out[0], vinf_out[1], vinf_out[2],
+                 color=colors[i], arrow_length_ratio=0.15, linewidth=2.5,
+                 label=f"Leg {i+1}: i={total_inc+encounters[0]['i_deg']:.1f}°")
+
+        total_inc += encounters[0]["i_deg"]
+
+    ax.set_xlabel("x (v-space)", fontsize=11)
+    ax.set_ylabel("y (v-space)", fontsize=11)
+    ax.set_zlabel("z (v-space)", fontsize=11)
+    ax.set_xlim([-0.25, 0.25])
+    ax.set_ylim([-0.25, 0.25])
+    ax.set_zlim([-0.25, 0.25])
+    ax.set_title(f"v∞ Sphere: Relative Velocity Vectors After Each GA\n"
+                 f"v∞ magnitude = {v_inf:.4f} DU/TU, turn angle δ = {np.degrees(delta):.0f}°",
+                 fontsize=12, fontweight="bold")
+    ax.legend(fontsize=9, loc="upper left")
+    ax.set_box_aspect([1, 1, 1])
+    ax.view_init(elev=20, azim=-45)
+    ax.grid(alpha=0.3)
+
+    fig.tight_layout()
+    fig.savefig(out_name, dpi=150)
+    print(f"Saved {out_name}")
+
+
 if __name__ == "__main__":
     plot_concept()
     plot_flyby_explainer()
@@ -968,3 +1041,7 @@ if __name__ == "__main__":
     plot_inclination()
     plot_inclination_views()
     plot_multi_flyby()
+
+    # Need to populate encounters for vinf_sphere plot
+    encounters = propagate_multi_flyby(6, None)
+    plot_vinf_sphere()
