@@ -822,19 +822,24 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
     ax3d.plot(x_moon, y_moon, z_moon, "-", color="#9467bd", lw=2.5, label="Moon orbit", alpha=0.8)
 
     colors = ["#1f77b4", "#ff7f0e", "#2ca02c"]
-    linestyles = ["-", "--", ":"]
+    linestyles = ["-", "-", "-"]  # all solid
     total_inc = 0.0
 
     # Plot GA legs in 3D — cumulative inclination
+    # All use same post-GA velocity, but rotated around x-axis for tilt
+    delta = encounters[0]["outcome"]["delta"]
+    v_y_base = v_cA - v_inf * np.cos(delta)  # post-GA tangential speed
+    v_z_base = v_inf * np.sin(delta)         # post-GA out-of-plane speed
+
     for i, enc in enumerate(encounters):
-        delta = enc["outcome"]["delta"]
         a_sc = enc["a"]
 
-        # Construct velocity with cumulative inclination from previous GA
-        # At ascending node: v = v_apo * (0, cos(i_cumulative), sin(i_cumulative))
+        # Rotate the base velocity around x-axis by cumulative inclination angle
         i_rad = np.radians(total_inc)
-        v_y = v_apo * np.cos(i_rad) - v_inf * np.cos(delta)
-        v_z = v_apo * np.sin(i_rad) + v_inf * np.sin(delta)
+        cos_i = np.cos(i_rad)
+        sin_i = np.sin(i_rad)
+        v_y = cos_i * v_y_base - sin_i * v_z_base
+        v_z = sin_i * v_y_base + cos_i * v_z_base
         v_out_3d = np.array([0.0, v_y, v_z])
         r_enc_3d = np.array([r_enc[0], r_enc[1], 0.0])
 
@@ -868,16 +873,17 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
     ax2d.plot(x_init, y_init, "--", color="#d62728", lw=2, label="initial orbit", alpha=0.7)
     ax2d.plot(x_moon, y_moon, "-", color="#9467bd", lw=2.5, label="Moon orbit", alpha=0.8)
 
-    # GA legs — cumulative inclination
+    # GA legs — cumulative inclination (same velocity rotated)
     total_inc_2d = 0.0
     for i, enc in enumerate(encounters):
-        delta = enc["outcome"]["delta"]
         a_sc = enc["a"]
 
-        # Construct velocity with cumulative inclination
+        # Rotate the base velocity around x-axis by cumulative inclination angle
         i_rad = np.radians(total_inc_2d)
-        v_y = v_apo * np.cos(i_rad) - v_inf * np.cos(delta)
-        v_z = v_apo * np.sin(i_rad) + v_inf * np.sin(delta)
+        cos_i = np.cos(i_rad)
+        sin_i = np.sin(i_rad)
+        v_y = cos_i * v_y_base - sin_i * v_z_base
+        v_z = sin_i * v_y_base + cos_i * v_z_base
         v_out_3d = np.array([0.0, v_y, v_z])
         r_enc_3d = np.array([r_enc[0], r_enc[1], 0.0])
 
