@@ -460,7 +460,462 @@ def plot_soi_entry(out_name="gravity_assist_soi_entry.png"):
     print(f"Saved {out_name}  (SOI radius {r_soi:.3f} DU)")
 
 
+def flyby_inclination(r_p):
+    """Maximum heliocentric inclination change [rad] from a flyby at periapsis
+    r_p: turn v∞ fully OUT of the orbital plane (toward ±z). The turn angle δ is
+    fixed by r_p, so the component of v∞_out along v_a (hence the energy) is the
+    same as the in-plane case — only the perpendicular kick moves from radial to
+    out-of-plane. tan(i) = v∞·sinδ / (v_a − v∞·cosδ)."""
+    _, _, v_cA, v_inf = hohmann_to_assist()
+    d = turn_angle(v_inf, r_p)
+    return np.arctan2(v_inf * np.sin(d), v_cA - v_inf * np.cos(d))
+
+
+def _prop3(r0, v0, T, n=700, mu=MU_C):
+    """Sample a pure two-body (central-body) arc in 3-D from (r0, v0) over T."""
+    def f(t, y):
+        rr = (y[0] ** 2 + y[1] ** 2 + y[2] ** 2) ** 1.5
+        return [y[3], y[4], y[5],
+                -mu * y[0] / rr, -mu * y[1] / rr, -mu * y[2] / rr]
+    sol = solve_ivp(f, (0.0, T), [r0[0], r0[1], r0[2], v0[0], v0[1], v0[2]],
+                    t_eval=np.linspace(0.0, T, n), rtol=1e-9, atol=1e-12)
+    return sol.y[0], sol.y[1], sol.y[2]
+
+
+def plot_inclination(r_p=R_BODY, out_name="gravity_assist_inclination.png"):
+    """Out-of-plane (inclination) flybys. THREE reference flybys are shown in
+    EVERY panel with consistent colors, so the curve's markers match the orbits:
+      closest (blue, δ=135°, least inclined, biggest orbit),
+      δ=90°   (orange, max out-of-plane KICK),
+      peak    (green,  δ≈79°, max inclination ANGLE, smallest orbit).
+    Only the +z side is drawn (−z is the mirror). The trade: more inclination
+    comes with a smaller post-flyby orbit."""
+    _, v_apo, v_cA, v_inf = hohmann_to_assist()
+    r_soi = soi_radius()
+
+    BLUE, ORANGE, GREEN = "#1f77b4", "#ff7f0e", "#2ca02c"
+    # (name, color, marker, turn angle δ)
+    specials = [
+        ("closest", BLUE, "o", turn_angle(v_inf, r_p)),
+        ("δ=90° (max kick)", ORANGE, "D", np.pi / 2.0),
+        ("peak Δi", GREEN, "s", np.arccos(v_inf / v_cA)),
+    ]
+
+    def incl(delta):                              # heliocentric inclination
+        return np.arctan2(v_inf * np.sin(delta), v_cA - v_inf * np.cos(delta))
+
+    def rp_of(delta):                             # periapsis giving this turn
+        return (1.0 / np.sin(delta / 2.0) - 1.0) * MU_A / v_inf ** 2
+
+    rhat = np.array([1.0, 0.0, 0.0])
+    that = np.array([0.0, 1.0, 0.0])
+    zhat = np.array([0.0, 0.0, 1.0])
+    r_enc = R_A * rhat
+    v_a = v_cA * that
+
+    def orbit_xyz(delta):                         # +z tilted orbit for this δ
+        vy = v_cA - v_inf * np.cos(delta)
+        vz = v_inf * np.sin(delta)
+        v_sc = np.array([0.0, vy, vz])
+        a = -MU_C / (2.0 * (0.5 * (vy * vy + vz * vz) - MU_C / R_A))
+        return _prop3(r_enc, v_sc, 2.0 * np.pi * np.sqrt(a ** 3 / MU_C))
+
+    fig = plt.figure(figsize=(13, 11))
+    axL = fig.add_subplot(2, 2, 1)
+    axM = fig.add_subplot(2, 2, 2, projection="3d")
+    axR = fig.add_subplot(2, 2, 3)
+    axV = fig.add_subplot(2, 2, 4)
+
+    # ---- Panel 1: Δi vs r_p (full curve) + the three reference flybys ----
+    rp = np.linspace(R_BODY, 1.0, 600)
+    icurve = np.degrees(np.array([incl(turn_angle(v_inf, x)) for x in rp]))
+    valid = rp <= r_soi
+    axL.plot(rp[valid], icurve[valid], "k-", lw=2, label="valid (r_p ≤ SOI)")
+    axL.plot(rp[~valid], icurve[~valid], "k--", alpha=0.4, label="beyond SOI")
+    axL.axvline(r_soi, color="0.6", ls=":")
+    for name, col, mk, dd in specials:
+        axL.plot([rp_of(dd)], [np.degrees(incl(dd))], mk, color=col, ms=10,
+                 label=f"{name}: {np.degrees(incl(dd)):.1f}° (δ={np.degrees(dd):.0f}°)")
+    axL.set_xlabel("flyby periapsis r_p [DU]")
+    axL.set_ylabel("inclination change Δi [deg]")
+    axL.set_title("Δi vs flyby periapsis (out-of-plane turn)")
+    axL.legend(fontsize=7)
+    axL.grid(alpha=0.3)
+
+    # ---- Panel 2: 3-D orbits (in-plane + the three +z tilted) ----
+    o = flyby_outcome(r_p, +1)
+    xp, yp, zp = _prop3(r_enc, o["v_out"][0] * that + o["v_out"][1] * rhat,
+                        2 * np.pi * np.sqrt(o["a"] ** 3 / MU_C))
+    axM.plot(xp, yp, zp, "-", color="0.6", lw=1.4, label="in-plane (i=0)")
+    for name, col, mk, dd in specials:
+        x, y, z = orbit_xyz(dd)
+        axM.plot(x, y, z, "-", color=col, lw=1.5,
+                 label=f"{name} (i={np.degrees(incl(dd)):.1f}°)")
+    axM.scatter([0], [0], [0], color="gold", s=70, ec="k")
+    axM.scatter([r_enc[0]], [0], [0], color="red", marker="*", s=130)
+    axM.set_box_aspect((1, 1, 0.45))
+    axM.view_init(elev=12, azim=-35)
+    axM.set_xlabel("x [DU]"); axM.set_ylabel("y [DU]")
+    axM.set_zlabel("z [DU]  (exagg.)")
+    axM.legend(fontsize=7, loc="upper left")
+    axM.set_title("3-D orbits (+z) — green (peak) is most tilted, smallest")
+
+    # ---- Panel 3: SOI entry/exit (turn plane y–z); exits for the three δ ----
+    axR.add_patch(plt.Circle((0, 0), r_soi, fill=False, ec="0.5", ls=":",
+                             lw=1.5, label="SOI"))
+    axR.add_patch(plt.Circle((0, 0), R_BODY, color="0.4"))
+    Larr = 0.4 * r_soi
+    din = np.array([-1.0, 0.0])                  # v∞_in in (y, z): retrograde = -y
+    ent = -r_soi * din
+    axR.plot([ent[0]], [ent[1]], "r*", ms=15, label="enter (v∞ in)")
+    axR.annotate("", xy=ent + Larr * din, xytext=ent,
+                 arrowprops=dict(arrowstyle="-|>", color="#d62728", lw=2.5))
+    for name, col, mk, dd in specials:
+        dout = np.array([-np.cos(dd), np.sin(dd)])     # v∞_out (+z) in (y, z)
+        dout = dout / np.linalg.norm(dout)
+        ex = r_soi * dout
+        axR.plot([ex[0]], [ex[1]], mk, color=col, ms=10, label=f"{name} exit")
+        axR.annotate("", xy=ex + Larr * dout, xytext=ex,
+                     arrowprops=dict(arrowstyle="-|>", color=col, lw=2))
+    axR.annotate("", xy=(0.5 * r_soi, 0), xytext=(0, 0),
+                 arrowprops=dict(arrowstyle="->", color="0.55", lw=1.5))
+    axR.text(0.5 * r_soi, 0.05 * r_soi, "v_a", color="0.5", fontsize=8)
+    axR.plot([0], [0], "o", color="0.4", ms=4)
+    axR.set_aspect("equal")
+    axR.set_xlim(-1.3 * r_soi, 1.3 * r_soi)
+    axR.set_ylim(-1.3 * r_soi, 1.3 * r_soi)
+    axR.set_xlabel("y [DU]  (in-plane tangential)")
+    axR.set_ylabel("z [DU]  (out of plane)")
+    axR.legend(fontsize=7, loc="lower center")
+    axR.set_title("SOI entry / +z exits (turn plane y–z)")
+
+    # ---- Panel 4: velocity bridge, v_sc = v_a + v∞ (y–z velocity plane) ----
+    ph = np.linspace(0, 2 * np.pi, 200)
+    axV.plot(v_cA + v_inf * np.cos(ph), v_inf * np.sin(ph), "0.7", ls="--",
+             lw=1, label="v∞ circle")
+    axV.annotate("", xy=(v_cA, 0), xytext=(0, 0),
+                 arrowprops=dict(arrowstyle="->", color="0.5", lw=2))
+    axV.text(0.5 * v_cA, -0.045, "v_a", color="0.4", fontsize=9, ha="center")
+    axV.annotate("", xy=(v_apo, 0), xytext=(0, 0),
+                 arrowprops=dict(arrowstyle="-|>", color="#d62728", lw=2.5))
+    axV.text(0.5 * v_apo, 0.03, "v_sc in", color="#d62728", fontsize=8,
+             ha="center")
+    for name, col, mk, dd in specials:
+        vy = v_cA - v_inf * np.cos(dd)
+        vz = v_inf * np.sin(dd)
+        axV.annotate("", xy=(vy, vz), xytext=(0, 0),
+                     arrowprops=dict(arrowstyle="-|>", color=col, lw=2.5))
+        axV.plot([vy], [vz], mk, color=col, ms=6,
+                 label=f"{name} out (i={np.degrees(incl(dd)):.1f}°)")
+    axV.plot([0], [0], "ko", ms=4)
+    axV.set_aspect("equal")
+    axV.set_xlabel("v_y  (in-plane) [DU/TU]")
+    axV.set_ylabel("v_z  (out of plane) [DU/TU]")
+    axV.legend(fontsize=7, loc="lower left")
+    axV.set_title("Velocity bridge — green tilts most (max inclination)")
+
+    fig.suptitle("Inclination flybys — closest (blue) vs δ=90° (orange) vs "
+                 "peak (green), consistent everywhere", fontsize=12)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.savefig(out_name, dpi=150)
+    print(f"Saved {out_name}")
+    for name, col, mk, dd in specials:
+        print(f"  {name}: δ={np.degrees(dd):.0f}°, i={np.degrees(incl(dd)):.2f}°, "
+              f"r_p={rp_of(dd):.3f}")
+
+
+def plot_inclination_views(r_p=R_BODY,
+                           out_name="gravity_assist_inclination_views.png"):
+    """The inclination-flyby orbits as a 3-D view + its three orthographic
+    projections. Top-down (xy) hides the tilt but shows the size/energy
+    difference; the edge-on views (xz, yz) reveal the inclination."""
+    _, v_apo, v_cA, v_inf = hohmann_to_assist()
+    rhat = np.array([1.0, 0.0, 0.0])
+    that = np.array([0.0, 1.0, 0.0])
+    zhat = np.array([0.0, 0.0, 1.0])
+    r_enc = R_A * rhat
+    v_a = v_cA * that
+
+    def incl(delta):
+        return np.degrees(np.arctan2(v_inf * np.sin(delta),
+                                     v_cA - v_inf * np.cos(delta)))
+
+    def orbit(delta):                              # +z tilted orbit for this δ
+        vy = v_cA - v_inf * np.cos(delta)
+        vz = v_inf * np.sin(delta)
+        a = -MU_C / (2.0 * (0.5 * (vy * vy + vz * vz) - MU_C / R_A))
+        return _prop3(r_enc, np.array([0.0, vy, vz]),
+                      2.0 * np.pi * np.sqrt(a ** 3 / MU_C))
+
+    # Same three reference flybys / colors as plot_inclination (+z only).
+    o = flyby_outcome(r_p, +1)
+    orbits = [("in-plane (i=0)", "0.6", "-")
+              + _prop3(r_enc, o["v_out"][0] * that + o["v_out"][1] * rhat,
+                       2 * np.pi * np.sqrt(o["a"] ** 3 / MU_C))]
+    for name, col, dd in [("closest", "#1f77b4", turn_angle(v_inf, r_p)),
+                          ("δ=90°", "#ff7f0e", np.pi / 2.0),
+                          ("peak", "#2ca02c", np.arccos(v_inf / v_cA))]:
+        orbits.append((f"{name} (i={incl(dd):.1f}°)", col, "-") + orbit(dd))
+
+    fig = plt.figure(figsize=(12, 11))
+    ax3 = fig.add_subplot(2, 2, 1, projection="3d")
+    axxy = fig.add_subplot(2, 2, 2)
+    axxz = fig.add_subplot(2, 2, 3)
+    axyz = fig.add_subplot(2, 2, 4)
+    for lab, col, ls, x, y, z in orbits:
+        ax3.plot(x, y, z, ls, color=col, lw=1.3, label=lab)
+        axxy.plot(x, y, ls, color=col, lw=1.3, label=lab)
+        axxz.plot(x, z, ls, color=col, lw=1.3)
+        axyz.plot(y, z, ls, color=col, lw=1.3)
+
+    ax3.scatter([0], [0], [0], color="gold", s=60, ec="k")
+    ax3.scatter([r_enc[0]], [0], [0], color="red", marker="*", s=110)
+    ax3.set_box_aspect((1, 1, 0.45))
+    ax3.view_init(elev=12, azim=-35)
+    ax3.set_xlabel("x"); ax3.set_ylabel("y"); ax3.set_zlabel("z (exagg.)")
+    ax3.set_title("3-D view")
+    ax3.legend(fontsize=6, loc="upper left")
+
+    for ax2, fx, fy, xl, yl, ttl, eq in [
+            (axxy, r_enc[0], 0.0, "x [DU]", "y [DU]",
+             "xy (top-down) — tilt hidden, size differs", True),
+            (axxz, r_enc[0], 0.0, "x [DU]", "z [DU]",
+             "xz (edge-on) — z not to scale", False),
+            (axyz, 0.0, 0.0, "y [DU]", "z [DU]",
+             "yz (edge-on) — z not to scale", False)]:
+        ax2.plot([0], [0], "o", color="gold", ms=11, mec="k")
+        ax2.plot([fx], [fy], "r*", ms=13)
+        if eq:
+            ax2.set_aspect("equal")
+        ax2.set_xlabel(xl); ax2.set_ylabel(yl)
+        ax2.set_title(ttl); ax2.grid(alpha=0.3)
+    axxy.legend(fontsize=6, loc="upper left")
+
+    fig.suptitle("Inclination flybys — 3-D view and orthographic projections",
+                 fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    fig.savefig(out_name, dpi=150)
+    print(f"Saved {out_name}")
+
+
+# ----------------------------------------------------------------------------
+# Resonant multi-flyby analysis (2:1 resonance POC)
+# After each GA, the s/c has a new orbit. For 2:1 resonance, it should complete
+# 2 orbits while the assist body completes 1, meeting it again for the next GA.
+# Target: a_sc = R_A / 2^(2/3) ≈ 0.63 for 2:1 resonance.
+# ----------------------------------------------------------------------------
+
+def find_resonance_rp(target_sma=None, v_inf=None, verbose=True):
+    """Search for r_p that produces the target SMA after a single flyby.
+    For 2:1 resonance: a_sc = R_A / 2^(2/3) ≈ 0.6299.
+    Returns (r_p, achieved_sma, outcome_dict)."""
+    if target_sma is None:
+        target_sma = R_A / (2.0 ** (2.0 / 3.0))  # 2:1 resonance SMA
+    if v_inf is None:
+        _, _, _, v_inf = hohmann_to_assist()
+
+    r_soi = soi_radius()
+    r_p_vals = np.linspace(R_BODY, r_soi * 0.99, 200)
+    sma_vals = []
+    outcomes = []
+
+    for r_p in r_p_vals:
+        o = flyby_outcome(r_p, +1)
+        outcomes.append(o)
+        if np.isfinite(o["a"]):
+            sma_vals.append(o["a"])
+        else:
+            sma_vals.append(np.inf)
+
+    sma_vals = np.array(sma_vals)
+    # Find closest to target SMA
+    idx = np.argmin(np.abs(sma_vals - target_sma))
+
+    if verbose:
+        finite_smas = sma_vals[np.isfinite(sma_vals)]
+        print(f"  Target SMA: {target_sma:.4f} (2:1 resonance)")
+        if len(finite_smas) > 0:
+            print(f"  Achievable SMA range: {np.min(finite_smas):.4f} to {np.max(finite_smas):.4f}")
+        print(f"  Best match: r_p={r_p_vals[idx]:.4f}, a={sma_vals[idx]:.4f}")
+
+    return r_p_vals[idx], sma_vals[idx], outcomes[idx]
+
+
+def encounter_time_2to1(a_sc, period_ratio=0.5):
+    """Time for next encounter in 2:1 resonance: s/c does 2 orbits, assist does 1.
+    Returns the time when they next meet."""
+    # Period of assist body at R_A
+    p_assist = 2.0 * np.pi * np.sqrt(R_A ** 3 / MU_C)
+    # S/C period at a_sc
+    p_sc = 2.0 * np.pi * np.sqrt(a_sc ** 3 / MU_C)
+    # For 2:1: p_sc = p_assist / 2, so they meet after one assist period
+    # (at which point s/c has done 2 orbits)
+    return p_assist
+
+
+def propagate_multi_flyby(n_flybys=3, r_p=None):
+    """Propagate 3 gravity assists with the same r_p (POC).
+    Returns list of dicts with positions and inclinations at each encounter.
+    Note: this is a simplified POC that assumes encounters at the same inertial
+    location with the same r_p; a full solution would find actual resonant times."""
+    if r_p is None:
+        r_p, achieved_sma, _ = find_resonance_rp(verbose=False)
+
+    # Initial Hohmann trajectory parameters
+    dv_dep, v_apo, v_cA, v_inf = hohmann_to_assist()
+    rhat = np.array([1.0, 0.0])
+    that = np.array([0.0, 1.0])
+
+    encounters = []
+
+    for flyby_num in range(n_flybys):
+        # Each "encounter" is at the Moon's orbital position (simplified POC)
+        r_enc = R_A * rhat
+        v_a = v_cA * that
+
+        # Flyby with same r_p
+        o = flyby_outcome(r_p, +1)
+        delta_deg = np.degrees(o["delta"])
+        v_out_inertial = v_a + o["vinf_out"]
+        i_after = np.degrees(flyby_inclination(r_p))
+
+        encounters.append({
+            "flyby": flyby_num + 1,
+            "r_enc": r_enc.copy(),
+            "v_out": v_out_inertial.copy(),
+            "a": o["a"],
+            "delta_deg": delta_deg,
+            "i_deg": i_after,
+            "outcome": o
+        })
+
+    return encounters
+
+
+def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.png"):
+    """Plot multi-view: 3D view and top-down xy view showing all orbits and GA legs."""
+    if r_p is None:
+        r_p, _, _ = find_resonance_rp(verbose=False)
+
+    encounters = propagate_multi_flyby(n_flybys, r_p)
+
+    dv_dep, v_apo, v_cA, v_inf = hohmann_to_assist()
+    rhat = np.array([1.0, 0.0])
+    that = np.array([0.0, 1.0])
+    r_enc = R_A * rhat
+
+    fig = plt.figure(figsize=(16, 7))
+
+    # ---- 3D view (left) ----
+    ax3d = fig.add_subplot(121, projection="3d")
+
+    # Background orbits
+    th = np.linspace(0, 2*np.pi, 300)
+    x_init = R_INIT * np.cos(th)
+    y_init = R_INIT * np.sin(th)
+    z_init = np.zeros_like(th)
+    ax3d.plot(x_init, y_init, z_init, "--", color="#d62728", lw=2, label="initial orbit", alpha=0.7)
+
+    x_moon = R_A * np.cos(th)
+    y_moon = R_A * np.sin(th)
+    z_moon = np.zeros_like(th)
+    ax3d.plot(x_moon, y_moon, z_moon, "-", color="#9467bd", lw=2.5, label="Moon orbit", alpha=0.8)
+
+    colors = ["#1f77b4", "#ff7f0e", "#2ca02c"]
+    total_inc = 0.0
+
+    # Plot GA legs in 3D
+    for i, enc in enumerate(encounters):
+        delta = enc["outcome"]["delta"]
+        a_sc = enc["a"]
+
+        v_y = v_cA - v_inf * np.cos(delta)
+        v_z = v_inf * np.sin(delta)
+        v_out_3d = np.array([0.0, v_y, v_z])
+        r_enc_3d = np.array([r_enc[0], r_enc[1], 0.0])
+
+        if np.isfinite(a_sc):
+            t_prop = 1.5 * 2.0 * np.pi * np.sqrt(a_sc ** 3 / MU_C)
+        else:
+            t_prop = 10.0
+
+        x, y, z = _prop3(r_enc_3d, v_out_3d, t_prop, n=500)
+        ax3d.plot(x, y, z, "-", color=colors[i], lw=2.5, label=f"Leg {i+1}: Δi={enc['i_deg']:.1f}°")
+        ax3d.scatter([r_enc[0]], [r_enc[1]], [0], s=120, color=colors[i], marker="*", edgecolors="k", linewidths=1)
+        total_inc += enc["i_deg"]
+
+    ax3d.scatter([0], [0], [0], s=100, color="gold", edgecolors="k", linewidths=2)
+    ax3d.set_xlabel("x [DU]", fontsize=10)
+    ax3d.set_ylabel("y [DU]", fontsize=10)
+    ax3d.set_zlabel("z [DU]", fontsize=10)
+    ax3d.set_xlim([-1.2, 1.2])
+    ax3d.set_ylim([-1.2, 1.2])
+    ax3d.set_zlim([-0.3, 0.3])
+    ax3d.view_init(elev=25, azim=-45)
+    ax3d.set_title("3D view (inclined orbits)", fontsize=11, fontweight="bold")
+    ax3d.legend(fontsize=8, loc="upper left")
+    ax3d.grid(alpha=0.2)
+
+    # ---- 2D top-down view (right) ----
+    ax2d = fig.add_subplot(122)
+
+    # Initial and Moon orbits
+    ax2d.plot(x_init, y_init, "--", color="#d62728", lw=2, label="initial orbit", alpha=0.7)
+    ax2d.plot(x_moon, y_moon, "-", color="#9467bd", lw=2.5, label="Moon orbit", alpha=0.8)
+
+    # GA legs
+    for i, enc in enumerate(encounters):
+        delta = enc["outcome"]["delta"]
+        a_sc = enc["a"]
+
+        v_y = v_cA - v_inf * np.cos(delta)
+        v_z = v_inf * np.sin(delta)
+        v_out_3d = np.array([0.0, v_y, v_z])
+        r_enc_3d = np.array([r_enc[0], r_enc[1], 0.0])
+
+        if np.isfinite(a_sc):
+            t_prop = 1.5 * 2.0 * np.pi * np.sqrt(a_sc ** 3 / MU_C)
+        else:
+            t_prop = 10.0
+
+        x, y, z = _prop3(r_enc_3d, v_out_3d, t_prop, n=500)
+        ax2d.plot(x, y, "-", color=colors[i], lw=2.5, label=f"Leg {i+1}: Δi={enc['i_deg']:.1f}°")
+        ax2d.plot(r_enc[0], r_enc[1], "*", color=colors[i], ms=12, markeredgecolor="k", markeredgewidth=0.5)
+
+    ax2d.plot(0, 0, "o", color="gold", ms=10, markeredgecolor="k", markeredgewidth=1)
+    ax2d.set_xlabel("x [DU]", fontsize=10)
+    ax2d.set_ylabel("y [DU]", fontsize=10)
+    ax2d.set_xlim([-1.2, 1.2])
+    ax2d.set_ylim([-1.2, 1.2])
+    ax2d.set_aspect("equal")
+    ax2d.set_title("Top-down view (xy-plane)", fontsize=11, fontweight="bold")
+    ax2d.legend(fontsize=8, loc="upper left")
+    ax2d.grid(alpha=0.2)
+
+    fig.suptitle(f"Multi-Flyby Trajectory: Initial Orbit → 3 GA Legs → Cumulative Δi={total_inc:.1f}°\n"
+                 f"r_p={r_p:.4f} DU",
+                 fontsize=12, fontweight="bold")
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    fig.savefig(out_name, dpi=150)
+    print(f"Saved {out_name}")
+
+    # Print summary
+    print(f"\nMulti-Flyby Trajectory Summary:")
+    print(f"  Initial orbit:  R_INIT = {R_INIT} DU")
+    print(f"  Moon orbit:     R_A = {R_A} DU")
+    print(f"  Flyby r_p:      {r_p:.4f} DU")
+    print(f"\n  Leg | δ (°) | Δi (°) | a (DU)")
+    print(f"  ----+-------+--------+-------")
+    for enc in encounters:
+        print(f"   {enc['flyby']}  | {enc['delta_deg']:5.1f} | {enc['i_deg']:6.1f} | {enc['a']:.4f}")
+    print(f"  ----+-------+--------+-------")
+    print(f"  Total accumulated inclination: {total_inc:.1f}°")
+
+
 if __name__ == "__main__":
     plot_concept()
     plot_flyby_explainer()
     plot_soi_entry()
+    plot_inclination()
+    plot_inclination_views()
+    plot_multi_flyby()
