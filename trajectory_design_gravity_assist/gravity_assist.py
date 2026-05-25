@@ -854,7 +854,8 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
     ax3d.set_zlabel("z [DU]", fontsize=10)
     ax3d.set_xlim([-1.2, 1.2])
     ax3d.set_ylim([-1.2, 1.2])
-    ax3d.set_zlim([-0.3, 0.3])
+    ax3d.set_zlim([-1.2, 1.2])
+    ax3d.set_box_aspect([1, 1, 1])  # equal aspect ratio
     ax3d.view_init(elev=25, azim=-45)
     ax3d.set_title("3D view (inclined orbits)", fontsize=11, fontweight="bold")
     ax3d.legend(fontsize=8, loc="upper left")
