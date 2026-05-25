@@ -792,7 +792,7 @@ def propagate_multi_flyby(n_flybys=3, r_p=None):
     return encounters
 
 
-def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.png"):
+def plot_multi_flyby(n_flybys=6, r_p=None, out_name="gravity_assist_multi_flyby.png"):
     """Plot multi-view: 3D view and top-down xy view showing all orbits and GA legs."""
     if r_p is None:
         r_p, _, _ = find_resonance_rp(verbose=False)
@@ -821,19 +821,22 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
     z_moon = np.zeros_like(th)
     ax3d.plot(x_moon, y_moon, z_moon, "-", color="#9467bd", lw=2.5, label="Moon orbit", alpha=0.8)
 
-    colors = ["#1f77b4", "#ff7f0e", "#2ca02c"]
-    linestyles = ["-", "-", "-"]  # all solid
+    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"]
+    linestyles = ["-", "-", "-", "-", "-", "-"]  # all solid
     total_inc = 0.0
     sma_check = []
 
-    # Plot GA legs in 3D — cumulative inclination
+    # Plot GA legs in 3D — cumulative inclination at every half-revolution
     # All use same post-GA velocity, but rotated around x-axis for tilt
+    # Alternate between ascending node (x=1) and descending node (x=-1)
     delta = encounters[0]["outcome"]["delta"]
     v_y_base = v_cA - v_inf * np.cos(delta)  # post-GA tangential speed
     v_z_base = v_inf * np.sin(delta)         # post-GA out-of-plane speed
+    a_sc = encounters[0]["a"]
 
-    for i, enc in enumerate(encounters):
-        a_sc = enc["a"]
+    for i in range(n_flybys):
+        # Alternate between ascending node (+x) and descending node (-x)
+        x_sign = 1.0 if (i % 2 == 0) else -1.0
 
         # Rotate the base velocity around x-axis by cumulative inclination angle
         i_rad = np.radians(total_inc)
@@ -842,7 +845,7 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
         v_y = cos_i * v_y_base - sin_i * v_z_base
         v_z = sin_i * v_y_base + cos_i * v_z_base
         v_out_3d = np.array([0.0, v_y, v_z])
-        r_enc_3d = np.array([r_enc[0], r_enc[1], 0.0])
+        r_enc_3d = np.array([x_sign * R_A, 0.0, 0.0])
 
         # Compute SMA from energy at encounter point
         v_mag_sq = np.sum(v_out_3d ** 2)
@@ -856,9 +859,12 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
             t_prop = 10.0
 
         x, y, z = _prop3(r_enc_3d, v_out_3d, t_prop, n=500)
-        ax3d.plot(x, y, z, linestyles[i], color=colors[i], lw=2.5, label=f"Leg {i+1}: i={total_inc+enc['i_deg']:.1f}°")
-        ax3d.scatter([r_enc[0]], [r_enc[1]], [0], s=120, color=colors[i], marker="*", edgecolors="k", linewidths=1)
-        total_inc += enc["i_deg"]
+        col_idx = i % len(colors)
+        ax3d.plot(x, y, z, linestyles[col_idx], color=colors[col_idx], lw=2.5,
+                 label=f"Leg {i+1}: i={total_inc+encounters[0]['i_deg']:.1f}°")
+        ax3d.scatter([r_enc_3d[0]], [r_enc_3d[1]], [0], s=120, color=colors[col_idx],
+                    marker="*", edgecolors="k", linewidths=1)
+        total_inc += encounters[0]["i_deg"]
 
     ax3d.scatter([0], [0], [0], s=100, color="gold", edgecolors="k", linewidths=2)
     ax3d.set_xlabel("x [DU]", fontsize=10)
@@ -880,10 +886,12 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
     ax2d.plot(x_init, y_init, "--", color="#d62728", lw=2, label="initial orbit", alpha=0.7)
     ax2d.plot(x_moon, y_moon, "-", color="#9467bd", lw=2.5, label="Moon orbit", alpha=0.8)
 
-    # GA legs — cumulative inclination (same velocity rotated)
+    # GA legs — cumulative inclination at every half-revolution
     total_inc_2d = 0.0
-    for i, enc in enumerate(encounters):
-        a_sc = enc["a"]
+    delta_inc = encounters[0]["i_deg"]
+    for i in range(n_flybys):
+        # Alternate between ascending node (+x) and descending node (-x)
+        x_sign = 1.0 if (i % 2 == 0) else -1.0
 
         # Rotate the base velocity around x-axis by cumulative inclination angle
         i_rad = np.radians(total_inc_2d)
@@ -892,7 +900,7 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
         v_y = cos_i * v_y_base - sin_i * v_z_base
         v_z = sin_i * v_y_base + cos_i * v_z_base
         v_out_3d = np.array([0.0, v_y, v_z])
-        r_enc_3d = np.array([r_enc[0], r_enc[1], 0.0])
+        r_enc_3d = np.array([x_sign * R_A, 0.0, 0.0])
 
         if np.isfinite(a_sc):
             t_prop = 1.5 * 2.0 * np.pi * np.sqrt(a_sc ** 3 / MU_C)
@@ -900,9 +908,12 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
             t_prop = 10.0
 
         x, y, z = _prop3(r_enc_3d, v_out_3d, t_prop, n=500)
-        ax2d.plot(x, y, linestyles[i], color=colors[i], lw=2.5, label=f"Leg {i+1}: i={total_inc_2d+enc['i_deg']:.1f}°")
-        ax2d.plot(r_enc[0], r_enc[1], "*", color=colors[i], ms=12, markeredgecolor="k", markeredgewidth=0.5)
-        total_inc_2d += enc["i_deg"]
+        col_idx = i % len(colors)
+        ax2d.plot(x, y, linestyles[col_idx], color=colors[col_idx], lw=2.5,
+                 label=f"Leg {i+1}: i={total_inc_2d+delta_inc:.1f}°")
+        ax2d.plot(r_enc_3d[0], r_enc_3d[1], "*", color=colors[col_idx], ms=12,
+                 markeredgecolor="k", markeredgewidth=0.5)
+        total_inc_2d += delta_inc
 
     ax2d.plot(0, 0, "o", color="gold", ms=10, markeredgecolor="k", markeredgewidth=1)
     ax2d.set_xlabel("x [DU]", fontsize=10)
@@ -922,16 +933,19 @@ def plot_multi_flyby(n_flybys=3, r_p=None, out_name="gravity_assist_multi_flyby.
     print(f"Saved {out_name}")
 
     # Print summary
-    print(f"\nMulti-Flyby Trajectory Summary:")
+    print(f"\nMulti-Flyby Trajectory Summary (6 legs at half-rev intervals):")
     print(f"  Initial orbit:  R_INIT = {R_INIT} DU")
     print(f"  Moon orbit:     R_A = {R_A} DU")
     print(f"  Flyby r_p:      {r_p:.4f} DU")
-    print(f"\n  Leg | δ (°) | Δi (°) | a (DU) | a_check (DU)")
-    print(f"  ----+-------+--------+--------+----------")
-    for i, enc in enumerate(encounters):
-        print(f"   {enc['flyby']}  | {enc['delta_deg']:5.1f} | {enc['i_deg']:6.1f} | {enc['a']:.4f} | {sma_check[i]:.4f}")
-    print(f"  ----+-------+--------+--------+----------")
-    print(f"  Total accumulated inclination: {total_inc:.1f}°")
+    print(f"\n  Leg | Location | δ (°) | Δi (°) | i_total | a (DU) | a_check (DU)")
+    print(f"  ----+----------+-------+--------+---------+--------+----------")
+    for i in range(n_flybys):
+        location = "asc.node" if (i % 2 == 0) else "desc.node"
+        i_total = (i + 1) * encounters[0]["i_deg"]
+        print(f"   {i+1}  | {location:8} | {encounters[0]['delta_deg']:5.1f} | {encounters[0]['i_deg']:6.1f} | {i_total:7.1f} | {encounters[0]['a']:.4f} | {sma_check[i]:.4f}")
+    print(f"  ----+----------+-------+--------+---------+--------+----------")
+    total_inc_final = n_flybys * encounters[0]["i_deg"]
+    print(f"  Total accumulated inclination: {total_inc_final:.1f}°")
     print(f"  SMA consistency check: all legs should have same a ✓" if np.allclose(sma_check, sma_check[0], rtol=1e-4) else f"  SMA MISMATCH! ✗")
 
 
