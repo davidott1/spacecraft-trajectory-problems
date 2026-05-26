@@ -31,3 +31,15 @@ The user's interactive **zsh does not treat `#` as a comment** (no
 commands you hand the user to paste — they get parsed as arguments
 (e.g. `git push  # publish` → `git push '#' publish …`). Keep handed-over
 commands comment-free, or put explanations on separate lines / in prose.
+
+## Project pointers
+
+Per-project READMEs explain setup, units, plotter→PNG map, and vocabulary.
+Read the relevant one before editing or answering questions about a folder.
+
+- [trajectory_design_gravity_assist/README.md](trajectory_design_gravity_assist/README.md)
+  — patched-conic GA in a canonical Earth–Moon system; explains the v∞ /
+  turn-angle / pump / crank / VILM / resonance / inclination-floor vocabulary
+  and which function generates each PNG.
+- [trajectory_design_grid_search/README.md](trajectory_design_grid_search/README.md)
+  — porkchop plot for Earth→Moon via multi-rev Lambert grid search.
