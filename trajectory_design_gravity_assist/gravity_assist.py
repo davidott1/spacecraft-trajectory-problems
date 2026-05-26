@@ -482,6 +482,117 @@ def _prop3(r0, v0, T, n=700, mu=MU_C):
     return sol.y[0], sol.y[1], sol.y[2]
 
 
+def _prop3_state(r0, v0, T, n=700, mu=MU_C):
+    """Like _prop3 but also returns the final (r, v) state at time T."""
+    x, y, z = _prop3(r0, v0, T, n=n, mu=mu)
+    # re-derive final velocity from a tight integration end-point
+    def f(t, s):
+        rr = (s[0] ** 2 + s[1] ** 2 + s[2] ** 2) ** 1.5
+        return [s[3], s[4], s[5],
+                -mu * s[0] / rr, -mu * s[1] / rr, -mu * s[2] / rr]
+    sol = solve_ivp(f, (0.0, T), [r0[0], r0[1], r0[2], v0[0], v0[1], v0[2]],
+                    rtol=1e-10, atol=1e-13, dense_output=True)
+    sf = sol.y[:, -1]
+    return (x, y, z), sf[:3].copy(), sf[3:].copy()
+
+
+def build_inclination_sequence(target_inc_deg=60.0, n_legs=6, resonance=(1, 1),
+                               vinf=None, margin_deg=5.0):
+    """Inclination-cranking campaign: climb 0 -> target_inc in equal steps while
+    staying RESONANT with the Moon, so the spacecraft returns to the same
+    encounter point each orbit for the next flyby.
+
+    How it works (v-infinity leveraging):
+      * A flyby only rotates v_inf; |v_inf| is fixed by the ARRIVAL orbit (you
+        must arrive with a big enough v_inf -- a flyby cannot grow it).
+      * Staying in a p:q resonance pins the SMA, hence |v_sc| at the encounter,
+        hence the along-track component of v_inf. That confines v_inf to a CIRCLE
+        on the v_inf sphere. Its top (fully out of plane) is the inclination
+        ceiling i_max; we pick v_inf so i_max = target + margin so the target sits
+        below the flat saturation top.
+      * Each flyby CRANKS v_inf a little around the Moon-velocity axis, raising
+        inclination by target/n_legs while the period (resonance) is unchanged.
+        Inclination-per-crank steepens with phi, so the early flybys use gentle
+        turns (large r_p) and later ones tighten up -- all kept <= delta_max.
+
+    Returns the list of per-leg dicts (one orbit per inclination 0..target).
+    """
+    _, v_apo, v_cA, _ = hohmann_to_assist()
+    p, q = resonance
+    a = R_A * (q / p) ** (2.0 / 3.0)                 # SMA from the resonance
+    V = np.sqrt(MU_C * (2.0 / R_A - 1.0 / a))        # encounter speed (vis-viva)
+
+    def circle(vi):                                  # v_inf circle for this resonance
+        cv = (V ** 2 - v_cA ** 2 - vi ** 2) / (2.0 * v_cA)   # along-track comp (pins SMA)
+        vp = np.sqrt(max(0.0, vi ** 2 - cv ** 2))    # perpendicular magnitude
+        return cv, vp, v_cA + cv                     # cv, vp, v_t
+
+    def i_max_of(vi):
+        cv, vp, v_t = circle(vi)
+        return np.degrees(np.arctan2(vp, v_t))
+
+    if vinf is None:                                 # choose v_inf so i_max = target+margin
+        lo, hi = 1e-3, 1.99 * v_cA
+        for _ in range(100):
+            mid = 0.5 * (lo + hi)
+            if i_max_of(mid) < target_inc_deg + margin_deg:
+                lo = mid
+            else:
+                hi = mid
+        vinf = 0.5 * (lo + hi)
+
+    cv, vp, v_t = circle(vinf)
+    delta_max = turn_angle(vinf, R_BODY)             # max turn (Moon-surface flyby)
+    T = 2.0 * np.pi * np.sqrt(a ** 3 / MU_C)         # full resonant period
+
+    # Encounter fixed at (R_A, 0, 0); local frame there.
+    r_enc = np.array([R_A, 0.0, 0.0])
+    e_r = np.array([1.0, 0.0, 0.0])
+    e_v = np.array([0.0, 1.0, 0.0])                  # Moon prograde
+    e_h = np.array([0.0, 0.0, 1.0])                  # out of plane
+    v_moon = v_cA * e_v
+
+    legs = []
+    prev_vinf = None
+    for k, i_deg in enumerate(np.linspace(0.0, target_inc_deg, n_legs + 1)):
+        phi = np.arcsin(np.clip(np.tan(np.radians(i_deg)) * v_t / vp, 0.0, 1.0))
+        vinf_out = cv * e_v + vp * (np.cos(phi) * e_r + np.sin(phi) * e_h)
+        v_out = v_moon + vinf_out
+        if prev_vinf is None:                        # arrival sets v_inf at phi=0
+            vinf_in, turn = vinf_out.copy(), 0.0
+        else:
+            vinf_in = prev_vinf
+            turn = float(np.arccos(np.clip(np.dot(prev_vinf, vinf_out) / vinf ** 2,
+                                           -1.0, 1.0)))
+        r_p = ((1.0 / np.sin(turn / 2.0) - 1.0) * MU_A / vinf ** 2
+               if turn > 1e-9 else np.inf)
+        (cx, cy, cz), _, _ = _prop3_state(r_enc, v_out, T, n=600)
+
+        legs.append(dict(
+            leg=k, node="asc", r_enc=r_enc.copy(), v_moon=v_moon.copy(),
+            v_sc_in=(v_moon + vinf_in).copy(), v_sc_out=v_out.copy(),
+            v_inf_in=vinf_in.copy(), v_inf_out=vinf_out.copy(),
+            vinf_mag_in=float(np.linalg.norm(vinf_in)),
+            vinf_mag_out=float(np.linalg.norm(vinf_out)),
+            incl_deg=float(i_deg), a=a, turn_deg=float(np.degrees(turn)),
+            r_p=float(r_p), delta_max_deg=float(np.degrees(delta_max)),
+            feasible=bool(turn <= delta_max + 1e-9 and r_p >= R_BODY),
+            curve=(cx, cy, cz)))
+        prev_vinf = vinf_out
+
+    e_start = np.sqrt(max(0.0, 1.0 - (R_A * v_t) ** 2 / a))
+    print(f"\nInclination-cranking campaign  ({p}:{q} resonance):")
+    print(f"  arrival v_inf={vinf:.4f}, V={V:.4f}, a={a:.4f}, "
+          f"i_max(ceiling)={i_max_of(vinf):.1f} deg, delta_max={np.degrees(delta_max):.1f} deg")
+    print(f"  start orbit eccentricity={e_start:.3f}, periapsis={a*(1-e_start):.3f} DU "
+          f"(Earth radius ~ 0.017 DU)")
+    print("  leg  incl   turn   r_p(DU)  feasible")
+    for L in legs:
+        print(f"   {L['leg']}   {L['incl_deg']:4.0f}  {L['turn_deg']:5.1f}  "
+              f"{L['r_p']:7.3f}   {L['feasible']}")
+    return legs
+
+
 def plot_inclination(r_p=R_BODY, out_name="gravity_assist_inclination.png"):
     """Out-of-plane (inclination) flybys. THREE reference flybys are shown in
     EVERY panel with consistent colors, so the curve's markers match the orbits:
@@ -792,239 +903,118 @@ def propagate_multi_flyby(n_flybys=3, r_p=None):
     return encounters
 
 
-def plot_multi_flyby(n_flybys=6, r_p=None, out_name="gravity_assist_multi_flyby.png"):
-    """Plot multi-view: 3D view and top-down xy view showing all orbits and GA legs."""
-    if r_p is None:
-        r_p, _, _ = find_resonance_rp(verbose=False)
-
-    encounters = propagate_multi_flyby(n_flybys, r_p)
-
-    dv_dep, v_apo, v_cA, v_inf = hohmann_to_assist()
-    rhat = np.array([1.0, 0.0])
-    that = np.array([0.0, 1.0])
-    r_enc = R_A * rhat
+def plot_multi_flyby(legs=None, out_name="gravity_assist_multi_flyby.png"):
+    """3-D and top-down views of the inclination-cranking campaign. Each leg is a
+    full resonant orbit at a successively higher inclination, all sharing the
+    encounter point where the flyby cranks v_inf. Encounter star marks the GA."""
+    if legs is None:
+        legs = build_inclination_sequence()
 
     fig = plt.figure(figsize=(16, 7))
-
-    # ---- 3D view (left) ----
     ax3d = fig.add_subplot(121, projection="3d")
-
-    # Background orbits
-    th = np.linspace(0, 2*np.pi, 300)
-    x_init = R_INIT * np.cos(th)
-    y_init = R_INIT * np.sin(th)
-    z_init = np.zeros_like(th)
-    ax3d.plot(x_init, y_init, z_init, "--", color="#d62728", lw=2, label="initial orbit", alpha=0.7)
-
-    x_moon = R_A * np.cos(th)
-    y_moon = R_A * np.sin(th)
-    z_moon = np.zeros_like(th)
-    ax3d.plot(x_moon, y_moon, z_moon, "-", color="#9467bd", lw=2.5, label="Moon orbit", alpha=0.8)
-
-    # Hohmann transfer from R_INIT to R_A
-    a_t = 0.5 * (R_INIT + R_A)
-    r_dep = R_INIT * np.array([-1.0, 0.0])
-    v_peri = np.sqrt(MU_C * (2.0 / R_INIT - 1.0 / a_t))
-    bx, by = _prop2(r_dep, np.sqrt(MU_C * (2.0 / R_INIT - 1.0 / a_t)) * np.array([0.0, -1.0]),
-                    np.pi * np.sqrt(a_t ** 3 / MU_C))
-    bz = np.zeros_like(bx)
-    ax3d.plot(bx, by, bz, "-", color="0.5", lw=2, alpha=0.6, label="Hohmann transfer")
-
-    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"]
-    linestyles = ["-", "-", "-", "-", "-", "-"]  # all solid
-    total_inc = 0.0
-    sma_check = []
-
-    # Plot GA legs in 3D — cumulative inclination at every half-revolution
-    # All use same post-GA velocity, but rotated around x-axis for tilt
-    # Alternate between ascending node (x=1) and descending node (x=-1)
-    delta = encounters[0]["outcome"]["delta"]
-    v_y_base = v_cA - v_inf * np.cos(delta)  # post-GA tangential speed
-    v_z_base = v_inf * np.sin(delta)         # post-GA out-of-plane speed
-    a_sc = encounters[0]["a"]
-
-    for i in range(n_flybys):
-        # Alternate between ascending node (+x) and descending node (-x)
-        x_sign = 1.0 if (i % 2 == 0) else -1.0
-
-        # Rotate the base velocity around x-axis by cumulative inclination angle
-        i_rad = np.radians(total_inc)
-        cos_i = np.cos(i_rad)
-        sin_i = np.sin(i_rad)
-        v_y = cos_i * v_y_base - sin_i * v_z_base
-        v_z = sin_i * v_y_base + cos_i * v_z_base
-        v_out_3d = np.array([0.0, v_y, v_z])
-        r_enc_3d = np.array([x_sign * R_A, 0.0, 0.0])
-
-        # Compute SMA from energy at encounter point
-        v_mag_sq = np.sum(v_out_3d ** 2)
-        E = 0.5 * v_mag_sq - MU_C / np.linalg.norm(r_enc_3d)
-        a_computed = -MU_C / (2.0 * E) if E < 0 else np.inf
-        sma_check.append(a_computed)
-
-        if np.isfinite(a_sc):
-            t_prop = 1.5 * 2.0 * np.pi * np.sqrt(a_sc ** 3 / MU_C)
-        else:
-            t_prop = 10.0
-
-        x, y, z = _prop3(r_enc_3d, v_out_3d, t_prop, n=500)
-        col_idx = i % len(colors)
-        ax3d.plot(x, y, z, linestyles[col_idx], color=colors[col_idx], lw=2.5,
-                 label=f"Leg {i+1}: i={total_inc+encounters[0]['i_deg']:.1f}°")
-        ax3d.scatter([r_enc_3d[0]], [r_enc_3d[1]], [0], s=120, color=colors[col_idx],
-                    marker="*", edgecolors="k", linewidths=1)
-        total_inc += encounters[0]["i_deg"]
-
-    ax3d.scatter([0], [0], [0], s=100, color="gold", edgecolors="k", linewidths=2)
-    ax3d.set_xlabel("x [DU]", fontsize=10)
-    ax3d.set_ylabel("y [DU]", fontsize=10)
-    ax3d.set_zlabel("z [DU]", fontsize=10)
-    ax3d.set_xlim([-1.2, 1.2])
-    ax3d.set_ylim([-1.2, 1.2])
-    ax3d.set_zlim([-1.2, 1.2])
-    ax3d.set_box_aspect([1, 1, 1])  # equal aspect ratio
-    ax3d.view_init(elev=25, azim=-45)
-    ax3d.set_title("3D view (inclined orbits)", fontsize=11, fontweight="bold")
-    ax3d.legend(fontsize=8, loc="upper left")
-    ax3d.grid(alpha=0.2)
-
-    # ---- 2D top-down view (right) ----
     ax2d = fig.add_subplot(122)
 
-    # Initial and Moon orbits
-    ax2d.plot(x_init, y_init, "--", color="#d62728", lw=2, label="initial orbit", alpha=0.7)
-    ax2d.plot(x_moon, y_moon, "-", color="#9467bd", lw=2.5, label="Moon orbit", alpha=0.8)
+    th = np.linspace(0, 2 * np.pi, 300)
+    x_init, y_init = R_INIT * np.cos(th), R_INIT * np.sin(th)
+    x_moon, y_moon = R_A * np.cos(th), R_A * np.sin(th)
+    for ax in (ax3d, ax2d):
+        args = ([np.zeros_like(th)] if ax is ax3d else [])
+        ax.plot(x_init, y_init, *args, "--", color="#d62728", lw=2,
+                label="initial orbit", alpha=0.7)
+        ax.plot(x_moon, y_moon, *args, "-", color="#9467bd", lw=2.5,
+                label="Moon orbit", alpha=0.8)
 
-    # Hohmann transfer
+    # Hohmann transfer R_INIT -> R_A (planar)
+    a_t = 0.5 * (R_INIT + R_A)
+    r_dep = R_INIT * np.array([-1.0, 0.0])
+    bx, by = _prop2(r_dep, np.sqrt(MU_C * (2.0 / R_INIT - 1.0 / a_t)) *
+                    np.array([0.0, -1.0]), np.pi * np.sqrt(a_t ** 3 / MU_C))
+    ax3d.plot(bx, by, np.zeros_like(bx), "-", color="0.5", lw=2, alpha=0.6,
+              label="Hohmann transfer")
     ax2d.plot(bx, by, "-", color="0.5", lw=2, alpha=0.6, label="Hohmann transfer")
 
-    # GA legs — cumulative inclination at every half-revolution
-    total_inc_2d = 0.0
-    delta_inc = encounters[0]["i_deg"]
-    for i in range(n_flybys):
-        # Alternate between ascending node (+x) and descending node (-x)
-        x_sign = 1.0 if (i % 2 == 0) else -1.0
+    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#17becf"]
+    for L in legs:
+        c = colors[L["leg"] % len(colors)]
+        x, y, z = L["curve"]
+        lab = f"Leg {L['leg']}: i={L['incl_deg']:.0f}°  (r_p={L['r_p']:.2f})"
+        ax3d.plot(x, y, z, "-", color=c, lw=2.2, label=lab)
+        ax2d.plot(x, y, "-", color=c, lw=2.2, label=lab)
+        re = L["r_enc"]
+        ax3d.scatter([re[0]], [re[1]], [re[2]], s=110, color=c, marker="*",
+                     edgecolors="k", linewidths=1)
+        ax2d.plot(re[0], re[1], "*", color=c, ms=12, mec="k", mew=0.5)
 
-        # Rotate the base velocity around x-axis by cumulative inclination angle
-        i_rad = np.radians(total_inc_2d)
-        cos_i = np.cos(i_rad)
-        sin_i = np.sin(i_rad)
-        v_y = cos_i * v_y_base - sin_i * v_z_base
-        v_z = sin_i * v_y_base + cos_i * v_z_base
-        v_out_3d = np.array([0.0, v_y, v_z])
-        r_enc_3d = np.array([x_sign * R_A, 0.0, 0.0])
-
-        if np.isfinite(a_sc):
-            t_prop = 1.5 * 2.0 * np.pi * np.sqrt(a_sc ** 3 / MU_C)
-        else:
-            t_prop = 10.0
-
-        x, y, z = _prop3(r_enc_3d, v_out_3d, t_prop, n=500)
-        col_idx = i % len(colors)
-        ax2d.plot(x, y, linestyles[col_idx], color=colors[col_idx], lw=2.5,
-                 label=f"Leg {i+1}: i={total_inc_2d+delta_inc:.1f}°")
-        ax2d.plot(r_enc_3d[0], r_enc_3d[1], "*", color=colors[col_idx], ms=12,
-                 markeredgecolor="k", markeredgewidth=0.5)
-        total_inc_2d += delta_inc
-
-    ax2d.plot(0, 0, "o", color="gold", ms=10, markeredgecolor="k", markeredgewidth=1)
-    ax2d.set_xlabel("x [DU]", fontsize=10)
-    ax2d.set_ylabel("y [DU]", fontsize=10)
-    ax2d.set_xlim([-1.2, 1.2])
-    ax2d.set_ylim([-1.2, 1.2])
+    ax3d.scatter([0], [0], [0], s=100, color="gold", edgecolors="k", linewidths=2)
+    ax2d.plot(0, 0, "o", color="gold", ms=10, mec="k", mew=1)
+    for ax in (ax3d, ax2d):
+        ax.set_xlabel("x [DU]"); ax.set_ylabel("y [DU]")
+        ax.set_xlim([-1.6, 1.6]); ax.set_ylim([-1.6, 1.6])
+        ax.legend(fontsize=7, loc="upper left"); ax.grid(alpha=0.2)
+    ax3d.set_zlabel("z [DU]"); ax3d.set_zlim([-1.6, 1.6])
+    ax3d.set_box_aspect([1, 1, 1]); ax3d.view_init(elev=25, azim=-45)
+    ax3d.set_title("3-D view (resonant orbits, climbing inclination)",
+                   fontsize=11, fontweight="bold")
     ax2d.set_aspect("equal")
     ax2d.set_title("Top-down view (xy-plane)", fontsize=11, fontweight="bold")
-    ax2d.legend(fontsize=8, loc="upper left")
-    ax2d.grid(alpha=0.2)
 
-    fig.suptitle(f"Multi-Flyby Trajectory: Initial Orbit → 3 GA Legs → Cumulative Δi={total_inc:.1f}°\n"
-                 f"r_p={r_p:.4f} DU",
+    vinf_c = legs[0]["vinf_mag_out"]
+    fig.suptitle(f"Inclination cranking: v∞={vinf_c:.2f}, "
+                 f"{legs[0]['incl_deg']:.0f}° → {legs[-1]['incl_deg']:.0f}° over "
+                 f"{len(legs)-1} resonant flybys (period fixed)",
                  fontsize=12, fontweight="bold")
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     fig.savefig(out_name, dpi=150)
     print(f"Saved {out_name}")
 
-    # Print summary
-    print(f"\nMulti-Flyby Trajectory Summary (6 legs at half-rev intervals):")
-    print(f"  Initial orbit:  R_INIT = {R_INIT} DU")
-    print(f"  Moon orbit:     R_A = {R_A} DU")
-    print(f"  Flyby r_p:      {r_p:.4f} DU")
-    print(f"\n  Leg | Location | δ (°) | Δi (°) | i_total | a (DU) | a_check (DU)")
-    print(f"  ----+----------+-------+--------+---------+--------+----------")
-    for i in range(n_flybys):
-        location = "asc.node" if (i % 2 == 0) else "desc.node"
-        i_total = (i + 1) * encounters[0]["i_deg"]
-        print(f"   {i+1}  | {location:8} | {encounters[0]['delta_deg']:5.1f} | {encounters[0]['i_deg']:6.1f} | {i_total:7.1f} | {encounters[0]['a']:.4f} | {sma_check[i]:.4f}")
-    print(f"  ----+----------+-------+--------+---------+--------+----------")
-    total_inc_final = n_flybys * encounters[0]["i_deg"]
-    print(f"  Total accumulated inclination: {total_inc_final:.1f}°")
-    print(f"  SMA consistency check: all legs should have same a ✓" if np.allclose(sma_check, sma_check[0], rtol=1e-4) else f"  SMA MISMATCH! ✗")
 
-
-def plot_vinf_sphere(encounters_list, out_name="gravity_assist_vinf_sphere.png"):
-    """Plot the v_infinity sphere showing how the relative velocity vector
-    marches around after each successive GA at the ascending/descending nodes."""
-    _, v_apo, v_cA, v_inf = hohmann_to_assist()
-    r_p, _, _ = find_resonance_rp(verbose=False)
-    delta = encounters_list[0]["outcome"]["delta"] if encounters_list else turn_angle(v_inf, r_p)
+def plot_vinf_sphere(legs=None, out_name="gravity_assist_vinf_sphere.png"):
+    """v_infinity sphere for the inclination-cranking campaign. |v_inf| is fixed
+    (set by the arrival), so every arrow lies on one sphere. Each flyby cranks
+    v_inf a step around the Moon-velocity axis (e_v, the +y direction here),
+    lifting it out of plane and raising the orbit inclination while the period
+    stays fixed. Solid = incoming, dashed = post-flyby (crank) at that leg."""
+    if legs is None:
+        legs = build_inclination_sequence()
+    v_inf = legs[0]["vinf_mag_out"]
 
     fig = plt.figure(figsize=(12, 10))
     ax = fig.add_subplot(111, projection="3d")
 
-    # Draw v_infinity sphere
-    th = np.linspace(0, 2*np.pi, 100)
-    ph = np.linspace(0, np.pi, 50)
+    # Reference v_inf sphere (radius = leg-1 |v_inf|)
+    th = np.linspace(0, 2 * np.pi, 60)
+    ph = np.linspace(0, np.pi, 30)
     TH, PH = np.meshgrid(th, ph)
-    Xs = v_inf * np.sin(PH) * np.cos(TH)
-    Ys = v_inf * np.sin(PH) * np.sin(TH)
-    Zs = v_inf * np.cos(PH)
-    ax.plot_surface(Xs, Ys, Zs, alpha=0.1, color="cyan")
+    ax.plot_surface(v_inf * np.sin(PH) * np.cos(TH),
+                    v_inf * np.sin(PH) * np.sin(TH),
+                    v_inf * np.cos(PH), alpha=0.08, color="cyan")
 
-    # Initial v_infinity (retrograde, pointing in -y direction)
-    vinf_in = np.array([0, -v_inf, 0])
-    ax.quiver(0, 0, 0, vinf_in[0], vinf_in[1], vinf_in[2],
-             color="red", arrow_length_ratio=0.15, linewidth=3, label="initial v∞")
+    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#17becf"]
+    print("\n=== v_infinity sphere (inclination crank, OUTGOING v∞) ===")
+    print(f"|v_inf| = {v_inf:.4f} (fixed, sphere radius)")
+    for L in legs:
+        vo = L["v_inf_out"]
+        if L["leg"] == 0:                       # arrival = the initial v∞
+            ax.quiver(0, 0, 0, vo[0], vo[1], vo[2], color="k", linewidth=3.5,
+                      arrow_length_ratio=0.12, label="initial v∞ (arrival, i=0°)")
+        else:
+            ax.quiver(0, 0, 0, vo[0], vo[1], vo[2], color=colors[L["leg"] % len(colors)],
+                      linewidth=2.5, arrow_length_ratio=0.12,
+                      label=f"after flyby {L['leg']}: i={L['incl_deg']:.0f}°")
+        tag = "INIT" if L["leg"] == 0 else f"out{L['leg']}"
+        print(f"  {tag:>5}: incl={L['incl_deg']:5.1f}°  "
+              f"v∞=[{vo[0]:6.3f},{vo[1]:6.3f},{vo[2]:6.3f}]  turn={L['turn_deg']:.1f}°")
 
-    # v_infinity vectors after each GA
-    # They rotate around different axes depending on whether ascending or descending node
-    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"]
-    total_inc = 0.0
-
-    for i in range(6):
-        # Rotate around x-axis for cumulative inclination
-        i_rad = np.radians(total_inc)
-        cos_i = np.cos(i_rad)
-        sin_i = np.sin(i_rad)
-
-        # Start with v_infinity in the (y, z) plane after rotating by inclination
-        # vinf_in rotated around x-axis
-        vy_rot = cos_i * (-v_inf) - sin_i * 0
-        vz_rot = sin_i * (-v_inf) + cos_i * 0
-
-        # Now rotate by turn angle δ in the (y, z) plane
-        delta_i_rad = np.radians(total_inc) + delta  # effective turn in rotated frame
-        cos_d = np.cos(delta)
-        sin_d = np.sin(delta)
-        vy_out = cos_d * vy_rot - sin_d * vz_rot
-        vz_out = sin_d * vy_rot + cos_d * vz_rot
-        vinf_out = np.array([0, vy_out, vz_out])
-
-        ax.quiver(0, 0, 0, vinf_out[0], vinf_out[1], vinf_out[2],
-                 color=colors[i], arrow_length_ratio=0.15, linewidth=2.5,
-                 label=f"Leg {i+1}: i={total_inc+encounters_list[0]['i_deg']:.1f}°")
-
-        total_inc += encounters_list[0]["i_deg"]
-
-    ax.set_xlabel("x (v-space)", fontsize=11)
-    ax.set_ylabel("y (v-space)", fontsize=11)
-    ax.set_zlabel("z (v-space)", fontsize=11)
-    ax.set_xlim([-0.25, 0.25])
-    ax.set_ylim([-0.25, 0.25])
-    ax.set_zlim([-0.25, 0.25])
-    ax.set_title(f"v∞ Sphere: Relative Velocity Vectors After Each GA\n"
-                 f"v∞ magnitude = {v_inf:.4f} DU/TU, turn angle δ = {np.degrees(delta):.0f}°",
+    lim = v_inf * 1.2
+    ax.set_xlabel("v_x  (radial)", fontsize=11)
+    ax.set_ylabel("v_y  (along Moon vel = crank axis)", fontsize=11)
+    ax.set_zlabel("v_z  (out of plane)", fontsize=11)
+    ax.set_xlim([-lim, lim]); ax.set_ylim([-lim, lim]); ax.set_zlim([-lim, lim])
+    ax.set_title(f"v∞ sphere — OUTGOING v∞ after each flyby (|v∞|={v_inf:.2f} fixed)\n"
+                 f"black = initial v∞ (arrival); cranking lifts it out of plane "
+                 f"{legs[0]['incl_deg']:.0f}° → {legs[-1]['incl_deg']:.0f}°, period fixed",
                  fontsize=12, fontweight="bold")
-    ax.legend(fontsize=9, loc="upper left")
+    ax.legend(fontsize=7, loc="upper left")
     ax.set_box_aspect([1, 1, 1])
     ax.view_init(elev=20, azim=-45)
     ax.grid(alpha=0.3)
@@ -1032,7 +1022,148 @@ def plot_vinf_sphere(encounters_list, out_name="gravity_assist_vinf_sphere.png")
     fig.tight_layout()
     fig.savefig(out_name, dpi=150)
     print(f"Saved {out_name}")
-    plt.show()  # Keep interactive window open for rotation
+    plt.show()  # keep interactive window open for rotation
+
+
+def plot_floor_trajectories(out_name="flyby_inclination_floor_trajectories.png"):
+    """The β=35° inclination 'floor' family, drawn as REAL flyby trajectories
+    across three frames in one figure.  β is the v∞ DECLINATION (its angle out
+    of the reference plane) -- distinct from the flyby turn angle δ used
+    elsewhere in this module.
+      1. GA-body frame: a fixed incoming v∞ (declined by β) plus five b-plane
+         rolls give hyperbolae whose planes all contain v∞; their GA-body
+         inclinations span [β, 180−β] -- none flatter than β.
+      2. inclination vs b-plane roll (the reachable band).
+      3. inertial frame: the heliocentric orbit each of those five flybys
+         produces -- central-body inclination ≠ the GA-body inclination at left.
+    Self-contained canonical system (μ=1, GA body on a circular orbit R=1)."""
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+    beta = np.radians(35.0)              # v∞ declination (out-of-plane angle)
+    e, r_p = 2.0, 0.35
+    turn = 2.0 * np.arcsin(1.0 / e)      # flyby turn angle δ (= 60°)
+    nu_inf = np.arccos(-1.0 / e)
+
+    mu_c, r_ga, v_body_mag, vinf = 1.0, 1.0, 1.0, 0.35
+    r_enc = np.array([r_ga, 0.0, 0.0])
+    v_body = np.array([0.0, v_body_mag, 0.0])
+
+    def prop(v_sc, n=500):
+        energy = 0.5 * v_sc @ v_sc - mu_c / r_ga
+        a = -mu_c / (2 * energy)
+        T = 2 * np.pi * np.sqrt(a ** 3 / mu_c) if energy < 0 else 5.0
+        f = lambda t, y: [*y[3:], *(-mu_c * y[:3] / np.linalg.norm(y[:3]) ** 3)]
+        sol = solve_ivp(f, (0, T), [*r_enc, *v_sc],
+                        t_eval=np.linspace(0, T, n), rtol=1e-9, atol=1e-11)
+        return sol.y[0], sol.y[1], sol.y[2]
+
+    def helio_incl(v_sc):
+        h = np.cross(r_enc, v_sc)
+        return np.degrees(np.arccos(h[2] / np.linalg.norm(h)))
+
+    vinf_dir = np.array([np.cos(beta), 0.0, np.sin(beta)])     # fixed incoming v∞
+    u = np.array([0.0, 1.0, 0.0])
+    w = np.array([-np.sin(beta), 0.0, np.cos(beta)])
+
+    nu = np.linspace(np.radians(-92), np.radians(92), 360)
+    r = r_p * (1 + e) / (1 + e * np.cos(nu))
+    peri = np.vstack([r * np.cos(nu), r * np.sin(nu)])
+    ang_in = np.arctan2(e + np.cos(-nu_inf), -np.sin(-nu_inf))
+    c, s = np.cos(-ang_in), np.sin(-ang_in)
+    P2 = np.array([[c, -s], [s, c]]) @ peri
+
+    def traj(i_deg):                       # flyby hyperbola giving this GA-body inc
+        i = np.radians(i_deg)
+        b = np.clip(np.cos(i) / np.cos(beta), -1, 1)
+        a = np.sqrt(max(0.0, 1 - b * b))
+        h = a * u + b * w                  # orbit normal on the great circle ⊥ v∞
+        b1 = vinf_dir
+        b2 = np.cross(h, b1); b2 /= np.linalg.norm(b2)
+        P3 = P2[0][:, None] * b1 + P2[1][:, None] * b2
+        vout = np.cos(turn) * b1 + np.sin(turn) * b2
+        return P3, h, vout
+
+    targets = [35, 65, 90, 120, 145]
+    cmap = plt.cm.viridis(np.linspace(0, 1, len(targets)))
+    th = np.linspace(0, 2 * np.pi, 80)
+    fig = plt.figure(figsize=(21, 6.6), constrained_layout=True)
+
+    # ---- Panel 1: GA-body-frame flyby trajectories ----
+    ax = fig.add_subplot(1, 3, 1, projection="3d")
+    ax.add_collection3d(Poly3DCollection(
+        [[(1.05 * np.cos(t), 1.05 * np.sin(t), 0) for t in th]], alpha=0.10,
+        facecolor="steelblue"))
+    ax.text(0.55, 0.7, 0, "equator (reference plane)", color="steelblue", fontsize=8)
+    ax.quiver(*(-1.05 * vinf_dir), *(1.0 * vinf_dir), color="crimson", lw=3.5,
+              arrow_length_ratio=0.1)
+    ax.text(*(-1.25 * vinf_dir), r"fixed $v_\infty$ in (β=35°)", color="crimson",
+            fontsize=10)
+    ax.quiver(0, 0, 0, 0, 0, 0.95, color="navy", lw=1.5, arrow_length_ratio=0.12)
+    ax.text(0, 0, 1.0, "pole z", color="navy", fontsize=9)
+    for ti, col in zip(targets, cmap):
+        P3, h, _ = traj(ti)
+        lab = f"i = {np.degrees(np.arccos(h[2])):.0f}°" + (
+            " (min/floor)" if ti == 35 else " (polar)" if ti == 90 else
+            " (max)" if ti == 145 else "")
+        ax.plot(P3[:, 0], P3[:, 1], P3[:, 2], color=col, lw=2.4, label=lab)
+    ax.scatter([0], [0], [0], color="0.3", s=120)
+    ax.set_xlim(-1.1, 1.1); ax.set_ylim(-1.1, 1.1); ax.set_zlim(-1.0, 1.0)
+    ax.set_box_aspect((1, 1, 0.9)); ax.view_init(elev=16, azim=-66)
+    ax.set_xlabel("x"); ax.set_ylabel("y"); ax.set_zlabel("z")
+    ax.legend(fontsize=8, loc="upper left")
+    ax.set_title("Real flyby trajectories (GA-body frame), β=35°\n"
+                 "all contain the one red v∞; none flatter than 35°", fontsize=10)
+
+    # ---- Panel 2: inclination vs b-plane roll ----
+    ax2 = fig.add_subplot(1, 3, 2)
+    roll = np.linspace(0, 2 * np.pi, 400)
+    iz = np.degrees(np.arccos(np.sin(roll) * np.cos(beta)))
+    ax2.plot(np.degrees(roll), iz, color="0.4", lw=2)
+    ax2.axhspan(35, 145, color="green", alpha=0.08)
+    ax2.axhline(35, color="darkgreen", ls="--", lw=1.5, label="floor = β = 35°")
+    ax2.axhline(145, color="purple", ls="--", lw=1.0, label="ceiling = 180−β = 145°")
+    for ti, col in zip(targets, cmap):
+        ax2.axhline(ti, color=col, lw=1.2, alpha=0.9)
+        ax2.plot(np.degrees(roll[np.argmin(np.abs(iz - ti))]), ti, "o", color=col, ms=9)
+    ax2.set_xlim(0, 360); ax2.set_ylim(0, 180)
+    ax2.set_yticks([0, 35, 65, 90, 120, 145, 180])
+    ax2.set_xlabel("b-plane roll angle θ  [deg]  (free, no ΔV)")
+    ax2.set_ylabel("orbit inclination i  [deg]  (GA-body frame)")
+    ax2.set_title("Inclination vs roll — the trajectories at left are the dots\n"
+                  "reachable band [35°, 145°]; below 35° is unreachable", fontsize=10)
+    ax2.legend(fontsize=8, loc="center right"); ax2.grid(alpha=0.3)
+
+    # ---- Panel 3: inertial-frame heliocentric orbits ----
+    ax3 = fig.add_subplot(1, 3, 3, projection="3d")
+    ax3.add_collection3d(Poly3DCollection(
+        [[(1.4 * np.cos(t), 1.4 * np.sin(t), 0) for t in th]], alpha=0.06,
+        facecolor="steelblue"))
+    ax3.plot(r_ga * np.cos(th), r_ga * np.sin(th), 0 * th, color="0.6", ls="--",
+             lw=1, label="GA-body orbit")
+    v_sc_in = v_body + vinf * vinf_dir
+    bx, by, bz = prop(v_sc_in)
+    ax3.plot(bx, by, bz, color="0.5", lw=1.6, ls=":",
+             label=f"before  i={helio_incl(v_sc_in):.0f}°")
+    for ti, col in zip(targets, cmap):
+        _, _, vout = traj(ti)
+        v_sc = v_body + vinf * vout
+        x, y, z = prop(v_sc)
+        ax3.plot(x, y, z, color=col, lw=2.2,
+                 label=f"GA i={ti}° → helio i={helio_incl(v_sc):.0f}°")
+    ax3.scatter([0], [0], [0], color="gold", s=150, ec="k")
+    ax3.scatter([r_enc[0]], [0], [0], color="red", marker="*", s=160)
+    ax3.set_xlim(-1.5, 1.5); ax3.set_ylim(-1.5, 1.5); ax3.set_zlim(-1.0, 1.0)
+    ax3.set_box_aspect((1, 1, 0.65)); ax3.view_init(elev=20, azim=-60)
+    ax3.set_xlabel("x"); ax3.set_ylabel("y"); ax3.set_zlabel("z")
+    ax3.legend(fontsize=7, loc="upper left")
+    ax3.set_title("3. Inertial frame: heliocentric orbit of each flyby\n"
+                  "(central-body i ≠ the GA-body i at left)", fontsize=10)
+
+    fig.suptitle("β=35° (v∞ declination) floor family across frames: GA-body "
+                 "trajectories (1) and their inclinations (2), and the inertial "
+                 "orbit each produces (3) — the two inclinations differ", fontsize=12)
+    fig.savefig(out_name, dpi=140)
+    print(f"Saved {out_name}")
 
 
 if __name__ == "__main__":
@@ -1041,8 +1172,9 @@ if __name__ == "__main__":
     plot_soi_entry()
     plot_inclination()
     plot_inclination_views()
-    plot_multi_flyby()
 
-    # Need to populate encounters for vinf_sphere plot
-    encounters = propagate_multi_flyby(6, None)
-    plot_vinf_sphere(encounters)
+    legs = build_inclination_sequence()
+    plot_multi_flyby(legs=legs)
+    plt.close("all")            # drop the static figures
+    plot_floor_trajectories()   # build the cross-frame figure (stays open)
+    plot_vinf_sphere(legs)      # ends in plt.show() -> opens BOTH remaining windows
