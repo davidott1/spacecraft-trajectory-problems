@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- v2: FDOF wordmark with an elliptical trajectory arc sweeping under it,
+     spacecraft dot at the right end of the arc. -->
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 620 220"
+     width="620" height="220"
+     role="img" aria-label="FDOF">
+
+  <style><![CDATA[
+    :root, svg {
+      --ink:    #1a1a2e;
+      --accent: #ff6b35;
+      --orbit-stroke: 4;
+    }
+    .arc        { fill: none; stroke: var(--accent); stroke-width: var(--orbit-stroke);
+                  stroke-linecap: round; stroke-dasharray: 2 8; }
+    .spacecraft { fill: var(--accent); }
+    .wordmark {
+      font-family: 'Helvetica Neue', 'Inter', 'Arial', sans-serif;
+      font-weight: 700;
+      font-size: 150px;
+      letter-spacing: -2px;
+      fill: var(--ink);
+    }
+  ]]></style>
+
+  <text x="40" y="145" class="wordmark">FDOF</text>
+
+  <!-- elliptical trajectory arc beneath the wordmark.
+       SVG arc syntax: M (start) A rx ry x-axis-rot large-arc sweep (end) -->
+  <path class="arc" d="M 50,180 A 280,40 0 0 1 580,180"/>
+
+  <!-- spacecraft dot at the right end of the arc -->
+  <circle cx="580" cy="180" r="9" class="spacecraft"/>
+</svg>

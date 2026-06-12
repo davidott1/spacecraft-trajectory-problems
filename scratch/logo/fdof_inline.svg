@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- v1: same trick as orbit.svg — the "O" in FDOF is a tilted orbit + dot. -->
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 620 200"
+     width="620" height="200"
+     role="img" aria-label="FDOF">
+
+  <style><![CDATA[
+    :root, svg {
+      --ink:    #1a1a2e;
+      --accent: #ff6b35;
+      --orbit-stroke: 6;
+      --dot-r:        9;
+    }
+    .orbit-ring { fill: none; stroke: var(--ink); stroke-width: var(--orbit-stroke); }
+    .spacecraft { fill: var(--accent); }
+    .wordmark {
+      font-family: 'Helvetica Neue', 'Inter', 'Arial', sans-serif;
+      font-weight: 700;
+      font-size: 140px;
+      letter-spacing: -2px;
+      fill: var(--ink);
+    }
+  ]]></style>
+
+  <!-- "FD" -->
+  <text x="30"  y="150" class="wordmark">FD</text>
+
+  <!-- "O" as a tilted orbit + spacecraft dot -->
+  <g id="icon-o" transform="rotate(-20 320 105)">
+    <ellipse cx="320" cy="105" rx="55" ry="42" class="orbit-ring"/>
+    <!-- dot at t = -55° on the pre-rotation ellipse:
+         x = 320 + 55*cos(-55°) ≈ 351.5
+         y = 105 + 42*sin(-55°) ≈  70.6                                 -->
+    <circle cx="351.5" cy="70.6" r="9" class="spacecraft"/>
+  </g>
+
+  <!-- "F" -->
+  <text x="395" y="150" class="wordmark">F</text>
+</svg>

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 520 200"
+     width="520" height="200"
+     role="img" aria-label="orbit">
+
+  <!-- =========================================================
+       Design knobs — change these and the rest follows.
+       ========================================================= -->
+  <style><![CDATA[
+    :root, svg {
+      /* colors */
+      --ink:     #1a1a2e;   /* wordmark + orbit stroke */
+      --accent:  #ff6b35;   /* spacecraft dot */
+      --bg:      transparent;
+
+      /* sizes */
+      --orbit-stroke: 6;    /* px, ellipse stroke width */
+      --dot-r:        9;    /* px, spacecraft radius     */
+    }
+
+    .bg          { fill: var(--bg); }
+    .orbit-ring  { fill: none; stroke: var(--ink); stroke-width: var(--orbit-stroke); }
+    .spacecraft  { fill: var(--accent); }
+    .wordmark {
+      font-family: 'Helvetica Neue', 'Inter', 'Arial', sans-serif;
+      font-weight: 600;
+      font-size: 130px;
+      letter-spacing: -4px;
+      fill: var(--ink);
+    }
+  ]]></style>
+
+  <rect class="bg" width="100%" height="100%"/>
+
+  <!-- =========================================================
+       "o" as an orbit: tilted ellipse + spacecraft dot.
+       The whole group is rotated, so the dot stays ON the ring.
+       ========================================================= -->
+  <g id="icon-o" transform="rotate(-20 100 105)">
+    <ellipse cx="100" cy="105" rx="55" ry="38" class="orbit-ring"/>
+    <!-- dot at parametric angle t = -50 deg on the pre-rotation ellipse:
+         x = 100 + 55*cos(-50°)  ≈ 135.4
+         y = 105 + 38*sin(-50°)  ≈  75.9                              -->
+    <circle cx="135.4" cy="75.9" r="9" class="spacecraft"/>
+  </g>
+
+  <!-- =========================================================
+       Wordmark: "rbit" (the "o" is the icon above).
+       ========================================================= -->
+  <g id="wordmark">
+    <text x="170" y="148" class="wordmark">rbit</text>
+  </g>
+</svg>

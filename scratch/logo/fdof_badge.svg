@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- v3: NASA-patch style circular badge. "FDOF" centered inside an orbit
+     ring, spacecraft dot riding the top-right of the ring. -->
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 240 240"
+     width="240" height="240"
+     role="img" aria-label="FDOF">
+
+  <style><![CDATA[
+    :root, svg {
+      --ink:    #1a1a2e;
+      --accent: #ff6b35;
+      --orbit-stroke: 5;
+    }
+    .orbit-ring { fill: none; stroke: var(--ink); stroke-width: var(--orbit-stroke); }
+    .spacecraft { fill: var(--accent); }
+    .wordmark {
+      font-family: 'Helvetica Neue', 'Inter', 'Arial', sans-serif;
+      font-weight: 700;
+      font-size: 56px;
+      letter-spacing: 1px;
+      fill: var(--ink);
+      text-anchor: middle;
+    }
+  ]]></style>
+
+  <!-- orbit ring (tilted ellipse) -->
+  <g transform="rotate(-25 120 120)">
+    <ellipse cx="120" cy="120" rx="100" ry="70" class="orbit-ring"/>
+    <!-- spacecraft dot at t = 30° on the pre-rotation ellipse:
+         x = 120 + 100*cos(30°) ≈ 206.6
+         y = 120 + 70*sin(30°)  ≈ 155.0  (will appear top-right after -25° tilt) -->
+    <circle cx="206.6" cy="85.0" r="9" class="spacecraft"/>
+  </g>
+
+  <!-- centered wordmark -->
+  <text x="120" y="138" class="wordmark">FDOF</text>
+</svg>
