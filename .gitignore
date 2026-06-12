@@ -5,5 +5,8 @@ __pycache__/
 .coverage
 .vscode/
 
+# Large gravity model data (downloaded separately)
+two_body_high_fidelity/data/gravity_models/
+
 # Ignore files
 *.png
